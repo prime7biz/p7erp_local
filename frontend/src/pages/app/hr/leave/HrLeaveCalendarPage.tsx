@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { logApiError } from "@/utils/logApiError";
 
 const PREFIX = "/app/hr";
 
@@ -18,7 +19,8 @@ export function HrLeaveCalendarPage() {
       try {
         const data = await api.getHrLeaveCalendarData({ year, month });
         if (!cancelled) setRows(data);
-      } catch {
+      } catch (e) {
+        logApiError("HrLeaveCalendarPage.getHrLeaveCalendarData", e);
         if (!cancelled) setRows([]);
       } finally {
         if (!cancelled) setLoading(false);

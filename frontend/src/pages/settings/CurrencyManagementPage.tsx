@@ -5,8 +5,9 @@
 import { useEffect, useState } from "react";
 import { api, type CurrencyExchangeRateResponse } from "@/api/client";
 import { getCurrencySymbol, CURRENCY_CODES } from "@/lib/currency";
+import { todayLocalISO } from "@/lib/dates";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayLocalISO();
 
 export function CurrencyManagementPage() {
   const [rates, setRates] = useState<CurrencyExchangeRateResponse[]>([]);

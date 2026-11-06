@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { APP_VERSION, getPlatformHealth } from "@/api/client";
 import type { PlatformHealthResponse } from "@/api/client";
+import { usePolling } from "@/hooks/usePolling";
+import { logApiError } from "@/utils/logApiError";
 
 export function AppFooter({ showHealthDetails }: { showHealthDetails: boolean }) {
   const [now, setNow] = useState(new Date());
@@ -12,31 +14,19 @@ export function AppFooter({ showHealthDetails }: { showHealthDetails: boolean })
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    if (!showHealthDetails) return;
-    let cancelled = false;
-    const fetchHealth = async () => {
+  usePolling(
+    async () => {
       try {
-        const next = await getPlatformHealth();
-        if (!cancelled) {
-          setHealth(next);
-          setHealthError(false);
-        }
-      } catch {
-        if (!cancelled) {
-          setHealthError(true);
-        }
+        setHealth(await getPlatformHealth());
+        setHealthError(false);
+      } catch (e) {
+        logApiError("AppFooter.getPlatformHealth", e);
+        setHealthError(true);
+        throw e;
       }
-    };
-    void fetchHealth();
-    const timer = window.setInterval(() => {
-      void fetchHealth();
-    }, 60_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [showHealthDetails]);
+    },
+    { intervalMs: 60_000, enabled: showHealthDetails },
+  );
 
   const systemStatusLabel = healthError ? "offline" : health?.status === "healthy" ? "healthy" : "degraded";
   const systemStatusClass =

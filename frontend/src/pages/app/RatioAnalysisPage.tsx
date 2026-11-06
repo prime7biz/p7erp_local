@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -8,10 +8,13 @@ import {
 } from "@/api/client";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
+import { sumMoneyBy } from "@/lib/money";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 function sumOutstanding(r: BillsAgingResponse | null): number {
   if (!r?.rows?.length) return 0;
-  return r.rows.reduce((s, row) => s + (Number(row.outstanding_amount) || 0), 0);
+  return sumMoneyBy(r.rows, (row) => row.outstanding_amount);
 }
 
 type Snap = {
@@ -19,6 +22,21 @@ type Snap = {
   arAging: BillsAgingResponse | null;
   apAging: BillsAgingResponse | null;
 };
+
+async function loadSnap(d: string, groupId: number | ""): Promise<Snap> {
+  const [fs, arAging, apAging] = await Promise.all([
+    api.getFinancialStatements({ as_of_date: d, group_id: groupId || undefined }),
+    api.getBillsAging({ bill_type: "RECEIVABLE", as_of_date: d }).catch((e) => {
+      logApiError("RatioAnalysisPage.getBillsAging AR", e);
+      return null;
+    }),
+    api.getBillsAging({ bill_type: "PAYABLE", as_of_date: d }).catch((e) => {
+      logApiError("RatioAnalysisPage.getBillsAging AP", e);
+      return null;
+    }),
+  ]);
+  return { fs, arAging, apAging };
+}
 
 function buildMetrics(fs: FinancialStatementsResponse, arAging: BillsAgingResponse | null, apAging: BillsAgingResponse | null) {
   const assets = Number(fs.balance_sheet.assets ?? 0);
@@ -62,7 +80,7 @@ function buildMetrics(fs: FinancialStatementsResponse, arAging: BillsAgingRespon
 }
 
 export function RatioAnalysisPage() {
-  const [asOfDate, setAsOfDate] = useState(new Date().toISOString().slice(0, 10));
+  const [asOfDate, setAsOfDate] = useState(todayLocalISO());
   const [compareDate, setCompareDate] = useState("");
   const [groupId, setGroupId] = useState<number | "">("");
   const [groups, setGroups] = useState<AccountGroupResponse[]>([]);
@@ -73,39 +91,31 @@ export function RatioAnalysisPage() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function loadSnap(d: string): Promise<Snap> {
-    const [fs, arAging, apAging] = await Promise.all([
-      api.getFinancialStatements({ as_of_date: d, group_id: groupId || undefined }),
-      api.getBillsAging({ bill_type: "RECEIVABLE", as_of_date: d }).catch((e) => {
-        logApiError("RatioAnalysisPage.getBillsAging AR", e);
-        return null;
-      }),
-      api.getBillsAging({ bill_type: "PAYABLE", as_of_date: d }).catch((e) => {
-        logApiError("RatioAnalysisPage.getBillsAging AP", e);
-        return null;
-      }),
-    ]);
-    return { fs, arAging, apAging };
-  }
-
-  async function load() {
+  const latest = useLatestRequest();
+  const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       setError("");
       setLoading(true);
-      setPrimary(await loadSnap(asOfDate));
+      const first = await loadSnap(asOfDate, groupId);
+      if (!latest.isCurrent(token)) return;
+      setPrimary(first);
       if (compareDate) {
-        setSecondary(await loadSnap(compareDate));
+        const second = await loadSnap(compareDate, groupId);
+        if (!latest.isCurrent(token)) return;
+        setSecondary(second);
       } else {
         setSecondary(null);
       }
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
       setPrimary(null);
       setSecondary(null);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }
+  }, [latest, asOfDate, compareDate, groupId]);
 
   async function loadGroups() {
     try {
@@ -122,8 +132,7 @@ export function RatioAnalysisPage() {
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [asOfDate, compareDate, groupId]);
+  }, [load]);
 
   useEffect(() => {
     if (!success) return;

@@ -8,6 +8,7 @@ import {
   setExtAuth,
 } from "@/api/externalClient";
 import type { ExternalMeResponse, ExternalPrincipalType, ExternalTokenResponse } from "@/types/externalAccess";
+import { logApiError } from "@/utils/logApiError";
 
 export function useExternalAuth(principalType: ExternalPrincipalType) {
   const [me, setMe] = useState<ExternalMeResponse | null>(null);
@@ -57,8 +58,8 @@ export function useExternalAuth(principalType: ExternalPrincipalType) {
   const logout = useCallback(async () => {
     try {
       if (getExtToken()) await externalLogout();
-    } catch {
-      /* ignore */
+    } catch (e) {
+      logApiError("useExternalAuth.logout", e);
     }
     clearExtAuth();
     setMe(null);

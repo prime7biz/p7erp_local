@@ -1,8 +1,9 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type PartyLedgerResponse } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 export function PartyLedgersPage() {
   const [rows, setRows] = useState<PartyLedgerResponse[]>([]);
@@ -15,28 +16,37 @@ export function PartyLedgersPage() {
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const actionsRef = useRef<HTMLDivElement | null>(null);
 
-  async function load() {
+  // Typing in the search box does not reload; the list reloads on submit or when a filter changes.
+  const searchRef = useRef(search);
+  useEffect(() => {
+    searchRef.current = search;
+  }, [search]);
+
+  const latest = useLatestRequest();
+  const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       setError("");
       const res = await api.listPartyLedgers({
         party_type: partyType || undefined,
-        search: search.trim() || undefined,
+        search: searchRef.current.trim() || undefined,
         balance_type: balanceType || undefined,
         overdue_only: overdueOnly || undefined,
         page_size: 100,
       });
+      if (!latest.isCurrent(token)) return;
       setRows(res.items);
       setTotal(res.total);
     } catch (e) {
       logApiError("PartyLedgersPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }
+  }, [latest, partyType, balanceType, overdueOnly]);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [partyType, balanceType, overdueOnly]);
+  }, [load]);
 
   useEffect(() => {
     function onDocClick(ev: MouseEvent) {

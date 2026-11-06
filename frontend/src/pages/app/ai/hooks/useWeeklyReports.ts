@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type AiWeeklyReportItem, type AiWeeklyReportStatus } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 export function useWeeklyReports(initialLimit = 24) {
   const [items, setItems] = useState<AiWeeklyReportItem[]>([]);
@@ -12,21 +13,26 @@ export function useWeeklyReports(initialLimit = 24) {
   const [info, setInfo] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setError(null);
     setLoading(true);
     try {
       const [listRes, st] = await Promise.all([api.aiListWeeklyReports({ limit }), api.aiGetWeeklyReportsStatus()]);
+      if (!latest.isCurrent(token)) return;
       setItems(listRes.items);
       setStatus(st);
     } catch (e) {
+      logApiError("useWeeklyReports.load", e);
+      if (!latest.isCurrent(token)) return;
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
-      logApiError("useWeeklyReports.load", e);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [limit]);
+  }, [latest, limit]);
 
   useEffect(() => {
     void load();

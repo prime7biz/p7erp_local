@@ -86,8 +86,7 @@ export function CommandPalette({ open, onClose, routes, createActions, userId, o
       .finally(() => {
         if (latest.isCurrent(token)) setSearching(false);
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debounced, open]);
+  }, [debounced, open, latest]);
 
   const entries = useMemo<Entry[]>(() => {
     const q = query.trim().toLowerCase();

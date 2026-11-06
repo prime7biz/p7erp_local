@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Download, RefreshCw } from "lucide-react";
 
 import { api, type TradeCaseDashboardResponse, type TradeCaseRow } from "@/api/client";
+import { todayLocalISO } from "@/lib/dates";
 
 const ALERTS = "/app/merchandising/alerts";
 
@@ -163,7 +164,7 @@ export function TradeDashboardPage() {
               const url = URL.createObjectURL(blob);
               const a = document.createElement("a");
               a.href = url;
-              a.download = `trade-at-risk-${new Date().toISOString().slice(0, 10)}.csv`;
+              a.download = `trade-at-risk-${todayLocalISO()}.csv`;
               a.click();
               URL.revokeObjectURL(url);
             }}

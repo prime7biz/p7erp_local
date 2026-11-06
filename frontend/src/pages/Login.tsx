@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
-import { api, setAuth } from "@/api/client";
+// Small modules only, so the login page does not download every API method.
+import { authApi } from "@/api/auth";
+import { setAuth } from "@/api/core";
+import { safeInternalPath } from "@/utils/safeUrl";
 import { useAuth } from "@/context/AuthContext";
 import { PasswordFieldInput } from "@/components/auth/PasswordFieldInput";
 import {
@@ -16,13 +19,6 @@ import {
 } from "lucide-react";
 
 /** Only allow same-origin relative paths for post-login redirect (open redirect guard). */
-function safeInternalPath(raw: string | null): string | null {
-  if (raw == null || typeof raw !== "string") return null;
-  const t = raw.trim();
-  if (!t.startsWith("/") || t.startsWith("//")) return null;
-  return t;
-}
-
 const features = [
   { icon: ShoppingBag, label: "Merchandising" },
   { icon: Factory, label: "Production" },
@@ -57,7 +53,7 @@ export function Login() {
     }
     setLoading(true);
     try {
-      const res = await api.login({
+      const res = await authApi.login({
         company_code: code,
         username: username.trim(),
         password,

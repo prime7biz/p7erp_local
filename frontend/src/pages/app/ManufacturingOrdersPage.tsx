@@ -11,7 +11,9 @@ import {
 } from "@/components/inventory/InventoryListStates";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { useListPagination } from "@/hooks/useListPagination";
+import { logApiError } from "@/utils/logApiError";
 
 function statusBadgeClass(status: string) {
   switch (status) {
@@ -46,6 +48,7 @@ export function ManufacturingOrdersPage() {
   const [form, setForm] = useState<ManufacturingOrderCreate>({ finished_item_id: 0, planned_quantity: "0", notes: "" });
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const latest = useLatestRequest();
 
   const loadKpiAndMasters = useCallback(async () => {
     const [overview, pendingCrRows, stockRes] = await Promise.all([
@@ -78,22 +81,27 @@ export function ManufacturingOrdersPage() {
   }, []);
 
   const loadOrdersPage = useCallback(async () => {
+    const token = latest.begin();
     setError("");
     setLoading(true);
     try {
       const moRes = await api.listManufacturingOrdersWithTotal({ limit, offset });
+      if (!latest.isCurrent(token)) return;
       setOrders(moRes.rows);
       setOrdersTotal(moRes.total ?? moRes.rows.length);
       const stagePairs = await Promise.all(
         moRes.rows.map(async (row) => [row.id, await api.getManufacturingStages(row.id)] as const),
       );
+      if (!latest.isCurrent(token)) return;
       setStagesByOrder(Object.fromEntries(stagePairs));
     } catch (e) {
+      logApiError("ManufacturingOrdersPage.loadOrdersPage", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load manufacturing data");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [limit, offset]);
+  }, [latest, limit, offset]);
 
   useEffect(() => {
     void loadKpiAndMasters();
@@ -117,8 +125,8 @@ export function ManufacturingOrdersPage() {
           if (cancelled) return;
           fetchedItemLabelsRef.current.add(id);
           setFinishedItemLabels((prev) => (prev[id] ? prev : { ...prev, [id]: it.name }));
-        } catch {
-          /* ignore */
+        } catch (e) {
+          logApiError("ManufacturingOrdersPage.getInventoryItem", e);
         }
       }),
     );

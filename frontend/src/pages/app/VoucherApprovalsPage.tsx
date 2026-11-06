@@ -7,6 +7,9 @@ import { useListPagination } from "@/hooks/useListPagination";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { VoucherActionReasonModal } from "@/components/vouchers/VoucherActionReasonModal";
 import { logApiError } from "@/utils/logApiError";
+import { toLocalISODate, todayLocalISO } from "@/lib/dates";
+import { sumMoneyBy } from "@/lib/money";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 const QUEUE_STATUSES = ["SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED"] as const;
 
@@ -37,7 +40,7 @@ const ACTIONS_NEEDING_REASON = new Set(["reject", "cancel", "reverse", "cancel_p
 function defaultFromDate(): string {
   const d = new Date();
   d.setMonth(d.getMonth() - 3);
-  return d.toISOString().slice(0, 10);
+  return toLocalISODate(d);
 }
 
 export function VoucherApprovalsPage() {
@@ -52,7 +55,7 @@ export function VoucherApprovalsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [fromDate, setFromDate] = useState(defaultFromDate);
-  const [toDate, setToDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [toDate, setToDate] = useState(() => todayLocalISO());
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [pendingWorkflowAction, setPendingWorkflowAction] = useState<{ voucherId: number; action: string } | null>(null);
   const loadedActionsRef = useRef<Set<number>>(new Set());
@@ -66,7 +69,9 @@ export function VoucherApprovalsPage() {
     setPage(1);
   }, [debouncedSearch, statusFilter, fromDate, toDate, setPage]);
 
+  const latest = useLatestRequest();
   const loadMerged = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     setSuccess("");
@@ -89,6 +94,7 @@ export function VoucherApprovalsPage() {
           }),
         ),
       );
+      if (!latest.isCurrent(token)) return;
 
       const map = new Map<number, VoucherResponse>();
       for (const r of results) {
@@ -103,12 +109,13 @@ export function VoucherApprovalsPage() {
       });
       setMergedRows(merged);
     } catch (e) {
-      setError((e as Error).message);
       logApiError("VoucherApprovalsPage.loadMerged", e);
+      if (!latest.isCurrent(token)) return;
+      setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [debouncedSearch, fromDate, statusFilter, toDate]);
+  }, [latest, debouncedSearch, fromDate, statusFilter, toDate]);
 
   useEffect(() => {
     void loadMerged();
@@ -171,7 +178,7 @@ export function VoucherApprovalsPage() {
   function exportCsv() {
     const headers = ["voucher_id", "voucher_number", "voucher_date", "voucher_type", "status", "reference", "amount"];
     const lines = mergedRows.map((r) => {
-      const amount = r.lines.filter((l) => l.entry_type === "DEBIT").reduce((sum, l) => sum + Number(l.amount || 0), 0);
+      const amount = sumMoneyBy(r.lines.filter((l) => l.entry_type === "DEBIT"), (l) => l.amount);
       return [r.id, r.voucher_number, r.voucher_date, r.voucher_type, r.status, r.reference ?? "", amount.toFixed(2)].join(",");
     });
     const csv = [headers.join(","), ...lines].join("\n");
@@ -246,7 +253,7 @@ export function VoucherApprovalsPage() {
               </tr>
             ) : (
               pageRows.map((r) => {
-                const amount = r.lines.filter((l) => l.entry_type === "DEBIT").reduce((sum, l) => sum + Number(l.amount || 0), 0);
+                const amount = sumMoneyBy(r.lines.filter((l) => l.entry_type === "DEBIT"), (l) => l.amount);
                 return (
                   <tr key={r.id} className="border-t">
                     <td className="px-3 py-2">

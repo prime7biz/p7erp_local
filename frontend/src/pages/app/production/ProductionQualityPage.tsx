@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "@/api/client";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalISO();
 }
 
 export function ProductionQualityPage() {
@@ -18,6 +20,7 @@ export function ProductionQualityPage() {
   const [checks, setChecks] = useState<Awaited<ReturnType<typeof api.listProductionQcChecks>>>([]);
   const [filters, setFilters] = useState<Awaited<ReturnType<typeof api.getCrewDailyFilters>> | null>(null);
   const [msg, setMsg] = useState("");
+  const latest = useLatestRequest();
 
   const pareto = useMemo(() => {
     const map = new Map<string, number>();
@@ -43,6 +46,7 @@ export function ProductionQualityPage() {
   }, [lineId, shiftId]);
 
   const loadChecks = useCallback(async () => {
+    const token = latest.begin();
     try {
       setMsg("");
       const rows = await api.listProductionQcChecks({
@@ -50,12 +54,14 @@ export function ProductionQualityPage() {
         shift_id: shiftId ?? undefined,
         line_id: lineId ?? undefined,
       });
+      if (!latest.isCurrent(token)) return;
       setChecks(rows);
     } catch (e) {
       logApiError(e, "ProductionQualityPage.loadChecks");
+      if (!latest.isCurrent(token)) return;
       setMsg("Could not load QC checks.");
     }
-  }, [date, lineId, shiftId]);
+  }, [latest, date, lineId, shiftId]);
 
   useEffect(() => {
     void loadFilters();

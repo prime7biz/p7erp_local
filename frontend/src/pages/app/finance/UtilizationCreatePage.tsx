@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type EmiPreviewResponse } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
 import { erpControlFocusClass } from "@/components/app/listPageLayout";
+import { todayLocalISO } from "@/lib/dates";
 
 export function UtilizationCreatePage() {
   const { facilityId } = useParams<{ facilityId: string }>();
@@ -14,11 +15,12 @@ export function UtilizationCreatePage() {
   const [rate, setRate] = useState("12");
   const [moratorium, setMoratorium] = useState("0");
   const [freq, setFreq] = useState("monthly");
-  const [disbDate, setDisbDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [disbDate, setDisbDate] = useState(() => todayLocalISO());
   const [preview, setPreview] = useState<EmiPreviewResponse | null>(null);
   const [err, setErr] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
     const t = window.setTimeout(() => {
       void (async () => {
         try {
@@ -31,13 +33,16 @@ export function UtilizationCreatePage() {
             moratorium_months: Number(moratorium) || 0,
             interest_type: policy === "flat_interest" ? "flat" : "reducing_balance",
           });
-          setPreview(p);
+          if (!cancelled) setPreview(p);
         } catch (e) {
           logApiError("UtilizationCreatePage.preview", e);
         }
       })();
     }, 400);
-    return () => window.clearTimeout(t);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
   }, [principal, numInst, policy, rate, moratorium, freq]);
 
   async function submit(e: FormEvent) {

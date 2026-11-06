@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { api, type HrComplianceFramework, type HrPayrollRunResponse } from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
 import { useAuth } from "@/context/AuthContext";
+import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 const PREFIX = "/app/hr";
 
@@ -68,7 +70,10 @@ export function HrAiInsightsPage() {
         ? api.getHrAttendanceAnalysis()
         : Promise.resolve(null),
       flagOn(flags, "ai_turnover_prediction_enabled") ? api.getHrTurnoverRisk() : Promise.resolve(null),
-      api.listHrPayrollRuns().catch(() => [] as HrPayrollRunResponse[]),
+      api.listHrPayrollRuns().catch((e) => {
+        logApiError("HrAiInsightsPage.listHrPayrollRuns", e);
+        return [] as HrPayrollRunResponse[];
+      }),
     ]);
 
     if (fwRes.status === "fulfilled") {
@@ -125,15 +130,20 @@ export function HrAiInsightsPage() {
     }
   };
 
+  const riskRequest = useLatestRequest();
   const loadComplianceRisk = useCallback(async () => {
     if (frameworkId === "" || !flagOn(flags, "ai_compliance_risk_prediction_enabled")) return;
+    const token = riskRequest.begin();
     try {
-      setComplianceRisk(await api.getHrComplianceRisk(Number(frameworkId)));
+      const risk = await api.getHrComplianceRisk(Number(frameworkId));
+      if (!riskRequest.isCurrent(token)) return;
+      setComplianceRisk(risk);
     } catch (e) {
+      if (!riskRequest.isCurrent(token)) return;
       setWarnings((prev) => [...prev.filter((w) => !w.includes("Compliance forecast")), e instanceof Error ? e.message : "Compliance forecast failed"]);
       setComplianceRisk(null);
     }
-  }, [frameworkId, flags]);
+  }, [riskRequest, frameworkId, flags]);
 
   useEffect(() => {
     if (frameworkId !== "") void loadComplianceRisk();

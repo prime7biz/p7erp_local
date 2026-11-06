@@ -7,6 +7,7 @@ import {
   type ProformaPaymentSummary,
 } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 function money(n: number | null | undefined, currency?: string | null) {
   const v = Number(n ?? 0);
@@ -15,7 +16,7 @@ function money(n: number | null | undefined, currency?: string | null) {
 }
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalISO();
 }
 
 function newIdempotencyKey(piId: number) {

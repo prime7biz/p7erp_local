@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type MisRatioAnalysisResponse, type MisRatioTrendResponse } from "@/api/client";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
 import { formatRatioValue, statusBadgeClass } from "./misFormat";
+import { todayLocalISO } from "@/lib/dates";
 
 const CATEGORY_LABELS: Record<string, string> = {
   liquidity: "Liquidity",
@@ -14,47 +16,57 @@ const CATEGORY_LABELS: Record<string, string> = {
 const CATEGORY_ORDER = ["liquidity", "profitability", "efficiency", "leverage"];
 
 export function RatioAnalysisMisPage() {
-  const [asOfDate, setAsOfDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [asOfDate, setAsOfDate] = useState(() => todayLocalISO());
   const [data, setData] = useState<MisRatioAnalysisResponse | null>(null);
   const [selectedRatio, setSelectedRatio] = useState<string>("current_ratio");
   const [trend, setTrend] = useState<MisRatioTrendResponse | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function load() {
+  const latest = useLatestRequest();
+  const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       setError("");
       setLoading(true);
       const res = await api.getMisRatioAnalysis({ as_of_date: asOfDate });
+      if (!latest.isCurrent(token)) return;
       setData(res);
-      if (!res.ratios.some((r) => r.name === selectedRatio) && res.ratios[0]) {
-        setSelectedRatio(res.ratios[0].name);
+      const firstRatio = res.ratios[0];
+      if (firstRatio) {
+        setSelectedRatio((current) => (res.ratios.some((r) => r.name === current) ? current : firstRatio.name));
       }
     } catch (e) {
       logApiError("RatioAnalysisMisPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }
+  }, [latest, asOfDate]);
 
-  async function loadTrend(name: string) {
-    try {
-      setTrend(await api.getMisRatioTrend({ ratio_name: name, months: 6 }));
-    } catch (e) {
-      logApiError("RatioAnalysisMisPage.loadTrend", e);
-      setTrend(null);
-    }
-  }
+  const trendRequest = useLatestRequest();
+  const loadTrend = useCallback(
+    async (name: string) => {
+      const token = trendRequest.begin();
+      try {
+        const res = await api.getMisRatioTrend({ ratio_name: name, months: 6 });
+        if (trendRequest.isCurrent(token)) setTrend(res);
+      } catch (e) {
+        logApiError("RatioAnalysisMisPage.loadTrend", e);
+        if (trendRequest.isCurrent(token)) setTrend(null);
+      }
+    },
+    [trendRequest],
+  );
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [asOfDate]);
+  }, [load]);
 
   useEffect(() => {
     if (selectedRatio) void loadTrend(selectedRatio);
-  }, [selectedRatio]);
+  }, [selectedRatio, loadTrend]);
 
   const categories = useMemo(() => {
     if (!data?.by_category) return [];

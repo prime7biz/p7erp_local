@@ -1,6 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
-import { api, setAuth } from "@/api/client";
+// Small modules only, so the login page does not download every API method.
+import { authApi } from "@/api/auth";
+import { setAuth } from "@/api/core";
+import { safeInternalPath } from "@/utils/safeUrl";
+import { logApiError } from "@/utils/logApiError";
 import { externalLogin, setExtAuth } from "@/api/externalClient";
 import { useAuth } from "@/context/AuthContext";
 import { portalHomePath } from "@/lib/externalAccess";
@@ -17,13 +21,6 @@ import {
   Info,
   Mail,
 } from "lucide-react";
-
-function safeInternalPath(raw: string | null): string | null {
-  if (raw == null || typeof raw !== "string") return null;
-  const t = raw.trim();
-  if (!t.startsWith("/") || t.startsWith("//")) return null;
-  return t;
-}
 
 type PortalRole = "staff" | "admin" | ExternalPrincipalType;
 
@@ -70,14 +67,15 @@ export function UnifiedLoginPage() {
       return;
     }
     try {
-      const r = await api.resolveTenant(code);
+      const r = await authApi.resolveTenant(code);
       setTenantHint(r.tenant_name);
       setAvailableRoles(r.available_roles);
       if (!r.available_roles.includes(loginRole)) {
         if (r.available_roles.includes("staff")) setLoginRole("staff");
         else if (r.available_roles[0]) setLoginRole(r.available_roles[0] as PortalRole);
       }
-    } catch {
+    } catch (e) {
+      logApiError("UnifiedLoginPage.resolveTenant", e);
       setTenantHint(null);
       setAvailableRoles(null);
     }
@@ -106,7 +104,7 @@ export function UnifiedLoginPage() {
         return;
       }
 
-      const res = await api.login({
+      const res = await authApi.login({
         company_code: code,
         email: email.trim(),
         password,

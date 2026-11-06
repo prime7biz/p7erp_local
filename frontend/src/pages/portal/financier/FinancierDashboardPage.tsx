@@ -27,6 +27,7 @@ import { GoodsMovementSummaryCard } from "@/components/external-access/GoodsMove
 import { FinancierGradientMetricCard } from "@/components/external-access/FinancierGradientMetricCard";
 import { financierScopeAtLeast } from "@/utils/financierScope";
 import { logApiError } from "@/utils/logApiError";
+import { subtractMoney, sumMoneyBy } from "@/lib/money";
 
 type CreditLineItem = {
   id: number;
@@ -210,22 +211,15 @@ export function FinancierDashboardPage() {
   const creditTotals = useMemo(() => {
     if (!creditLines?.items.length) return null;
     const currency = creditLines.items[0]?.currency ?? "";
-    let sanctioned = 0;
-    let utilized = 0;
-    for (const row of creditLines.items) {
-      sanctioned += Number(row.sanctioned_amount ?? 0);
-      utilized += Number(row.utilized_amount ?? 0);
-    }
-    return { sanctioned, utilized, available: Math.max(sanctioned - utilized, 0), currency };
+    const sanctioned = sumMoneyBy(creditLines.items, (row) => row.sanctioned_amount);
+    const utilized = sumMoneyBy(creditLines.items, (row) => row.utilized_amount);
+    return { sanctioned, utilized, available: Math.max(subtractMoney(sanctioned, utilized), 0), currency };
   }, [creditLines]);
 
   const loanTotals = useMemo(() => {
     if (!loanPortfolio?.items.length) return { count: 0, outstanding: 0, currency: "" as string };
     const currency = loanPortfolio.items[0]?.currency ?? "";
-    let outstanding = 0;
-    for (const row of loanPortfolio.items) {
-      outstanding += Number(row.outstanding_principal ?? 0);
-    }
+    const outstanding = sumMoneyBy(loanPortfolio.items, (row) => row.outstanding_principal);
     return { count: loanPortfolio.items.length, outstanding, currency };
   }, [loanPortfolio]);
 

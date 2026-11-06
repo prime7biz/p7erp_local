@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type AiForecastRunResponse } from "@/api/client";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { ForecastChart } from "@/pages/app/ai/predictions/charts/renderers/ForecastChart";
 import { formatAiError } from "@/pages/app/ai/predictions/utils/formatAiError";
 import { X, Copy, RefreshCw, Trash2 } from "lucide-react";
@@ -22,21 +23,29 @@ export function ForecastRunDrawer({
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // Parents pass `onUpdated` inline; keep the latest in a ref so `load` only changes with `runId`.
+  const onUpdatedRef = useRef(onUpdated);
+  onUpdatedRef.current = onUpdated;
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
     if (runId == null) return;
+    const token = latest.begin();
     setLoading(true);
     setError(null);
     try {
       const r = await api.aiGetForecastRun(runId);
+      if (!latest.isCurrent(token)) return;
       setRun(r);
-      onUpdated?.(r);
+      onUpdatedRef.current?.(r);
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError(formatAiError(e, "Failed to load forecast run"));
       setRun(null);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [runId, onUpdated]);
+  }, [latest, runId]);
 
   useEffect(() => {
     if (runId == null) {

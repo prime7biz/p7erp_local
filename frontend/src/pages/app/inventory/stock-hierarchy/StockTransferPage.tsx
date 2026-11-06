@@ -7,6 +7,7 @@ import {
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
+import { getInventoryItemsCached, getWarehousesCached } from "@/lib/masterData";
 
 type LineDraft = {
   stock_item_id: number;
@@ -33,7 +34,7 @@ export function StockTransferPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    void Promise.all([api.listWarehouses(), api.listInventoryItems()])
+    void Promise.all([getWarehousesCached(), getInventoryItemsCached()])
       .then(([wh, it]) => {
         setWarehouses(wh.filter((w) => w.is_active));
         setItems(it);

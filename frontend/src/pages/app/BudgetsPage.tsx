@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
   api,
   type BudgetCreate,
@@ -10,6 +10,8 @@ import {
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { currentMonthLocal } from "@/lib/dates";
 
 function linesToCreate(lines: BudgetResponse["lines"]): BudgetLineCreate[] {
   return lines.map((l) => ({
@@ -50,14 +52,16 @@ export function BudgetsPage() {
       {
         account_id: null,
         cost_center_id: null,
-        period_month: new Date().toISOString().slice(0, 7),
+        period_month: currentMonthLocal(),
         amount: "0",
         notes: "",
       },
     ],
   });
 
-  async function load() {
+  const latest = useLatestRequest();
+  const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       setError("");
       const [b, a, c] = await Promise.all([
@@ -65,6 +69,7 @@ export function BudgetsPage() {
         api.listChartOfAccounts({ active_only: true }),
         api.listCostCenters({ active_only: true }),
       ]);
+      if (!latest.isCurrent(token)) return;
       setBudgets(b);
       setAccounts(a);
       setCostCenters(c);
@@ -72,18 +77,20 @@ export function BudgetsPage() {
         setSelectedBudgetId(null);
         setVsActual(null);
       } else if (selectedBudgetId) {
-        setVsActual(await api.getBudgetVsActual(selectedBudgetId));
+        const vs = await api.getBudgetVsActual(selectedBudgetId);
+        if (!latest.isCurrent(token)) return;
+        setVsActual(vs);
       }
     } catch (e) {
       logApiError("BudgetsPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }
+  }, [latest, selectedBudgetId, fiscalYearFilter]);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBudgetId, fiscalYearFilter]);
+  }, [load]);
 
   useEffect(() => {
     const close = () => setOpenActionsId(null);
@@ -108,7 +115,7 @@ export function BudgetsPage() {
           {
             account_id: null,
             cost_center_id: null,
-            period_month: new Date().toISOString().slice(0, 7),
+            period_month: currentMonthLocal(),
             amount: "0",
             notes: "",
           },
@@ -202,7 +209,7 @@ export function BudgetsPage() {
                     {
                       account_id: null,
                       cost_center_id: null,
-                      period_month: new Date().toISOString().slice(0, 7),
+                      period_month: currentMonthLocal(),
                       amount: "0",
                       notes: "",
                     },
@@ -350,7 +357,7 @@ export function BudgetsPage() {
                   {
                     account_id: null,
                     cost_center_id: null,
-                    period_month: new Date().toISOString().slice(0, 7),
+                    period_month: currentMonthLocal(),
                     amount: "0",
                     notes: "",
                   },

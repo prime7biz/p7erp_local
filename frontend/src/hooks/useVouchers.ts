@@ -1,5 +1,6 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { api, ApiError, type ListWithTotal, type VoucherResponse } from "@/api/client";
+import { tenantKey } from "@/lib/queryKeys";
 import { STALE_ORDER_LISTS } from "@/lib/queryStaleTimes";
 
 export type VoucherListFilters = {
@@ -22,7 +23,7 @@ export function useVouchers(
   const status_filter = filters.status_filter ?? filters.status;
 
   return useQuery({
-    queryKey: ["vouchers", "list", filters],
+    queryKey: tenantKey("vouchers", "list", filters),
     queryFn: async () =>
       api.listVouchersWithTotal({
         status_filter,

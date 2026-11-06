@@ -1,7 +1,9 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type OutstandingBillCreate, type OutstandingBillResponse, type BillsAgingResponse } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 export function OutstandingBillsPage() {
   const [rows, setRows] = useState<OutstandingBillResponse[]>([]);
@@ -18,15 +20,17 @@ export function OutstandingBillsPage() {
     bill_no: "",
     party_name: "",
     bill_type: "RECEIVABLE",
-    bill_date: new Date().toISOString().slice(0, 10),
-    due_date: new Date().toISOString().slice(0, 10),
+    bill_date: todayLocalISO(),
+    due_date: todayLocalISO(),
     amount: "0",
     paid_amount: "0",
     currency: "BDT",
     notes: "",
   });
 
-  async function load() {
+  const latest = useLatestRequest();
+  const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       setSuccess("");
       setError("");
@@ -34,18 +38,19 @@ export function OutstandingBillsPage() {
         api.listOutstandingBills({ bill_type: billType, status_filter: statusFilter || undefined }),
         api.getBillsAging({ bill_type: billType }),
       ]);
+      if (!latest.isCurrent(token)) return;
       setRows(bills);
       setAging(ag);
     } catch (e) {
       logApiError("OutstandingBillsPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }
+  }, [latest, billType, statusFilter]);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [billType, statusFilter]);
+  }, [load]);
 
   const filteredRows = rows.filter((r) => {
     const query = search.trim().toLowerCase();

@@ -20,6 +20,7 @@ import { InventoryDocumentPrintSheets } from "@/components/print/InventoryDocume
 import { PrintPreviewModal } from "@/components/print/PrintPreviewModal";
 import { fetchInventoryItemPage, hydrateInventoryItem } from "@/lib/remoteSelectFetchers";
 import { logApiError } from "@/utils/logApiError";
+import { getWarehousesCached } from "@/lib/masterData";
 
 const STATUSES = ["DRAFT", "SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED", "POSTED", "REJECTED"];
 
@@ -74,7 +75,7 @@ export function DeliveryChallanDetailPage() {
   const [orderIdInput, setOrderIdInput] = useState("");
 
   const loadRefs = useCallback(async () => {
-    const wh = await api.listWarehouses();
+    const wh = await getWarehousesCached();
     setWarehouses(wh);
     setLine((p) => ({
       ...p,

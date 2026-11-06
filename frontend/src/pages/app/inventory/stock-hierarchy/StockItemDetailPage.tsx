@@ -1,7 +1,8 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, type StockItemDetailResponse, type StockItemPriceUpsert } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 
 type Tab = "overview" | "planning" | "batches" | "godown" | "ledger" | "pricing";
@@ -19,22 +20,26 @@ export function StockItemDetailPage() {
     is_active: true,
   });
   const [saving, setSaving] = useState(false);
+  const latest = useLatestRequest();
 
-  async function load() {
+  const load = useCallback(async () => {
     if (!itemId) return;
+    const token = latest.begin();
     try {
       setError("");
-      setData(await api.getStockItemDetail(itemId));
+      const detail = await api.getStockItemDetail(itemId);
+      if (!latest.isCurrent(token)) return;
+      setData(detail);
     } catch (e) {
       logApiError("StockItemDetailPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }
+  }, [latest, itemId]);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemId]);
+  }, [load]);
 
   async function savePrice(e: FormEvent) {
     e.preventDefault();

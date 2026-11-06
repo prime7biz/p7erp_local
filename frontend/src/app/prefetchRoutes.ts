@@ -1,3 +1,6 @@
+import { runPrefetch } from "@/lib/chunkReload";
+import { logApiError } from "@/utils/logApiError";
+
 const prefetchedKeys = new Set<string>();
 
 type PrefetchRule = {
@@ -72,11 +75,19 @@ const prefetchRules: PrefetchRule[] = [
   },
 ];
 
+function startPrefetch(rule: PrefetchRule) {
+  runPrefetch(rule.load).catch((e) => {
+    // Allow a later hover to try again (e.g. after a brief network drop).
+    prefetchedKeys.delete(rule.key);
+    logApiError(`prefetchRoutes.${rule.key}`, e);
+  });
+}
+
 export function prefetchSidebarRoute(href: string) {
   for (const rule of prefetchRules) {
     if (!rule.matches(href) || prefetchedKeys.has(rule.key)) continue;
     prefetchedKeys.add(rule.key);
-    void rule.load();
+    startPrefetch(rule);
     return;
   }
 }
@@ -89,6 +100,6 @@ export function prefetchTopSearchRoutes() {
     const rule = prefetchRules.find((r) => r.key === key);
     if (!rule) continue;
     prefetchedKeys.add(rule.key);
-    void rule.load();
+    startPrefetch(rule);
   }
 }

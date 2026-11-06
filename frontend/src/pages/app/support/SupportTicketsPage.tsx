@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type PlatformSupportTicketItem } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { ClipboardList, PlusCircle } from "lucide-react";
 
 const PREFIX = "/app/support";
@@ -21,7 +22,10 @@ export function SupportTicketsPage() {
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
@@ -30,15 +34,17 @@ export function SupportTicketsPage() {
         page_size: 50,
         status: statusFilter || undefined,
       });
+      if (!latest.isCurrent(token)) return;
       setItems(r.items);
       setTotal(r.total);
     } catch (e) {
       logApiError("listPlatformSupportTickets", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load tickets");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [statusFilter]);
+  }, [latest, statusFilter]);
 
   useEffect(() => {
     void load();

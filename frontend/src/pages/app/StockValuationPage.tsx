@@ -6,6 +6,7 @@ import {
   InventoryErrorPanel,
   InventoryValuationSkeleton,
 } from "@/components/inventory/InventoryListStates";
+import { todayLocalISO } from "@/lib/dates";
 
 function downloadCsv(filename: string, csv: string) {
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -76,7 +77,7 @@ export function StockValuationPage() {
           <button
             type="button"
             className="rounded-lg border border-border bg-surface-raised px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
-            onClick={() => downloadCsv(`stock_valuation_${new Date().toISOString().slice(0, 10)}.csv`, csv)}
+            onClick={() => downloadCsv(`stock_valuation_${todayLocalISO()}.csv`, csv)}
           >
             Export CSV
           </button>

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { financierPortalApi } from "@/hooks/useFinancierPortal";
 import { PortalErrorState } from "@/components/external-access/PortalErrorState";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 type GroupLine = {
   item_id: number;
@@ -61,20 +62,26 @@ export function FinancierInventoryPage() {
     }
   }, []);
 
+  const groupRequest = useLatestRequest();
   const loadByGroup = useCallback(async () => {
+    const token = groupRequest.begin();
     try {
       const d = await financierPortalApi.inventoryByGroup({ btb_scope: btbScope });
+      if (!groupRequest.isCurrent(token)) return;
       setByGroup({
         groups: (d.groups as GroupBlock[]) ?? [],
         note: typeof d.note === "string" ? d.note : null,
       });
     } catch (e) {
       logApiError("financier inventory by-group", e);
+      if (!groupRequest.isCurrent(token)) return;
       throw e;
     }
-  }, [btbScope]);
+  }, [groupRequest, btbScope]);
 
+  const ledgerRequest = useLatestRequest();
   const loadLedger = useCallback(async () => {
+    const token = ledgerRequest.begin();
     if (!itemSelected) {
       setLedger(null);
       return;
@@ -86,12 +93,14 @@ export function FinancierInventoryPage() {
         offset: 0,
         include_gl: includeGl,
       });
+      if (!ledgerRequest.isCurrent(token)) return;
       setLedger(d);
     } catch (e) {
       logApiError("financier inventory ledger", e);
+      if (!ledgerRequest.isCurrent(token)) return;
       throw e;
     }
-  }, [itemId, itemSelected, includeGl]);
+  }, [ledgerRequest, itemId, itemSelected, includeGl]);
 
   const loadAccounting = useCallback(async () => {
     try {
@@ -132,7 +141,7 @@ export function FinancierInventoryPage() {
 
   useEffect(() => {
     if (!itemSelected) {
-      setLedger(null);
+      void loadLedger();
       return;
     }
     void (async () => {

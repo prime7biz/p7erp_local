@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   api,
   type VoucherReportMonthlyResponse,
@@ -6,10 +6,13 @@ import {
   type VoucherReportTopPreparersResponse,
 } from "@/api/client";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
+import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { logApiError } from "@/utils/logApiError";
 
 export function VoucherAnalyticsPage() {
-  const [fromDate, setFromDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10));
-  const [toDate, setToDate] = useState(new Date().toISOString().slice(0, 10));
+  const [fromDate, setFromDate] = useState(startOfMonthLocalISO());
+  const [toDate, setToDate] = useState(todayLocalISO());
   const [voucherType, setVoucherType] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [voucherTypes, setVoucherTypes] = useState<string[]>([]);
@@ -20,7 +23,9 @@ export function VoucherAnalyticsPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  async function load() {
+  const latest = useLatestRequest();
+  const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       setError("");
       const [s, m, t] = await Promise.all([
@@ -43,25 +48,27 @@ export function VoucherAnalyticsPage() {
           status_filter: statusFilter || undefined,
         }),
       ]);
+      if (!latest.isCurrent(token)) return;
       setSummary(s);
       setMonthly(m);
       setTopPreparers(t);
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }
+  }, [latest, fromDate, toDate, voucherType, statusFilter]);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromDate, toDate, voucherType, statusFilter]);
+  }, [load]);
 
   async function loadMeta() {
     try {
       const [types, sts] = await Promise.all([api.getVoucherTypesMeta(), api.getVoucherStatusesMeta()]);
       setVoucherTypes(types);
       setStatuses(sts);
-    } catch {
+    } catch (e) {
+      logApiError("VoucherAnalyticsPage.loadMeta", e);
       setVoucherTypes([]);
       setStatuses([]);
     }
@@ -106,8 +113,8 @@ export function VoucherAnalyticsPage() {
   function clearFilters() {
     setVoucherType("");
     setStatusFilter("");
-    setFromDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10));
-    setToDate(new Date().toISOString().slice(0, 10));
+    setFromDate(startOfMonthLocalISO());
+    setToDate(todayLocalISO());
   }
 
   return (

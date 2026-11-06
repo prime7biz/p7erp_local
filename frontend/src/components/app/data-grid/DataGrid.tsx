@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { exportCsv, exportXlsx } from "./exportRows";
 import { SavedViewsMenu } from "./SavedViewsMenu";
 import type { GridColumn, GridDensity } from "./types";
+import { todayLocalISO } from "@/lib/dates";
 
 export type { GridColumn, GridDensity } from "./types";
 
@@ -173,7 +174,7 @@ export function DataGrid<T>({
   const clearSelection = useCallback(() => setRowSelection({}), []);
   const visibleRows = table.getRowModel().rows.map((r) => r.original);
   const visibleColumns = columns.filter((c) => columnVisibility[c.id] !== false);
-  const baseName = `${exportName ?? tableKey}-${new Date().toISOString().slice(0, 10)}`;
+  const baseName = `${exportName ?? tableKey}-${todayLocalISO()}`;
 
   const getCurrentConfig = (): SavedViewConfig => ({
     query: savedViews?.getQuery(),

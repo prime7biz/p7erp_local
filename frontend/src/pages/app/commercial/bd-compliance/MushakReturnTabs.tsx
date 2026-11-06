@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { api, type Mushak610, type Mushak91Summary } from "@/api/client";
 import { downloadXlsx } from "@/lib/reportExport";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { btnSecondary, errMsg, inputClass, labelClass, num } from "./shared";
 
 function useMonth() {
@@ -33,15 +34,20 @@ function MonthPicker({ period, setPeriod, onRefresh }: { period: string; setPeri
 export function Mushak610Tab() {
   const { period, setPeriod, year, month } = useMonth();
   const [data, setData] = useState<Mushak610 | null>(null);
+  const latest = useLatestRequest();
 
   const load = useCallback(async () => {
+    const token = latest.begin();
     try {
-      setData(await api.getMushak610(year, month));
+      const result = await api.getMushak610(year, month);
+      if (!latest.isCurrent(token)) return;
+      setData(result);
     } catch (e) {
       logApiError("Mushak610Tab.load", e);
+      if (!latest.isCurrent(token)) return;
       toast.error(errMsg(e, "Could not load Mushak 6.10"));
     }
-  }, [year, month]);
+  }, [latest, year, month]);
 
   useEffect(() => {
     void load();
@@ -119,15 +125,20 @@ export function Mushak610Tab() {
 export function Mushak91Tab() {
   const { period, setPeriod, year, month } = useMonth();
   const [data, setData] = useState<Mushak91Summary | null>(null);
+  const latest = useLatestRequest();
 
   const load = useCallback(async () => {
+    const token = latest.begin();
     try {
-      setData(await api.getMushak91(year, month));
+      const result = await api.getMushak91(year, month);
+      if (!latest.isCurrent(token)) return;
+      setData(result);
     } catch (e) {
       logApiError("Mushak91Tab.load", e);
+      if (!latest.isCurrent(token)) return;
       toast.error(errMsg(e, "Could not load Mushak 9.1 summary"));
     }
-  }, [year, month]);
+  }, [latest, year, month]);
 
   useEffect(() => {
     void load();

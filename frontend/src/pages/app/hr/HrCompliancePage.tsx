@@ -10,6 +10,8 @@ import {
 } from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
 import { useAuth } from "@/context/AuthContext";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { logApiError } from "@/utils/logApiError";
 
 const PREFIX = "/app/hr";
 
@@ -62,18 +64,18 @@ export function HrCompliancePage() {
     try {
       const rows = await api.listHrComplianceFrameworks();
       setFrameworks(rows);
-      if (rows.length > 0 && selectedFrameworkId == null) {
-        const active = rows.find((f) => f.is_active && !f.is_system) ?? rows.find((f) => f.is_active) ?? rows[0];
-        if (active) setSelectedFrameworkId(active.id);
-      }
+      const active = rows.find((f) => f.is_active && !f.is_system) ?? rows.find((f) => f.is_active) ?? rows[0];
+      if (active) setSelectedFrameworkId((current) => current ?? active.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load frameworks");
     } finally {
       setLoading(false);
     }
-  }, [selectedFrameworkId, complianceEnabled]);
+  }, [complianceEnabled]);
 
+  const detailRequest = useLatestRequest();
   const loadFrameworkDetail = useCallback(async (frameworkId: number) => {
+    const token = detailRequest.begin();
     setDetailLoading(true);
     try {
       const [reqRows, recRows, scoreRow, audit] = await Promise.all([
@@ -82,12 +84,14 @@ export function HrCompliancePage() {
         api.getHrComplianceScore(frameworkId),
         api.getHrAuditReadiness(frameworkId),
       ]);
+      if (!detailRequest.isCurrent(token)) return;
       setRequirements(reqRows);
       setRecords(recRows);
       setScore(scoreRow);
       setGaps(audit.gaps);
       setActionPlan(audit.action_plan ?? []);
     } catch (e) {
+      if (!detailRequest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load framework details");
       setRequirements([]);
       setRecords([]);
@@ -95,15 +99,16 @@ export function HrCompliancePage() {
       setGaps([]);
       setActionPlan([]);
     } finally {
-      setDetailLoading(false);
+      if (detailRequest.isCurrent(token)) setDetailLoading(false);
     }
-  }, []);
+  }, [detailRequest]);
 
   const loadLegacy = useCallback(async () => {
     setLegacyLoading(true);
     try {
       setLegacyRows(await api.listHrComplianceChecks());
-    } catch {
+    } catch (e) {
+      logApiError("HrCompliancePage.listHrComplianceChecks", e);
       setLegacyRows([]);
     } finally {
       setLegacyLoading(false);

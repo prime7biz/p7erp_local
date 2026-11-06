@@ -11,9 +11,11 @@ import {
   type SupplierPoDetail,
   type SupplierUpdateKind,
 } from "./supplierApi";
+import { todayLocalISO } from "@/lib/dates";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 const card = "rounded-xl border border-border bg-surface-raised p-4";
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayLocalISO();
 
 function ResponseBadge({ po }: { po: SupplierPo }) {
   if (po.supplier_status === "CONFIRMED")
@@ -103,11 +105,20 @@ export function SupplierPurchaseOrdersPage() {
   const [scope, setScope] = useState<"open" | "all">("open");
   const [rows, setRows] = useState<SupplierPo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const latest = useLatestRequest();
   const load = useCallback(() => {
+    const token = latest.begin();
     setError(null);
     setRows(null);
-    supplierApi.purchaseOrders(scope).then((r) => setRows(r.items)).catch((e) => setError(e instanceof Error ? e.message : "Could not load"));
-  }, [scope]);
+    supplierApi
+      .purchaseOrders(scope)
+      .then((r) => {
+        if (latest.isCurrent(token)) setRows(r.items);
+      })
+      .catch((e) => {
+        if (latest.isCurrent(token)) setError(e instanceof Error ? e.message : "Could not load");
+      });
+  }, [latest, scope]);
   useEffect(load, [load]);
 
   return (

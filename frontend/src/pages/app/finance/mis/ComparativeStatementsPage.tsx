@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type ComparativeStatementResponse } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { downloadCsv } from "@/lib/reportExport";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { formatMoney } from "./misFormat";
 
 type Tab = "balance_sheet" | "pl";
@@ -23,7 +24,9 @@ export function ComparativeStatementsPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function load() {
+  const latest = useLatestRequest();
+  const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       setError("");
       setLoading(true);
@@ -31,19 +34,20 @@ export function ComparativeStatementsPage() {
         tab === "balance_sheet"
           ? await api.getComparativeBalanceSheet({ year1, year2 })
           : await api.getComparativePl({ year1, year2 });
+      if (!latest.isCurrent(token)) return;
       setData(res);
     } catch (e) {
       logApiError("ComparativeStatementsPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }
+  }, [latest, tab, year1, year2]);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, year1, year2]);
+  }, [load]);
 
   const rows = useMemo(() => {
     if (!data) return [];

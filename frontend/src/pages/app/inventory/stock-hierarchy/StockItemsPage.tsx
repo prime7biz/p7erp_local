@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -6,6 +6,7 @@ import {
   type StockItemListRow,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { downloadCsv } from "@/lib/reportExport";
 import { logApiError } from "@/utils/logApiError";
 
@@ -15,29 +16,34 @@ export function StockItemsPage() {
   const [groups, setGroups] = useState<StockGroupResponse[]>([]);
   const [groupId, setGroupId] = useState("");
   const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [lowStock, setLowStock] = useState(false);
   const [expiryNearing, setExpiryNearing] = useState(false);
   const [error, setError] = useState("");
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const actionsRef = useRef<HTMLDivElement | null>(null);
+  const latest = useLatestRequest();
 
-  async function load() {
+  const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       setError("");
       const res = await api.listStockItemsEnhanced({
         group_id: groupId ? Number(groupId) : undefined,
-        search: search.trim() || undefined,
+        search: appliedSearch.trim() || undefined,
         low_stock: lowStock || undefined,
         expiry_nearing: expiryNearing || undefined,
         page_size: 100,
       });
+      if (!latest.isCurrent(token)) return;
       setRows(res.items);
       setTotal(res.total);
     } catch (e) {
       logApiError("StockItemsPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }
+  }, [latest, groupId, appliedSearch, lowStock, expiryNearing]);
 
   useEffect(() => {
     void api
@@ -48,8 +54,7 @@ export function StockItemsPage() {
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupId, lowStock, expiryNearing]);
+  }, [load]);
 
   useEffect(() => {
     function onDocClick(ev: MouseEvent) {
@@ -63,7 +68,8 @@ export function StockItemsPage() {
 
   function onSearch(e: FormEvent) {
     e.preventDefault();
-    void load();
+    if (search === appliedSearch) void load();
+    else setAppliedSearch(search);
   }
 
   function exportCsv() {

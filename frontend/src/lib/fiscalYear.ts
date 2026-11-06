@@ -23,10 +23,8 @@ function isoDate(year: number, month: number, day: number): string {
   return `${year}-${pad(month)}-${pad(day)}`;
 }
 
-/** Today's date as YYYY-MM-DD in the user's own time zone (toISOString() would give the UTC day). */
-export function localTodayISO(now: Date = new Date()): string {
-  return isoDate(now.getFullYear(), now.getMonth() + 1, now.getDate());
-}
+/** Same as `todayLocalISO` in `lib/dates.ts`; kept under this name for existing callers. */
+export { todayLocalISO as localTodayISO } from "./dates";
 
 export function normalizeStartMonth(value: unknown): number {
   const m = Number(value);

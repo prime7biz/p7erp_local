@@ -80,7 +80,7 @@ export function AiPredictionsPage() {
         setPolledRun(created);
       }
     } catch {
-      /* handled in hook */
+      /* useForecastRuns.generate already shows the error via runsError */
     }
   };
 
@@ -92,7 +92,7 @@ export function AiPredictionsPage() {
         setPolledRun(created);
       }
     } catch {
-      /* handled */
+      /* useForecastRuns.generate already shows the error via runsError */
     } finally {
       setRunningKey(null);
     }

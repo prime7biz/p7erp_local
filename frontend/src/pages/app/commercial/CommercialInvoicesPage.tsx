@@ -4,6 +4,7 @@ import { FileText } from "lucide-react";
 import { api, type CommercialInvoiceRow } from "@/api/client";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 export function CommercialInvoicesPage() {
   const [searchParams] = useSearchParams();
@@ -18,7 +19,10 @@ export function CommercialInvoicesPage() {
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
@@ -29,15 +33,17 @@ export function CommercialInvoicesPage() {
         page: 1,
         page_size: 200,
       });
+      if (!latest.isCurrent(token)) return;
       setItems(Array.isArray(res.items) ? res.items : []);
     } catch (e) {
       logApiError("CommercialInvoicesPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setItems([]);
       setError(e instanceof Error ? e.message : "Failed to load invoices");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [statusFilter, dateFrom, dateTo]);
+  }, [latest, statusFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     void load();

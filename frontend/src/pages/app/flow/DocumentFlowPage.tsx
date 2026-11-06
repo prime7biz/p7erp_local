@@ -33,6 +33,8 @@ import {
   listTableTrClass,
 } from "@/components/app/listPageLayout";
 import { useListPagination } from "@/hooks/useListPagination";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { logApiError } from "@/utils/logApiError";
 import { cn } from "@/lib/utils";
 import {
   FileText,
@@ -45,6 +47,7 @@ import {
   Download,
   ArrowRight,
 } from "lucide-react";
+import { todayLocalISO } from "@/lib/dates";
 
 const PREFIX = "/app";
 
@@ -116,7 +119,10 @@ export function DocumentFlowPage() {
         api.listQuotationsPaginated({ page: 1, page_size: 1 }),
         api.listProformaInvoices({ limit: PROFORMA_LIMIT, offset: 0 }),
         api.listTradeCases({ limit: TRADE_CASE_LIMIT }),
-        api.getTradeCaseDocumentCounts().catch(() => ({ documents: {}, shipments: {} })),
+        api.getTradeCaseDocumentCounts().catch((e) => {
+          logApiError("DocumentFlowPage.getTradeCaseDocumentCounts", e);
+          return { documents: {}, shipments: {} };
+        }),
         api.listQuotationsPaginated({ page: 1, page_size: AUX_PAGE_SIZE }),
         api.listInquiriesPaginated({ page: 1, page_size: AUX_PAGE_SIZE }),
       ]);
@@ -152,7 +158,8 @@ export function DocumentFlowPage() {
       }
       setTradeDocCounts(docMap);
       setTradeShipCounts(shipMap);
-    } catch {
+    } catch (e) {
+      logApiError("DocumentFlowPage.loadAuxiliary", e);
       setKpiInquiriesTotal(null);
       setKpiQuotationsTotal(null);
       setKpiProformasCount(null);
@@ -168,7 +175,10 @@ export function DocumentFlowPage() {
     }
   }, []);
 
+  const latestOrders = useLatestRequest();
+
   const loadOrdersPage = useCallback(async () => {
+    const token = latestOrders.begin();
     setOrdersLoading(true);
     setError("");
     try {
@@ -180,17 +190,20 @@ export function DocumentFlowPage() {
         page,
         page_size: pageSize,
       });
+      if (!latestOrders.isCurrent(token)) return;
       setOrders(res.items);
       setListTotal(res.total);
       if (res.page !== page) setPage(res.page);
     } catch (e) {
+      logApiError("DocumentFlowPage.loadOrdersPage", e);
+      if (!latestOrders.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load document flow");
       setOrders([]);
       setListTotal(0);
     } finally {
-      setOrdersLoading(false);
+      if (latestOrders.isCurrent(token)) setOrdersLoading(false);
     }
-  }, [search, filterOrderStatus, filterCreatedFrom, filterCreatedTo, page, pageSize, setPage]);
+  }, [latestOrders, search, filterOrderStatus, filterCreatedFrom, filterCreatedTo, page, pageSize, setPage]);
 
   useEffect(() => {
     void loadAuxiliary();
@@ -198,8 +211,7 @@ export function DocumentFlowPage() {
 
   useEffect(() => {
     void loadOrdersPage();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, filterOrderStatus, filterCreatedFrom, filterCreatedTo, page, pageSize]);
+  }, [loadOrdersPage]);
 
   const proformasByOrderId = useMemo(() => {
     const m = new Map<number, ProformaInvoiceRow[]>();
@@ -281,7 +293,7 @@ export function DocumentFlowPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `document-flow-page${page}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `document-flow-page${page}-${todayLocalISO()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }, [flowRows, tradeCaseByOrderId, tradeDocCounts, tradeShipCounts, page]);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -17,6 +17,9 @@ import { FileImportCard } from "@/components/ai-extract/FileImportCard";
 import { useCommercialDocExtraction } from "@/hooks/useCommercialDocExtraction";
 import type { ConflictResolutionChoice, FieldApplyState } from "@/types/extraction";
 import { buildLcFieldApplyStates } from "@/utils/extractionHelpers";
+import { todayLocalISO } from "@/lib/dates";
+import { subtractMoney, sumMoneyBy } from "@/lib/money";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 const CONTRACT_TYPES = [
   { value: "EXPORT_LC", label: "Master Export LC" },
@@ -128,7 +131,10 @@ export function MasterContractsPage() {
     informational: 1,
   };
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
@@ -146,6 +152,7 @@ export function MasterContractsPage() {
           return { items: [] as MerchAlertItem[] };
         }),
       ]);
+      if (!latest.isCurrent(token)) return;
       setItems(rows);
       const grouped: Record<number, MerchAlertItem[]> = {};
       for (const alert of alerts.items) {
@@ -157,35 +164,43 @@ export function MasterContractsPage() {
       }
       setAlertMap(grouped);
     } catch (e) {
+      logApiError("MasterContractsPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load master contracts");
       setItems([]);
       setAlertMap({});
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [statusFilter]);
+  }, [latest, statusFilter]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const formRef = useRef(form);
+  useEffect(() => {
+    formRef.current = form;
+  }, [form]);
 
   useEffect(() => {
     if (!lcExtract.response) {
       setLcReviewRows([]);
       return;
     }
+    const formNow = formRef.current;
     const current: Record<string, string> = {
-      reference: form.reference ?? "",
-      contract_type: form.contract_type ?? "",
-      amount: form.amount != null ? String(form.amount) : "",
-      currency: form.currency ?? "",
-      buyer_name: form.buyer_name ?? "",
-      bank_name: form.bank_name ?? "",
-      contract_date: form.contract_date ?? "",
-      expiry_date: form.expiry_date ?? "",
+      reference: formNow.reference ?? "",
+      contract_type: formNow.contract_type ?? "",
+      amount: formNow.amount != null ? String(formNow.amount) : "",
+      currency: formNow.currency ?? "",
+      buyer_name: formNow.buyer_name ?? "",
+      bank_name: formNow.bank_name ?? "",
+      contract_date: formNow.contract_date ?? "",
+      expiry_date: formNow.expiry_date ?? "",
     };
     setLcReviewRows(buildLcFieldApplyStates(lcExtract.response, current));
-  }, [lcExtract.response]); // eslint-disable-line react-hooks/exhaustive-deps -- snapshot once per extraction
+  }, [lcExtract.response]);
 
   const applyLcField = (fieldKey: string) => {
     const row = lcReviewRows.find((r) => r.fieldKey === fieldKey);
@@ -211,7 +226,7 @@ export function MasterContractsPage() {
   const totals = useMemo(() => {
     const total = items.length;
     const active = items.filter((row) => (row.status || "").toUpperCase() === "ACTIVE").length;
-    const amount = items.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const amount = sumMoneyBy(items, (row) => row.amount);
     return { total, active, amount };
   }, [items]);
 
@@ -300,8 +315,8 @@ export function MasterContractsPage() {
   const utilization = useMemo(() => {
     if (!selectedContract) return null;
     const total = Number(selectedContract.amount || 0);
-    const used = selectedLcs.reduce((sum, lc) => sum + Number(lc.amount || 0), 0);
-    const remaining = Math.max(total - used, 0);
+    const used = sumMoneyBy(selectedLcs, (lc) => lc.amount);
+    const remaining = Math.max(subtractMoney(total, used), 0);
     const rawPercent = total > 0 ? (used / total) * 100 : 0;
     const band = getBand(rawPercent);
     return { total, used, remaining, percent: rawPercent, band };
@@ -338,9 +353,9 @@ export function MasterContractsPage() {
     if (!selectedContract) return;
     const contractRef = selectedContract.reference || `contract_${selectedContract.id}`;
     const safeRef = contractRef.replace(/[^\w.-]+/g, "_");
-    const now = new Date().toISOString().slice(0, 10);
+    const now = todayLocalISO();
     const utilTotal = Number(selectedContract.amount || 0);
-    const utilUsed = selectedLcs.reduce((sum, lc) => sum + Number(lc.amount || 0), 0);
+    const utilUsed = sumMoneyBy(selectedLcs, (lc) => lc.amount);
     const utilPct = utilTotal > 0 ? (utilUsed / utilTotal) * 100 : 0;
 
     const rows: string[][] = [

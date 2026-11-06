@@ -10,6 +10,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import type { DashboardAttentionSummary } from "@/api/client";
+import { safeInternalPath } from "@/utils/safeUrl";
 
 const bdt = new Intl.NumberFormat("en-BD");
 
@@ -142,7 +143,7 @@ function NeedsAttentionStripInner({ summary }: NeedsAttentionStripProps) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {CARDS.map((card) => {
           const value = summary[card.key] ?? 0;
-          const href = summary.links?.[card.key] || DEFAULT_LINKS[card.key];
+          const href = safeInternalPath(summary.links?.[card.key]) || DEFAULT_LINKS[card.key];
           const isHot = value > 0 && card.warnWhenPositive;
           const isDanger = value > 0 && Boolean(card.dangerWhenPositive);
           return (

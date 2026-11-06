@@ -3,6 +3,9 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Download, Plus } from "lucide-react";
 
 import { api, type TradeCaseCreate, type TradeCaseRow } from "@/api/client";
+import { todayLocalISO } from "@/lib/dates";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { logApiError } from "@/utils/logApiError";
 
 const EMPTY_FORM: TradeCaseCreate = {
   direction: "EXPORT",
@@ -35,7 +38,10 @@ export function TradeCasesPage() {
   const [creating, setCreating] = useState(false);
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
@@ -49,14 +55,17 @@ export function TradeCasesPage() {
         at_risk: atRiskOnly || undefined,
         limit: 500,
       });
+      if (!latest.isCurrent(token)) return;
       setItems(rows);
     } catch (e) {
+      logApiError("TradeCasesPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setItems([]);
       setError(e instanceof Error ? e.message : "Failed to load trade cases");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [directionFilter, statusFilter, stageFilter, atRiskOnly, search, dateFrom, dateTo]);
+  }, [latest, directionFilter, statusFilter, stageFilter, atRiskOnly, search, dateFrom, dateTo]);
 
   useEffect(() => {
     void load();
@@ -64,10 +73,10 @@ export function TradeCasesPage() {
 
   // Keep filters in sync when opening the list from dashboard / deep links (?status=, ?stage=, ?at_risk=1).
   useEffect(() => {
-    setStatusFilter(searchParams.get("status") ?? "");
-    setStageFilter(searchParams.get("stage") ?? "");
-    setAtRiskOnly(searchParams.get("at_risk") === "1");
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync only when the URL query string changes
+    const params = new URLSearchParams(searchParamsKey);
+    setStatusFilter(params.get("status") ?? "");
+    setStageFilter(params.get("stage") ?? "");
+    setAtRiskOnly(params.get("at_risk") === "1");
   }, [searchParamsKey]);
 
   const exportCsv = () => {
@@ -94,7 +103,7 @@ export function TradeCasesPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `trade-cases-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `trade-cases-${todayLocalISO()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

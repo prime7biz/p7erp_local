@@ -7,6 +7,7 @@ import {
   type OrderProfitabilitySummaryPage,
 } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 function statusClass(status: string): string {
   if (status === "green") return "bg-status-success-subtle text-status-success-foreground";
@@ -59,7 +60,10 @@ export function OrderProfitabilityPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
@@ -68,15 +72,17 @@ export function OrderProfitabilityPage() {
         page,
         page_size: 25,
       });
+      if (!latest.isCurrent(token)) return;
       setData(res);
     } catch (e) {
       logApiError("OrderProfitabilityPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load profitability");
       setData(null);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [orderStatus, page]);
+  }, [latest, orderStatus, page]);
 
   useEffect(() => {
     void load();

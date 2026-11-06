@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type HrPayslipResponse } from "@/api/client";
 import { HrSimpleCrudPage } from "@/pages/app/hr/components/HrSimpleCrudPage";
+import { logApiError } from "@/utils/logApiError";
 
 interface HrPayslipFilter {
   run_id: number;
@@ -12,7 +13,8 @@ export function HrPayslipsPage() {
   const refresh = useCallback(async () => {
     try {
       setSlips(await api.listHrPayslips());
-    } catch {
+    } catch (e) {
+      logApiError("HrPayslipsPage.listHrPayslips", e);
       setSlips([]);
     }
   }, []);

@@ -1,33 +1,41 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type CashFlowStatementResponse, type CashForecastScenarioResponse } from "@/api/client";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
+import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 export function CashFlowReportPage() {
   const [mode, setMode] = useState<"statement" | "forecast">("statement");
-  const [fromDate, setFromDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10));
-  const [toDate, setToDate] = useState(new Date().toISOString().slice(0, 10));
+  const [fromDate, setFromDate] = useState(startOfMonthLocalISO());
+  const [toDate, setToDate] = useState(todayLocalISO());
   const [statement, setStatement] = useState<CashFlowStatementResponse | null>(null);
   const [rows, setRows] = useState<CashForecastScenarioResponse[]>([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  async function load() {
+  const latest = useLatestRequest();
+  const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       setError("");
       if (mode === "statement") {
-        setStatement(await api.getCashFlowStatement({ from_date: fromDate, to_date: toDate }));
+        const res = await api.getCashFlowStatement({ from_date: fromDate, to_date: toDate });
+        if (!latest.isCurrent(token)) return;
+        setStatement(res);
       } else {
-        setRows(await api.listCashForecastScenarios());
+        const res = await api.listCashForecastScenarios();
+        if (!latest.isCurrent(token)) return;
+        setRows(res);
       }
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }
+  }, [latest, mode, fromDate, toDate]);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, fromDate, toDate]);
+  }, [load]);
 
   useEffect(() => {
     if (!success) return;

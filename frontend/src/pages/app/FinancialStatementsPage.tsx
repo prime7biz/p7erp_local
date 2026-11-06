@@ -1,11 +1,14 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type AccountGroupResponse, type FinancialStatementsResponse, type ReportBasis } from "@/api/client";
 import { trialBalanceHref, type AccountNature } from "@/lib/financeDrilldown";
 import { downloadCsv, downloadXlsx, printCurrentPage } from "@/lib/reportExport";
+import { todayLocalISO } from "@/lib/dates";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { logApiError } from "@/utils/logApiError";
 
 export function FinancialStatementsPage() {
-  const [asOfDate, setAsOfDate] = useState(new Date().toISOString().slice(0, 10));
+  const [asOfDate, setAsOfDate] = useState(todayLocalISO());
   const [groupId, setGroupId] = useState<number | "">("");
   const [groups, setGroups] = useState<AccountGroupResponse[]>([]);
   const [compactView, setCompactView] = useState(false);
@@ -14,19 +17,25 @@ export function FinancialStatementsPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  async function load() {
+  const latest = useLatestRequest();
+  const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       setError("");
-      setData(await api.getFinancialStatements({ as_of_date: asOfDate, group_id: groupId || undefined, basis }));
+      const res = await api.getFinancialStatements({ as_of_date: asOfDate, group_id: groupId || undefined, basis });
+      if (!latest.isCurrent(token)) return;
+      setData(res);
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }
+  }, [latest, asOfDate, groupId, basis]);
 
   async function loadGroups() {
     try {
       setGroups(await api.listAccountGroups());
-    } catch {
+    } catch (e) {
+      logApiError("FinancialStatementsPage.loadGroups", e);
       setGroups([]);
     }
   }
@@ -37,8 +46,7 @@ export function FinancialStatementsPage() {
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [asOfDate, groupId, basis]);
+  }, [load]);
 
   useEffect(() => {
     if (!success) return;

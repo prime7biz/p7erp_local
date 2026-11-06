@@ -18,6 +18,10 @@ import { RowActionsMenu, type RowActionItem } from "@/components/app/RowActionsM
 import { useConfirm } from "@/components/app/useConfirm";
 import { listPageRootClass, listPageTableCardClass } from "@/components/app/listPageLayout";
 import { logApiError } from "@/utils/logApiError";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
+import { fetchCustomerPage, fetchOrderPage, fetchVendorPage, hydrateCustomer, hydrateOrder, hydrateVendor } from "@/lib/remoteSelectFetchers";
+import { todayLocalISO } from "@/lib/dates";
+import { addMoney, sumMoneyBy } from "@/lib/money";
 
 type Tab = "shipments" | "statements" | "rules";
 type Option = { id: number; label: string };
@@ -33,29 +37,21 @@ const dirLabel = (d: CommissionDirection) => (d === "RECEIVABLE" ? "We earn" : "
 const errMsg = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 function useOptions() {
-  const [orders, setOrders] = useState<Option[]>([]);
-  const [vendors, setVendors] = useState<Option[]>([]);
-  const [customers, setCustomers] = useState<Option[]>([]);
+
   const [agents, setAgents] = useState<Option[]>([]);
   const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
   useEffect(() => {
     Promise.all([
-      api.listOrdersPaginated({ page: 1, page_size: 200 }),
-      api.listVendorsPaginated({ is_active: true, page: 1, page_size: 500 }),
-      api.listCustomersPaginated({ page: 1, page_size: 500 }),
       api.listIntermediaries({ is_active: true }),
       api.listChartOfAccounts(),
     ])
-      .then(([o, v, c, a, coa]) => {
-        setOrders(o.items.map((x) => ({ id: x.id, label: `${x.order_code}${x.customer_name ? ` · ${x.customer_name}` : ""}` })));
-        setVendors(v.items.map((x) => ({ id: x.id, label: x.name })));
-        setCustomers(c.items.map((x) => ({ id: x.id, label: x.name })));
+      .then(([a, coa]) => {
         setAgents(a.map((x) => ({ id: x.id, label: x.name })));
         setAccounts(coa);
       })
       .catch((e) => logApiError("CommissionPage.options", e));
   }, []);
-  return { orders, vendors, customers, agents, accounts };
+  return { agents, accounts };
 }
 
 export function CommissionPage() {
@@ -109,7 +105,7 @@ export function CommissionPage() {
           </button>
         ))}
       </div>
-      {tab === "shipments" ? <ShipmentsTab options={options} /> : null}
+      {tab === "shipments" ? <ShipmentsTab /> : null}
       {tab === "statements" ? <StatementsTab /> : null}
       {tab === "rules" ? <RulesTab options={options} settings={settings} onSettings={setSettings} /> : null}
     </div>
@@ -118,13 +114,13 @@ export function CommissionPage() {
 
 /* ------------------------------------------------------------------ shipments */
 
-function ShipmentsTab({ options }: { options: ReturnType<typeof useOptions> }) {
+function ShipmentsTab() {
   const confirm = useConfirm();
   const [rows, setRows] = useState<CommissionShipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | number | null>(null);
   const [saving, setSaving] = useState(false);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalISO();
   const [form, setForm] = useState({
     order_id: "",
     vendor_id: "",
@@ -152,7 +148,11 @@ function ShipmentsTab({ options }: { options: ReturnType<typeof useOptions> }) {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.order_id || !form.shipment_ref.trim() || !form.shipped_value) return;
+    if (!form.order_id) {
+      toast.error("Select the order for this shipment");
+      return;
+    }
+    if (!form.shipment_ref.trim() || !form.shipped_value) return;
     setSaving(true);
     try {
       const created = await api.createCommissionShipment({
@@ -181,7 +181,7 @@ function ShipmentsTab({ options }: { options: ReturnType<typeof useOptions> }) {
 
   const columns = useMemo<GridColumn<CommissionShipment>[]>(() => {
     const sumDir = (s: CommissionShipment, d: CommissionDirection) =>
-      s.entries.filter((e) => e.direction === d).reduce((n, e) => n + Number(e.gross_amount), 0);
+      sumMoneyBy(s.entries.filter((e) => e.direction === d), (e) => e.gross_amount);
     return [
       { id: "date", header: "Date", value: (s) => s.shipment_date, cell: (s) => s.shipment_date },
       { id: "ref", header: "Shipment ref", alwaysVisible: true, value: (s) => s.shipment_ref, cell: (s) => <span className="font-medium text-text-primary">{s.shipment_ref}</span> },
@@ -252,17 +252,25 @@ function ShipmentsTab({ options }: { options: ReturnType<typeof useOptions> }) {
         <h2 className="text-sm font-semibold text-text-primary sm:col-span-2 lg:col-span-4">Record a shipment</h2>
         <div>
           <label className={labelClass} htmlFor="cs-order">Order *</label>
-          <select id="cs-order" required value={form.order_id} onChange={set("order_id")} className={inputClass}>
-            <option value="">Select order…</option>
-            {options.orders.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </select>
+          <RemoteSearchSelect
+            id="cs-order"
+            value={form.order_id ? Number(form.order_id) : ""}
+            onChange={(next) => setForm((f) => ({ ...f, order_id: next === "" ? "" : String(next) }))}
+            fetchPage={fetchOrderPage}
+            hydrateById={hydrateOrder}
+            placeholder="Select order…"
+          />
         </div>
         <div>
           <label className={labelClass} htmlFor="cs-factory">Factory (if we earn from it)</label>
-          <select id="cs-factory" value={form.vendor_id} onChange={set("vendor_id")} className={inputClass}>
-            <option value="">—</option>
-            {options.vendors.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </select>
+          <RemoteSearchSelect
+            id="cs-factory"
+            value={form.vendor_id ? Number(form.vendor_id) : ""}
+            onChange={(next) => setForm((f) => ({ ...f, vendor_id: next === "" ? "" : String(next) }))}
+            fetchPage={fetchVendorPage}
+            hydrateById={hydrateVendor}
+            placeholder="Search factory…"
+          />
         </div>
         <div>
           <label className={labelClass} htmlFor="cs-ref">Shipment / invoice ref *</label>
@@ -363,8 +371,8 @@ function StatementsTab() {
         net: 0,
       };
       g.count += 1;
-      g.gross += Number(e.gross_amount);
-      g.net += Number(e.net_amount);
+      g.gross = addMoney(g.gross, e.gross_amount);
+      g.net = addMoney(g.net, e.net_amount);
       map.set(key, g);
     }
     return [...map.values()];
@@ -395,7 +403,7 @@ function StatementsTab() {
       { id: "direction", header: "Type", value: (s) => dirLabel(s.direction), cell: (s) => dirLabel(s.direction) },
       { id: "party", header: "Party", value: (s) => s.counterparty_name ?? "", cell: (s) => s.counterparty_name ?? "—" },
       { id: "gross", header: "Gross", align: "right", value: (s) => Number(s.gross_total), cell: (s) => fmt(s.gross_total, s.currency) },
-      { id: "tax", header: "TDS + VDS", align: "right", value: (s) => Number(s.tds_total) + Number(s.vds_total), cell: (s) => fmt(Number(s.tds_total) + Number(s.vds_total), s.currency) },
+      { id: "tax", header: "TDS + VDS", align: "right", value: (s) => addMoney(s.tds_total, s.vds_total), cell: (s) => fmt(addMoney(s.tds_total, s.vds_total), s.currency) },
       { id: "net", header: "Net", align: "right", value: (s) => Number(s.net_total), cell: (s) => fmt(s.net_total, s.currency) },
       { id: "status", header: "Status", value: (s) => s.status, cell: (s) => s.status },
       {
@@ -547,10 +555,14 @@ function RulesTab({
   }, [load]);
 
   const scopes: CommissionRule["scope"][] = rule.direction === "RECEIVABLE" ? ["DEFAULT", "VENDOR", "CUSTOMER"] : ["DEFAULT", "INTERMEDIARY"];
-  const targets = rule.scope === "VENDOR" ? options.vendors : rule.scope === "CUSTOMER" ? options.customers : rule.scope === "INTERMEDIARY" ? options.agents : [];
+  const targets = rule.scope === "INTERMEDIARY" ? options.agents : [];
 
   const addRule = async (e: React.FormEvent) => {
     e.preventDefault();
+    if ((rule.scope === "VENDOR" || rule.scope === "CUSTOMER") && !rule.target) {
+      toast.error(rule.scope === "VENDOR" ? "Select the factory this rule is for" : "Select the buyer this rule is for");
+      return;
+    }
     try {
       await api.createCommissionRule({
         direction: rule.direction,
@@ -645,10 +657,32 @@ function RulesTab({
           {rule.scope !== "DEFAULT" ? (
             <div className="sm:col-span-2">
               <label className={labelClass} htmlFor="cr-target">Which one</label>
-              <select id="cr-target" required value={rule.target} onChange={(e) => setRule({ ...rule, target: e.target.value })} className={inputClass}>
-                <option value="">Select…</option>
-                {targets.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-              </select>
+              {rule.scope === "VENDOR" ? (
+                <RemoteSearchSelect
+                  key="vendor"
+                  id="cr-target"
+                  value={rule.target ? Number(rule.target) : ""}
+                  onChange={(next) => setRule((r) => ({ ...r, target: next === "" ? "" : String(next) }))}
+                  fetchPage={fetchVendorPage}
+                  hydrateById={hydrateVendor}
+                  placeholder="Search factory…"
+                />
+              ) : rule.scope === "CUSTOMER" ? (
+                <RemoteSearchSelect
+                  key="customer"
+                  id="cr-target"
+                  value={rule.target ? Number(rule.target) : ""}
+                  onChange={(next) => setRule((r) => ({ ...r, target: next === "" ? "" : String(next) }))}
+                  fetchPage={fetchCustomerPage}
+                  hydrateById={hydrateCustomer}
+                  placeholder="Search buyer…"
+                />
+              ) : (
+                <select id="cr-target" required value={rule.target} onChange={(e) => setRule({ ...rule, target: e.target.value })} className={inputClass}>
+                  <option value="">Select…</option>
+                  {targets.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </select>
+              )}
             </div>
           ) : null}
           <div>

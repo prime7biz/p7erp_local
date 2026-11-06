@@ -1,5 +1,8 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { api, ApiError, clearAuth, MeResponse } from "@/api/client";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+// Small modules only: importing "@/api/client" here would put every API method in the first download.
+import { authApi } from "@/api/auth";
+import { ApiError, clearAuth } from "@/api/core";
+import type { MeResponse } from "@/api/client";
 
 interface AuthState {
   me: MeResponse | null;
@@ -27,7 +30,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.me();
+      const data = await authApi.me();
       setMe(data);
     } catch (e) {
       setMe(null);
@@ -48,7 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refetch();
+    void refetch();
   }, [refetch]);
 
   const logout = useCallback(() => {
@@ -72,11 +75,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [me],
   );
 
-  return (
-    <AuthContext.Provider value={{ me, loading, error, logout, refetch, hasPermission }}>
-      {children}
-    </AuthContext.Provider>
+  // Same object between renders unless something changed, so every useAuth() consumer does not re-render.
+  const value = useMemo(
+    () => ({ me, loading, error, logout, refetch, hasPermission }),
+    [me, loading, error, logout, refetch, hasPermission],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 // Hook is intentionally colocated with AuthProvider for a single import surface.

@@ -14,6 +14,7 @@ import { LinkedRecordsSection } from "@/components/app/LinkedRecordsSection";
 import { WorkflowSummaryStrip } from "@/components/app/WorkflowSummaryStrip";
 import { useCustomerAi } from "@/hooks/useCustomerAi";
 import { logApiError } from "@/utils/logApiError";
+import { safeHref } from "@/utils/safeUrl";
 import { Building2, Mail, MapPin, Pencil, Phone, UserRound } from "lucide-react";
 
 function formatDateTime(value: string): string {
@@ -236,10 +237,17 @@ export function CustomerDetailPage() {
         </div>
         <div className="rounded-xl border border-border bg-surface-raised p-4">
           <div className="text-xs uppercase tracking-wide text-text-muted">Website</div>
-          {customer.website ? (
-            <a href={customer.website} target="_blank" rel="noreferrer" className="mt-1 inline-block font-semibold text-brand-primary hover:underline">
+          {customer.website && safeHref(customer.website, { assumeHttps: true }) ? (
+            <a
+              href={safeHref(customer.website, { assumeHttps: true })}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 inline-block font-semibold text-brand-primary hover:underline"
+            >
               Open website
             </a>
+          ) : customer.website ? (
+            <div className="mt-1 break-all font-semibold text-text-primary">{customer.website}</div>
           ) : (
             <div className="mt-1 font-semibold text-text-primary">—</div>
           )}

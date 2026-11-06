@@ -29,6 +29,7 @@ import {
   QUOTATION_MANUFACTURING_HOURS_PER_DAY,
   toSafeNumber,
 } from "./mappers/quotationNumeric";
+import { getCustomersCached } from "@/lib/masterData";
 
 export function useQuotationWorkspaceController(id?: string) {
   const navigate = useNavigate();
@@ -81,7 +82,7 @@ export function useQuotationWorkspaceController(id?: string) {
           api.listItemCategories(),
           api.listCostingItems(),
           api.listItemUnits(),
-          isNew ? api.listCustomers() : Promise.resolve([] as CustomerResponse[]),
+          isNew ? getCustomersCached() : Promise.resolve([] as CustomerResponse[]),
           isNew ? api.listInquiries() : Promise.resolve([] as InquiryResponse[]),
           isNew ? api.listCustomerIntermediaryLinks() : Promise.resolve([] as CustomerIntermediaryLinkResponse[]),
           api.getSettingsConfig(),
@@ -288,13 +289,16 @@ export function useQuotationWorkspaceController(id?: string) {
     [items, units, quotation?.projected_quantity, quotation?.currency],
   );
 
+  // Depend on primitive header fields only: the rollup header sync replaces `quotation` with a new object.
+  const quotationId = quotation?.id;
+  const projectedQuantity = quotation?.projected_quantity;
+
   useEffect(() => {
-    if (!quotation) return;
-    const qc = quotation.currency ?? "USD";
-    const pq = toSafeNumber(quotation.projected_quantity);
+    if (quotationId == null) return;
+    const pq = toSafeNumber(projectedQuantity);
     setMaterials((rows) =>
       rows.map((row) => {
-        const c = computeMaterialLineAmounts(row, pq, qc);
+        const c = computeMaterialLineAmounts(row, pq, quotationCurrency);
         return {
           ...row,
           amount_per_dozen: c.amount_per_dozen,
@@ -303,20 +307,18 @@ export function useQuotationWorkspaceController(id?: string) {
         };
       }),
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- document currency / qty only; avoid full quotation (rollup header sync creates new refs)
-  }, [quotation?.currency, quotation?.projected_quantity]);
+  }, [quotationId, quotationCurrency, projectedQuantity]);
 
   useEffect(() => {
-    if (!quotation) return;
-    const pq = toSafeNumber(quotation.projected_quantity);
+    if (quotationId == null) return;
+    const pq = toSafeNumber(projectedQuantity);
     setManufacturing((rows) =>
       rows.map((row) => ({
         ...row,
         ...computeManufacturingLineAmounts(row, pq),
       })),
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- qty + quotation identity; row inputs handled in onManufacturingChange
-  }, [quotation?.id, quotation?.projected_quantity]);
+  }, [quotationId, projectedQuantity]);
 
   const refreshCostingMasters = useCallback(async () => {
     const [cats, itemsRes, unitsRes] = await Promise.all([
@@ -496,7 +498,8 @@ export function useQuotationWorkspaceController(id?: string) {
           const upload = await api.uploadStyleImage(created.id, quickStyleImageFile);
           styleForSelect = { ...created, style_image_url: upload.style_image_url };
           setQuickStyleNotice("Style created and picture uploaded.");
-        } catch {
+        } catch (e) {
+          logApiError("QuotationWorkspace.uploadStyleImage", e);
           setQuickStyleNotice("Style created. Picture upload failed, upload later from style detail.");
         }
       } else {

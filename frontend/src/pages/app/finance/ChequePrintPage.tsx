@@ -8,6 +8,7 @@ import { Link, useParams } from "react-router-dom";
 import { api, type ChartOfAccountResponse, type VoucherResponse } from "@/api/client";
 import { amountInWords, formatLakh } from "@/lib/amountInWords";
 import { logApiError } from "@/utils/logApiError";
+import { sumMoneyBy } from "@/lib/money";
 
 const OFFSET_KEY = "p7_cheque_offset_mm";
 
@@ -41,15 +42,20 @@ export function ChequePrintPage() {
 
   useEffect(() => {
     if (!Number.isFinite(id) || id <= 0) return;
+    let cancelled = false;
     void Promise.all([api.getVoucher(id), api.listChartOfAccounts()])
       .then(([v, accts]) => {
+        if (cancelled) return;
         setVoucher(v);
         setAccounts(accts);
       })
       .catch((e) => {
         logApiError("ChequePrintPage.load", e);
-        setError((e as Error).message);
+        if (!cancelled) setError((e as Error).message);
       });
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
@@ -58,7 +64,7 @@ export function ChequePrintPage() {
     if (!voucher) return { amount: 0, bankName: "", defaultPayee: "" };
     const bankCredits = voucher.lines.filter((l) => l.entry_type === "CREDIT" && accountById.get(l.account_id)?.is_bank_account);
     const debits = voucher.lines.filter((l) => l.entry_type === "DEBIT");
-    const sum = (ls: typeof voucher.lines) => ls.reduce((s, l) => s + Number(l.amount || 0), 0);
+    const sum = (ls: typeof voucher.lines) => sumMoneyBy(ls, (l) => l.amount);
     const payeeLine = debits.find((l) => !accountById.get(l.account_id)?.is_bank_account);
     return {
       amount: bankCredits.length ? sum(bankCredits) : sum(debits),

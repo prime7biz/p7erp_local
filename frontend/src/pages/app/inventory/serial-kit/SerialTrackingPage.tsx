@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type StockSerialRow, type SerialTrace } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 
 export function SerialTrackingPage() {
@@ -12,15 +13,21 @@ export function SerialTrackingPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setError("");
     try {
-      setRows(await api.listStockSerials({ q: q || undefined, status: status || undefined }));
+      const res = await api.listStockSerials({ q: q || undefined, status: status || undefined });
+      if (!latest.isCurrent(token)) return;
+      setRows(res);
     } catch (e) {
       logApiError("SerialTrackingPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }, [q, status]);
+  }, [latest, q, status]);
 
   useEffect(() => {
     void load();

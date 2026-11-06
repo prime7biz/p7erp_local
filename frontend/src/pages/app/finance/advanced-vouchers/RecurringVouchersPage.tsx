@@ -8,6 +8,7 @@ import {
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 const FREQUENCIES: RecurringFrequency[] = ["DAILY", "WEEKLY", "MONTHLY", "QUARTERLY", "YEARLY"];
 
@@ -27,7 +28,7 @@ export function RecurringVouchersPage() {
     name: "",
     voucher_type: "JOURNAL",
     frequency: "MONTHLY" as RecurringFrequency,
-    start_date: new Date().toISOString().slice(0, 10),
+    start_date: todayLocalISO(),
     end_date: "",
     description: "",
     generate_as_status: "DRAFT" as "DRAFT" | "POSTED",

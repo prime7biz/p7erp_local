@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, type PartyLedgerCreate } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
+import { getCustomersCached, getVendorsCached } from "@/lib/masterData";
 
 type PartyOption = { id: number; label: string };
 
@@ -16,28 +18,34 @@ export function PartyLedgerCreatePage() {
   const [interestRate, setInterestRate] = useState("");
   const [openingBalance, setOpeningBalance] = useState("0");
   const [openingType, setOpeningType] = useState<"DR" | "CR">("DR");
-  const [openingDate, setOpeningDate] = useState(new Date().toISOString().slice(0, 10));
+  const [openingDate, setOpeningDate] = useState(todayLocalISO());
   const [billWise, setBillWise] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     async function loadParties() {
       try {
         if (partyType === "CUSTOMER") {
-          const rows = await api.listCustomers();
+          const rows = await getCustomersCached();
+          if (cancelled) return;
           setParties(rows.map((c) => ({ id: c.id, label: `${c.customer_code} — ${c.name}` })));
         } else {
-          const rows = await api.listVendors();
+          const rows = await getVendorsCached();
+          if (cancelled) return;
           setParties(rows.map((v) => ({ id: v.id, label: `${v.vendor_code} — ${v.name}` })));
         }
         setPartyId("");
       } catch (e) {
         logApiError("PartyLedgerCreatePage.loadParties", e);
-        setError((e as Error).message);
+        if (!cancelled) setError((e as Error).message);
       }
     }
     void loadParties();
+    return () => {
+      cancelled = true;
+    };
   }, [partyType]);
 
   async function submit(e: FormEvent) {

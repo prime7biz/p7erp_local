@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type EnhancedGatePassResponse } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 function toCsv(rows: EnhancedGatePassResponse[]) {
   const h = ["gate_pass_code", "status", "purpose", "destination", "vehicle_no", "guard_ack"];
@@ -50,7 +51,7 @@ export function ReportGatePassesPage() {
     const blob = new Blob([toCsv(rows)], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `gate-passes-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `gate-passes-${todayLocalISO()}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   }

@@ -4,6 +4,7 @@ import { api } from "@/api/client";
 import { fetchVendorPage, hydrateVendor } from "@/lib/remoteSelectFetchers";
 import type { CreatePoFromOrderBomLinePayload, OrderDrivenBomLine } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { getWarehousesCached } from "@/lib/masterData";
 
 export function BomLinePoDrawer({
   open,
@@ -38,7 +39,7 @@ export function BomLinePoDrawer({
     setCurrency(currencyDefault || line.quoted_currency || "");
     setVendorId(line.preferred_vendor_id ?? "");
     setErr("");
-    void api.listWarehouses().then((w) => setWarehouses(w.map((x) => ({ id: x.id, name: x.name }))));
+    void getWarehousesCached().then((w) => setWarehouses(w.map((x) => ({ id: x.id, name: x.name }))));
     void (async () => {
       if (!line.item_id) {
         setSuggestions([]);

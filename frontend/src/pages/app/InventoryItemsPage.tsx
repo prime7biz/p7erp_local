@@ -37,8 +37,10 @@ import {
   erpControlFocusClass,
 } from "@/components/app/listPageLayout";
 import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { useListPagination } from "@/hooks/useListPagination";
 import { cn } from "@/lib/utils";
+import { getWarehousesCached } from "@/lib/masterData";
 
 type TabId = "masters" | "groups" | "units" | "warehouses" | "items";
 
@@ -85,6 +87,7 @@ export function InventoryItemsPage() {
   const [editingSubcategory, setEditingSubcategory] = useState<ItemSubcategoryResponse | null>(null);
   const [subcategoryEditForm, setSubcategoryEditForm] = useState<ItemSubcategoryUpdate | null>(null);
   const { pageSize, setPageSize } = useListPagination();
+  const latest = useLatestRequest();
   const [itemPage, setItemPage] = useState(1);
   const [itemTotal, setItemTotal] = useState(0);
   const [itemModalMode, setItemModalMode] = useState<"view" | "edit">("view");
@@ -143,6 +146,7 @@ export function InventoryItemsPage() {
   );
 
   const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
@@ -150,7 +154,7 @@ export function InventoryItemsPage() {
         api.listInventoryItemCategories({ limit: 500 }),
         api.listInventoryItemSubcategories({ limit: 500 }),
         api.listInventoryItemUnits({ limit: 500 }),
-        api.listWarehouses(),
+        getWarehousesCached(),
         api.listStockGroups(),
         api.listInventoryItemsPaginated({
           page: itemPage,
@@ -158,6 +162,7 @@ export function InventoryItemsPage() {
           search: debouncedItemSearch.trim() || undefined,
         }),
       ]);
+      if (!latest.isCurrent(token)) return;
       setCategories(cat);
       setSubcategories(sub);
       setUnits(uni);
@@ -194,11 +199,13 @@ export function InventoryItemsPage() {
         return { ...prev, category_id, unit_id };
       });
     } catch (e) {
+      logApiError("InventoryItemsPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load inventory masters");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [itemPage, pageSize, debouncedItemSearch]);
+  }, [latest, itemPage, pageSize, debouncedItemSearch]);
 
   useEffect(() => {
     void load();

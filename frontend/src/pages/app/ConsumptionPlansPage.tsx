@@ -4,6 +4,7 @@ import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { fetchOrderPage, hydrateOrder } from "@/lib/remoteSelectFetchers";
 import { api, type ConsumptionPlanDetailResponse, type ConsumptionPlanResponse } from "@/api/client";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { useListPagination } from "@/hooks/useListPagination";
 
 export function ConsumptionPlansPage() {
@@ -16,20 +17,26 @@ export function ConsumptionPlansPage() {
   const [error, setError] = useState("");
   const [loadingPlans, setLoadingPlans] = useState(true);
 
+  const latest = useLatestRequest();
+
   const loadPlansPage = useCallback(async () => {
+    const token = latest.begin();
     setLoadingPlans(true);
     try {
       const res = await api.listConsumptionPlansWithTotal({ limit, offset });
+      if (!latest.isCurrent(token)) return;
       setPlans(res.rows);
       setPlansTotal(res.total ?? res.rows.length);
     } catch (e) {
+      logApiError("ConsumptionPlansPage.loadPlansPage", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load consumption plans");
       setPlans([]);
       setPlansTotal(0);
     } finally {
-      setLoadingPlans(false);
+      if (latest.isCurrent(token)) setLoadingPlans(false);
     }
-  }, [limit, offset]);
+  }, [latest, limit, offset]);
 
   useEffect(() => {
     void loadPlansPage();

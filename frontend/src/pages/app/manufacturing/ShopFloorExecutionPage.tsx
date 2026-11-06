@@ -3,6 +3,8 @@ import { useLocation } from "react-router-dom";
 
 import { api } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { logApiError } from "@/utils/logApiError";
 
 function screenTitle(pathname: string): string {
   if (pathname.includes("/production/cutting")) return "Shop Floor - Cutting";
@@ -34,6 +36,7 @@ export function ShopFloorExecutionPage() {
   >({});
 
   const [balanceSuggestions, setBalanceSuggestions] = useState<Array<Record<string, unknown>>>([]);
+  const latest = useLatestRequest();
 
   const title = useMemo(() => screenTitle(location.pathname), [location.pathname]);
   const areaKey = useMemo(() => {
@@ -51,6 +54,7 @@ export function ShopFloorExecutionPage() {
   const canRunOperationActions = myRole !== "quality";
 
   const load = useCallback(async () => {
+    const token = latest.begin();
     setError("");
     try {
       const [queueRows, dash, userRows, downtimeRows, reasonRows, trendRows] = await Promise.all([
@@ -71,6 +75,7 @@ export function ShopFloorExecutionPage() {
           end_date: analyticsEndDate || undefined,
         }),
       ]);
+      if (!latest.isCurrent(token)) return;
       setRows(queueRows);
       setDashboard(dash);
       setUsers(userRows.filter((row) => row.is_active));
@@ -78,9 +83,11 @@ export function ShopFloorExecutionPage() {
       setDowntimeReasonRows(reasonRows);
       setDowntimeTrendRows(trendRows);
     } catch (e) {
+      logApiError("ShopFloorExecutionPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load shop floor queue");
     }
-  }, [statusFilter, areaKey, analyticsStartDate, analyticsEndDate]);
+  }, [latest, statusFilter, areaKey, analyticsStartDate, analyticsEndDate]);
 
   useEffect(() => {
     void load();
@@ -94,7 +101,10 @@ export function ShopFloorExecutionPage() {
           (r.items || []).filter((i) => i.action && i.action !== "hold" && i.action !== "observe").slice(0, 3),
         ),
       )
-      .catch(() => setBalanceSuggestions([]));
+      .catch((e) => {
+        logApiError("ShopFloorExecutionPage.getPredictiveLineBalance", e);
+        setBalanceSuggestions([]);
+      });
   }, []);
 
   const runAction = async (action: "start" | "hold" | "resume" | "complete", opId: number) => {

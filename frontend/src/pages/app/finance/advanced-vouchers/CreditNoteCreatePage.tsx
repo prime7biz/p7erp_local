@@ -4,14 +4,16 @@ import {
   api,
   type ChartOfAccountResponse,
   type PartyLedgerBillResponse,
-  type PartyLedgerResponse,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
+import { fetchPartyLedgerPage, hydratePartyLedger } from "@/lib/remoteSelectFetchers";
+import { todayLocalISO } from "@/lib/dates";
+import { addMoney } from "@/lib/money";
 
 export function CreditNoteCreatePage() {
   const navigate = useNavigate();
-  const [partyLedgers, setPartyLedgers] = useState<PartyLedgerResponse[]>([]);
   const [bills, setBills] = useState<PartyLedgerBillResponse[]>([]);
   const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
   const [error, setError] = useState("");
@@ -24,17 +26,14 @@ export function CreditNoteCreatePage() {
     tax_amount: "0",
     tax_account_id: "",
     revenue_or_purchase_account_id: "",
-    voucher_date: new Date().toISOString().slice(0, 10),
+    voucher_date: todayLocalISO(),
     description: "",
   });
 
   useEffect(() => {
-    void Promise.all([
-      api.listPartyLedgers({ page_size: 200 }),
-      api.listChartOfAccounts({ active_only: true }),
-    ])
-      .then(([pl, coa]) => {
-        setPartyLedgers(pl.items);
+    void api
+      .listChartOfAccounts({ active_only: true })
+      .then((coa) => {
         setAccounts(coa);
       })
       .catch((e) => {
@@ -48,23 +47,33 @@ export function CreditNoteCreatePage() {
       setBills([]);
       return;
     }
+    let cancelled = false;
     void api
       .listPartyLedgerPendingBills(Number(form.party_ledger_id))
-      .then(setBills)
+      .then((rows) => {
+        if (!cancelled) setBills(rows);
+      })
       .catch((e) => {
         logApiError("CreditNoteCreatePage.bills", e);
-        setBills([]);
+        if (!cancelled) setBills([]);
       });
+    return () => {
+      cancelled = true;
+    };
   }, [form.party_ledger_id]);
 
   const preview = useMemo(() => {
     const amount = Number(form.amount) || 0;
     const tax = Number(form.tax_amount) || 0;
-    return { amount, tax, total: amount + tax };
+    return { amount, tax, total: addMoney(amount, tax) };
   }, [form.amount, form.tax_amount]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!form.party_ledger_id) {
+      setError("Select a party ledger.");
+      return;
+    }
     try {
       setSubmitting(true);
       setError("");
@@ -106,19 +115,15 @@ export function CreditNoteCreatePage() {
       <form onSubmit={onSubmit} className="grid max-w-3xl gap-4 rounded-lg border border-gray-200 bg-white p-4 sm:grid-cols-2">
         <label className="text-xs text-gray-600 sm:col-span-2">
           Party ledger
-          <select
-            className="mt-1 block w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-            value={form.party_ledger_id}
-            onChange={(e) => setForm((p) => ({ ...p, party_ledger_id: e.target.value, original_bill_id: "" }))}
-            required
-          >
-            <option value="">Select party…</option>
-            {partyLedgers.map((pl) => (
-              <option key={pl.id} value={pl.id}>
-                {pl.party_name} ({pl.party_type})
-              </option>
-            ))}
-          </select>
+          <RemoteSearchSelect
+            className="mt-1"
+            value={form.party_ledger_id ? Number(form.party_ledger_id) : ""}
+            onChange={(next) => setForm((p) => ({ ...p, party_ledger_id: next === "" ? "" : String(next), original_bill_id: "" }))}
+            fetchPage={fetchPartyLedgerPage}
+            hydrateById={hydratePartyLedger}
+            placeholder="Select party…"
+            aria-label="Party ledger"
+          />
         </label>
         <label className="text-xs text-gray-600 sm:col-span-2">
           Original bill

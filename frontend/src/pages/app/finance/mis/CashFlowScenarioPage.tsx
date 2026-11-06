@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import {
   api,
   type CashBreakEvenResponse,
@@ -39,15 +40,19 @@ export function CashFlowScenarioPage() {
     }
   }
 
-  async function runSensitivity(pct: number) {
-    try {
-      setSensitivity(
-        await api.postCashSensitivity({ variable: "sales", change_percent: pct }),
-      );
-    } catch (e) {
-      logApiError("CashFlowScenarioPage.runSensitivity", e);
-    }
-  }
+  const sensitivityRequest = useLatestRequest();
+  const runSensitivity = useCallback(
+    async (pct: number) => {
+      const token = sensitivityRequest.begin();
+      try {
+        const res = await api.postCashSensitivity({ variable: "sales", change_percent: pct });
+        if (sensitivityRequest.isCurrent(token)) setSensitivity(res);
+      } catch (e) {
+        logApiError("CashFlowScenarioPage.runSensitivity", e);
+      }
+    },
+    [sensitivityRequest],
+  );
 
   useEffect(() => {
     void loadBase();
@@ -56,7 +61,7 @@ export function CashFlowScenarioPage() {
   useEffect(() => {
     const timer = window.setTimeout(() => void runSensitivity(salesChange), 400);
     return () => window.clearTimeout(timer);
-  }, [salesChange]);
+  }, [salesChange, runSensitivity]);
 
   return (
     <div className="space-y-4 p-4 md:p-6">

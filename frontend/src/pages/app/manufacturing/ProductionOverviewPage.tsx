@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { api, type InventoryItemResponse } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { logApiError } from "@/utils/logApiError";
+import { getInventoryItemsCached } from "@/lib/masterData";
 
 type WipJournalRow = {
   id: number;
@@ -38,7 +39,7 @@ export function ProductionOverviewPage() {
       setError("");
       try {
         const [itemRows, workOrderRows, capacityRows, wip, maint] = await Promise.all([
-          api.listInventoryItems(),
+          getInventoryItemsCached(),
           api.listMfgWorkOrders(),
           api.getMfgCapacityLoads(),
           api.listWipJournals().catch((e) => {

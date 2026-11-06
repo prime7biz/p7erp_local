@@ -47,6 +47,10 @@ import { logApiError } from "@/utils/logApiError";
 import { useAuth } from "@/context/AuthContext";
 import { resolveRole } from "@/lib/roles";
 import type { TaxPreviewResponse } from "@/api/client";
+import { todayLocalISO } from "@/lib/dates";
+import { fetchExchangeRate } from "@/lib/fxRates";
+import { isZeroMoney, moneyEquals, subtractMoney, sumMoneyBy, toMoneyString } from "@/lib/money";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 const CTL =
   "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20";
@@ -57,7 +61,7 @@ const LINE_GRID = "md:grid-cols-[2rem_minmax(0,1fr)_8.5rem_8.5rem_5.5rem]";
 const LABEL = "mb-1 block text-xs font-medium text-text-secondary";
 
 function rowAmount(lines: VoucherLineCreate[], t: "DEBIT" | "CREDIT") {
-  return lines.filter((l) => l.entry_type === t).reduce((sum, l) => sum + Number(l.amount || 0), 0);
+  return sumMoneyBy(lines.filter((l) => l.entry_type === t), (l) => l.amount);
 }
 
 function makeLine(accountId: number, currency: string, exchangeRate: string, entryType: "DEBIT" | "CREDIT" = "DEBIT"): VoucherLineCreate {
@@ -144,15 +148,22 @@ export function VouchersPage() {
 
   useEffect(() => {
     let cancelled = false;
-    void api.getVoucherTypesMeta().then((types) => {
-      if (!cancelled) setVoucherTypes(types);
-    });
+    void api
+      .getVoucherTypesMeta()
+      .then((types) => {
+        if (!cancelled) setVoucherTypes(types);
+      })
+      .catch((e) => {
+        logApiError("VouchersPage.getVoucherTypesMeta", e);
+      });
     return () => {
       cancelled = true;
     };
   }, []);
 
+  const listRequest = useLatestRequest();
   const loadList = useCallback(async () => {
+    const token = listRequest.begin();
     setLoading(true);
     setError(null);
     setOpenActionsId(null);
@@ -166,14 +177,17 @@ export function VouchersPage() {
         limit,
         offset,
       });
+      if (!listRequest.isCurrent(token)) return;
       setRows(vRes.rows);
       setTotalRows(vRes.total ?? vRes.rows.length);
     } catch (e) {
+      if (!listRequest.isCurrent(token)) return;
+      logApiError("VouchersPage.loadList", e);
       setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if (listRequest.isCurrent(token)) setLoading(false);
     }
-  }, [debouncedSearch, limit, offset, statusFilter, voucherIdFilter]);
+  }, [listRequest, debouncedSearch, limit, offset, statusFilter, voucherIdFilter]);
 
   useEffect(() => {
     void loadList();
@@ -230,7 +244,7 @@ export function VouchersPage() {
 
   const debitTotal = useMemo(() => rowAmount(form.lines, "DEBIT"), [form.lines]);
   const creditTotal = useMemo(() => rowAmount(form.lines, "CREDIT"), [form.lines]);
-  const isBalanced = Math.abs(debitTotal - creditTotal) < 0.001;
+  const isBalanced = moneyEquals(debitTotal, creditTotal);
 
   const todayISO = localTodayISO();
   const selectedFiscalYear = fiscalYearOf(form.voucher_date || todayISO, fyStartMonth);
@@ -270,8 +284,8 @@ export function VouchersPage() {
 
   function addSuggestedAccount(accountId: number, side: "DEBIT" | "CREDIT") {
     setForm((prev) => {
-      const diff = rowAmount(prev.lines, "DEBIT") - rowAmount(prev.lines, "CREDIT");
-      const fill = side === "CREDIT" && diff > 0.001 ? diff.toFixed(2) : side === "DEBIT" && diff < -0.001 ? (-diff).toFixed(2) : null;
+      const diff = subtractMoney(rowAmount(prev.lines, "DEBIT"), rowAmount(prev.lines, "CREDIT"));
+      const fill = side === "CREDIT" && diff > 0 ? toMoneyString(diff) : side === "DEBIT" && diff < 0 ? toMoneyString(-diff) : null;
       const emptyIdx = prev.lines.findIndex((l) => !l.account_id);
       const target = prev.lines[emptyIdx];
       if (target) {
@@ -355,10 +369,10 @@ export function VouchersPage() {
   }
 
   function autoBalanceVoucher() {
-    const diff = debitTotal - creditTotal;
-    if (Math.abs(diff) < 0.001) { setSuccess("Voucher is already balanced."); return; }
+    const diff = subtractMoney(debitTotal, creditTotal);
+    if (isZeroMoney(diff)) { setSuccess("Voucher is already balanced."); return; }
     const entryType: "DEBIT" | "CREDIT" = diff > 0 ? "CREDIT" : "DEBIT";
-    const amount = Math.abs(diff).toFixed(2);
+    const amount = toMoneyString(Math.abs(diff));
     setForm((prev) => ({
       ...prev,
       lines: [...prev.lines, { ...makeLine(0, prev.currency ?? "BDT", prev.exchange_rate ?? "1", entryType), amount, notes: "Auto balance line" }],
@@ -381,7 +395,7 @@ export function VouchersPage() {
     if (!isBalanced) throw new Error("Voucher is not balanced.");
   }
 
-  function resetForm() {
+  const resetForm = useCallback(() => {
     setEditingVoucherId(null);
     setMultiCurrency(false);
     setLiveRateStatus("idle");
@@ -402,7 +416,7 @@ export function VouchersPage() {
       btb_lc_id: undefined,
       lines: [makeLine(0, "BDT", "1", "DEBIT")],
     });
-  }
+  }, [voucherTypes]);
 
   async function fetchLiveRate() {
     const cur = (form.currency ?? "BDT").toUpperCase();
@@ -410,19 +424,21 @@ export function VouchersPage() {
     if (cur === base) { setForm((p) => ({ ...p, exchange_rate: "1" })); return; }
     setLiveRateStatus("loading");
     try {
-      const res = await fetch(`https://open.er-api.com/v6/latest/${cur}`);
-      const json = await res.json();
-      if (json.result === "success" && json.rates?.[base]) {
-        setForm((p) => ({
-          ...p,
-          exchange_rate: String(json.rates[base]),
-          exchange_rate_source: `open.er-api.com ${new Date().toISOString().slice(0, 10)}`,
-        }));
-        setLiveRateStatus("fetched");
-      } else {
+      const picked = await fetchExchangeRate(cur, base);
+      if (!picked) {
+        logApiError("VouchersPage.fetchLiveRate", new Error(`No usable rate for ${cur}->${base}`));
         setLiveRateStatus("error");
+        return;
       }
-    } catch {
+      const source = picked.live || /fallback/i.test(picked.source) ? picked.source : `${picked.source} (fallback)`;
+      setForm((p) => ({
+        ...p,
+        exchange_rate: String(Number(picked.rate.toFixed(6))),
+        exchange_rate_source: `${source} ${todayLocalISO()}`,
+      }));
+      setLiveRateStatus("fetched");
+    } catch (e) {
+      logApiError("VouchersPage.fetchLiveRate", e);
       setLiveRateStatus("error");
     }
   }
@@ -516,8 +532,7 @@ export function VouchersPage() {
     resetForm();
     setForm((p) => ({ ...p, voucher_type: type }));
     setShowCreate(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [newTypeFromUrl, setSearchParams]);
+  }, [newTypeFromUrl, setSearchParams, resetForm]);
 
   const runListWorkflowAction = useCallback(
     async (voucherId: number, action: string, reason: string) => {
@@ -1120,7 +1135,9 @@ export function VouchersPage() {
                     </button>
                   </div>
                   {liveRateStatus === "fetched" ? (
-                    <p className="mt-1 text-xs text-status-success-foreground">Live rate fetched from open.er-api.com</p>
+                    <p className="mt-1 text-xs text-status-success-foreground">
+                      Live rate fetched (source: {form.exchange_rate_source ?? "unknown"})
+                    </p>
                   ) : liveRateStatus === "error" ? (
                     <p className="mt-1 text-xs text-status-danger-foreground">Could not fetch live rate. Enter manually.</p>
                   ) : null}
@@ -1269,7 +1286,7 @@ export function VouchersPage() {
               <div className="text-sm">Debit Total: <span className="font-semibold text-text-primary">{debitTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
               <div className="text-sm">Credit Total: <span className="font-semibold text-text-primary">{creditTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
               <div className={`rounded-lg px-3 py-1.5 text-center text-sm font-semibold ${isBalanced ? "bg-status-success-subtle text-status-success-foreground" : "bg-status-danger-subtle text-status-danger-foreground"}`}>
-                {isBalanced ? "Balanced" : `Difference: ${Math.abs(debitTotal - creditTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                {isBalanced ? "Balanced" : `Difference: ${Math.abs(subtractMoney(debitTotal, creditTotal)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
               </div>
               <div className="flex justify-end gap-2">
                 <button
@@ -1337,7 +1354,7 @@ export function VouchersPage() {
                 <tr><td className="px-3 py-5 text-text-muted" colSpan={10}>No vouchers found.</td></tr>
               ) : (
                 rows.map((row) => {
-                  const amount = row.lines.filter((l) => l.entry_type === "DEBIT").reduce((s, l) => s + Number(l.amount || 0), 0);
+                  const amount = sumMoneyBy(row.lines.filter((l) => l.entry_type === "DEBIT"), (l) => l.amount);
                   return (
                     <tr
                       key={row.id}

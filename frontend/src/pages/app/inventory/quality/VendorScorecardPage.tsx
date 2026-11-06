@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type VendorScorecardRow } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 
 export function VendorScorecardPage() {
@@ -9,15 +10,21 @@ export function VendorScorecardPage() {
   const [rows, setRows] = useState<VendorScorecardRow[]>([]);
   const [error, setError] = useState("");
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setError("");
     try {
-      setRows(await api.getVendorQualityScorecard(days));
+      const res = await api.getVendorQualityScorecard(days);
+      if (!latest.isCurrent(token)) return;
+      setRows(res);
     } catch (e) {
       logApiError("VendorScorecardPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }, [days]);
+  }, [latest, days]);
 
   useEffect(() => {
     void load();

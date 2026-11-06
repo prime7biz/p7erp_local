@@ -1,7 +1,8 @@
+import { todayLocalISO } from "@/lib/dates";
 /** Calendar YYYY-MM-DD in the local timezone of the parsed string (avoids UTC day shift vs article bylines). */
 export function resourceArticleDateToIsoDate(displayDate: string): string {
   const t = Date.parse(displayDate);
-  if (Number.isNaN(t)) return new Date().toISOString().slice(0, 10);
+  if (Number.isNaN(t)) return todayLocalISO();
   const d = new Date(t);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");

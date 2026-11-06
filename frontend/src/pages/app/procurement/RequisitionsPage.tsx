@@ -6,16 +6,19 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   api,
-  type InventoryItemResponse,
   type RequisitionInput,
   type RequisitionSummary,
   type WarehouseResponse,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { REQUISITION_STATUS_LABEL } from "./requisitionStatus";
 import { RequisitionStatusBadge } from "./RequisitionStatusBadge";
+import { getWarehousesCached } from "@/lib/masterData";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
+import { fetchInventoryItemPage, hydrateInventoryItem } from "@/lib/remoteSelectFetchers";
 
 const CTL = "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm";
 
@@ -31,7 +34,6 @@ export function RequisitionsPage() {
   const [error, setError] = useState("");
   const [openActionsId, setOpenActionsId] = useState<string | number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [items, setItems] = useState<InventoryItemResponse[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseResponse[]>([]);
   const [department, setDepartment] = useState("");
   const [purpose, setPurpose] = useState("");
@@ -39,34 +41,36 @@ export function RequisitionsPage() {
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()]);
   const [saving, setSaving] = useState(false);
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
       const res = await api.listRequisitions({ status: statusFilter || undefined, limit: 100 });
+      if (!latest.isCurrent(token)) return;
       setRows(res.rows);
       setTotal(res.total);
     } catch (e) {
       logApiError("RequisitionsPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [statusFilter]);
+  }, [latest, statusFilter]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   useEffect(() => {
-    if (!showCreate || items.length) return;
-    void Promise.all([api.listInventoryItemsPaginated({ page: 1, page_size: 500 }), api.listWarehouses()])
-      .then(([itm, wh]) => {
-        setItems(itm.items);
-        setWarehouses(wh);
-      })
+    if (!showCreate || warehouses.length) return;
+    void getWarehousesCached()
+      .then(setWarehouses)
       .catch((e) => logApiError("RequisitionsPage.masters", e));
-  }, [showCreate, items.length]);
+  }, [showCreate, warehouses.length]);
 
   function setLine(i: number, patch: Partial<DraftLine>) {
     setLines((prev) => prev.map((ln, idx) => (idx === i ? { ...ln, ...patch } : ln)));
@@ -140,14 +144,15 @@ export function RequisitionsPage() {
           <div className="space-y-2">
             {lines.map((ln, i) => (
               <div key={i} className="grid gap-2 md:grid-cols-[2fr_1.5fr_1fr_1fr_auto]">
-                <select className={CTL} value={ln.item_id} onChange={(e) => setLine(i, { item_id: e.target.value ? Number(e.target.value) : "" })}>
-                  <option value="">Select item…</option>
-                  {items.map((it) => (
-                    <option key={it.id} value={it.id}>
-                      {it.item_code} - {it.name}
-                    </option>
-                  ))}
-                </select>
+                <RemoteSearchSelect
+                  value={ln.item_id}
+                  onChange={(next) => setLine(i, { item_id: next })}
+                  fetchPage={fetchInventoryItemPage}
+                  hydrateById={hydrateInventoryItem}
+                  placeholder="Select item…"
+                  aria-label="Item"
+                  menuPortal
+                />
                 <select className={CTL} value={ln.warehouse_id} onChange={(e) => setLine(i, { warehouse_id: e.target.value ? Number(e.target.value) : "" })}>
                   <option value="">Warehouse (optional)</option>
                   {warehouses.map((w) => (

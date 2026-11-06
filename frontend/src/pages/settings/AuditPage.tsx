@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type AuditLogResponse } from "@/api/client";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 export function AuditPage() {
   const [logs, setLogs] = useState<AuditLogResponse[]>([]);
@@ -11,7 +12,10 @@ export function AuditPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError(null);
     try {
@@ -21,14 +25,16 @@ export function AuditPage() {
         action: action || undefined,
         search: search || undefined,
       });
+      if (!latest.isCurrent(token)) return;
       setLogs(data.items);
       setTotal(data.total);
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [limit, offset, action, search]);
+  }, [latest, limit, offset, action, search]);
 
   useEffect(() => {
     void load();

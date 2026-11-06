@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   api,
@@ -12,6 +12,8 @@ import {
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { BillAllocationModal } from "./BillAllocationModal";
 import { logApiError } from "@/utils/logApiError";
+import { addDaysLocalISO, todayLocalISO } from "@/lib/dates";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 type Tab = "bills" | "statement" | "aging" | "allocations";
 
@@ -25,12 +27,8 @@ export function PartyLedgerDetailPage() {
   const [bills, setBills] = useState<PartyLedgerBillResponse[]>([]);
   const [statusFilter, setStatusFilter] = useState("");
   const [statement, setStatement] = useState<PartyLedgerStatementResponse | null>(null);
-  const [fromDate, setFromDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 90);
-    return d.toISOString().slice(0, 10);
-  });
-  const [toDate, setToDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [fromDate, setFromDate] = useState(() => addDaysLocalISO(-90));
+  const [toDate, setToDate] = useState(() => todayLocalISO());
   const [aging, setAging] = useState<PartyLedgerAgingResponse | null>(null);
   const [allocations, setAllocations] = useState<PartyLedgerAllocationResponse[]>([]);
   const [allocBill, setAllocBill] = useState<PartyLedgerBillResponse | null>(null);
@@ -42,59 +40,73 @@ export function PartyLedgerDetailPage() {
     setSearchParams({ tab: t });
   };
 
-  async function loadLedger() {
+  const ledgerRequest = useLatestRequest();
+  const loadLedger = useCallback(async () => {
     if (!Number.isFinite(ledgerId)) return;
+    const token = ledgerRequest.begin();
     try {
       setError("");
-      setLedger(await api.getPartyLedger(ledgerId));
+      const res = await api.getPartyLedger(ledgerId);
+      if (ledgerRequest.isCurrent(token)) setLedger(res);
     } catch (e) {
       logApiError("PartyLedgerDetailPage.loadLedger", e);
-      setError((e as Error).message);
+      if (ledgerRequest.isCurrent(token)) setError((e as Error).message);
     }
-  }
+  }, [ledgerRequest, ledgerId]);
 
-  async function loadBills() {
+  const billsRequest = useLatestRequest();
+  const loadBills = useCallback(async () => {
+    const token = billsRequest.begin();
     try {
       const res = await api.listPartyLedgerBills(ledgerId, {
         status: statusFilter || undefined,
       });
-      setBills(res.items);
+      if (billsRequest.isCurrent(token)) setBills(res.items);
     } catch (e) {
       logApiError("PartyLedgerDetailPage.loadBills", e);
-      setError((e as Error).message);
+      if (billsRequest.isCurrent(token)) setError((e as Error).message);
     }
-  }
+  }, [billsRequest, ledgerId, statusFilter]);
 
-  async function loadStatement() {
+  const statementRequest = useLatestRequest();
+  const loadStatement = useCallback(async () => {
+    const token = statementRequest.begin();
     try {
-      setStatement(await api.getPartyLedgerStatement(ledgerId, { from_date: fromDate, to_date: toDate }));
+      const res = await api.getPartyLedgerStatement(ledgerId, { from_date: fromDate, to_date: toDate });
+      if (statementRequest.isCurrent(token)) setStatement(res);
     } catch (e) {
       logApiError("PartyLedgerDetailPage.loadStatement", e);
-      setError((e as Error).message);
+      if (statementRequest.isCurrent(token)) setError((e as Error).message);
     }
-  }
+  }, [statementRequest, ledgerId, fromDate, toDate]);
 
-  async function loadAging() {
+  const agingRequest = useLatestRequest();
+  const loadAging = useCallback(async () => {
+    const token = agingRequest.begin();
     try {
-      setAging(await api.getPartyLedgerAging({ party_ledger_id: ledgerId }));
+      const res = await api.getPartyLedgerAging({ party_ledger_id: ledgerId });
+      if (agingRequest.isCurrent(token)) setAging(res);
     } catch (e) {
       logApiError("PartyLedgerDetailPage.loadAging", e);
-      setError((e as Error).message);
+      if (agingRequest.isCurrent(token)) setError((e as Error).message);
     }
-  }
+  }, [agingRequest, ledgerId]);
 
-  async function loadAllocations() {
+  const allocationsRequest = useLatestRequest();
+  const loadAllocations = useCallback(async () => {
+    const token = allocationsRequest.begin();
     try {
-      setAllocations(await api.listPartyLedgerAllocations(ledgerId));
+      const res = await api.listPartyLedgerAllocations(ledgerId);
+      if (allocationsRequest.isCurrent(token)) setAllocations(res);
     } catch (e) {
       logApiError("PartyLedgerDetailPage.loadAllocations", e);
-      setError((e as Error).message);
+      if (allocationsRequest.isCurrent(token)) setError((e as Error).message);
     }
-  }
+  }, [allocationsRequest, ledgerId]);
 
   useEffect(() => {
     void loadLedger();
-  }, [ledgerId]);
+  }, [loadLedger]);
 
   useEffect(() => {
     if (ledger?.party_type !== "CUSTOMER") return;
@@ -109,8 +121,7 @@ export function PartyLedgerDetailPage() {
     if (tab === "statement") void loadStatement();
     if (tab === "aging") void loadAging();
     if (tab === "allocations") void loadAllocations();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, ledgerId, statusFilter, fromDate, toDate]);
+  }, [tab, loadBills, loadStatement, loadAging, loadAllocations]);
 
   const partyAging = useMemo(
     () => aging?.parties.find((p) => p.party_ledger_id === ledgerId) ?? null,

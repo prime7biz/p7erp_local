@@ -6,6 +6,7 @@ import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { addDaysLocalISO, todayLocalISO } from "@/lib/dates";
 import { BarChart3, RefreshCw, Sparkles } from "lucide-react";
 
 type Tab = "exec" | "plan" | "tna" | "finance" | "copilot" | "doc" | "gov";
@@ -44,17 +45,14 @@ export function ErpAiPhasesDashboardSection() {
     setBusy(true);
     setMsg(null);
     setPayload(null);
-    const today = new Date();
-    const to = new Date(today);
-    to.setDate(to.getDate() + 14);
     try {
       if (tab === "exec") {
         const r = await api.getExecutiveAiBrief();
         setPayload(r as Record<string, unknown>);
       } else if (tab === "plan") {
         const r = await api.postProductionPlanningAdvisory({
-          from_date: today.toISOString().slice(0, 10),
-          to_date: to.toISOString().slice(0, 10),
+          from_date: todayLocalISO(),
+          to_date: addDaysLocalISO(14),
         });
         setPayload(r as Record<string, unknown>);
       } else if (tab === "tna") {

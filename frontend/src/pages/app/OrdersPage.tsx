@@ -1,22 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   api,
   type OrderResponse,
   type OrderCreate,
-  type CustomerResponse,
   type QuotationResponse,
   type PlanningGroundingSummaryRow,
   type OrderFinancialStatusOut,
   type OrderSewingLineSummaryOut,
 } from "@/api/client";
 import { useListPagination } from "@/hooks/useListPagination";
-import { useDebouncedValue, useLatestRequest } from "@/hooks/useDebouncedValue";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { toast } from "sonner";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
 import { DataGrid, type GridColumn } from "@/components/app/data-grid/DataGrid";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
+import { fetchCustomerPage, hydrateCustomer } from "@/lib/remoteSelectFetchers";
 import { useConfirm } from "@/components/app/useConfirm";
 import {
   COMMISSION_MODE_OPTIONS,
@@ -157,7 +159,6 @@ export function OrdersPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<OrderResponse | null>(null);
   const [form, setForm] = useState<OrderCreate>({ customer_id: 0 });
-  const [customers, setCustomers] = useState<CustomerResponse[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [quotations, setQuotations] = useState<QuotationResponse[]>([]);
@@ -168,7 +169,7 @@ export function OrdersPage() {
   const debouncedSearch = useDebouncedValue(search);
   const latest = useLatestRequest();
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const token = latest.begin();
     setLoading(true);
     setError("");
@@ -197,12 +198,13 @@ export function OrdersPage() {
       if (!latest.isCurrent(token)) return;
       setGroundingByOrderId(gmap);
     } catch (e) {
+      logApiError("OrdersPage.load", e);
       if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load orders");
     } finally {
       if (latest.isCurrent(token)) setLoading(false);
     }
-  };
+  }, [latest, debouncedSearch, statusFilter, page, pageSize, setPage]);
 
   const filteredItems = useMemo(() => {
     if (quickFilter === "linked_quotation") return items.filter((row) => row.quotation_id != null);
@@ -219,25 +221,18 @@ export function OrdersPage() {
     o.quotation_id == null ? "—" : o.quotation_code?.trim() ? o.quotation_code : `#${o.quotation_id}`;
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, statusFilter, page, pageSize]);
+    void load();
+  }, [load]);
 
   useEffect(() => {
     if (!modalOpen || !editing) return;
     let cancelled = false;
     (async () => {
       try {
-        const [custRes, quotRes] = await Promise.all([
-          api.listCustomersPaginated({ page: 1, page_size: 500 }),
-          api.listQuotationsPaginated({ page: 1, page_size: 200 }),
-        ]);
-        if (!cancelled) {
-          setCustomers(custRes.items);
-          setQuotations(quotRes.items);
-        }
-      } catch {
-        /* ignore */
+        const quotRes = await api.listQuotationsPaginated({ page: 1, page_size: 200 });
+        if (!cancelled) setQuotations(quotRes.items);
+      } catch (e) {
+        logApiError("OrdersPage.loadEditOptions", e);
       }
     })();
     return () => {
@@ -656,20 +651,15 @@ export function OrdersPage() {
                 <label className="block text-sm font-medium text-text-secondary mb-1">
                   Customer
                 </label>
-                <select
+                <RemoteSearchSelect
                   value={form.customer_id || ""}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, customer_id: Number(e.target.value) || 0 }))
-                  }
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
-                >
-                  <option value={0}>Select customer…</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(next) => setForm((f) => ({ ...f, customer_id: next === "" ? 0 : next }))}
+                  fetchPage={fetchCustomerPage}
+                  hydrateById={hydrateCustomer}
+                  placeholder="Search customer by code or name…"
+                  aria-label="Customer"
+                  allowClear={false}
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-text-secondary mb-1">

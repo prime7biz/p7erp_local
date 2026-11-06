@@ -20,7 +20,10 @@ import { VoucherActionReasonModal } from "@/components/vouchers/VoucherActionRea
 import { useAuth } from "@/context/AuthContext";
 import { resolveRole } from "@/lib/roles";
 import { logApiError } from "@/utils/logApiError";
+import { findPartyLedgerByAccount } from "@/lib/remoteSelectFetchers";
 import { voucherPrintVerificationUrl } from "@/utils/verifyPrintUrl";
+import { moneyEquals, sumMoneyBy } from "@/lib/money";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 const WORKFLOW_STEPS = ["DRAFT", "SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED", "POSTED"];
 const ACTION_TO_STATUS: Record<string, string> = {
@@ -89,6 +92,7 @@ export function VoucherDetailPage() {
   const [budgetOverrideReason, setBudgetOverrideReason] = useState("");
   const [posting, setPosting] = useState(false);
 
+  const latest = useLatestRequest();
   const loadVoucher = useCallback(async () => {
     const id = Number(voucherId);
     if (!Number.isFinite(id) || id <= 0) {
@@ -96,6 +100,7 @@ export function VoucherDetailPage() {
       setLoading(false);
       return;
     }
+    const token = latest.begin();
     setLoading(true);
     try {
       const [v, a, c] = await Promise.all([
@@ -103,27 +108,35 @@ export function VoucherDetailPage() {
         api.listChartOfAccounts({ active_only: false }),
         api.listCostCenters({ active_only: false }),
       ]);
+      if (!latest.isCurrent(token)) return;
       setVoucher(v);
       setAccounts(a);
       setCostCenters(c);
       try {
         const meta = await api.getVoucherAvailableActions(id);
+        if (!latest.isCurrent(token)) return;
         setActions(meta.actions);
-      } catch {
+      } catch (e) {
+        logApiError("VoucherDetailPage.getVoucherAvailableActions", e);
+        if (!latest.isCurrent(token)) return;
         setActions([]);
       }
       try {
         const refs = await api.listBillReferences();
+        if (!latest.isCurrent(token)) return;
         setBillRefs(refs.filter((r) => r.source_voucher_id === id));
-      } catch {
+      } catch (e) {
+        logApiError("VoucherDetailPage.listBillReferences", e);
+        if (!latest.isCurrent(token)) return;
         setBillRefs([]);
       }
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [voucherId]);
+  }, [latest, voucherId]);
 
   useEffect(() => {
     void loadVoucher();
@@ -281,12 +294,12 @@ export function VoucherDetailPage() {
 
   const debitTotal = useMemo(() => {
     if (!voucher) return 0;
-    return voucher.lines.filter((l) => l.entry_type === "DEBIT").reduce((s, l) => s + Number(l.amount || 0), 0);
+    return sumMoneyBy(voucher.lines.filter((l) => l.entry_type === "DEBIT"), (l) => l.amount);
   }, [voucher]);
 
   const creditTotal = useMemo(() => {
     if (!voucher) return 0;
-    return voucher.lines.filter((l) => l.entry_type === "CREDIT").reduce((s, l) => s + Number(l.amount || 0), 0);
+    return sumMoneyBy(voucher.lines.filter((l) => l.entry_type === "CREDIT"), (l) => l.amount);
   }, [voucher]);
 
   const stepIndex = voucher ? WORKFLOW_STEPS.indexOf(voucher.status) : -1;
@@ -594,10 +607,10 @@ export function VoucherDetailPage() {
                 <td className="px-3 py-2">
                   <span
                     className={`text-xs font-semibold ${
-                      Math.abs(debitTotal - creditTotal) < 0.001 ? "text-status-success-foreground" : "text-status-danger-foreground"
+                      moneyEquals(debitTotal, creditTotal) ? "text-status-success-foreground" : "text-status-danger-foreground"
                     }`}
                   >
-                    {Math.abs(debitTotal - creditTotal) < 0.001 ? "Balanced" : "Not Balanced"}
+                    {moneyEquals(debitTotal, creditTotal) ? "Balanced" : "Not Balanced"}
                   </span>
                 </td>
               </tr>
@@ -622,8 +635,7 @@ export function VoucherDetailPage() {
                       // FIFO auto-allocate against party ledger (requires party_ledger_enabled)
                       const partyLine = (voucher.lines || []).find((l) => l.account_id);
                       if (!partyLine) throw new Error("No party account line on this voucher");
-                      const ledgers = await api.listPartyLedgers({ page_size: 200 });
-                      const match = ledgers.items.find((p) => p.ledger_account_id === partyLine.account_id);
+                      const match = await findPartyLedgerByAccount(partyLine.account_id);
                       if (!match) throw new Error("No party ledger linked to this voucher account");
                       const allocs = await api.autoAllocatePartyLedger({
                         party_ledger_id: match.id,

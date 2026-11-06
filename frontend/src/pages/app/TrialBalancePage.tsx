@@ -1,13 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, type AccountGroupResponse, type ChartOfAccountResponse, type ReportBasis, type TrialBalanceResponse } from "@/api/client";
 import { dateParam, idParam, ledgerActivityHref, yearStart } from "@/lib/financeDrilldown";
 import { downloadCsv, downloadXlsx, printCurrentPage } from "@/lib/reportExport";
+import { todayLocalISO } from "@/lib/dates";
+import { sumMoneyBy } from "@/lib/money";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { logApiError } from "@/utils/logApiError";
 
 export function TrialBalancePage() {
   const [searchParams] = useSearchParams();
   const natureFilter = searchParams.get("nature") ?? "";
-  const [asOfDate, setAsOfDate] = useState(() => dateParam(searchParams.get("as_of"), new Date().toISOString().slice(0, 10)));
+  const [asOfDate, setAsOfDate] = useState(() => dateParam(searchParams.get("as_of"), todayLocalISO()));
   const [groupId, setGroupId] = useState<number | "">(() => idParam(searchParams.get("group_id")) ?? "");
   const [accountId, setAccountId] = useState<number | "">("");
   const [groups, setGroups] = useState<AccountGroupResponse[]>([]);
@@ -18,23 +22,27 @@ export function TrialBalancePage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  async function load() {
+  const latest = useLatestRequest();
+  const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       setError("");
-      setData(
-        await api.getTrialBalance({ as_of_date: asOfDate, group_id: groupId || undefined, account_id: accountId || undefined, basis }),
-      );
+      const res = await api.getTrialBalance({ as_of_date: asOfDate, group_id: groupId || undefined, account_id: accountId || undefined, basis });
+      if (!latest.isCurrent(token)) return;
+      setData(res);
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }
+  }, [latest, asOfDate, groupId, accountId, basis]);
 
   async function loadMeta() {
     try {
       const [accountGroups, chartAccounts] = await Promise.all([api.listAccountGroups(), api.listChartOfAccounts({ active_only: true })]);
       setGroups(accountGroups);
       setAccounts(chartAccounts);
-    } catch {
+    } catch (e) {
+      logApiError("TrialBalancePage.loadMeta", e);
       setGroups([]);
       setAccounts([]);
     }
@@ -46,8 +54,7 @@ export function TrialBalancePage() {
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [asOfDate, groupId, accountId, basis]);
+  }, [load]);
 
   useEffect(() => {
     if (!success) return;
@@ -59,8 +66,8 @@ export function TrialBalancePage() {
     () => (data?.rows ?? []).filter((r) => !natureFilter || r.nature === natureFilter),
     [data, natureFilter],
   );
-  const visibleDebit = natureFilter ? visibleRows.reduce((s, r) => s + Number(r.debit || 0), 0) : Number(data?.total_debit ?? 0);
-  const visibleCredit = natureFilter ? visibleRows.reduce((s, r) => s + Number(r.credit || 0), 0) : Number(data?.total_credit ?? 0);
+  const visibleDebit = natureFilter ? sumMoneyBy(visibleRows, (r) => r.debit) : Number(data?.total_debit ?? 0);
+  const visibleCredit = natureFilter ? sumMoneyBy(visibleRows, (r) => r.credit) : Number(data?.total_credit ?? 0);
 
   function exportCsv() {
     const headers = ["account_number", "account_name", "group_name", "nature", "debit", "credit"];

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type MasterContractRow } from "@/api/client";
+import { subtractMoney, sumMoneyBy } from "@/lib/money";
 import { logApiError } from "@/utils/logApiError";
 
 export function ReportLcOutstandingPage() {
@@ -34,13 +35,9 @@ export function ReportLcOutstandingPage() {
   }, [statusFilter]);
 
   const totals = useMemo(() => {
-    let amt = 0;
-    let util = 0;
-    for (const r of rows) {
-      amt += Number(r.amount ?? 0);
-      util += Number(r.btb_utilized_amount ?? 0);
-    }
-    return { amount: amt, utilized: util, remaining: amt - util };
+    const amt = sumMoneyBy(rows, (r) => r.amount);
+    const util = sumMoneyBy(rows, (r) => r.btb_utilized_amount);
+    return { amount: amt, utilized: util, remaining: subtractMoney(amt, util) };
   }, [rows]);
 
   return (
@@ -107,7 +104,7 @@ export function ReportLcOutstandingPage() {
                 const pct = r.btb_utilization_pct != null ? Number(r.btb_utilization_pct) : null;
                 const rem =
                   r.amount != null && r.btb_utilized_amount != null
-                    ? Number(r.amount) - Number(r.btb_utilized_amount)
+                    ? subtractMoney(r.amount, r.btb_utilized_amount)
                     : null;
                 return (
                   <tr key={r.id} className="border-b border-border-subtle last:border-0">

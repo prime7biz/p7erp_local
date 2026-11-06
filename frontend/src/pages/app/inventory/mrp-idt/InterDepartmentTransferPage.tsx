@@ -9,6 +9,7 @@ import {
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
+import { getInventoryItemsCached, getWarehousesCached } from "@/lib/masterData";
 
 const PROCESSES = ["Knitting", "Dyeing", "Cutting", "Sewing", "Finishing", "Printing", "AOP"];
 
@@ -34,8 +35,8 @@ export function InterDepartmentTransferPage() {
     try {
       setError("");
       const [wh, it, idts] = await Promise.all([
-        api.listWarehouses(),
-        api.listInventoryItems(),
+        getWarehousesCached(),
+        getInventoryItemsCached(),
         api.listInterDepartmentTransfers(),
       ]);
       setWarehouses(wh);

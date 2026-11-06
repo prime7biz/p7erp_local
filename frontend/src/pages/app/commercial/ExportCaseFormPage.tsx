@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { api, type ExportCaseCreate, type ExportCaseUpdate, type OrderResponse } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 type FormState = {
   reference: string;
@@ -23,7 +24,7 @@ type FormState = {
 const emptyForm = (orderIdPrefill?: string): FormState => ({
   reference: "",
   status: "DRAFT",
-  case_date: new Date().toISOString().slice(0, 10),
+  case_date: todayLocalISO(),
   amount: "",
   order_id: orderIdPrefill ?? "",
   trade_case_id: "",
@@ -122,8 +123,8 @@ export function ExportCaseFormPage() {
         try {
           const customer = await api.getCustomer(order.customer_id);
           country = customer.country || "";
-        } catch {
-          /* ignore */
+        } catch (e) {
+          logApiError("ExportCaseFormPage.getCustomer", e);
         }
         setForm((prev) => ({
           ...prev,

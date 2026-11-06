@@ -23,6 +23,19 @@ export function downloadCsv(csvContent: string, baseName: string): void {
   URL.revokeObjectURL(url);
 }
 
+/** Save a file the API returned (fetched with auth headers via `requestBlob`). */
+export function downloadBlob(blob: Blob, baseName: string, extension: "csv" | "txt" = "csv"): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = datedFilename(baseName, extension);
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Some browsers start the download asynchronously; revoking immediately can cancel it.
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 type XlsxCell = string | number | null | undefined;
 
 /**

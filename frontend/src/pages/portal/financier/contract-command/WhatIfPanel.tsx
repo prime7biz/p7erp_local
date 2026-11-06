@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { financierPortalApi } from "@/hooks/useFinancierPortal";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 export function WhatIfPanel({ contractId }: { contractId: number }) {
   const [etd, setEtd] = useState(0);
@@ -8,18 +9,23 @@ export function WhatIfPanel({ contractId }: { contractId: number }) {
   const [server, setServer] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const latest = useLatestRequest();
+
   const run = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     try {
       const r = await financierPortalApi.contractWhatIf(contractId, { etd_shift_days: etd, rm_accel_pct: rm });
+      if (!latest.isCurrent(token)) return;
       setServer(r);
     } catch (e) {
       logApiError("contract what-if", e);
+      if (!latest.isCurrent(token)) return;
       setServer(null);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [contractId, etd, rm]);
+  }, [latest, contractId, etd, rm]);
 
   useEffect(() => {
     const t = window.setTimeout(() => void run(), 400);

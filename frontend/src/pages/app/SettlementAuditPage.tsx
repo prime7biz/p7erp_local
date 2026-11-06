@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   api,
   type SettlementAuditPresetResponse,
@@ -6,12 +6,11 @@ import {
   type SettlementAuditRow,
 } from "@/api/client";
 import { downloadCsv } from "@/lib/reportExport";
+import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { logApiError } from "@/utils/logApiError";
 
 const STATUS_OPTIONS = ["DRAFT", "APPROVED", "PROCESSED", "EXECUTED"] as const;
-
-function startOfMonth(date = new Date()) {
-  return new Date(date.getFullYear(), date.getMonth(), 1).toISOString().slice(0, 10);
-}
 
 type SettlementFilters = {
   from_date: string;
@@ -20,6 +19,16 @@ type SettlementFilters = {
   source_currency: string;
   party_query: string;
 };
+
+function defaultFilters(): SettlementFilters {
+  return {
+    from_date: startOfMonthLocalISO(),
+    to_date: todayLocalISO(),
+    status_filter: "",
+    source_currency: "",
+    party_query: "",
+  };
+}
 
 export function SettlementAuditPage() {
   const [rows, setRows] = useState<SettlementAuditRow[]>([]);
@@ -31,54 +40,57 @@ export function SettlementAuditPage() {
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
-  const [filters, setFilters] = useState<SettlementFilters>({
-    from_date: startOfMonth(),
-    to_date: new Date().toISOString().slice(0, 10),
-    status_filter: "",
-    source_currency: "",
-    party_query: "",
-  });
+  const [filters, setFilters] = useState<SettlementFilters>(defaultFilters);
   const [presetName, setPresetName] = useState("");
   const [presets, setPresets] = useState<SettlementAuditPresetResponse[]>([]);
+  const latest = useLatestRequest();
 
-  async function load() {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await api.listSettlementAudit({
-        ...filters,
-        from_date: filters.from_date || undefined,
-        to_date: filters.to_date || undefined,
-        status_filter: filters.status_filter || undefined,
-        source_currency: filters.source_currency || undefined,
-        party_query: filters.party_query || undefined,
-        limit: 500,
-      });
-      setRows(data.rows);
-      setTotals(data.totals);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load settlement audit");
-      setRows([]);
-      setTotals({ row_count: 0, source_total: 0, base_total: 0 });
-    } finally {
-      setLoading(false);
-    }
-  }
+  const loadWith = useCallback(
+    async (f: SettlementFilters) => {
+      const token = latest.begin();
+      setLoading(true);
+      setError("");
+      try {
+        const data = await api.listSettlementAudit({
+          ...f,
+          from_date: f.from_date || undefined,
+          to_date: f.to_date || undefined,
+          status_filter: f.status_filter || undefined,
+          source_currency: f.source_currency || undefined,
+          party_query: f.party_query || undefined,
+          limit: 500,
+        });
+        if (!latest.isCurrent(token)) return;
+        setRows(data.rows);
+        setTotals(data.totals);
+      } catch (e) {
+        if (!latest.isCurrent(token)) return;
+        setError(e instanceof Error ? e.message : "Failed to load settlement audit");
+        setRows([]);
+        setTotals({ row_count: 0, source_total: 0, base_total: 0 });
+      } finally {
+        if (latest.isCurrent(token)) setLoading(false);
+      }
+    },
+    [latest],
+  );
+
+  const load = () => loadWith(filters);
 
   async function loadPresets() {
     try {
       const data = await api.listSettlementAuditPresets();
       setPresets(data);
-    } catch {
+    } catch (e) {
+      logApiError("SettlementAuditPage.loadPresets", e);
       setPresets([]);
     }
   }
 
   useEffect(() => {
-    void load();
+    void loadWith(defaultFilters());
     void loadPresets();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadWith]);
 
   const distinctCurrencies = useMemo(() => {
     const set = new Set(rows.map((r) => r.source_currency).filter(Boolean));
@@ -142,6 +154,7 @@ export function SettlementAuditPage() {
     };
     setFilters(nextFilters);
     setError("");
+    const token = latest.begin();
     try {
       const data = await api.listSettlementAudit({
         ...nextFilters,
@@ -152,10 +165,14 @@ export function SettlementAuditPage() {
         party_query: nextFilters.party_query || undefined,
         limit: 500,
       });
+      if (!latest.isCurrent(token)) return;
       setRows(data.rows);
       setTotals(data.totals);
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to apply preset");
+    } finally {
+      if (latest.isCurrent(token)) setLoading(false);
     }
   };
 
@@ -252,15 +269,7 @@ export function SettlementAuditPage() {
           <button
             type="button"
             className="rounded border px-3 py-2 text-sm"
-            onClick={() =>
-              setFilters({
-                from_date: startOfMonth(),
-                to_date: new Date().toISOString().slice(0, 10),
-                status_filter: "",
-                source_currency: "",
-                party_query: "",
-              })
-            }
+            onClick={() => setFilters(defaultFilters())}
           >
             Reset
           </button>

@@ -1,28 +1,34 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type BillsAgingResponse } from "@/api/client";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
+import { todayLocalISO } from "@/lib/dates";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 export function ArApAgingReportPage() {
   const [billType, setBillType] = useState<"PAYABLE" | "RECEIVABLE">("RECEIVABLE");
-  const [asOfDate, setAsOfDate] = useState(new Date().toISOString().slice(0, 10));
+  const [asOfDate, setAsOfDate] = useState(todayLocalISO());
   const [partyName, setPartyName] = useState("");
   const [data, setData] = useState<BillsAgingResponse | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  async function load() {
+  const latest = useLatestRequest();
+  const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       setError("");
-      setData(await api.getBillsAging({ bill_type: billType, as_of_date: asOfDate, party_name: partyName.trim() || undefined }));
+      const res = await api.getBillsAging({ bill_type: billType, as_of_date: asOfDate, party_name: partyName.trim() || undefined });
+      if (!latest.isCurrent(token)) return;
+      setData(res);
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }
+  }, [latest, billType, asOfDate, partyName]);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [billType, asOfDate, partyName]);
+  }, [load]);
 
   useEffect(() => {
     if (!success) return;

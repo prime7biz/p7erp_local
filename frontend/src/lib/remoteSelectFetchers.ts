@@ -6,10 +6,13 @@ import {
   type CustomerResponse,
   type InventoryItemResponse,
   type OrderResponse,
+  type PartyLedgerResponse,
+  type StockItemListRow,
   type TradeCaseRow,
   type VendorResponse,
 } from "@/api/client";
 import type { RemoteSelectOption } from "@/hooks/useRemotePaginatedSearch";
+import { logApiError } from "@/utils/logApiError";
 
 function customerLabel(c: CustomerResponse): string {
   return `${c.customer_code} · ${c.name}`;
@@ -42,7 +45,8 @@ export async function hydrateCustomer(
   try {
     const c = await api.getCustomer(id);
     return { value: c.id, label: customerLabel(c), meta: c };
-  } catch {
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateCustomer", e);
     return null;
   }
 }
@@ -74,7 +78,8 @@ export async function hydrateInventoryItem(
   try {
     const it = await api.getInventoryItem(id);
     return { value: it.id, label: `${it.item_code} · ${it.name}`, meta: it };
-  } catch {
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateInventoryItem", e);
     return null;
   }
 }
@@ -103,7 +108,8 @@ export async function hydrateVendor(id: number): Promise<RemoteSelectOption<Vend
   try {
     const v = await api.getVendor(id);
     return { value: v.id, label: `${v.vendor_code} · ${v.name}`, meta: v };
-  } catch {
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateVendor", e);
     return null;
   }
 }
@@ -136,7 +142,8 @@ export async function hydrateOrder(id: number): Promise<RemoteSelectOption<Order
       label: `${o.order_code}${o.style_ref ? ` · ${o.style_ref}` : ""}`,
       meta: o,
     };
-  } catch {
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateOrder", e);
     return null;
   }
 }
@@ -174,7 +181,8 @@ export async function hydrateChartAccount(
   try {
     const a = await api.getChartOfAccount(id);
     return { value: a.id, label: chartAccountLabel(a), meta: a };
-  } catch {
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateChartAccount", e);
     return null;
   }
 }
@@ -205,7 +213,8 @@ export async function hydrateCostCenter(id: number): Promise<RemoteSelectOption<
   try {
     const c = await api.getCostCenter(id);
     return { value: c.id, label: `${c.center_code} — ${c.name}`, meta: c };
-  } catch {
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateCostCenter", e);
     return null;
   }
 }
@@ -243,7 +252,8 @@ export async function hydrateTradeCase(id: number): Promise<RemoteSelectOption<T
   try {
     const t = await api.getTradeCase(id);
     return { value: t.id, label: tradeCaseLabel(t), meta: t };
-  } catch {
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateTradeCase", e);
     return null;
   }
 }
@@ -290,7 +300,70 @@ export async function hydrateBtbLc(id: number): Promise<RemoteSelectOption<BtbLc
   try {
     const b = await api.getBtbLc(id);
     return { value: b.id, label: btbLcLabel(b), meta: b };
-  } catch {
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateBtbLc", e);
+    return null;
+  }
+}
+
+function partyLedgerLabel(p: PartyLedgerResponse): string {
+  return `${p.party_name} (${p.party_type})`;
+}
+
+/** Party ledgers (customer / vendor accounts) for RemoteSearchSelect (server search). */
+export async function fetchPartyLedgerPage(
+  query: string,
+  page: number,
+  pageSize: number,
+): Promise<{ options: RemoteSelectOption<PartyLedgerResponse>[]; total: number }> {
+  const res = await api.listPartyLedgers({ search: query || undefined, page, page_size: pageSize });
+  return {
+    options: res.items.map((p) => ({ value: p.id, label: partyLedgerLabel(p), meta: p })),
+    total: res.total,
+  };
+}
+
+export async function hydratePartyLedger(id: number): Promise<RemoteSelectOption<PartyLedgerResponse> | null> {
+  try {
+    const p = await api.getPartyLedger(id);
+    return { value: p.id, label: partyLedgerLabel(p), meta: p };
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydratePartyLedger", e);
+    return null;
+  }
+}
+
+/** Find the party ledger linked to a chart-of-accounts ledger, searching every page (not just the first). */
+export async function findPartyLedgerByAccount(accountId: number): Promise<PartyLedgerResponse | null> {
+  const pageSize = 200;
+  for (let page = 1; page <= 100; page += 1) {
+    const res = await api.listPartyLedgers({ page, page_size: pageSize });
+    const match = res.items.find((p) => p.ledger_account_id === accountId);
+    if (match) return match;
+    if (res.items.length < pageSize || page * pageSize >= res.total) return null;
+  }
+  return null;
+}
+
+/** Stock items (stock hierarchy view of inventory items) for RemoteSearchSelect (server search). */
+export async function fetchStockItemPage(
+  query: string,
+  page: number,
+  pageSize: number,
+): Promise<{ options: RemoteSelectOption<StockItemListRow>[]; total: number }> {
+  const res = await api.listStockItemsEnhanced({ search: query || undefined, page, page_size: pageSize });
+  return {
+    options: (res.items ?? []).map((i) => ({ value: i.id, label: `${i.item_code ?? i.id} — ${i.name}`, meta: i })),
+    total: res.total,
+  };
+}
+
+export async function hydrateStockItem(id: number): Promise<RemoteSelectOption | null> {
+  try {
+    const i = await api.getStockItemDetail(id);
+    return { value: i.id, label: `${i.item_code ?? i.id} — ${i.name}` };
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateStockItem", e);
     return null;
   }
 }

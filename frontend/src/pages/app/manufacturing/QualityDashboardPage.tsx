@@ -19,6 +19,7 @@ import type { PredictiveHeuristicResponse, QualityDashboardResponse } from "@/ap
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 
 const resultColors: Record<string, string> = {
@@ -42,7 +43,10 @@ export function QualityDashboardPage() {
   const [defectRisk, setDefectRisk] = useState<PredictiveHeuristicResponse | null>(null);
   const [selectedLineId, setSelectedLineId] = useState<number | null>(null);
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setError("");
     setLoading(true);
     try {
@@ -50,13 +54,16 @@ export function QualityDashboardPage() {
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
       });
+      if (!latest.isCurrent(token)) return;
       setDashboard(data);
     } catch (e) {
+      logApiError("QualityDashboardPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load QC dashboard");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [dateFrom, dateTo]);
+  }, [latest, dateFrom, dateTo]);
 
   const loadDefectRisk = useCallback(() => {
     api

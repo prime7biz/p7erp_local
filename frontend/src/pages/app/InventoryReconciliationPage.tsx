@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type StockVsGlResponse, type WipVsGlResponse } from "@/api/client";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 
 type TabKey = "po" | "grn" | "challan" | "gatepass" | "stock" | "finance";
@@ -38,8 +39,10 @@ export function InventoryReconciliationPage() {
     low_stock_count: number;
   } | null>(null);
   const [search, setSearch] = useState("");
+  const latest = useLatestRequest();
 
   const load = useCallback(async () => {
+    const token = latest.begin();
     setError("");
     try {
       const filter = {
@@ -66,6 +69,7 @@ export function InventoryReconciliationPage() {
           return null;
         }),
       ]);
+      if (!latest.isCurrent(token)) return;
       setStockGl(sgl);
       setWipGl(wgl);
       setPoRows(po);
@@ -107,9 +111,11 @@ export function InventoryReconciliationPage() {
         }),
       );
     } catch (e) {
+      logApiError("InventoryReconciliation.load", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load inventory reports");
     }
-  }, [statusFilter, dateFrom, dateTo]);
+  }, [latest, statusFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     void load();

@@ -15,6 +15,7 @@ import {
 } from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
 import { useAuth } from "@/context/AuthContext";
+import { logApiError } from "@/utils/logApiError";
 
 type Tab = "personal" | "job" | "documents" | "age" | "medical" | "history" | "salary" | "production";
 
@@ -143,7 +144,8 @@ export function HrEmployeeDetailPage() {
     if (!employee) return;
     try {
       setDocuments(await api.listHrEmployeeDocuments(employee.id));
-    } catch {
+    } catch (e) {
+      logApiError("HrEmployeeDetailPage.documents", e);
       setDocuments([]);
     }
   }, [employee]);
@@ -153,7 +155,8 @@ export function HrEmployeeDetailPage() {
     void (async () => {
       try {
         setProdProfile(await api.getEmployeeProductionProfile(employee.id, 30));
-      } catch {
+      } catch (e) {
+        logApiError("HrEmployeeDetailPage.productionProfile", e);
         setProdProfile(null);
       }
     })();
@@ -163,7 +166,8 @@ export function HrEmployeeDetailPage() {
     if (!employee) return;
     try {
       setHistory(await api.listHrEmployeeStatusHistory(employee.id));
-    } catch {
+    } catch (e) {
+      logApiError("HrEmployeeDetailPage.statusHistory", e);
       setHistory([]);
     }
   }, [employee]);
@@ -172,7 +176,8 @@ export function HrEmployeeDetailPage() {
     if (!employee) return;
     try {
       setAgeVerifications(await api.listHrAgeVerifications(employee.id));
-    } catch {
+    } catch (e) {
+      logApiError("HrEmployeeDetailPage.ageVerifications", e);
       setAgeVerifications([]);
     }
   }, [employee]);
@@ -181,7 +186,8 @@ export function HrEmployeeDetailPage() {
     if (!employee) return;
     try {
       setMedicalRecords(await api.listHrMedicalRecords(employee.id));
-    } catch {
+    } catch (e) {
+      logApiError("HrEmployeeDetailPage.medicalRecords", e);
       setMedicalRecords([]);
     }
   }, [employee]);

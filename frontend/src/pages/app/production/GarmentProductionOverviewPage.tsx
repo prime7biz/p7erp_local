@@ -3,10 +3,12 @@ import { Link } from "react-router-dom";
 
 import { api } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalISO();
 }
 
 type WipJournalRow = {
@@ -29,6 +31,7 @@ export function GarmentProductionOverviewPage() {
   const [wipJournals, setWipJournals] = useState<WipJournalRow[]>([]);
   const [error, setError] = useState("");
   const [maintenanceItems, setMaintenanceItems] = useState<Array<Record<string, unknown>>>([]);
+  const latest = useLatestRequest();
 
   const autoPostWip =
     me?.feature_flags?.auto_post_wip_journal === false
@@ -59,15 +62,18 @@ export function GarmentProductionOverviewPage() {
   }, []);
 
   const loadKpi = useCallback(async () => {
+    const token = latest.begin();
     try {
       setError("");
       const k = await api.getProductionDashboard(date);
+      if (!latest.isCurrent(token)) return;
       setKpi(k);
     } catch (e) {
       logApiError(e, "GarmentProductionOverviewPage.loadKpi");
+      if (!latest.isCurrent(token)) return;
       setError("Could not load dashboard KPIs.");
     }
-  }, [date]);
+  }, [latest, date]);
 
   useEffect(() => {
     void loadBase();

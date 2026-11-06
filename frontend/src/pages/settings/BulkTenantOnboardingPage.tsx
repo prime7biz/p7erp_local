@@ -7,8 +7,22 @@ import {
 } from "@/api/client";
 import { listPageErrorClass, listTableHeadCellClass, listTableRowClass } from "@/components/app/listPageLayout";
 import { Button } from "@/components/ui/button";
+import { todayLocalISO } from "@/lib/dates";
+import { PLATFORM_ADMIN_TOKEN_KEY } from "@/api/authStorage";
 
-const ADMIN_TOKEN_KEY = "p7_platform_admin_token";
+/** Platform admin token lives in sessionStorage: it is dropped when this tab closes. */
+const ADMIN_TOKEN_KEY = PLATFORM_ADMIN_TOKEN_KEY;
+
+function readAdminToken(): string {
+  try {
+    // Older builds kept this token in localStorage (survives restarts); remove that copy.
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+    return sessionStorage.getItem(ADMIN_TOKEN_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
 const TENANT_TYPES: TenantType[] = ["manufacturer", "buying_house", "both"];
 
 function parseMembers(text: string, fallbackType: TenantType) {
@@ -26,7 +40,7 @@ function parseMembers(text: string, fallbackType: TenantType) {
 }
 
 export function BulkTenantOnboardingPage() {
-  const [adminToken, setAdminToken] = useState(() => localStorage.getItem(ADMIN_TOKEN_KEY) ?? "");
+  const [adminToken, setAdminToken] = useState(() => readAdminToken());
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
@@ -48,7 +62,7 @@ export function BulkTenantOnboardingPage() {
     setSuccess("");
     try {
       const res = await api.platformAdminLogin({ username, password });
-      localStorage.setItem(ADMIN_TOKEN_KEY, res.access_token);
+      sessionStorage.setItem(ADMIN_TOKEN_KEY, res.access_token);
       setAdminToken(res.access_token);
       setPassword("");
       setSuccess(`Platform admin login successful. Token expires in ${res.expires_in_minutes} minutes.`);
@@ -60,7 +74,7 @@ export function BulkTenantOnboardingPage() {
   }
 
   function handleLogout() {
-    localStorage.removeItem(ADMIN_TOKEN_KEY);
+    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
     setAdminToken("");
     setCreated([]);
     setSuccess("Platform admin token cleared.");
@@ -104,7 +118,7 @@ export function BulkTenantOnboardingPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `bulk-created-tenants-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `bulk-created-tenants-${todayLocalISO()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }

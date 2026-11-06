@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/api/client";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 const OPTIONAL_UNITS = ["knitting", "dyeing", "printing", "aop", "embroidery", "elastic", "washing"];
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalISO();
 }
 
 function crewEmpOptionKey(designationId: number | null | undefined, designationFilter: string | null | undefined) {
@@ -29,6 +31,8 @@ export function DailyCrewSheetPage() {
   const [employeeOptions, setEmployeeOptions] = useState<Record<string, Array<{ id: number; label: string }>>>({});
   const [sheetStatus, setSheetStatus] = useState<string | null>(null);
   const [gaps, setGaps] = useState<Awaited<ReturnType<typeof api.getCrewSubstituteSuggestions>>["gaps"]>([]);
+  const latestRows = useLatestRequest();
+  const latestStatus = useLatestRequest();
 
   const loadFilters = useCallback(async () => {
     try {
@@ -45,6 +49,7 @@ export function DailyCrewSheetPage() {
 
   const loadRows = useCallback(async () => {
     if (!shiftId) return;
+    const token = latestRows.begin();
     try {
       setMsg("");
       const data = await api.getCrewDaily({
@@ -54,12 +59,14 @@ export function DailyCrewSheetPage() {
         department_type: mode === "unit" ? unitDept : undefined,
         machine_id: mode === "unit" ? machineId : undefined,
       });
+      if (!latestRows.isCurrent(token)) return;
       setRows(data);
     } catch (e) {
       logApiError(e, "DailyCrewSheetPage.loadRows");
+      if (!latestRows.isCurrent(token)) return;
       setMsg("Could not load crew sheet.");
     }
-  }, [date, lineId, machineId, mode, shiftId, unitDept]);
+  }, [latestRows, date, lineId, machineId, mode, shiftId, unitDept]);
 
   const loadEmployeeOptions = useCallback(async () => {
     const keys = new Set<string>();
@@ -81,24 +88,29 @@ export function DailyCrewSheetPage() {
             label: `${x.employee_code} - ${x.name}`,
           })),
         }));
-      } catch {
+      } catch (e) {
+        logApiError(e, "DailyCrewSheetPage.loadEmployeeOptions");
         setEmployeeOptions((prev) => ({ ...prev, [k]: [] }));
       }
     }
   }, [employeeOptions, rows]);
 
   const loadLineSheetStatus = useCallback(async () => {
+    const token = latestStatus.begin();
     if (mode !== "line" || !shiftId || !lineId) {
       setSheetStatus(null);
       return;
     }
     try {
       const s = await api.getLineCrewSheetStatus({ production_date: date, shift_id: shiftId, line_id: lineId });
+      if (!latestStatus.isCurrent(token)) return;
       setSheetStatus(s.status);
-    } catch {
+    } catch (e) {
+      logApiError(e, "DailyCrewSheetPage.loadLineSheetStatus");
+      if (!latestStatus.isCurrent(token)) return;
       setSheetStatus(null);
     }
-  }, [date, lineId, mode, shiftId]);
+  }, [latestStatus, date, lineId, mode, shiftId]);
 
   useEffect(() => {
     void loadFilters();

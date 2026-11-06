@@ -278,23 +278,28 @@ async def post_delivery_challan_gl(
     v_date = delivery_date or date.today()
     buckets: dict[tuple[int | None, int | None], float] = defaultdict(float)
 
-    for line in lines:
-        mv = (
-            await db.execute(
-                select(StockMovement).where(
-                    StockMovement.tenant_id == tenant_id,
-                    StockMovement.reference_type == "DELIVERY_CHALLAN",
-                    StockMovement.reference_id == challan_id,
-                    StockMovement.item_id == line.item_id,
-                    StockMovement.warehouse_id == line.warehouse_id,
-                    StockMovement.movement_type == "OUT",
-                )
+    # Value each OUT movement of the challan once (one per line). Looking movements up per
+    # line by item + warehouse counted the first one again when a challan repeated a line.
+    line_item_ids = {line.item_id for line in lines}
+    movements = (
+        await db.execute(
+            select(StockMovement)
+            .where(
+                StockMovement.tenant_id == tenant_id,
+                StockMovement.reference_type == "DELIVERY_CHALLAN",
+                StockMovement.reference_id == challan_id,
+                StockMovement.movement_type == "OUT",
             )
-        ).scalars().first()
-        val = _f(mv.movement_value) if mv else 0.0
+            .order_by(StockMovement.id)
+        )
+    ).scalars().all()
+    for mv in movements:
+        if mv.item_id not in line_item_ids:
+            continue
+        val = _f(mv.movement_value)
         if val <= 0:
             continue
-        acc = await resolve_inventory_accounts(db, tenant_id, line.item_id)
+        acc = await resolve_inventory_accounts(db, tenant_id, mv.item_id)
         inv_id = acc["inventory"]
         cogs_id = acc["cogs"]
         if not inv_id or not cogs_id:

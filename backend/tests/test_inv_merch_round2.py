@@ -188,6 +188,7 @@ async def test_concurrent_bom_from_order_creates_one_active_bom(real_db):
 
 @pytest.mark.asyncio
 async def test_active_bom_partial_unique_index(db_session_integration):
+    """Backstop index uq_boms_tenant_order_active (migration 154) behind the app-level order lock."""
     db = db_session_integration
     tenant, _user, style, _q, order = await _seed_order(db)
 

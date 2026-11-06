@@ -190,6 +190,10 @@ async def _seed(db):
 
 
 async def _old_budget_vs_actual(db, tenant, budget) -> dict:
+    """Row-by-row reference. Since 2026-11 it is limited to the budget's financial year and sums base_amount."""
+    from app.modules.finance.fiscal_year import fiscal_year_bounds_from_label, fy_start_month
+
+    fy_bounds = fiscal_year_bounds_from_label(budget.fiscal_year, fy_start_month(tenant.feature_flags))
     lines = list((await db.execute(select(BudgetLine).where(BudgetLine.budget_id == budget.id))).scalars().all())
     posted_rows = list(
         (
@@ -200,6 +204,8 @@ async def _old_budget_vs_actual(db, tenant, budget) -> dict:
             )
         ).all()
     )
+    if fy_bounds is not None:
+        posted_rows = [(vl, v) for vl, v in posted_rows if fy_bounds[0] <= v.voucher_date <= fy_bounds[1]]
     rows = []
     total_budget = 0.0
     total_actual = 0.0
@@ -211,7 +217,7 @@ async def _old_budget_vs_actual(db, tenant, budget) -> dict:
                 continue
             if line.cost_center_id is not None and voucher_line.cost_center_id != line.cost_center_id:
                 continue
-            actual_amount += _to_float(voucher_line.amount)
+            actual_amount += _to_float(voucher_line.base_amount)
         total_budget += budget_amount
         total_actual += actual_amount
         rows.append(
@@ -230,6 +236,8 @@ async def _old_budget_vs_actual(db, tenant, budget) -> dict:
         "budget_id": budget.id,
         "budget_name": budget.budget_name,
         "fiscal_year": budget.fiscal_year,
+        "period_start": fy_bounds[0].isoformat() if fy_bounds else None,
+        "period_end": fy_bounds[1].isoformat() if fy_bounds else None,
         "rows": rows,
         "total_budget": round(total_budget, 2),
         "total_actual": round(total_actual, 2),

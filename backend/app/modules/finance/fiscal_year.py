@@ -53,6 +53,21 @@ def fiscal_year_info(d: date, start_month: int = 1) -> dict[str, Any]:
     }
 
 
+def fiscal_year_bounds_from_label(label: Any, start_month: int = 1) -> tuple[date, date] | None:
+    """Start/end dates for a stored fiscal-year label such as "2026" or "2026-27".
+
+    The leading 4-digit number is the calendar year the financial year starts in.
+    Returns None when the label has no usable year (old free-text budgets).
+    """
+    text = str(label or "").strip()
+    if len(text) < 4 or not text[:4].isdigit():
+        return None
+    year = int(text[:4])
+    if year < 1900 or year > 9998:
+        return None
+    return fiscal_year_bounds(date(year, start_month, 1), start_month)
+
+
 async def tenant_fy_start_month(db: AsyncSession, tenant_id: int) -> int:
     from app.models import Tenant
 

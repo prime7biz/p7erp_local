@@ -4656,14 +4656,20 @@ async def budget_vs_actual(
         raise HTTPException(status_code=404, detail="Budget not found")
     lines = list((await db.execute(select(BudgetLine).where(BudgetLine.budget_id == budget.id))).scalars().all())
 
-    # Posted, in-books voucher line amounts summed per (account, cost centre) in SQL.
-    # A budget line with no account matches every account, so only filter when all lines name one.
+    from app.modules.finance.fiscal_year import fiscal_year_bounds_from_label, fy_start_month
+
+    # Posted, in-books voucher line amounts (in base currency) summed per (account, cost centre) in SQL,
+    # limited to the budget's financial year. A budget line with no account matches every account,
+    # so only filter by account when all lines name one.
+    fy_bounds = fiscal_year_bounds_from_label(budget.fiscal_year, fy_start_month(tenant.feature_flags))
     actual_query = (
-        select(VoucherLine.account_id, VoucherLine.cost_center_id, func.sum(VoucherLine.amount))
+        select(VoucherLine.account_id, VoucherLine.cost_center_id, func.sum(VoucherLine.base_amount))
         .join(Voucher, VoucherLine.voucher_id == Voucher.id)
         .where(VoucherLine.tenant_id == tenant.id, Voucher.status == "POSTED", voucher_in_books_clause())
         .group_by(VoucherLine.account_id, VoucherLine.cost_center_id)
     )
+    if fy_bounds is not None:
+        actual_query = actual_query.where(Voucher.voucher_date >= fy_bounds[0], Voucher.voucher_date <= fy_bounds[1])
     if lines and all(line.account_id is not None for line in lines):
         actual_query = actual_query.where(VoucherLine.account_id.in_({line.account_id for line in lines}))
     actual_by_account_cc = (await db.execute(actual_query)).all() if lines else []
@@ -4699,6 +4705,8 @@ async def budget_vs_actual(
         "budget_id": budget.id,
         "budget_name": budget.budget_name,
         "fiscal_year": budget.fiscal_year,
+        "period_start": fy_bounds[0].isoformat() if fy_bounds else None,
+        "period_end": fy_bounds[1].isoformat() if fy_bounds else None,
         "rows": rows,
         "total_budget": round(total_budget, 2),
         "total_actual": round(total_actual, 2),

@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.common.business_date import today_local
 from app.common.codegen import next_tenant_code
 from app.models import (
     Customer,
@@ -310,7 +311,7 @@ async def _build_draft_invoice_for_group(
         status="DRAFT",
         customer_id=customer_id,
         source_delivery_challan_id=challan.id,
-        invoice_date=invoice_date or challan.delivery_date or date.today(),
+        invoice_date=invoice_date or challan.delivery_date or today_local(),
         currency=currency,
         exchange_rate_to_base=rate,
         total_amount=Decimal("0"),
@@ -559,7 +560,7 @@ async def issue_commercial_invoice(
         tenant_id=tenant_id,
         user_id=user_id,
         voucher_type="JOURNAL",
-        voucher_date=invoice.invoice_date or date.today(),
+        voucher_date=invoice.invoice_date or today_local(),
         lines=[
             AutoPostingLine(
                 entry_type="DEBIT",

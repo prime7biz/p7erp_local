@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.models import Tenant
 from app.models.facility import Facility, FacilityUtilization, InterestAccrual
 from app.models.finance import Voucher, VoucherLine
@@ -32,7 +33,7 @@ async def run_monthly_accrual(
     """Create one accrual per active utilization per month (skip if exists). Returns counts."""
     created = 0
     skipped = 0
-    adate = accrual_date or date.today()
+    adate = accrual_date or today_local()
 
     r = await db.execute(
         select(FacilityUtilization).where(
@@ -155,7 +156,7 @@ async def reverse_accrual(
         db=db,
         tenant_id=tenant_id,
         user_id=user_id,
-        voucher_date=date.today(),
+        voucher_date=today_local(),
         description=f"Reversal accrual #{accrual_id}",
         reference=f"FAC-ACC-REV-{accrual_id}",
         debit_account_id=cr.account_id,

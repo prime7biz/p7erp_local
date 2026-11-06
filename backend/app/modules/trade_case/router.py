@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.auth import get_current_user
 from app.common.ownership import ensure_owned
 from app.common.storage import FileStorageService
@@ -196,7 +197,7 @@ async def list_trade_cases(
     if date_to is not None:
         stmt = stmt.where(TradeCase.created_at <= datetime.combine(date_to, datetime.max.time()))
     if at_risk:
-        today = date.today()
+        today = today_local()
         horizon = today + timedelta(days=at_risk_days)
         terminal_stages = ("SETTLED", "SHIPPED")
         stmt = stmt.where(

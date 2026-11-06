@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.ownership import ensure_owned
 from app.models.finance import ChartOfAccount, Voucher, VoucherLine
 from app.models.party_ledger import PartyLedger
@@ -150,7 +151,7 @@ async def create_tds_liability_voucher(
     include_bank_net: bool = False,
 ) -> Voucher:
     """JOURNAL: Dr Vendor AP (gross), Cr TDS Payable (tds); optionally Cr Bank (net)."""
-    vdate = voucher_date or deduction.deduction_date or date.today()
+    vdate = voucher_date or deduction.deduction_date or today_local()
     gross = _money(_d(deduction.taxable_amount))
     tds = _money(_d(deduction.tds_amount))
     if tds <= ZERO:
@@ -271,7 +272,7 @@ async def create_tds_deduction_record(
         tds_amount=_money(tds_amount),
         net_payment=_money(_d(taxable_amount) - _d(tds_amount)),
         status="PENDING",
-        deduction_date=deduction_date or date.today(),
+        deduction_date=deduction_date or today_local(),
         created_by=created_by,
         notes=notes,
     )

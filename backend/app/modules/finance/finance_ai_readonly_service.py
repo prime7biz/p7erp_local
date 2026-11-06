@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import Numeric, case, cast, extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.models import PaymentRun, Voucher, VoucherLine
 
 
@@ -45,7 +46,7 @@ async def build_finance_readonly_insights(
     tenant_id: int,
     months_back: int = 6,
 ) -> dict[str, Any]:
-    today = date.today()
+    today = today_local()
     start_year = today.year
     start_month = today.month - (months_back - 1)
     while start_month < 1:

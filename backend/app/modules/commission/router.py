@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.codegen import next_tenant_code_entity_key
@@ -770,7 +771,7 @@ async def create_statement(
         direction=body.direction,
         counterparty_type=body.counterparty_type,
         counterparty_id=body.counterparty_id,
-        statement_date=body.statement_date or date.today(),
+        statement_date=body.statement_date or today_local(),
         currency=currency,
         gross_total=sum((e.gross_amount for e in entries), Decimal("0")),
         tds_total=sum((e.tds_amount for e in entries), Decimal("0")),

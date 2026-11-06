@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.auth import get_current_user
 from app.common.tenant import require_tenant
 from app.common.tenant_feature_keys import is_bd_bond_compliance_enabled
@@ -294,7 +295,7 @@ async def list_uds(
             )
         ).all()
         counts = {int(a): int(b) for a, b in cnt_rows}
-    today = date.today()
+    today = today_local()
     return {
         "items": [
             {
@@ -577,7 +578,7 @@ async def create_bond_entry(
         quantity=qty,
         value_bdt=_dec(body.value_bdt, "value_bdt"),
         status="OPEN",
-        entry_date=body.entry_date or date.today(),
+        entry_date=body.entry_date or today_local(),
         notes=body.notes,
     )
     db.add(entry)

@@ -30,6 +30,7 @@ from sqlalchemy import case, cast, func, Numeric, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.business_date import today_local
 from app.common.cache import (
     ACCOUNT_GROUP_HIERARCHY_CACHE_TTL_SECONDS,
     account_group_hierarchy_cache_key,
@@ -3143,9 +3144,9 @@ async def day_book_report(
     from app.modules.finance.advanced_voucher_service import voucher_visible_in_day_book_clause
 
     if from_date is None:
-        from_date = date.today().replace(day=1)
+        from_date = today_local(tenant).replace(day=1)
     if to_date is None:
-        to_date = date.today()
+        to_date = today_local(tenant)
     filters = [
         Voucher.tenant_id == tenant.id,
         Voucher.voucher_date >= from_date,
@@ -3320,7 +3321,7 @@ async def trial_balance_report(
 ):
     _ensure_tenant(user, tenant)
     if as_of_date is None:
-        as_of_date = date.today()
+        as_of_date = today_local(tenant)
     accounts_stmt = (
         select(ChartOfAccount, AccountGroup)
         .join(AccountGroup, ChartOfAccount.group_id == AccountGroup.id)
@@ -3401,7 +3402,7 @@ async def financial_statements(
 ):
     _ensure_tenant(user, tenant)
     if as_of_date is None:
-        as_of_date = date.today()
+        as_of_date = today_local(tenant)
     accounts_stmt = (
         select(ChartOfAccount, AccountGroup)
         .join(AccountGroup, ChartOfAccount.group_id == AccountGroup.id)
@@ -3451,9 +3452,9 @@ async def cash_flow_statement(
 ):
     _ensure_tenant(user, tenant)
     if from_date is None:
-        from_date = date.today().replace(day=1)
+        from_date = today_local(tenant).replace(day=1)
     if to_date is None:
-        to_date = date.today()
+        to_date = today_local(tenant)
 
     vouchers = list(
         (
@@ -4206,7 +4207,7 @@ async def create_payable_from_purchase_order(
         prefix="AP-",
         width=4,
     )
-    due = date.today() + timedelta(days=max(body.due_in_days, 0))
+    due = today_local(tenant) + timedelta(days=max(body.due_in_days, 0))
     combined_notes = f"{body.notes or ''} | PO:{po.po_code} | GRN_COUNT:{grn_count}".strip(" |")
 
     row = OutstandingBill(
@@ -4214,7 +4215,7 @@ async def create_payable_from_purchase_order(
         bill_no=code,
         party_name=po.supplier_name,
         bill_type="PAYABLE",
-        bill_date=date.today(),
+        bill_date=today_local(tenant),
         due_date=due,
         amount=str(total_amount),
         paid_amount="0",
@@ -4291,7 +4292,7 @@ async def create_payable_from_goods_receiving(
         prefix="AP-",
         width=4,
     )
-    due = date.today() + timedelta(days=max(body.due_in_days, 0))
+    due = today_local(tenant) + timedelta(days=max(body.due_in_days, 0))
     combined_notes = f"{body.notes or ''} | PO:{po.po_code} | GRN:{grn.grn_code}".strip(" |")
 
     row = OutstandingBill(
@@ -4299,7 +4300,7 @@ async def create_payable_from_goods_receiving(
         bill_no=code,
         party_name=po.supplier_name,
         bill_type="PAYABLE",
-        bill_date=date.today(),
+        bill_date=today_local(tenant),
         due_date=due,
         amount=str(total_amount),
         paid_amount="0",
@@ -4356,7 +4357,7 @@ async def bills_aging(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    as_of = as_of_date or date.today()
+    as_of = as_of_date or today_local(tenant)
     stmt = select(OutstandingBill).where(
         OutstandingBill.tenant_id == tenant.id,
         OutstandingBill.bill_type == bill_type.strip().upper(),
@@ -5966,7 +5967,7 @@ async def purchase_ap_overview(
     due_next_7_days = sum(
         max(_to_float(p.amount) - _to_float(p.paid_amount), 0)
         for p in open_payables
-        if 0 <= (p.due_date - date.today()).days <= 7
+        if 0 <= (p.due_date - today_local(tenant)).days <= 7
     )
     return {
         "payable_bills_count": len(payables),
@@ -6655,7 +6656,7 @@ async def reverse_voucher(
             detail="This voucher never affected the books (memorandum/optional/post-dated); use cancel-posting instead",
         )
     await _assert_no_facility_link(db, tenant.id, src.id)
-    await _assert_open_period(db, tenant.id, date.today(), what="today's date (reversal date)")
+    await _assert_open_period(db, tenant.id, today_local(tenant), what="today's date (reversal date)")
     from app.modules.finance.tds_service import on_payment_voucher_cancelled
 
     await on_payment_voucher_cancelled(db, tenant.id, src)
@@ -6668,7 +6669,7 @@ async def reverse_voucher(
     vnum, series_seq, series_key, fy = await allocate_series_voucher_number(
         db,
         tenant_id=tenant.id,
-        voucher_date=date.today(),
+        voucher_date=today_local(tenant),
         voucher_type=src.voucher_type,
         branch_code=branch,
     )
@@ -6678,7 +6679,7 @@ async def reverse_voucher(
         tenant_id=tenant.id,
         voucher_number=vnum,
         voucher_type=src.voucher_type,
-        voucher_date=date.today(),
+        voucher_date=today_local(tenant),
         status="POSTED",
         description=f"Reversal of {src.voucher_number}",
         reference=src.voucher_number,
@@ -6839,13 +6840,13 @@ async def auto_create_bill_from_voucher(
         prefix=prefix,
         width=4,
     )
-    due = date.today() + timedelta(days=max(body.due_in_days, 0))
+    due = today_local(tenant) + timedelta(days=max(body.due_in_days, 0))
     row = OutstandingBill(
         tenant_id=tenant.id,
         bill_no=code,
         party_name=body.party_name,
         bill_type=body.bill_type,
-        bill_date=date.today(),
+        bill_date=today_local(tenant),
         due_date=due,
         amount=str(round(total, 2)),
         paid_amount="0",
@@ -7031,9 +7032,9 @@ async def ledger_activity_report(
     if not account or account.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Account not found")
     if from_date is None:
-        from_date = date.today().replace(day=1)
+        from_date = today_local(tenant).replace(day=1)
     if to_date is None:
-        to_date = date.today()
+        to_date = today_local(tenant)
 
     q = (
         select(VoucherLine, Voucher)
@@ -7295,7 +7296,7 @@ async def create_bill_reference(
         source_doc_number=body.source_doc_number,
         status="OPEN",
         credit_period_days=body.credit_period_days,
-        is_overdue=body.due_date < date.today() if body.due_date else False,
+        is_overdue=body.due_date < today_local(tenant) if body.due_date else False,
         notes=body.notes,
         created_by=user.id,
     )
@@ -7386,7 +7387,7 @@ async def allocate_bill_wise(
     await ensure_owned(db, VoucherLine, body.voucher_line_id, tenant.id, "Voucher line")
     if body.allocation_type == "ON_ACCOUNT":
         await ensure_owned(db, BillReference, body.bill_reference_id, tenant.id, "Bill reference")
-    today = date.today()
+    today = today_local(tenant)
 
     if body.allocation_type == "AGAINST_REF":
         if not body.bill_reference_id:
@@ -7517,7 +7518,7 @@ async def bill_wise_outstanding_report(
         else:
             payable_total += pending
             payable_count += 1
-        if r.is_overdue or (r.due_date and r.due_date < date.today()):
+        if r.is_overdue or (r.due_date and r.due_date < today_local(tenant)):
             overdue_total += pending
     return {
         "receivable": {"total": round(receivable_total, 2), "count": receivable_count},
@@ -7543,7 +7544,7 @@ async def bill_wise_aging_report(
             ).order_by(BillReference.bill_date.asc())
         )).scalars().all()
     )
-    today = date.today()
+    today = today_local(tenant)
     buckets: dict[str, float] = {"0_30": 0, "31_60": 0, "61_90": 0, "91_120": 0, "120_plus": 0}
     party_rows: list[dict] = []
     for r in rows:
@@ -7697,8 +7698,8 @@ async def create_vendor_bill_draft_from_grn(
         bill_code=bill_code,
         vendor_id=vid,
         vendor_invoice_ref=None,
-        vendor_invoice_date=date.today(),
-        bill_date=grn.received_date or date.today(),
+        vendor_invoice_date=today_local(tenant),
+        bill_date=grn.received_date or today_local(tenant),
         status="DRAFT",
         goods_receiving_id=grn.id,
         purchase_order_id=grn.purchase_order_id,
@@ -7875,7 +7876,7 @@ async def post_vendor_bill(
         tenant_id=tenant.id,
         user_id=user.id,
         voucher_type="JOURNAL",
-        voucher_date=b.bill_date or date.today(),
+        voucher_date=b.bill_date or today_local(tenant),
         lines=[
             AutoPostingLine(
                 entry_type="DEBIT",

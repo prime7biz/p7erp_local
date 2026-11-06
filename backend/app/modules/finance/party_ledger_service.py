@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.models.customer import Customer
 from app.models.finance import AccountGroup, ChartOfAccount
 from app.models.inventory import Vendor
@@ -204,7 +205,7 @@ async def get_or_create_party_ledger(
         interest_rate_monthly=interest_rate_monthly,
         opening_balance=ob,
         opening_balance_type=ob_type,
-        opening_balance_date=opening_balance_date or date.today(),
+        opening_balance_date=opening_balance_date or today_local(),
         current_balance=ob,
         current_balance_type=ob_type,
         total_dr_amount=ob if ob_type == "DR" else ZERO,
@@ -373,7 +374,7 @@ async def get_party_ledger_statement(
         raise HTTPException(status_code=404, detail="Party ledger not found")
 
     if to_date is None:
-        to_date = date.today()
+        to_date = today_local()
     if from_date is None:
         from_date = to_date - timedelta(days=90)
 
@@ -519,7 +520,7 @@ async def get_party_aging_report(
     as_of_date: date | None = None,
     party_type: str | None = None,
 ) -> dict[str, Any]:
-    as_of = as_of_date or date.today()
+    as_of = as_of_date or today_local()
     filters = [
         PartyLedger.tenant_id == tenant_id,
         PartyLedger.is_active.is_(True),

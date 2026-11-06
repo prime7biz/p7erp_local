@@ -8,6 +8,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.modules.finance.mis_coa_helpers import (
     _money,
     account_balances_as_of,
@@ -191,7 +192,7 @@ async def ratio_trend(
     months: int = 6,
     as_of: date | None = None,
 ) -> dict[str, Any]:
-    as_of = as_of or date.today()
+    as_of = as_of or today_local()
     months = max(1, min(months, 24))
     point_dates: list[date] = []
     y, m = as_of.year, as_of.month

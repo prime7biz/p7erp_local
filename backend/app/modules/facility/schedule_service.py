@@ -8,6 +8,7 @@ from datetime import date, timedelta
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.models.facility import Facility, FacilityUtilization, RepaymentScheduleLine
 
 from app.modules.facility.emi_service import preview_emi
@@ -85,7 +86,7 @@ async def replace_schedule_for_utilization(
     freq = util.installment_frequency or "monthly"
     moratorium = int(util.moratorium_months or 0)
 
-    first_due = util.first_repayment_date or util.disbursement_date or date.today()
+    first_due = util.first_repayment_date or util.disbursement_date or today_local()
     util.schedule_generation_version = int(util.schedule_generation_version or 1) + 1
     ver = util.schedule_generation_version
 

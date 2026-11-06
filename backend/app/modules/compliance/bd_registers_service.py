@@ -14,6 +14,8 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
+from app.common.business_date import today_local
+
 ZERO = Decimal("0")
 EXPIRY_WARNING_DAYS = 30
 
@@ -49,7 +51,7 @@ def compute_utilization(
     today: date | None = None,
 ) -> dict[str, Any]:
     """Entitled vs imported vs consumed per UD line, plus warnings."""
-    today = today or date.today()
+    today = today or today_local()
     lines: list[dict[str, Any]] = []
     warnings: list[dict[str, str]] = []
     total_entitled_value = ZERO

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.auth import get_current_user
 from app.common.permissions import (
     PERMISSION_MIS_REPORT_EXPORT,
@@ -66,7 +67,7 @@ async def fund_flow_report(
     _require_mis(tenant)
     await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_MIS_REPORT_VIEW)
     if to_date is None:
-        to_date = date.today()
+        to_date = today_local()
     if from_date is None:
         from_date = date(to_date.year, 1, 1)
     if from_date > to_date:
@@ -84,7 +85,7 @@ async def ratio_analysis_report(
     _ensure_tenant(user, tenant)
     _require_mis(tenant)
     await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_MIS_REPORT_VIEW)
-    return await calculate_ratios(db, tenant.id, as_of_date=as_of_date or date.today())
+    return await calculate_ratios(db, tenant.id, as_of_date=as_of_date or today_local())
 
 
 @router.get("/finance/reports/ratio-analysis/trend")
@@ -203,7 +204,7 @@ async def mis_health_card(
     _ensure_tenant(user, tenant)
     if not is_mis_reports_enabled(tenant.feature_flags):
         return {"enabled": False}
-    ratios = await calculate_ratios(db, tenant.id, as_of_date=date.today())
+    ratios = await calculate_ratios(db, tenant.id, as_of_date=today_local())
     runway = await cash_runway(db, tenant.id)
     by_name = {r["name"]: r for r in ratios["ratios"]}
     return {

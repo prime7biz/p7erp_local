@@ -9,6 +9,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.codegen import next_tenant_code
@@ -771,7 +772,7 @@ async def hr_dashboard_data(
         )
         or 0
     )
-    today = date.today()
+    today = today_local()
     att_today = int(
         await db.scalar(
             select(func.count()).select_from(AttendanceEntry).where(

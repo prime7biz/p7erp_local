@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.tenant_feature_keys import (
     BUDGET_MODE_OFF,
     get_budget_enforcement_mode,
@@ -82,7 +83,7 @@ async def evaluate_voucher_budget(
             can_post=True,
         )
 
-    period_month = (voucher.voucher_date or date.today()).strftime("%Y-%m")
+    period_month = (voucher.voucher_date or today_local()).strftime("%Y-%m")
     budget_rows = list(
         (
             await db.execute(

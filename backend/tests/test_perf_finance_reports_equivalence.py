@@ -18,6 +18,7 @@ import pytest
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
 
+from app.common.business_date import today_local
 from app.models.finance import (
     AccountGroup,
     Budget,
@@ -35,7 +36,7 @@ from app.modules.finance.ratio_analysis_service import calculate_ratios, ratio_t
 from tests.benchmark_fixtures import api_client, seed_tenant_admin
 from tests.test_perf_inventory_reports_equivalence import QueryCounter
 
-TODAY = date.today()
+TODAY = today_local()  # same business date the endpoints default to
 
 
 def _to_float(v) -> float:

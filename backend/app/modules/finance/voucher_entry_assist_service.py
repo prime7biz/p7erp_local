@@ -21,6 +21,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.orm_numeric import decimal_to_money_response
 from app.database import safe_async_session_rollback
 from app.models import AccountGroup, ChartOfAccount, Tenant, Voucher, VoucherLine
@@ -269,7 +270,7 @@ async def build_entry_assist(
     exclude_voucher_id: int | None = None,
     today: date | None = None,
 ) -> dict[str, Any]:
-    today = today or date.today()
+    today = today or today_local()
     start_month = fy_start_month(tenant.feature_flags)
     fy = fiscal_year_info(voucher_date, start_month)
     current_fy = fiscal_year_info(today, start_month)
@@ -391,7 +392,7 @@ async def suggest_narration(
     fallback = template_narration(voucher_type, debit_names, credit_names, total, reference)
 
     history_ids = await _history_voucher_ids(
-        db, tenant.id, (voucher_type or "").upper(), sorted(names), date.today() - timedelta(days=HISTORY_DAYS)
+        db, tenant.id, (voucher_type or "").upper(), sorted(names), today_local() - timedelta(days=HISTORY_DAYS)
     )
     examples = await _recent_narrations(db, history_ids)
 

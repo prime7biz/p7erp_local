@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.auth import get_current_user
 from app.common.permissions import (
     PERMISSION_PARTY_LEDGER_AGING,
@@ -717,7 +718,7 @@ async def calculate_interest(
     pl = await db.get(PartyLedger, ledger_id)
     if not pl or pl.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Party ledger not found")
-    as_of = body.as_of_date or date.today()
+    as_of = body.as_of_date or today_local()
     await mark_overdue_bills(db, tenant.id, as_of)
     bills = (
         await db.execute(

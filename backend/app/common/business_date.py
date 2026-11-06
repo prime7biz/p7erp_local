@@ -76,3 +76,12 @@ def now_local(tenant: Any = None) -> datetime:
 def today_local(tenant: Any = None) -> date:
     """Today's date in the business timezone (use for default business dates)."""
     return now_local(tenant).date()
+
+
+async def tenant_today(db: Any, tenant_id: int | None) -> date:
+    """`today_local` for code that only has a tenant id (the Tenant row is usually already in the session)."""
+    if tenant_id is None:
+        return today_local()
+    from app.models import Tenant
+
+    return today_local(await db.get(Tenant, tenant_id))

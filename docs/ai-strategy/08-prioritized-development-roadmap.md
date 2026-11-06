@@ -1,6 +1,6 @@
 # 08 - Prioritised AI Development Roadmap
 
-Part of the Prime7 AI strategy set. Index: [`AI_DEVELOPMENT_MASTER_PLAN.md`](../../AI_DEVELOPMENT_MASTER_PLAN.md).
+Part of the Prime7 AI strategy set. Index: [`AI_DEVELOPMENT_MASTER_PLAN.md`](AI_DEVELOPMENT_MASTER_PLAN.md).
 
 **Audit date:** 2026-11-04
 **Status:** Proposal for review. **No item below should be implemented until this roadmap is approved.**

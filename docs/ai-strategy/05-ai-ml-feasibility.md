@@ -1,6 +1,6 @@
 # 05 - AI / ML Feasibility
 
-Part of the Prime7 AI strategy set. Index: [`AI_DEVELOPMENT_MASTER_PLAN.md`](../../AI_DEVELOPMENT_MASTER_PLAN.md).
+Part of the Prime7 AI strategy set. Index: [`AI_DEVELOPMENT_MASTER_PLAN.md`](AI_DEVELOPMENT_MASTER_PLAN.md).
 
 **Audit date:** 2026-11-04
 **Scope:** Can Prime7's real data support forecasting and machine learning, and which method is most practical for each capability?

@@ -1,6 +1,6 @@
 # 06 - AI Infrastructure, Performance and Cost
 
-Part of the Prime7 AI strategy set. Index: [`AI_DEVELOPMENT_MASTER_PLAN.md`](../../AI_DEVELOPMENT_MASTER_PLAN.md).
+Part of the Prime7 AI strategy set. Index: [`AI_DEVELOPMENT_MASTER_PLAN.md`](AI_DEVELOPMENT_MASTER_PLAN.md).
 
 **Audit date:** 2026-11-04
 **Rule followed:** nothing is assumed to be deployed unless it appears in `docker-compose.yml`, `docker-compose.prod.yml`, `backend/app/config.py` or `backend/requirements.txt`. Live `.env` values were **not** read; which keys are set in production is Runtime-verify.

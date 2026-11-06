@@ -1,6 +1,6 @@
 # 02 - Existing AI Functionality Audit
 
-Part of the Prime7 AI strategy set. Index: [`AI_DEVELOPMENT_MASTER_PLAN.md`](../../AI_DEVELOPMENT_MASTER_PLAN.md).
+Part of the Prime7 AI strategy set. Index: [`AI_DEVELOPMENT_MASTER_PLAN.md`](AI_DEVELOPMENT_MASTER_PLAN.md).
 
 **Audit date:** 2026-11-04
 **Method:** Each feature was traced from frontend page or component, through the API route, to the backend service and its data source. Only features found in code are listed. Hypothetical features are not included.

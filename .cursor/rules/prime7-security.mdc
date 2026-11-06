@@ -1,0 +1,48 @@
+---
+description: Prime7 security and financial-integrity checklist for every module (tenant isolation, linked records, RBAC, double entry, posting idempotency, period locks, inventory valuation, migrations, regression tests). Always applied.
+globs:
+alwaysApply: true
+---
+
+# Prime7 security and financial integrity
+
+Applies to **every** backend module and to frontend permission handling. Every module is tenant-scoped. Evidence and
+file references live in `prime7-development.mdc`, and tracked gaps in `docs/ai-development/KNOWN-ISSUES.md`. Work that
+touches the areas below is **CRITICAL** in `prime7-orchestration.mdc`.
+
+Modules that post vouchers today (verified 2026-11-06): `finance`, `commercial`, `commission`, `facility`, `hr_payroll`,
+`inventory` and `production`. Inventory valuation lives in `inventory/stock_valuation_service.py`, plus cost layers in
+`router.py`, `idt_service.py`, `grn_qc_service.py` and `stock_batch_service.py`.
+
+## Tenant isolation and linked records
+- Resolve the tenant with `require_tenant` and reject a user/tenant mismatch. Every query filters `tenant_id`. Every
+  `db.get(Model, id)` is followed by a `row.tenant_id` check. Helpers that load by id must take `tenant_id`.
+- Every client-supplied related id passes `ensure_owned` / `ensure_all_owned` on create **and** update. This includes
+  bulk, import, job and AI-tool inputs. Another tenant's id must look like "not found".
+- New tenant tables ship with an RLS policy migration (`tests/test_rls_policies.py`). Exports, reports, dashboards,
+  Celery jobs (`bind_session_tenant`) and AI reads are tenant-scoped.
+
+## RBAC, approvals and audit
+- Reuse existing role gates and permission keys (`app/common/permissions.py`). Missing key allows; explicit `false` denies.
+  Never loosen a check. Cover new routes in `tests/test_route_permission_inventory.py`. Hiding a UI element is never the control.
+- Keep approval chains, posting authorization and `log_action` audit entries. Never write a record that bypasses them.
+
+## Financial and inventory integrity
+- Double entry: debits equal credits per voucher in base currency. Money is `Decimal` and decimal strings; never float.
+- Posted vouchers are never edited or deleted; a reversal is a new voucher. The posting date must be in an open period.
+- Idempotency: lock the source row (`with_for_update`), check the guard (status or link column), then write the voucher
+  and the link in one transaction. There is no database unique key on `source_module_ref`, so add a double-submit test.
+- Inventory: stock movements, cost layers and their GL vouchers must reconcile. Do not change the valuation method,
+  FIFO layering or the GL mapping without approval.
+- After a caught DB error call `safe_async_session_rollback(db)`.
+
+## Migrations
+- Phased: nullable column, then backfill, then NOT NULL in a later revision. Provide a working `downgrade()`.
+- No `DROP` or rename on populated tables without approval. Run only in the local container.
+
+## Leakage and injection
+- No secrets in code, logs or responses. No raw SQL with interpolation. Allowlist sort and filter fields.
+- Keep list sizes bounded (`MAX_PAGE_SIZE`). Errors must not reveal whether another tenant's record exists.
+
+## Required regression tests
+- Cross-tenant denial, permission denial, validation failure, idempotent re-submit, balanced entries, plus each acceptance criterion.

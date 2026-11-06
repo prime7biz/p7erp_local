@@ -1,0 +1,37 @@
+---
+description: Prime7 ERP core engineering constraints (multi-tenant, financial integrity, business hierarchy). Always applied.
+globs:
+alwaysApply: true
+---
+
+# Prime7 core rules
+
+Prime7 ERP is a **multi-tenant garment manufacturing / buying-house ERP** (FastAPI + PostgreSQL, React + TypeScript).
+Verified facts with file references: `.cursor/rules/prime7-development.mdc`. Security checklist: `prime7-security.mdc`.
+Modes, agent routing and quality gates: `prime7-orchestration.mdc`. Tracked gaps: `docs/ai-development/KNOWN-ISSUES.md`.
+
+## Always
+
+1. Inspect the existing code before changing it. Follow its schema, API, UI and naming patterns.
+2. Preserve established business workflows and architecture. No unrelated refactoring.
+3. Every tenant-owned record and every client-supplied linked record is tenant-validated (`ensure_owned`).
+4. Respect existing authorization and approval roles. Never loosen a permission check.
+5. Preserve financial and accounting integrity. Never bypass audit logs, period locks or posting permissions.
+6. Never silently change schemas, migrations or business semantics. Migrations are additive, phased and reversible.
+7. Do not invent missing requirements or business rules. Ask the user and record the question.
+8. Add or extend regression tests for every changed behaviour (cross-tenant denial, permission denial, validation).
+9. Backend commands run only through Docker (`docker compose exec backend ...`). No commit, push or deploy unless the user asks.
+
+## Business hierarchy (intent, verified against the code on 2026-11-06)
+
+- **Style** is primary for merchandising and production. Reality: `style_id` and `order_id` are nullable on many
+  tables, and the order execution spine names the Order as status source. Do not change this without approval.
+- **Export LC / Master Sales Contract** is primary for finance, commercial and logistics. It owns the cost center.
+- **PI links to orders**, **MSC/LC links to PI**, **BTB LC links to MSC/LC**. In the database the child holds the
+  foreign key (`proforma_invoices.master_contract_id`, `btb_lcs.master_contract_id`); those columns are nullable, so
+  the chain is business intent, not a database guarantee. Do not add NOT NULL or new validation without approval.
+- Preserve existing voucher, approval, posting, reversal and period-lock behaviour. A reversal is a new posted voucher;
+  posted vouchers are never edited in place.
+
+Verify the actual implementation before assuming a desired rule already exists. If it does not, flag the gap; do not
+build enforcement the user did not approve.

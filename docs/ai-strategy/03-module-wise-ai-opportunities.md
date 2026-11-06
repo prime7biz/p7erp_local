@@ -1,6 +1,6 @@
 # 03 - Module-wise AI Opportunities
 
-Part of the Prime7 AI strategy set. Index: [`AI_DEVELOPMENT_MASTER_PLAN.md`](../../AI_DEVELOPMENT_MASTER_PLAN.md).
+Part of the Prime7 AI strategy set. Index: [`AI_DEVELOPMENT_MASTER_PLAN.md`](AI_DEVELOPMENT_MASTER_PLAN.md).
 
 **Audit date:** 2026-11-04
 **Principle:** Use the simplest method that works. Business rules, SQL analytics and simple statistics come first. LLMs explain and summarise; they never produce the numbers. Machine learning is considered only where dense, labelled history exists.

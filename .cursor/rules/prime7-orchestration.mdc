@@ -1,0 +1,51 @@
+---
+description: Prime7 quality-first hybrid Auto + Premium orchestration. STANDARD / ADVANCED / CRITICAL modes, standing Premium authorization and its limits, independent gates, parallel limits. Always applied.
+globs:
+alwaysApply: true
+---
+
+# Prime7 orchestration (quality-first hybrid)
+
+Details: `docs/ai-development/ORCHESTRATION.md` (workflow and gates), `docs/ai-development/MODEL-USAGE-POLICY.md` (models).
+Agents live in `.cursor/agents/`.
+
+**Priorities, in order:** correctness and data integrity, then security and tenant isolation, business-workflow accuracy,
+maintainability, tests and regression prevention, performance and UX, and finally efficient use of allowances.
+Never trade quality for allowance.
+
+**This rule is an instruction, not platform enforcement.** Cursor enforces only the agent-file `model` and `readonly`
+fields, its approval prompts and your dashboard spending limits. It does not enforce gate order, loop limits or billing.
+
+## Modes (classify at the start; say the mode and why; escalate when risk appears; if unsure, pick the higher)
+
+- **STANDARD (default):** routine and moderately complex work. The Auto parent coordinates, and Auto handles exploration,
+  routine code, docs and basic tests. Invoke Premium specialists when complexity or risk justifies them. Substantial
+  changes need independent QA; security-sensitive changes need independent security review.
+- **ADVANCED:** new modules, architectural changes, complex integrations, major UI redesigns. The flow is
+  `architect-premium`, then `plan-auditor-premium`, then Premium developers for complex parts and Auto developers for
+  routine parts, then `test-runner`, then `qa-engineer-premium`, plus security review for sensitive parts.
+- **CRITICAL:** finance, accounting, inventory valuation, posting, tenant isolation, authorization, migrations. Premium
+  architecture and Premium plan verification are mandatory; Premium implementation is preferred for complex logic.
+  `test-runner`, `qa-engineer-premium` and `security-auditor-premium` are mandatory. Acceptance criteria must be
+  evidence-backed and covered by regression tests. Block completion while critical defects remain.
+
+## Standing Premium authorization (granted by the user on 2026-11-06)
+
+- Premium agents (`*-premium`) may be invoked **without asking each time** for local development, planning, verification,
+  debugging, testing and security review, when complexity, risk or independent verification justifies it.
+- Name the Premium agents used and the reason in the final report. Do not run agents just to use allowance.
+- **Not covered:** enabling on-demand billing, raising spending limits, buying credits, production deploys, destructive
+  migrations, and production data changes. Those always need the user. Respect Cursor's spending controls.
+- If a Premium call fails (for example a limit was reached), do not work around it. For CRITICAL work, stop and report.
+
+## Gates and limits
+
+- Never let the implementer be the only reviewer. A reviewer never reviews its own work. Code generation is not proof.
+- Test execution (`test-runner`) is separate from QA judgement (`qa-engineer` / `qa-engineer-premium`). A test passed
+  only if executed output is visible in this chat.
+- Read-only agents cannot run shell; pass them `git status`, `git diff` and test output in the prompt.
+- Allow at most **two** automatic correction rounds per failed gate, then report to the user.
+- Run at most **two** implementation agents at once, and only in separate Git worktrees with disjoint files. Read-only
+  reviewers may run in parallel. Never allow overlapping edits in one checkout.
+- Ask the user before destructive actions, production migrations or deploys, force pushes, or production data changes.
+- Never claim a subagent ran without a Task result in this chat.

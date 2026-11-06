@@ -1,6 +1,6 @@
 # 04 - Agentic ERP Architecture
 
-Part of the Prime7 AI strategy set. Index: [`AI_DEVELOPMENT_MASTER_PLAN.md`](../../AI_DEVELOPMENT_MASTER_PLAN.md).
+Part of the Prime7 AI strategy set. Index: [`AI_DEVELOPMENT_MASTER_PLAN.md`](AI_DEVELOPMENT_MASTER_PLAN.md).
 
 **Audit date:** 2026-11-04
 **Core rule:** AI agents never write directly to the database and never bypass ERP permissions, validation, approvals or accounting controls. Every AI action that changes data must go through the same service function a human user would trigger, after a human approves it where required.

@@ -1,6 +1,6 @@
 # 01 - Existing AI Architecture Audit
 
-Part of the Prime7 AI strategy set. Index: [`AI_DEVELOPMENT_MASTER_PLAN.md`](../../AI_DEVELOPMENT_MASTER_PLAN.md).
+Part of the Prime7 AI strategy set. Index: [`AI_DEVELOPMENT_MASTER_PLAN.md`](AI_DEVELOPMENT_MASTER_PLAN.md).
 
 **Audit date:** 2026-11-04
 **Method:** Read-only code inspection of `backend/app/modules/ai_tool/`, `ai_extract/`, `mcp_server/`, `erp_ai_phases/`, `backend/app/models/ai_*.py`, `backend/app/workers/`, `backend/app/config.py`, `docker-compose*.yml`, and Alembic. Existing docs were compared last and treated as claims, not truth.

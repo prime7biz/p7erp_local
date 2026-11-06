@@ -1,6 +1,6 @@
 # 10 - Executive Summary
 
-Part of the Prime7 AI strategy set. Index: [`AI_DEVELOPMENT_MASTER_PLAN.md`](../../AI_DEVELOPMENT_MASTER_PLAN.md).
+Part of the Prime7 AI strategy set. Index: [`AI_DEVELOPMENT_MASTER_PLAN.md`](AI_DEVELOPMENT_MASTER_PLAN.md).
 
 **Audit date:** 2026-11-04
 **Basis:** Read-only code investigation by six specialist passes (architecture, functional audit, business process, agentic design, ML and infrastructure, security and testing). No production data, secrets or live services were accessed. Items that depend on a running system are marked "Runtime-verify" in the detailed documents.

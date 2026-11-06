@@ -1,0 +1,122 @@
+---
+description: Verified reference for Prime7 business constraints with file evidence (tenant isolation, Style/Export LC hierarchy, commercial chain, voucher, reversal, period lock, posting idempotency, RBAC). Read before planning, implementing, auditing or testing ERP changes that touch these areas.
+globs:
+alwaysApply: false
+---
+
+# Prime7 development constraints (verified reference)
+
+The short always-applied summary is `prime7-core.mdc`; the security checklist is `prime7-security.mdc`; cost and agent
+routing is `prime7-orchestration.mdc`. This file holds the **evidence** (file references and known gaps) that those rules
+point to. Agents read it explicitly; it is not always injected, to save context.
+
+Verified against the repository on 2026-11-06. Every rule carries a status tag:
+
+- **[CONFIRMED]** implemented and checked in code (file references given).
+- **[POLICY]** desired business policy; the code only partly enforces it. Do not "fix" it silently and do not
+  invent enforcement. Flag the gap to the user instead.
+- **[UNVERIFIED]** not checked yet. Treat as unknown and ask.
+
+If a task needs a rule that is not listed here, do **not** invent one. Write it down as an open question
+(see `docs/erp-modernization/OPEN_QUESTIONS.md`) and ask the user.
+
+## 1. Multi-tenant isolation (mandatory)
+
+- **[CONFIRMED]** Tenant-scoped tables carry `tenant_id`. Handlers resolve the tenant with `require_tenant`
+  (`backend/app/common/tenant.py`) and reject a mismatch with the user's tenant.
+- **[CONFIRMED]** Every client-supplied related-record id must be checked with `ensure_owned` /
+  `ensure_all_owned` (`backend/app/common/ownership.py`) on create **and** update. Another tenant's record is
+  reported exactly like a missing one.
+- **[CONFIRMED]** Loading by primary key alone is a defect. Either filter by `tenant_id` in the query or compare
+  `row.tenant_id` right after `db.get(...)`. Row locks follow the same rule (`_lock_voucher` in
+  `backend/app/modules/finance/router.py`).
+- **[CONFIRMED]** Postgres RLS exists but is opt-in and off by default (migration `270_tenant_rls_policies.py`).
+  A new tenant table needs its own policy migration (`tests/test_rls_policies.py` guards this). Never assume
+  RLS protects you.
+- Aggregates, exports, dashboards, AI reads and background jobs are tenant-scoped too.
+- **[CONFIRMED latent gap]** `calculate_job_work_cost(db, idt_id)` in
+  `backend/app/modules/inventory/job_work_costing_service.py` (around line 104) loads `InterDepartmentTransfer` by id with
+  no tenant parameter or check. It has no callers today (others use `calculate_job_work_cost_from_idt`), so it is not
+  reachable, but any new caller must add a tenant check first. Tracked in `docs/ai-development/KNOWN-ISSUES.md` (KI-01).
+
+## 2. Style is primary for merchandising and production
+
+- **[POLICY, partly implemented]** `garment_styles` is the product master. But `Order.style_id` is nullable
+  (`backend/app/models/merch.py`), and production tables use nullable `style_id` and nullable `order_id`
+  (`backend/app/models/production.py`). `docs/ORDER_EXECUTION_SPINE.md` names the **Order** as the
+  post-confirmation status source and the order BOM as BOM authority (style BOM is reference).
+- Do not change nullability, the spine, or BOM authority without user approval. When both keys are possible,
+  use style for master/reference data and order for execution status, and flag any conflict.
+
+## 3. Export LC / Master Sales Contract is primary for finance, commercial and logistics
+
+- **[CONFIRMED]** `master_contracts` (type default `EXPORT_LC`) owns a cost center; BTB LC posting uses
+  `contract.cost_center_id` (`backend/app/modules/commercial/router.py`,
+  `docs/MASTER_CONTRACT_COST_CENTER_AND_LC_FINANCE.md`).
+- **[POLICY]** Logistics and other finance documents are expected to roll up to the contract. **[UNVERIFIED]**
+  for logistics. Check the actual links before relying on this.
+
+## 4. Commercial chain: Order <- PI <- MSC/LC <- BTB LC
+
+- **[CONFIRMED]** PI links to orders through `proforma_invoice_orders` (unique per PI+order, order FK
+  `RESTRICT`). PI points to its contract with `proforma_invoices.master_contract_id`. BTB LC points to its
+  contract with `btb_lcs.master_contract_id`. Orders get `master_contract_id` synced from the PI
+  (`_sync_order_pipeline_from_proforma`). In the database the child holds the foreign key.
+- **[CONFIRMED]** `IMPORT` PI requires a master contract, a purchase order and a vendor; `EXPORT` PI must not
+  carry a `purchase_order_id` (`_validate_proforma_import_rules`). BTB LC opening is refused without a master
+  contract.
+- **[POLICY]** Both `master_contract_id` columns are nullable in the schema, and `EXPORT` PI does not require a
+  contract. The full chain is therefore not DB-enforced. Do not add NOT NULL or new validation without user
+  approval (it would break existing data).
+
+## 5. Approval roles and posting authorization
+
+- **[CONFIRMED]** Role gate `_require_manager_or_admin` (admin, manager, super_admin, superadmin, owner) in the
+  finance router; permission keys live in `backend/app/common/permissions.py` (missing key allows, explicit
+  `false` denies, `*` grants all); governance keys use `assert_delegate_manager_or_permission`;
+  `tests/test_route_permission_inventory.py` guards route permissions.
+- Preserve existing role names, defaults and approval chains. Never loosen a check to make a test pass.
+
+## 6. Accounting, vouchers, reversal, period lock
+
+- **[CONFIRMED]** Posting dates must fall in an open period (`_assert_open_period`, `AccountingPeriod.is_closed`).
+- **[CONFIRMED]** A reversal is a **new** POSTED voucher (`reverses_voucher_id`, `source_module="REVERSAL"`,
+  `source_module_ref="reverses:<id>"`), manager/admin only, 409 if already reversed, dated today in an open
+  period. Vouchers that never hit the books use cancel-posting instead.
+- **[CONFIRMED]** `(tenant_id, voucher_number)` is unique; numbers come from the series allocator.
+- Never edit or delete a posted voucher in place. Money crosses the API as decimal strings (for example
+  `"100.5000"`). Never use float for new money logic.
+
+## 7. Financial posting must be idempotent and transactionally safe
+
+- **[CONFIRMED mechanisms, application level only]** `SELECT ... FOR UPDATE` (`_lock_voucher`), status guards,
+  per-document link columns (for example `BtbLcAccounting.lc_open_voucher_id` set means "already recorded"),
+  and `source_module` / `source_module_ref` stamping.
+- **[CONFIRMED gap]** There is no database unique constraint on `(tenant_id, source_module, source_module_ref)`.
+  The module `backend/app/modules/commercial/` contains no `with_for_update` at all. For example,
+  `POST /btb-lcs/{lc_id}/record-opening` checks `lc_open_voucher_id` and then writes without a row lock, so a
+  concurrent double submit may not be blocked. Treat this as a known gap and do not assume it is safe (KI-02 in
+  `docs/ai-development/KNOWN-ISSUES.md`).
+- New posting code: lock the source row, check the guard, create the voucher and set the link in **one**
+  transaction, call `safe_async_session_rollback(db)` after any caught DB error, and add a double-submit test.
+  Do not change existing posting semantics without user approval.
+
+## 8. Never weaken protections
+
+- Do not weaken RBAC, tenant validation or audit trails. Audit entries go through `log_action`
+  (`backend/app/modules/audit/service.py`). Keep single-session enforcement and rate limits intact.
+
+## 9. Conventions
+
+- Follow existing schema, API, UI and naming conventions. Backend commands run only in Docker
+  (`docker-python.mdc`). Table row actions use the combined Actions dropdown (`action-buttons.mdc`).
+  Additive, backwards-compatible changes only (`live-server-stability.mdc`). Alembic: phased and reversible.
+
+## 10. Multi-agent safety (details: `docs/ai-development/ORCHESTRATION.md`, cost: `docs/ai-development/MODEL-USAGE-POLICY.md`)
+
+- Never let two agents write to the same checkout at once. Parallel writers need separate Git worktrees or
+  disjoint file ownership.
+- No commits, pushes, tags, force pushes, production deploys or production migrations unless the user asks.
+- Ask the user first for anything destructive, irreversible or production-affecting.
+- A reviewing agent never approves its own work. Agent claims are not test evidence; only executed output is.
+- The working tree already contains many uncommitted changes from other work. Never revert, stash or clean them.

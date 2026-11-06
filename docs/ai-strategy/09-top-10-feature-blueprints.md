@@ -1,6 +1,6 @@
 # 09 - Top 10 Feature Blueprints
 
-Part of the Prime7 AI strategy set. Index: [`AI_DEVELOPMENT_MASTER_PLAN.md`](../../AI_DEVELOPMENT_MASTER_PLAN.md).
+Part of the Prime7 AI strategy set. Index: [`AI_DEVELOPMENT_MASTER_PLAN.md`](AI_DEVELOPMENT_MASTER_PLAN.md).
 
 **Audit date:** 2026-11-04
 **Status:** Implementation-ready specifications **for review**. Nothing here is implemented. Each blueprint follows the project rules: additive and backwards-compatible changes, feature flag OFF by default, reversible Alembic migrations, backend commands run in Docker, and `await safe_async_session_rollback(db)` after any caught database error.

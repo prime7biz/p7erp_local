@@ -71,6 +71,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   return <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- hook lives next to its provider
 export function useAdminAuth() {
   const c = useContext(AdminAuthContext);
   if (!c) throw new Error("useAdminAuth outside provider");

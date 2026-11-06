@@ -13,7 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.business_date import today_local
 from app.common.orm_numeric import api_money_to_decimal, decimal_to_money_response
-from app.common.tenant_feature_keys import is_payroll_auto_calculate_enabled, is_payroll_lop_enabled
+from app.common.tenant_feature_keys import (
+    is_payroll_auto_calculate_enabled,
+    is_payroll_lop_enabled,
+    is_payroll_ot_from_salary_enabled,
+)
 from app.models import (
     Employee,
     PayrollCalculationSnapshot,
@@ -212,16 +216,11 @@ class AutoCalculatePreview:
     missing_assignment_employee_ids: list[int]
     warnings: list[str] = field(default_factory=list)
     lop_applied: bool = False
+    ot_from_salary: bool = False
 
 
-async def run_applies_lop(db: AsyncSession, *, tenant: Tenant, run: PayrollRun) -> bool:
-    """Should loss of pay be applied when this run is (re)calculated?
-
-    The mode is fixed by the run's FIRST auto-calculation, so numbers of a run calculated before
-    loss of pay existed never change on a recalculation. Runs never auto-calculated use the flag.
-    """
-    if not is_payroll_lop_enabled(tenant.feature_flags):
-        return False
+async def _first_calculation_trace(db: AsyncSession, *, tenant: Tenant, run: PayrollRun) -> dict | None:
+    """Trace of the run's FIRST auto-calculation ({} when it has none), or None if never auto-calculated."""
     first_trace = (
         await db.execute(
             select(PayrollCalculationSnapshot.trace_json)
@@ -235,9 +234,36 @@ async def run_applies_lop(db: AsyncSession, *, tenant: Tenant, run: PayrollRun) 
         )
     ).first()
     if first_trace is None:
+        return None
+    return first_trace[0] if isinstance(first_trace[0], dict) else {}
+
+
+async def run_applies_lop(db: AsyncSession, *, tenant: Tenant, run: PayrollRun) -> bool:
+    """Should loss of pay be applied when this run is (re)calculated?
+
+    The mode is fixed by the run's FIRST auto-calculation, so numbers of a run calculated before
+    loss of pay existed never change on a recalculation. Runs never auto-calculated use the flag.
+    """
+    if not is_payroll_lop_enabled(tenant.feature_flags):
+        return False
+    trace = await _first_calculation_trace(db, tenant=tenant, run=run)
+    if trace is None:
         return True
-    trace = first_trace[0] if isinstance(first_trace[0], dict) else {}
     return trace.get("lop_applied") is True
+
+
+async def run_applies_ot_from_salary(db: AsyncSession, *, tenant: Tenant, run: PayrollRun) -> bool:
+    """Should overtime be priced from salary when this run is (re)calculated?
+
+    Same rule as ``run_applies_lop``: the run's first auto-calculation fixes the mode, so a run
+    calculated before the flag was switched on keeps its overtime numbers.
+    """
+    if not is_payroll_ot_from_salary_enabled(tenant.feature_flags):
+        return False
+    trace = await _first_calculation_trace(db, tenant=tenant, run=run)
+    if trace is None:
+        return True
+    return trace.get("ot_from_salary") is True
 
 
 def _line_is_manual(line: PayrollRunLine) -> bool:
@@ -329,6 +355,12 @@ async def preview_auto_calculate(
             "This run was first calculated before loss of pay was switched on, so it keeps the old "
             "calculation (absences and mid-period joiners / leavers are not prorated)"
         )
+    apply_ot_from_salary = await run_applies_ot_from_salary(db, tenant=tenant, run=run)
+    if not apply_ot_from_salary and is_payroll_ot_from_salary_enabled(tenant.feature_flags):
+        global_warnings.append(
+            "This run was first calculated before overtime from salary was switched on, so it keeps "
+            "the old overtime calculation"
+        )
 
     for emp in employees:
         existing_line = existing_by_emp.get(emp.id)
@@ -341,6 +373,7 @@ async def preview_auto_calculate(
             as_of=as_of,
             has_manual_override=has_manual,
             apply_lop=apply_lop,
+            ot_from_salary=apply_ot_from_salary,
         )
         previews.append(row)
         if row.skipped and row.skip_reason == "missing_assignment":
@@ -363,6 +396,7 @@ async def preview_auto_calculate(
         missing_assignment_employee_ids=missing,
         warnings=global_warnings,
         lop_applied=apply_lop,
+        ot_from_salary=apply_ot_from_salary,
     )
 
 

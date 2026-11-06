@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
+from app.common.business_date import today_local
 from app.common.tenant import require_tenant
 from app.database import get_db, safe_async_session_rollback
 from app.models import (
@@ -467,7 +468,7 @@ async def update_plan_task(
             value = value.strip().lower()
         setattr(row, key, value)
     if next_status == "done" and row.actual_date is None:
-        row.actual_date = datetime.utcnow().date()
+        row.actual_date = today_local(tenant)
     await db.commit()
     await db.refresh(row)
     return _to_plan_task_response(row, depends_on_seq, dependency_status, dependency_ready)
@@ -486,7 +487,7 @@ async def dashboard_summary(
     task_rows = (
         await db.execute(select(ManufacturingTnaPlanTask).where(ManufacturingTnaPlanTask.tenant_id == tenant.id))
     ).scalars().all()
-    today = datetime.utcnow().date()
+    today = today_local(tenant)
     upcoming_end = today + timedelta(days=7)
     upcoming_rows = (
         await db.execute(

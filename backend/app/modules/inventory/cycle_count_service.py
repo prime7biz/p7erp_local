@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import tenant_today, today_local
 from app.models import Tenant
 from app.models.costing import Item
 from app.models.inventory import CycleCountTask, StockMovement, Warehouse
@@ -81,7 +82,7 @@ async def generate_cycle_count_schedule(
     Create SCHEDULED tasks for items due by ABC frequency.
     frequency: optional filter A|B|C|ALL
     """
-    today = for_date or date.today()
+    today = for_date or today_local(tenant)
     freq = (frequency or "ALL").upper()
 
     items = list(
@@ -188,7 +189,7 @@ async def list_cycle_count_tasks(
     if status:
         q = q.where(CycleCountTask.status == status.upper())
     if history_days is not None:
-        cutoff = date.today() - timedelta(days=history_days)
+        cutoff = await tenant_today(db, tenant_id) - timedelta(days=history_days)
         q = q.where(CycleCountTask.scheduled_date >= cutoff)
     q = q.order_by(CycleCountTask.scheduled_date.desc(), CycleCountTask.id.desc()).limit(limit)
     return list((await db.execute(q)).scalars().all())

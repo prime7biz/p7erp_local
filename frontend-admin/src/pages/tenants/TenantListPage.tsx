@@ -65,7 +65,7 @@ export function TenantListPage() {
     load();
   }, [load]);
 
-  async function run(id: number, fn: () => Promise<unknown>, msg: string) {
+  async function run(fn: () => Promise<unknown>, msg: string) {
     setBusy(true);
     try {
       await fn();
@@ -200,7 +200,6 @@ export function TenantListPage() {
                               label: r.is_active ? "Suspend" : "Reactivate",
                               onClick: () =>
                                 run(
-                                  r.id,
                                   () => (r.is_active ? suspendTenant(r.id) : reactivateTenant(r.id)),
                                   r.is_active ? "Tenant suspended" : "Tenant reactivated",
                                 ),
@@ -219,7 +218,7 @@ export function TenantListPage() {
                             {
                               label: "Backup",
                               onClick: () =>
-                                run(r.id, () => triggerTenantBackup(r.id), "Tenant backup completed"),
+                                run(() => triggerTenantBackup(r.id), "Tenant backup completed"),
                               disabled: busy,
                             },
                           ]
@@ -271,7 +270,7 @@ export function TenantListPage() {
           if (confirmDelete == null) return;
           const id = confirmDelete;
           setConfirmDelete(null);
-          await run(id, () => deleteTenant(id), "Tenant marked deleted");
+          await run(() => deleteTenant(id), "Tenant marked deleted");
         }}
         title="Delete tenant?"
         message="This soft-deletes the tenant and deactivates it. This cannot be undone from the UI."

@@ -128,6 +128,13 @@ class TradeCaseMarginResponse(BaseModel):
     fx_rate_to_base: float | None = None
     margin_currency: str | None = None
     margin_note: str | None = None
+    # Currency `amount` is in (the case currency, or the linked PI's currency when the case has no amount).
+    amount_currency: str | None = None
+    # `estimated_cost` is summed from purchase-order base values, so it is in this (base) currency.
+    estimated_cost_currency: str | None = None
+    cost_po_count: int | None = None
+    cost_po_missing_base_count: int | None = None
+    cost_po_unrated_count: int | None = None
 
 
 class TradeCaseDashboardResponse(BaseModel):

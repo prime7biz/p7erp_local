@@ -54,6 +54,9 @@ from app.modules.onboarding.router import router as onboarding_router
 from app.modules.production.router import router as production_router
 from app.modules.hr.router import router as hr_router
 from app.modules.hr_attendance.router import router as hr_attendance_router
+from app.modules.hr_attendance.device_router import push_router as hr_attendance_device_push_router
+from app.modules.hr_attendance.device_router import router as hr_attendance_device_router
+from app.modules.hr_attendance.hr_settings_router import router as hr_settings_router
 from app.modules.hr_leave.router import router as hr_leave_router
 from app.modules.hr_payroll.router import router as hr_payroll_router
 from app.modules.hr_performance.router import router as hr_performance_router
@@ -365,6 +368,18 @@ app.include_router(
 )
 app.include_router(
     hr_attendance_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("hr.access"))],
+)
+app.include_router(
+    hr_attendance_device_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("hr.access"))],
+)
+# Devices authenticate with their own X-Device-Key header, not a staff login.
+app.include_router(hr_attendance_device_push_router, prefix=settings.api_v1_prefix)
+app.include_router(
+    hr_settings_router,
     prefix=settings.api_v1_prefix,
     dependencies=[Depends(require_internal_permission("hr.access"))],
 )

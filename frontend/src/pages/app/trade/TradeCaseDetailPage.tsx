@@ -10,6 +10,7 @@ import {
   type TradeCaseStageRow,
   type TradeDocumentRow,
 } from "@/api/client";
+import { baseCurrencyOf, costDisplay, marginDisplay, revenueDisplay } from "./tradeMarginDisplay";
 
 export function TradeCaseDetailPage() {
   const { caseId } = useParams<{ caseId: string }>();
@@ -68,6 +69,10 @@ export function TradeCaseDetailPage() {
     const have = new Set(docs.map((d) => String(d.document_type).toUpperCase()));
     return required.filter((r) => !have.has(r));
   }, [stages, docs, nextStage]);
+
+  const revenueView = revenueDisplay(margin);
+  const costView = costDisplay(margin);
+  const marginView = marginDisplay(margin);
 
   if (loading) return <div className="p-6 text-sm text-text-muted">Loading trade case...</div>;
   if (!item) return <div className="p-6 text-sm text-status-danger">{error || "Trade case not found."}</div>;
@@ -178,13 +183,32 @@ export function TradeCaseDetailPage() {
           </p>
         </div>
         <div className="rounded-xl border border-brand-primary/30 bg-brand-primary/10/60 p-4 shadow-sm">
-          <p className="text-xs uppercase tracking-wide text-text-muted">Estimated Margin</p>
+          <p className="text-xs uppercase tracking-wide text-text-muted">
+            Estimated Margin{baseCurrencyOf(margin) ? ` (${baseCurrencyOf(margin)})` : ""}
+          </p>
           <p className="mt-1 text-sm text-text-primary">
-            {(margin?.margin_amount ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} ({(margin?.margin_pct ?? 0).toFixed(2)}%)
+            {marginView.text}
+            {marginView.detail ? ` (${marginView.detail})` : ""}
           </p>
           <p className="mt-1 text-xs text-text-secondary">
-            Revenue: {(margin?.amount ?? 0).toLocaleString()} · Cost: {(margin?.estimated_cost ?? 0).toLocaleString()}
+            Revenue: <span title={revenueView.title}>{revenueView.text}</span>
+            {" · "}
+            Cost: <span title={costView.title}>{costView.text}</span>
           </p>
+          {revenueView.detail ? (
+            <p
+              className={`mt-0.5 text-[11px] ${revenueView.missingRate ? "text-status-warning-foreground" : "text-text-muted"}`}
+              title={revenueView.title}
+            >
+              {revenueView.missingRate ? "" : "Original: "}
+              {revenueView.detail}
+            </p>
+          ) : null}
+          {margin?.margin_note ? (
+            <p className="mt-1 rounded border border-status-warning/30 bg-status-warning-subtle px-2 py-1 text-[11px] text-status-warning-foreground">
+              {margin.margin_note}
+            </p>
+          ) : null}
         </div>
       </section>
 

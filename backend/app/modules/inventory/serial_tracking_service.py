@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.tenant_feature_keys import is_serial_tracking_enabled
 from app.models import Tenant
 from app.models.costing import Item
@@ -72,7 +73,7 @@ async def create_serials_on_grn(
         )
 
     created: list[StockSerial] = []
-    w_start = date.today()
+    w_start = today_local(tenant)
     w_end = w_start + timedelta(days=warranty_days) if warranty_days else None
     slug = uuid.uuid4().hex[:6].upper()
 

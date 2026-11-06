@@ -4681,64 +4681,11 @@ async def budget_vs_actual(
     budget = await db.get(Budget, budget_id)
     if not budget or budget.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Budget not found")
-    lines = list((await db.execute(select(BudgetLine).where(BudgetLine.budget_id == budget.id))).scalars().all())
 
-    from app.modules.finance.fiscal_year import fiscal_year_bounds_from_label, fy_start_month
+    from app.modules.finance.budget_vs_actual_service import compute_budget_vs_actual
 
-    # Posted, in-books voucher line amounts (in base currency) summed per (account, cost centre) in SQL,
-    # limited to the budget's financial year. A budget line with no account matches every account,
-    # so only filter by account when all lines name one.
-    fy_bounds = fiscal_year_bounds_from_label(budget.fiscal_year, fy_start_month(tenant.feature_flags))
-    actual_query = (
-        select(VoucherLine.account_id, VoucherLine.cost_center_id, func.sum(line_base_amount_sql()))
-        .join(Voucher, VoucherLine.voucher_id == Voucher.id)
-        .where(VoucherLine.tenant_id == tenant.id, Voucher.status == "POSTED", voucher_in_books_clause())
-        .group_by(VoucherLine.account_id, VoucherLine.cost_center_id)
-    )
-    if fy_bounds is not None:
-        actual_query = actual_query.where(Voucher.voucher_date >= fy_bounds[0], Voucher.voucher_date <= fy_bounds[1])
-    if lines and all(line.account_id is not None for line in lines):
-        actual_query = actual_query.where(VoucherLine.account_id.in_({line.account_id for line in lines}))
-    actual_by_account_cc = (await db.execute(actual_query)).all() if lines else []
-
-    rows = []
-    total_budget = 0.0
-    total_actual = 0.0
-    for line in lines:
-        budget_amount = _to_float(line.amount)
-        actual_sum = Decimal("0")
-        for account_id, cost_center_id, amount_sum in actual_by_account_cc:
-            if line.account_id is not None and account_id != line.account_id:
-                continue
-            if line.cost_center_id is not None and cost_center_id != line.cost_center_id:
-                continue
-            actual_sum += amount_sum or Decimal("0")
-        actual_amount = float(actual_sum)
-        total_budget += budget_amount
-        total_actual += actual_amount
-        rows.append(
-            {
-                "line_id": line.id,
-                "period_month": line.period_month,
-                "account_id": line.account_id,
-                "cost_center_id": line.cost_center_id,
-                "budget_amount": round(budget_amount, 2),
-                "actual_amount": round(actual_amount, 2),
-                "variance": round(actual_amount - budget_amount, 2),
-                "variance_pct": round(((actual_amount - budget_amount) / budget_amount * 100) if budget_amount > 0 else 0, 2),
-            }
-        )
-    return {
-        "budget_id": budget.id,
-        "budget_name": budget.budget_name,
-        "fiscal_year": budget.fiscal_year,
-        "period_start": fy_bounds[0].isoformat() if fy_bounds else None,
-        "period_end": fy_bounds[1].isoformat() if fy_bounds else None,
-        "rows": rows,
-        "total_budget": round(total_budget, 2),
-        "total_actual": round(total_actual, 2),
-        "total_variance": round(total_actual - total_budget, 2),
-    }
+    # Each line is compared with its own period (month / quarter / financial year), netted by account nature.
+    return await compute_budget_vs_actual(db, tenant, budget)
 
 
 @router.get("/banking/accounts", response_model=list[BankAccountOut])

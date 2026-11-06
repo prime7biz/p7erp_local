@@ -59,7 +59,7 @@ export function AnnouncementFormPage() {
     return () => {
       cancelled = true;
     };
-  }, [isNew, editId]);
+  }, [isNew, editId, showToast]);
 
   async function save() {
     const body: Record<string, unknown> = {

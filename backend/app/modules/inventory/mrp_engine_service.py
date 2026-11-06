@@ -11,6 +11,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import tenant_today
 from app.common.codegen import next_tenant_code
 from app.models.costing import Item
 from app.models.inventory import PlannedOrder, PurchaseOrder, PurchaseOrderItem, StockReservation
@@ -261,7 +262,7 @@ async def calculate_projected_balance(
         return []
     opening = _d(item.current_stock)
     safety = _d(item.safety_stock)
-    today = date.today()
+    today = await tenant_today(db, tenant_id)
     on_order = await _on_order_qty(db, tenant_id, item_id)
     firmed = await _firmed_planned_qty(db, tenant_id, item_id)
     rows: list[ProjectedBalanceRow] = []
@@ -305,7 +306,7 @@ async def run_mrp(
     net against stock + open PO + firmed plans; create PlannedOrder rows.
     """
     result = MRPResult()
-    as_of = as_of_date or date.today()
+    as_of = as_of_date or await tenant_today(db, tenant_id)
     horizon_end = as_of + timedelta(days=horizon_days)
 
     # Load open orders
@@ -508,7 +509,7 @@ async def release_planned_order(
             po_code=po_code,
             vendor_id=vendor_id,
             supplier_name=supplier_name,
-            order_date=date.today(),
+            order_date=await tenant_today(db, tenant_id),
             expected_date=row.requirement_date,
             status="DRAFT",
             notes=f"From planned order {row.planned_order_number}",

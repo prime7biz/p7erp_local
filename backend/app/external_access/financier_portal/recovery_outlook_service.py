@@ -7,6 +7,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import tenant_today, today_local
 from app.external_access.financier_portal import facility_selectors as fsel
 from app.external_access.financier_portal.contract_command.otd_engine import score_order_otd
 from app.external_access.financier_portal.visibility_service import (
@@ -57,7 +58,7 @@ async def build_recovery_outlook_for_order(
     as_of: date | None = None,
 ) -> dict[str, Any] | None:
     """Single-order recovery DTO."""
-    as_of = as_of or date.today()
+    as_of = as_of or today_local()
     if order_btbs is None:
         btb_rows = await fsel.party_btb_lc_rows(db, tenant_id, party_id)
         order_btbs = await fsel.order_btb_links_for_party(db, tenant_id, btb_rows)
@@ -171,7 +172,7 @@ async def count_production_risk_orders(
     order_btbs = await fsel.order_btb_links_for_party(db, tenant_id, btb_rows)
     if not order_btbs:
         return 0
-    today = date.today()
+    today = await tenant_today(db, tenant_id)
     cutoff = today + timedelta(days=days_ahead)
     count = 0
     for oid in order_btbs:

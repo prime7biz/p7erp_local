@@ -8,6 +8,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.business_date import today_local
 from app.common.ownership import ensure_owned
 from app.common.tenant import require_tenant
 from app.database import get_db
@@ -359,7 +360,7 @@ async def employee_production_profile(
         for ws, op in skills_q.all()
     ]
 
-    since = date.today() - timedelta(days=limit_days)
+    since = today_local(tenant) - timedelta(days=limit_days)
     att_rows = (
         await db.execute(
             select(AttendanceEntry.attendance_date, AttendanceEntry.status)

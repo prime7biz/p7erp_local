@@ -9910,7 +9910,19 @@ export interface BudgetVsActualResponse {
     actual_amount: number;
     variance: number;
     variance_pct: number;
+    /** "month" | "quarter" | "year" (budget financial year) | "all" (no usable year). */
+    period_type?: string;
+    period_start?: string | null;
+    period_end?: string | null;
+    /** Account group nature (Expense, Income, ...); null for an "Any account" line. */
+    nature?: string | null;
+    /** "debit_minus_credit" | "credit_minus_debit" | "per_account". */
+    net_rule?: string;
+    actual_debit?: number;
+    actual_credit?: number;
   }>;
+  period_start?: string | null;
+  period_end?: string | null;
   total_budget: number;
   total_actual: number;
   total_variance: number;
@@ -10905,6 +10917,20 @@ export interface TradeCaseMarginResponse {
   margin_amount?: number | null;
   margin_pct?: number | null;
   currency?: string | null;
+  base_currency?: string | null;
+  base_currency_margin?: number | null;
+  /** `amount` converted to `margin_currency` (null when there is no exchange rate). */
+  amount_base?: number | null;
+  fx_rate_to_base?: number | null;
+  /** Base currency: `estimated_cost`, `amount_base` and `margin_amount` are in this currency. */
+  margin_currency?: string | null;
+  margin_note?: string | null;
+  /** Currency of `amount` (case currency, or the linked PI's currency). */
+  amount_currency?: string | null;
+  estimated_cost_currency?: string | null;
+  cost_po_count?: number | null;
+  cost_po_missing_base_count?: number | null;
+  cost_po_unrated_count?: number | null;
 }
 
 export interface TradeCaseDashboardResponse {

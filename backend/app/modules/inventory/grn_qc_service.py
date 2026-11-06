@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.codegen import next_tenant_code
 from app.common.tenant_feature_keys import is_grn_quality_inspection_enabled
 from app.models import Tenant
@@ -283,7 +284,7 @@ async def create_inspection(
     insp.result = result
     insp.status = "COMPLETED"
     insp.inspected_by = inspected_by
-    insp.inspection_date = inspection_date or date.today()
+    insp.inspection_date = inspection_date or today_local(tenant)
     insp.updated_at = datetime.utcnow()
     insp.debit_note_suggested = rej > ZERO
 
@@ -350,7 +351,7 @@ async def move_stock_after_qc(
             quantity=qty,
             reference_type="GRN_QC",
             reference_id=insp.id,
-            movement_date=insp.inspection_date or date.today(),
+            movement_date=insp.inspection_date or today_local(tenant),
             notes=notes,
             created_by_user_id=insp.inspected_by,
             movement_kind=kind + "_OUT",
@@ -371,7 +372,7 @@ async def move_stock_after_qc(
             quantity=qty,
             reference_type="GRN_QC",
             reference_id=insp.id,
-            movement_date=insp.inspection_date or date.today(),
+            movement_date=insp.inspection_date or today_local(tenant),
             notes=notes,
             created_by_user_id=insp.inspected_by,
             movement_kind=kind + "_IN",

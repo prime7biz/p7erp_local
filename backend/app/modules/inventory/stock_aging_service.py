@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import tenant_today
 from app.models.costing import Item
 from app.models.inventory import GoodsReceiving, GoodsReceivingItem, StockBatch, Warehouse
 
@@ -56,7 +57,7 @@ async def get_stock_aging(
     bucket: str | None = None,
 ) -> dict[str, Any]:
     """Age open batches by receipt / manufacturing / created date."""
-    today = date.today()
+    today = await tenant_today(db, tenant_id)
     q = select(StockBatch).where(
         StockBatch.tenant_id == tenant_id,
         StockBatch.current_qty > 0,

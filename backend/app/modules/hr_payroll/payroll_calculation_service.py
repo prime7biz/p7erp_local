@@ -21,6 +21,7 @@ from app.models import (
     LeaveRequest,
     LeaveType,
     OvertimeEntry,
+    OvertimeRule,
     PayrollComponent,
     PayrollEmployeeStructureAssignment,
     PayrollPeriod,
@@ -90,6 +91,11 @@ class EmployeeCalcPreview:
     lop_absent_days: str = "0.0000"
     lop_unpaid_leave_days: str = "0.0000"
     lop_amount: str = "0.0000"  # salary not paid because of LOP / partial employment
+    # Overtime priced from salary (flag payroll_ot_from_salary_enabled). All zero when ot_from_salary is False.
+    ot_from_salary: bool = False
+    ot_paid_hours: str = "0.0000"  # approved OT hours paid (after daily caps, inside employment dates)
+    ot_hourly_rate: str = "0.0000"  # base salary / hours per month (salary in effect at the period end)
+    ot_amount: str = "0.0000"  # the OT_SALARY earning line
 
 
 def _employee_display_name(employee: Employee) -> str:
@@ -325,6 +331,153 @@ async def compute_lop_days(
     )
 
 
+OT_SALARY_CODE = "OT_SALARY"
+OT_SALARY_CALCULATION_TYPE = "OT_FROM_SALARY"
+_OT_TYPE_MULTIPLIER_FIELD = {"WEEKEND": "weekend_multiplier", "HOLIDAY": "holiday_multiplier"}
+
+
+@dataclass
+class SalaryOvertime:
+    """Overtime pay for one employee in one period, priced from the monthly base salary."""
+
+    paid_hours: Decimal
+    hourly_rate: Decimal
+    amount: Decimal
+    warnings: list[str]
+    entries: list[dict[str, Any]]
+
+
+def _decimal_or_none(value: Any) -> Decimal | None:
+    if value is None or str(value).strip() == "":
+        return None
+    try:
+        parsed = Decimal(str(value).strip())
+    except (ArithmeticError, ValueError):
+        return None
+    return parsed if parsed.is_finite() and parsed >= 0 else None
+
+
+async def compute_salary_overtime(
+    db: AsyncSession, *, tenant: Tenant, employee: Employee, start: date, end: date, display_base: Decimal
+) -> SalaryOvertime:
+    """Price APPROVED / POSTED overtime: hours x (base salary on that day / hours per month) x multiplier.
+
+    - Multiplier: the entry's overtime rule (weekday / weekend / holiday by ``ot_type``), else the
+      tenant setting ``hr_ot_multiplier``. A rule's ``max_ot_hours_per_day`` caps the hours paid per day.
+    - Each entry uses the salary assignment in effect on its work date, so a mid-period raise is
+      priced correctly; only entries between the joining and exit date count.
+    - Loss of pay never reduces overtime.
+    """
+    from app.common.tenant_feature_keys import get_hr_ot_hours_per_month, get_hr_ot_multiplier
+
+    flags = tenant.feature_flags if tenant is not None else None
+    hours_per_month = Decimal(str(get_hr_ot_hours_per_month(flags)))
+    default_multiplier = Decimal(str(get_hr_ot_multiplier(flags)))
+    zero = Decimal("0")
+    display_rate = quantize_money(display_base / hours_per_month)
+    employed_from = max(start, employee.joining_date) if employee.joining_date else start
+    employed_to = min(end, employee.exit_date) if employee.exit_date else end
+    if employed_to < employed_from:
+        return SalaryOvertime(zero, display_rate, zero, [], [])
+
+    entries = (
+        await db.execute(
+            select(OvertimeEntry)
+            .where(
+                OvertimeEntry.tenant_id == employee.tenant_id,
+                OvertimeEntry.employee_id == employee.id,
+                OvertimeEntry.work_date >= employed_from,
+                OvertimeEntry.work_date <= employed_to,
+                OvertimeEntry.status.in_(["APPROVED", "POSTED"]),
+            )
+            .order_by(OvertimeEntry.work_date.asc(), OvertimeEntry.id.asc())
+        )
+    ).scalars().all()
+    if not entries:
+        return SalaryOvertime(zero, display_rate, zero, [], [])
+
+    rule_ids = {e.rule_id for e in entries if e.rule_id is not None}
+    rules = {}
+    if rule_ids:
+        rules = {
+            r.id: r
+            for r in (
+                await db.execute(
+                    select(OvertimeRule).where(OvertimeRule.tenant_id == employee.tenant_id, OvertimeRule.id.in_(rule_ids))
+                )
+            ).scalars()
+        }
+    assignments = (
+        await db.execute(
+            select(PayrollEmployeeStructureAssignment)
+            .where(
+                PayrollEmployeeStructureAssignment.tenant_id == employee.tenant_id,
+                PayrollEmployeeStructureAssignment.employee_id == employee.id,
+                PayrollEmployeeStructureAssignment.effective_from <= employed_to,
+                or_(
+                    PayrollEmployeeStructureAssignment.effective_to.is_(None),
+                    PayrollEmployeeStructureAssignment.effective_to >= employed_from,
+                ),
+            )
+            .order_by(PayrollEmployeeStructureAssignment.effective_from.desc())
+        )
+    ).scalars().all()
+
+    def base_on(day: date) -> Decimal | None:
+        for asgn in assignments:
+            if asgn.effective_from <= day and (asgn.effective_to is None or asgn.effective_to >= day):
+                return api_money_to_decimal(asgn.base_salary) if asgn.base_salary is not None else None
+        return None
+
+    warnings: list[str] = []
+    traced: list[dict[str, Any]] = []
+    capped_hours_used: dict[date, Decimal] = {}
+    paid_total = zero
+    amount_total = zero
+    for entry in entries:
+        hours = api_money_to_decimal(entry.ot_hours)
+        rule = rules.get(entry.rule_id) if entry.rule_id is not None else None
+        multiplier = default_multiplier
+        paid = hours
+        if rule is not None:
+            field_name = _OT_TYPE_MULTIPLIER_FIELD.get((entry.ot_type or "").strip().upper(), "weekday_multiplier")
+            rule_multiplier = _decimal_or_none(getattr(rule, field_name))
+            if rule_multiplier is None:
+                warnings.append(f"Overtime rule {rule.code} has no valid {field_name}; used {default_multiplier}")
+            else:
+                multiplier = rule_multiplier
+            cap = _decimal_or_none(rule.max_ot_hours_per_day)
+            if cap is not None:
+                used = capped_hours_used.get(entry.work_date, zero)
+                paid = min(hours, max(cap - used, zero))
+                capped_hours_used[entry.work_date] = used + paid
+                if paid < hours:
+                    warnings.append(
+                        f"Overtime on {entry.work_date.isoformat()} capped at {cap} hour(s) by rule {rule.code}"
+                    )
+        base = base_on(entry.work_date)
+        if base is None:
+            warnings.append(f"Overtime on {entry.work_date.isoformat()} not paid: no base salary on that day")
+            continue
+        rate = base / hours_per_month
+        amount = paid * rate * multiplier
+        paid_total += paid
+        amount_total += amount
+        traced.append(
+            {
+                "overtime_entry_id": entry.id,
+                "work_date": entry.work_date.isoformat(),
+                "ot_type": entry.ot_type,
+                "hours": decimal_to_money_response(hours),
+                "paid_hours": decimal_to_money_response(paid),
+                "base_salary": decimal_to_money_response(base),
+                "multiplier": str(multiplier),
+                "amount": decimal_to_money_response(quantize_money(amount)),
+            }
+        )
+    return SalaryOvertime(paid_total, display_rate, quantize_money(amount_total), warnings, traced)
+
+
 async def resolve_assignment(
     db: AsyncSession, *, tenant_id: int, employee_id: int, as_of: date
 ) -> PayrollEmployeeStructureAssignment | None:
@@ -355,10 +508,13 @@ async def calculate_employee_payroll(
     as_of: date | None = None,
     has_manual_override: bool = False,
     apply_lop: bool = False,
+    ot_from_salary: bool = False,
 ) -> EmployeeCalcPreview:
     """Build a read-only payroll preview for one employee in a pay period.
 
     ``apply_lop`` prorates period-salary earnings (FIXED / PERCENT_OF_BASE) by payable days.
+    ``ot_from_salary`` adds an ``OT_SALARY`` earning (see ``compute_salary_overtime``) and pays
+    PER_HOUR_OT components 0, so overtime is never paid twice.
     """
     as_of_date = as_of or period.end_date
     name = _employee_display_name(employee)
@@ -512,6 +668,11 @@ async def calculate_employee_payroll(
             earned_minutes=earned_minutes,
             strict=True,
         )
+        if ot_from_salary and calc_type == "PER_HOUR_OT":
+            amount = Decimal("0")
+            warnings.append(
+                f"Component {component.code} (per OT hour) pays 0: overtime is paid from salary (OT_SALARY line)"
+            )
         ctype = (component.component_type or "EARNING").strip().upper()
         full_amount = amount
         if lop is not None and ctype != "DEDUCTION" and calc_type in PERIOD_SALARY_TYPES:
@@ -548,6 +709,43 @@ async def calculate_employee_payroll(
                 "component_type": ctype,
             }
         )
+
+    salary_ot: SalaryOvertime | None = None
+    if ot_from_salary:
+        salary_ot = await compute_salary_overtime(
+            db,
+            tenant=await db.get(Tenant, tenant_id),
+            employee=employee,
+            start=period.start_date,
+            end=period.end_date,
+            display_base=base,
+        )
+        warnings.extend(salary_ot.warnings)
+        if salary_ot.paid_hours > 0:
+            gross += salary_ot.amount
+            overtime_amount += salary_ot.amount
+            component_out.append(
+                ComponentCalcLine(
+                    component_id=0,
+                    component_code=OT_SALARY_CODE,
+                    component_name="Overtime (from salary)",
+                    component_type="EARNING",
+                    calculation_type=OT_SALARY_CALCULATION_TYPE,
+                    amount=decimal_to_money_response(salary_ot.amount),
+                    source_amount=decimal_to_money_response(salary_ot.hourly_rate),
+                )
+            )
+            component_trace.append(
+                {
+                    "component_id": 0,
+                    "code": OT_SALARY_CODE,
+                    "calculation_type": OT_SALARY_CALCULATION_TYPE,
+                    "source_amount": decimal_to_money_response(salary_ot.hourly_rate),
+                    "amount": decimal_to_money_response(salary_ot.amount),
+                    "full_amount": decimal_to_money_response(salary_ot.amount),
+                    "component_type": "EARNING",
+                }
+            )
 
     if unpaid_leave > 0:
         warnings.append(f"Unpaid leave days in period: {unpaid_leave}")
@@ -675,6 +873,13 @@ async def calculate_employee_payroll(
             lop_unpaid_leave_days=decimal_to_money_response(lop.unpaid_leave_days),
             lop_amount=decimal_to_money_response(quantize_money(lop_amount)),
         )
+    ot_fields: dict[str, Any] = {"ot_from_salary": salary_ot is not None}
+    if salary_ot is not None:
+        ot_fields.update(
+            ot_paid_hours=decimal_to_money_response(salary_ot.paid_hours),
+            ot_hourly_rate=decimal_to_money_response(salary_ot.hourly_rate),
+            ot_amount=decimal_to_money_response(salary_ot.amount),
+        )
     trace = {
         "as_of": as_of_date.isoformat(),
         "period_start": period.start_date.isoformat(),
@@ -701,6 +906,9 @@ async def calculate_employee_payroll(
         "calculation_source": "AUTO",
         # "lop_applied" also marks which calculation mode the run uses (see service.run_applies_lop).
         **lop_fields,
+        # "ot_from_salary" does the same for overtime (see service.run_applies_ot_from_salary).
+        **ot_fields,
+        **({"ot_salary_entries": salary_ot.entries} if salary_ot is not None else {}),
     }
     return EmployeeCalcPreview(
         employee_id=employee.id,
@@ -730,6 +938,7 @@ async def calculate_employee_payroll(
         earned_minutes=decimal_to_money_response(earned_minutes),
         pay_basis=pay_basis,
         **lop_fields,
+        **ot_fields,
     )
 
 

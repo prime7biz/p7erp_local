@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.codegen import next_tenant_code
 from app.common.tenant_feature_keys import is_consignment_stock_enabled
 from app.models import Tenant
@@ -100,7 +101,7 @@ async def receive_consignment(
             remaining_qty=qty,
             billed_qty=ZERO,
             is_billed=False,
-            agreement_date=agreement_date or date.today(),
+            agreement_date=agreement_date or today_local(tenant),
             settlement_terms_days=settlement_terms_days,
             unit_cost=cost if cost > ZERO else None,
             notes=notes,
@@ -117,7 +118,7 @@ async def receive_consignment(
         quantity=qty,
         reference_type="CONSIGNMENT",
         reference_id=row.id,
-        movement_date=date.today(),
+        movement_date=today_local(tenant),
         notes=f"Consignment from vendor {vendor.vendor_code}",
         movement_kind="CONSIGNMENT_RECEIPT",
         vendor_id=vendor_id,
@@ -194,7 +195,7 @@ async def consume_consignment(
         quantity=qty,
         reference_type="CONSIGNMENT",
         reference_id=row.id,
-        movement_date=date.today(),
+        movement_date=today_local(tenant),
         notes="Consignment consumption",
         movement_kind="CONSIGNMENT_CONSUME",
         vendor_id=row.vendor_id,
@@ -244,7 +245,7 @@ async def settle_consignment(
         po_code=po_code,
         vendor_id=vendor_id,
         supplier_name=vendor.name,
-        order_date=date.today(),
+        order_date=today_local(tenant),
         status="DRAFT",
         notes="Consignment settlement",
         currency=getattr(vendor, "default_currency", None) or "BDT",

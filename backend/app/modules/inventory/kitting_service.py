@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.codegen import next_tenant_code
 from app.common.tenant_feature_keys import is_kitting_enabled
 from app.models import Tenant
@@ -252,7 +253,7 @@ async def create_kit_order(
             quantity=need,
             reference_type="KIT_EXPLODE",
             reference_id=kit.id,
-            movement_date=date.today(),
+            movement_date=today_local(tenant),
             notes=f"Kit {kit.kit_code} x {kits_qty}",
             movement_kind="KIT_COMPONENT_ISSUE",
         )

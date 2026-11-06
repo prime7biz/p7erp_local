@@ -17,6 +17,7 @@ from app.common.auth import get_current_user
 from app.common.money import format_money, line_money_from_input, parse_money
 from app.common.orm_numeric import api_money_to_decimal, decimal_money_passthrough, decimal_to_money_response
 from app.common.authz import get_user_role_scoped_to_tenant
+from app.common.business_date import today_local
 from app.common.codegen import next_tenant_code
 from app.common.document_history import list_doc_events, record_doc_event
 from app.common.delete_guards import count_where as _count_where, ensure_vendor_deletable
@@ -3655,7 +3656,7 @@ async def acknowledge_goods_receiving(
         tenant_id=tenant.id,
         goods_receiving_id=row.id,
         gra_code=gra_code,
-        issue_date=row.received_date or date.today(),
+        issue_date=row.received_date or today_local(tenant),
         status="ISSUED",
         issued_by_user_id=user.id,
     )
@@ -4916,7 +4917,7 @@ async def create_and_post_production_material_issue(
         production_stage=body.production_stage,
         covered_order_qty=body.covered_order_qty,
         warehouse_id=body.warehouse_id,
-        issue_date=body.issue_date or date.today(),
+        issue_date=body.issue_date or today_local(tenant),
         status="POSTED",
         approval_status="MANAGER_OK" if any_over else "AUTO",
         notes=body.notes,
@@ -5283,7 +5284,7 @@ async def receive_process_order(
     await finalize_movement_fifo(db, tenant.id, po_in, in_unit_cost=uc)
     row.actual_output_qty = str(actual_qty)
     row.processing_charges = body.processing_charges or "0"
-    recv_date = date.today()
+    recv_date = today_local(tenant)
 
     from app.modules.production.knitting_finance_service import (
         maybe_post_knitting_subcontract_accrual_before_receive_gl,
@@ -6540,7 +6541,7 @@ async def post_warehouse_transfer(
                 detail=f"Insufficient stock for {icode} at source. Available={round(available, 3)}, required={round(req, 3)}",
             )
 
-    mv_date = row.transfer_date or date.today()
+    mv_date = row.transfer_date or today_local(tenant)
     for line in lines:
         qty_s = str(_to_float(line.quantity))
         qf = _to_float(qty_s)
@@ -6670,7 +6671,7 @@ async def post_stock_adjustment(
     qty_f = _to_float(row.quantity)
     if qty_f == 0:
         raise HTTPException(status_code=400, detail="Quantity cannot be zero")
-    mv_date = row.adjustment_date or date.today()
+    mv_date = row.adjustment_date or today_local(tenant)
     await _lock_stock_items(db, tenant.id, [row.item_id])
     if qty_f < 0:
         allow_neg = await tenant_allows_negative_stock(db, tenant.id)
@@ -6911,7 +6912,7 @@ async def post_physical_inventory_session(
     if not lines:
         raise HTTPException(status_code=400, detail="Session has no lines")
     await _lock_stock_items(db, tenant.id, (ln.item_id for ln in lines))
-    mv_date = row.count_date or date.today()
+    mv_date = row.count_date or today_local(tenant)
     allow_neg = await tenant_allows_negative_stock(db, tenant.id)
     on_hand_at_post: dict[int, float] = {}
     for line in lines:

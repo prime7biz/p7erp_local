@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -11,6 +11,7 @@ from sqlalchemy import DateTime, Integer, and_, case, cast, extract, func, liter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.business_date import today_local
 from app.common.pagination import MAX_PAGE_SIZE
 from app.common.tenant import require_tenant
 from app.database import get_db, safe_async_session_rollback
@@ -896,13 +897,14 @@ async def get_critical_alerts(
     from app.modules.merch.routers.wastage import compute_wastage_rows
 
     _ensure_tenant(user, tenant)
+    today = today_local(tenant)
     overdue = await db.execute(
         select(Followup).where(
             and_(
                 Followup.tenant_id == tenant.id,
                 Followup.status != "DONE",
                 Followup.due_date.is_not(None),
-                Followup.due_date < date.today(),
+                Followup.due_date < today,
             )
         )
     )
@@ -910,10 +912,10 @@ async def get_critical_alerts(
     alerts: list[dict] = [
         {
             "id": f"followup-{r.id}",
-            "severity": "critical" if (date.today() - r.due_date).days > 7 else "warning",
+            "severity": "critical" if (today - r.due_date).days > 7 else "warning",
             "category": "Order Follow-up",
             "title": r.title,
-            "description": f"Order #{r.order_id} overdue by {(date.today() - r.due_date).days} day(s)",
+            "description": f"Order #{r.order_id} overdue by {(today - r.due_date).days} day(s)",
             "order_id": r.order_id,
         }
         for r in rows

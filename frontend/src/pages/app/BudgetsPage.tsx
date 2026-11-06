@@ -23,6 +23,23 @@ function linesToCreate(lines: BudgetResponse["lines"]): BudgetLineCreate[] {
   }));
 }
 
+type VsActualRow = BudgetVsActualResponse["rows"][number];
+
+function linePeriodTitle(r: VsActualRow): string {
+  if (r.period_start && r.period_end) return `Actuals counted from ${r.period_start} to ${r.period_end}`;
+  return "Actuals counted for all dates (budget has no usable financial year)";
+}
+
+function actualTitle(r: VsActualRow): string {
+  const rule =
+    r.net_rule === "credit_minus_debit"
+      ? "credit − debit"
+      : r.net_rule === "per_account"
+        ? "each account by its own nature"
+        : "debit − credit";
+  return `Debit ${r.actual_debit ?? 0} · Credit ${r.actual_credit ?? 0} · Net (${rule})`;
+}
+
 function utilizationBarClass(pct: number): string {
   if (pct >= 100) return "bg-status-danger";
   if (pct >= 90) return "bg-status-warning";
@@ -461,8 +478,11 @@ export function BudgetsPage() {
             <div className="rounded border p-2">
               Budget: <b>{vsActual.total_budget.toLocaleString()}</b>
             </div>
-            <div className="rounded border p-2">
-              Actual: <b>{vsActual.total_actual.toLocaleString()}</b>
+            <div
+              className="rounded border p-2"
+              title="Sum of each line's actual for that line's own month / quarter / year"
+            >
+              Actual (line periods): <b>{vsActual.total_actual.toLocaleString()}</b>
             </div>
             <div className="rounded border p-2">
               Variance: <b>{vsActual.total_variance.toLocaleString()}</b>
@@ -480,7 +500,7 @@ export function BudgetsPage() {
               return (
                 <div key={r.line_id} className="border-b border-border pb-2">
                   <div className="mb-1 flex justify-between text-xs text-text-muted">
-                    <span>{r.period_month}</span>
+                    <span title={linePeriodTitle(r)}>{r.period_month}</span>
                     <span>
                       {utilPct.toFixed(0)}% used · Var: {r.variance.toLocaleString()} (
                       {r.variance_pct.toLocaleString()}%)
@@ -501,9 +521,14 @@ export function BudgetsPage() {
             <table className="min-w-full text-sm">
               <thead className="bg-surface-subtle text-left">
                 <tr>
-                  <th className="px-2 py-1">Month</th>
+                  <th className="px-2 py-1">Period</th>
                   <th className="px-2 py-1">Budget</th>
-                  <th className="px-2 py-1">Actual</th>
+                  <th
+                    className="px-2 py-1"
+                    title="Posted vouchers in this line's period only. Expense/asset = debit − credit; income/liability/equity = credit − debit."
+                  >
+                    Actual (line period)
+                  </th>
                   <th className="px-2 py-1">Variance</th>
                   <th className="px-2 py-1">Variance %</th>
                 </tr>
@@ -511,9 +536,13 @@ export function BudgetsPage() {
               <tbody>
                 {vsActual.rows.map((r) => (
                   <tr key={r.line_id} className="border-t">
-                    <td className="px-2 py-1">{r.period_month}</td>
+                    <td className="px-2 py-1" title={linePeriodTitle(r)}>
+                      {r.period_month}
+                    </td>
                     <td className="px-2 py-1">{r.budget_amount.toLocaleString()}</td>
-                    <td className="px-2 py-1">{r.actual_amount.toLocaleString()}</td>
+                    <td className="px-2 py-1" title={actualTitle(r)}>
+                      {r.actual_amount.toLocaleString()}
+                    </td>
                     <td className="px-2 py-1">{r.variance.toLocaleString()}</td>
                     <td className="px-2 py-1">{r.variance_pct.toLocaleString()}%</td>
                   </tr>

@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import tenant_today
 from app.database import safe_async_session_rollback
 from app.external_access.financier_portal import facility_selectors as fsel
 from app.models import Order
@@ -120,7 +121,7 @@ async def recovery_alerts_for_party(db: AsyncSession, *, tenant_id: int, party_i
         await safe_async_session_rollback(db)
         return []
     out: list[dict] = []
-    today = date.today()
+    today = await tenant_today(db, tenant_id)
     for r in rows[:40]:
         code = r.get("order_code") or str(r.get("order_id"))
         cov = r.get("coverage_ratio")
@@ -178,7 +179,7 @@ async def order_lifecycle_alerts_for_party(db: AsyncSession, *, tenant_id: int, 
         return []
     order_btbs = await fsel.order_btb_links_for_party(db, tenant_id, btb_rows)
     btb_ids = [b.id for b in btb_rows]
-    today = date.today()
+    today = await tenant_today(db, tenant_id)
     out: list[dict] = []
 
     def add(code: str, severity: str, title: str, detail: str, cap: int = 25) -> None:

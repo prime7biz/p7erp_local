@@ -7,12 +7,13 @@ Guarded by tenants.feature_flags.tna_event_sync (default off).
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.tenant_feature_keys import is_tna_event_sync_enabled
 from app.database import safe_async_session_rollback
 from app.models import Tenant
@@ -76,7 +77,7 @@ async def sync_order_followup_from_events(
             tmpl_code = {int(i): str(c) for i, c in tres.all()}
 
         now = datetime.utcnow()
-        today = date.today()
+        today = today_local(tenant)
         remark = note or f"{_SYSTEM_REMARK_PREFIX} event={event_key}"
         for row in rows:
             st = (row.status or "").lower()

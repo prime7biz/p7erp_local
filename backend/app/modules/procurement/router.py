@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
+from app.common.business_date import today_local
 from app.common.codegen import next_tenant_code
 from app.common.db_errors import commit_handling_duplicate_document_code
 from app.common.document_history import list_doc_events, record_doc_event
@@ -527,7 +528,7 @@ async def create_po_from_selection(
         vendor_id=q.vendor_id,
         currency=q.currency,
         exchange_rate_to_base=body.exchange_rate_to_base,
-        order_date=date.today(),
+        order_date=today_local(tenant),
         expected_date=body.expected_date or pr.required_date,
         notes=f"From requisition {pr.pr_code} (comparative statement). Reason: {pr.selection_reason}"[:2000],
         status="DRAFT",

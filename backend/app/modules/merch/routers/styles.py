@@ -15,6 +15,7 @@ from sqlalchemy import case, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.business_date import tenant_today
 from app.common.money import format_money, parse_money
 from app.common.codegen import next_tenant_code
 from app.common.ownership import ensure_owned
@@ -365,6 +366,7 @@ async def _build_style_summary(
     inquiry_count: int | None = None,
     quotation_count: int | None = None,
     order_ids: list[int] | None = None,
+    today: date | None = None,
 ) -> StyleSummaryResponse:
     if inquiry_count is None:
         inquiry_count = int(
@@ -405,7 +407,7 @@ async def _build_style_summary(
                 )
             )
         ).scalars().all()
-        today = date.today()
+        today = today or await tenant_today(db, tenant_id)
         for action in actions:
             status_text = (action.status or "").strip().lower()
             if status_text not in {"done", "completed", "closed"}:
@@ -573,6 +575,7 @@ async def _style_report_rows_for_styles(
     ).all():
         quotation_counts[int(sid)] = int(cnt)
     order_ids_by_style = await _resolve_style_order_ids_batch(db, tenant_id, styles)
+    today = await tenant_today(db, tenant_id)
     for style in styles:
         summary = await _build_style_summary(
             db,
@@ -581,6 +584,7 @@ async def _style_report_rows_for_styles(
             inquiry_count=inquiry_counts.get(style.id, 0),
             quotation_count=quotation_counts.get(style.id, 0),
             order_ids=order_ids_by_style.get(style.id, []),
+            today=today,
         )
         is_payment_overdue = _to_decimal(summary.due_amount) > Decimal("0")
         has_overdue_milestone = summary.overdue_followup_actions > 0
@@ -591,7 +595,7 @@ async def _style_report_rows_for_styles(
         if normalized_saved_view == "shipment_due_week":
             if summary.next_due_at is None:
                 continue
-            days_to_due = (summary.next_due_at - date.today()).days
+            days_to_due = (summary.next_due_at - today).days
             if days_to_due < 0 or days_to_due > 7:
                 continue
         if normalized_saved_view == "payment_overdue" and not is_payment_overdue:

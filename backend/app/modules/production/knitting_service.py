@@ -7,6 +7,8 @@ from datetime import date
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import tenant_today
+
 
 def safe_float_money(s: str | None, default: float = 0.0) -> float:
     try:
@@ -31,7 +33,7 @@ async def resolve_charge_amount(
     ft = (fabric_type_code or "").strip()
     if not ft:
         return 0.0
-    d = as_of or date.today()
+    d = as_of or await tenant_today(db, tenant_id)
     stmt = (
         select(KnittingChargeRate)
         .where(

@@ -706,32 +706,55 @@ async def get_trade_case_margin(
     fx_rate = await _rate_to_base(db, tenant, amount_ccy, base_ccy)
     amount_base = (amount * fx_rate).quantize(Decimal("0.01")) if amount is not None and fx_rate else None
 
+    # Purchase-order cost: `base_total_amount` is already in base currency. We also count POs whose
+    # base value is missing, or that are in another currency without a stored rate (their base value
+    # was saved at rate 1), so the screen can warn that the cost may be off.
     estimated_cost: float | None = None
+    cost_po_count: int | None = None
+    cost_po_missing_base_count: int | None = None
+    cost_po_unrated_count: int | None = None
+    po_filters = None
     if trade_case.btb_lc_id:
-        po_result = await db.execute(
-            select(func.coalesce(func.sum(PurchaseOrder.base_total_amount), 0)).where(
-                PurchaseOrder.tenant_id == tenant.id,
-                PurchaseOrder.btb_lc_id == trade_case.btb_lc_id,
-            )
-        )
-        estimated_cost = float(po_result.scalar() or 0)
+        po_filters = [PurchaseOrder.tenant_id == tenant.id, PurchaseOrder.btb_lc_id == trade_case.btb_lc_id]
     elif trade_case.vendor_id is not None:
-        po_result = await db.execute(
-            select(func.coalesce(func.sum(PurchaseOrder.base_total_amount), 0)).where(
-                PurchaseOrder.tenant_id == tenant.id,
-                PurchaseOrder.vendor_id == trade_case.vendor_id,
-                or_(PurchaseOrder.status == "APPROVED", PurchaseOrder.status == "RECEIVED"),
+        po_filters = [
+            PurchaseOrder.tenant_id == tenant.id,
+            PurchaseOrder.vendor_id == trade_case.vendor_id,
+            or_(PurchaseOrder.status == "APPROVED", PurchaseOrder.status == "RECEIVED"),
+        ]
+    if po_filters is not None:
+        po_ccy = func.upper(func.trim(func.coalesce(PurchaseOrder.currency, "")))
+        unrated = and_(po_ccy != "", po_ccy != base_ccy, PurchaseOrder.exchange_rate_to_base.is_(None))
+        po_row = (
+            await db.execute(
+                select(
+                    func.coalesce(func.sum(PurchaseOrder.base_total_amount), 0),
+                    func.count(PurchaseOrder.id),
+                    func.count(PurchaseOrder.id).filter(PurchaseOrder.base_total_amount.is_(None)),
+                    func.count(PurchaseOrder.id).filter(unrated),
+                ).where(*po_filters)
             )
-        )
-        estimated_cost = float(po_result.scalar() or 0)
+        ).one()
+        estimated_cost = float(po_row[0] or 0)
+        cost_po_count = int(po_row[1] or 0)
+        cost_po_missing_base_count = int(po_row[2] or 0)
+        cost_po_unrated_count = int(po_row[3] or 0)
 
     margin_amount = None
     margin_pct = None
-    margin_note = None
+    notes: list[str] = []
     if amount is not None and fx_rate is None:
-        margin_note = (
+        notes.append(
             f"No exchange rate from {amount_ccy} to {base_ccy}; add one under currency settings to see the margin."
         )
+    if cost_po_missing_base_count:
+        notes.append(f"{cost_po_missing_base_count} purchase order(s) have no {base_ccy} value and are not in the cost.")
+    if cost_po_unrated_count:
+        notes.append(
+            f"{cost_po_unrated_count} purchase order(s) in a foreign currency have no exchange rate; "
+            f"their cost may not be in {base_ccy}."
+        )
+    margin_note = " ".join(notes) or None
     if amount_base is not None and estimated_cost is not None:
         cost = Decimal(str(estimated_cost))
         margin_dec = amount_base - cost
@@ -752,6 +775,11 @@ async def get_trade_case_margin(
         fx_rate_to_base=float(fx_rate) if fx_rate is not None else None,
         margin_currency=base_ccy,
         margin_note=margin_note,
+        amount_currency=amount_ccy if amount is not None else None,
+        estimated_cost_currency=base_ccy if estimated_cost is not None else None,
+        cost_po_count=cost_po_count,
+        cost_po_missing_base_count=cost_po_missing_base_count,
+        cost_po_unrated_count=cost_po_unrated_count,
     )
 
 

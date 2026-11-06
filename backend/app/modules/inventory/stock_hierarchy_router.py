@@ -12,6 +12,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.business_date import today_local
 from app.common.codegen import next_tenant_code
 from app.common.inventory_policy import tenant_allows_negative_stock
 from app.common.permissions import (
@@ -801,7 +802,7 @@ async def create_stock_transfer(
             quantity=qty,
             reference_type="STOCK_TRANSFER",
             reference_id=transfer.id,
-            movement_date=date.today(),
+            movement_date=today_local(tenant),
             notes=f"Transfer {code} → {to_wh.warehouse_code}",
             created_by_user_id=user.id,
             movement_kind="WAREHOUSE_TRANSFER_OUT",
@@ -881,7 +882,7 @@ async def create_stock_transfer(
             quantity=qty,
             reference_type="STOCK_TRANSFER",
             reference_id=transfer.id,
-            movement_date=date.today(),
+            movement_date=today_local(tenant),
             notes=f"Transfer {code} from {from_wh.warehouse_code}",
             created_by_user_id=user.id,
             movement_kind="WAREHOUSE_TRANSFER_IN",

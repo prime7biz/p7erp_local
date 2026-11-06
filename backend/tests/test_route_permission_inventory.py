@@ -37,6 +37,7 @@ ALLOWED_WITHOUT_MODULE_KEY = (
     f"{API}/settings",  # router-level settings.access; a few child routers are mounted inside it
     f"{API}/production",  # sub-routers each carry production.access
     f"{API}/manufacturing",
+    f"{API}/hr/attendance/device-push",  # attendance devices sign in with their own X-Device-Key
 )
 
 

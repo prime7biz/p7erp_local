@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.database import get_db
 from app.models import BtbLc, BtbMaturityTranche, ExternalPrincipal, MasterContract, Order, Tenant
 from app.models.inventory import PurchaseOrder, PurchaseOrderItem, Warehouse
@@ -85,7 +86,7 @@ async def financier_dashboard(
     tenant_row = await db.get(Tenant, tid)
     maturities_90: int | None = None
     if tenant_row and is_financier_financial_summary_enabled(tenant_row):
-        today = date.today()
+        today = today_local(tenant_row)
         end = today + timedelta(days=90)
         maturities_90 = int(
             (
@@ -1200,7 +1201,7 @@ async def financier_bank_portfolio_export(
         "tenant_id": principal.tenant_id,
         "tenant_name": tenant.name if tenant else None,
         "financier_party_id": party_id,
-        "as_of": date.today().isoformat(),
+        "as_of": today_local(tenant).isoformat(),
         "metrics": {
             "active_orders": order_count,
             "open_btb_lcs": open_lcs,

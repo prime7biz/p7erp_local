@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import io
-from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import StreamingResponse
@@ -11,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.business_date import today_local
 from app.common.ownership import ensure_owned
 from app.common.tenant import require_tenant
 from app.database import get_db
@@ -287,7 +287,7 @@ async def create_cut_ticket(
         tenant_id=tenant.id,
         lay_plan_id=body.lay_plan_id,
         ticket_code=body.ticket_code,
-        cut_date=date.today(),
+        cut_date=today_local(tenant),
         status="pending",
     )
     db.add(row)

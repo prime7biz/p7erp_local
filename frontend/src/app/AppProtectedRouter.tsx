@@ -674,6 +674,10 @@ const HrOvertimeRulesPage = lazy(() =>
   import("@/pages/app/hr/attendance/HrOvertimeRulesPage").then((m) => ({ default: m.HrOvertimeRulesPage })),
 );
 const HrOvertimePage = lazy(() => import("@/pages/app/hr/attendance/HrOvertimePage").then((m) => ({ default: m.HrOvertimePage })));
+const HrAttendanceDevicesPage = lazy(() =>
+  import("@/pages/app/hr/attendance/HrAttendanceDevicesPage").then((m) => ({ default: m.HrAttendanceDevicesPage })),
+);
+const HrSettingsPage = lazy(() => import("@/pages/app/hr/HrSettingsPage").then((m) => ({ default: m.HrSettingsPage })));
 const HrLeavePoliciesPage = lazy(() =>
   import("@/pages/app/hr/leave/HrLeavePoliciesPage").then((m) => ({ default: m.HrLeavePoliciesPage })),
 );
@@ -1124,6 +1128,8 @@ export function AppProtectedRouter() {
           <Route path="hr/attendance/holidays" element={<HrAttendanceHolidaysPage />} />
           <Route path="hr/attendance/roster" element={<HrRosterPage />} />
           <Route path="hr/attendance/entries" element={<HrAttendanceEntryPage />} />
+          <Route path="hr/attendance/devices" element={<HrAttendanceDevicesPage />} />
+          <Route path="hr/settings" element={<HrSettingsPage />} />
           <Route path="hr/attendance/regularizations" element={<HrRegularizationsPage />} />
           <Route path="hr/attendance/overtime-rules" element={<HrOvertimeRulesPage />} />
           <Route path="hr/attendance/overtime" element={<HrOvertimePage />} />

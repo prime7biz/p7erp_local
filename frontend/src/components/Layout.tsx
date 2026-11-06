@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { Suspense, useState, useMemo, useEffect } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { getActiveAnnouncements, getToken, getTenantId } from "@/api/client";
@@ -178,7 +178,15 @@ export function Layout() {
               ))}
             </div>
           )}
-          <Outlet />
+          <Suspense
+            fallback={
+              <div className="flex min-h-[30vh] items-center justify-center" role="status" aria-label="Loading page">
+                <span className="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-brand-primary" />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </main>
         <div className="hidden lg:block">
           <AppFooter showHealthDetails={showHealthDetails} />

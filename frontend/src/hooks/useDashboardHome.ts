@@ -165,8 +165,8 @@ export function useDashboardHome({ dateRange }: UseDashboardHomeOptions) {
     (promiseStatuses = "NEW,IN_PROGRESS", options?: { bypassCache?: boolean }) => {
       setLoading(true);
       const rangeParams = { from_date: dateRange.from, to_date: dateRange.to };
-      const insightsPromise = api.getDashboardInsights();
       const bypass = options?.bypassCache === true;
+      const insightsPromise = api.getDashboardInsights({ refresh: bypass });
 
       return Promise.allSettled([
         queryClient.fetchQuery({

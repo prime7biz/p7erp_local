@@ -1,40 +1,60 @@
 import { Suspense, lazy, useEffect } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
-import { Landing } from "@/pages/Landing";
-import { UnifiedLoginPage } from "@/pages/UnifiedLoginPage";
-import { SignUp } from "@/pages/SignUp";
-import { UnifiedForgotPasswordPage } from "@/pages/UnifiedForgotPasswordPage";
-import { StaffAcceptInvitePage } from "@/pages/StaffAcceptInvitePage";
-import { ResetPasswordPage } from "@/pages/ResetPasswordPage";
-import { PublicLayout } from "@/components/public/PublicLayout";
-import { FeaturesPage } from "@/pages/public/FeaturesPage";
-import { PricingPage } from "@/pages/public/PricingPage";
-import { AboutPage } from "@/pages/public/AboutPage";
-import { ContactPage } from "@/pages/public/ContactPage";
-import { BookDemoPage } from "@/pages/public/BookDemoPage";
-import { RoiCalculatorPage } from "@/pages/public/RoiCalculatorPage";
-import { GarmentsErpPage } from "@/pages/public/GarmentsErpPage";
-import { BuyingHouseErpPage } from "@/pages/public/BuyingHouseErpPage";
-import { LegalLayout } from "@/components/legal/LegalLayout";
-import { TermsPage as LegalTermsPage } from "@/pages/legal/TermsPage";
-import { PrivacyPage as LegalPrivacyPage } from "@/pages/legal/PrivacyPage";
-import { DpaPage } from "@/pages/legal/DpaPage";
-import { AiDisclaimerPage } from "@/pages/legal/AiDisclaimerPage";
-import { SlaPage } from "@/pages/legal/SlaPage";
-import { SecurityCompliancePage } from "@/pages/legal/SecurityCompliancePage";
-import { TrustCenterPage } from "@/pages/legal/TrustCenterPage";
-import { HowItWorksPage } from "@/pages/public/HowItWorksPage";
-import { SecurityPage } from "@/pages/public/SecurityPage";
-import { ErpBangladeshPage } from "@/pages/public/ErpBangladeshPage";
-import { ErpComparisonPage } from "@/pages/public/ErpComparisonPage";
-import { ResourcesPage } from "@/pages/public/ResourcesPage";
-import { SitemapPage } from "@/pages/public/SitemapPage";
-import { NotFoundPage } from "@/pages/public/NotFoundPage";
-import { SupportPage } from "@/pages/public/SupportPage";
-import { VerifyProformaPage } from "@/pages/VerifyProformaPage";
-import { GlobalAiChatWidget } from "@/components/GlobalAiChatWidget";
 import { ExternalAccessGuard } from "@/components/external-access/ExternalAccessGuard";
 import { PortalLegacyLoginRedirect } from "@/components/external-access/PortalLegacyLoginRedirect";
+
+// Public, legal and auth pages are loaded on demand so each route only downloads its own code.
+const Landing = lazy(() => import("@/pages/Landing").then((m) => ({ default: m.Landing })));
+const UnifiedLoginPage = lazy(() => import("@/pages/UnifiedLoginPage").then((m) => ({ default: m.UnifiedLoginPage })));
+const SignUp = lazy(() => import("@/pages/SignUp").then((m) => ({ default: m.SignUp })));
+const UnifiedForgotPasswordPage = lazy(() =>
+  import("@/pages/UnifiedForgotPasswordPage").then((m) => ({ default: m.UnifiedForgotPasswordPage })),
+);
+const StaffAcceptInvitePage = lazy(() =>
+  import("@/pages/StaffAcceptInvitePage").then((m) => ({ default: m.StaffAcceptInvitePage })),
+);
+const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
+const PublicLayout = lazy(() => import("@/components/public/PublicLayout").then((m) => ({ default: m.PublicLayout })));
+const FeaturesPage = lazy(() => import("@/pages/public/FeaturesPage").then((m) => ({ default: m.FeaturesPage })));
+const PricingPage = lazy(() => import("@/pages/public/PricingPage").then((m) => ({ default: m.PricingPage })));
+const AboutPage = lazy(() => import("@/pages/public/AboutPage").then((m) => ({ default: m.AboutPage })));
+const ContactPage = lazy(() => import("@/pages/public/ContactPage").then((m) => ({ default: m.ContactPage })));
+const BookDemoPage = lazy(() => import("@/pages/public/BookDemoPage").then((m) => ({ default: m.BookDemoPage })));
+const RoiCalculatorPage = lazy(() =>
+  import("@/pages/public/RoiCalculatorPage").then((m) => ({ default: m.RoiCalculatorPage })),
+);
+const GarmentsErpPage = lazy(() => import("@/pages/public/GarmentsErpPage").then((m) => ({ default: m.GarmentsErpPage })));
+const BuyingHouseErpPage = lazy(() =>
+  import("@/pages/public/BuyingHouseErpPage").then((m) => ({ default: m.BuyingHouseErpPage })),
+);
+const LegalLayout = lazy(() => import("@/components/legal/LegalLayout").then((m) => ({ default: m.LegalLayout })));
+const LegalTermsPage = lazy(() => import("@/pages/legal/TermsPage").then((m) => ({ default: m.TermsPage })));
+const LegalPrivacyPage = lazy(() => import("@/pages/legal/PrivacyPage").then((m) => ({ default: m.PrivacyPage })));
+const DpaPage = lazy(() => import("@/pages/legal/DpaPage").then((m) => ({ default: m.DpaPage })));
+const AiDisclaimerPage = lazy(() => import("@/pages/legal/AiDisclaimerPage").then((m) => ({ default: m.AiDisclaimerPage })));
+const SlaPage = lazy(() => import("@/pages/legal/SlaPage").then((m) => ({ default: m.SlaPage })));
+const SecurityCompliancePage = lazy(() =>
+  import("@/pages/legal/SecurityCompliancePage").then((m) => ({ default: m.SecurityCompliancePage })),
+);
+const TrustCenterPage = lazy(() => import("@/pages/legal/TrustCenterPage").then((m) => ({ default: m.TrustCenterPage })));
+const HowItWorksPage = lazy(() => import("@/pages/public/HowItWorksPage").then((m) => ({ default: m.HowItWorksPage })));
+const SecurityPage = lazy(() => import("@/pages/public/SecurityPage").then((m) => ({ default: m.SecurityPage })));
+const ErpBangladeshPage = lazy(() =>
+  import("@/pages/public/ErpBangladeshPage").then((m) => ({ default: m.ErpBangladeshPage })),
+);
+const ErpComparisonPage = lazy(() =>
+  import("@/pages/public/ErpComparisonPage").then((m) => ({ default: m.ErpComparisonPage })),
+);
+const ResourcesPage = lazy(() => import("@/pages/public/ResourcesPage").then((m) => ({ default: m.ResourcesPage })));
+const SitemapPage = lazy(() => import("@/pages/public/SitemapPage").then((m) => ({ default: m.SitemapPage })));
+const NotFoundPage = lazy(() => import("@/pages/public/NotFoundPage").then((m) => ({ default: m.NotFoundPage })));
+const SupportPage = lazy(() => import("@/pages/public/SupportPage").then((m) => ({ default: m.SupportPage })));
+const VerifyProformaPage = lazy(() =>
+  import("@/pages/VerifyProformaPage").then((m) => ({ default: m.VerifyProformaPage })),
+);
+const GlobalAiChatWidget = lazy(() =>
+  import("@/components/GlobalAiChatWidget").then((m) => ({ default: m.GlobalAiChatWidget })),
+);
 
 const AppProtectedRouter = lazy(() =>
   import("@/app/AppProtectedRouter").then((mod) => ({ default: mod.AppProtectedRouter })),
@@ -387,6 +407,9 @@ export function AppRouter() {
               <Suspense fallback={<div className="min-h-[50vh] flex items-center justify-center text-sm text-text-muted">Loading app...</div>}>
                 <AppProtectedRouter />
               </Suspense>
+              <Suspense fallback={null}>
+                <GlobalAiChatWidget />
+              </Suspense>
             </ProtectedRoute>
           }
         />
@@ -399,7 +422,6 @@ export function AppRouter() {
           }
         />
       </Routes>
-      <GlobalAiChatWidget />
     </>
   );
 }

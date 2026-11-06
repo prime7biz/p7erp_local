@@ -3,7 +3,7 @@ import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from app.common.jwt_compat import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy import func
@@ -61,6 +61,14 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 PASSWORD_RESET_EXPIRE_MINUTES = 60
 PASSWORD_RESET_TOKEN_USE = "password_reset"
 logger = logging.getLogger(__name__)
+
+
+async def _send_email_quietly(label: str, user_id: int, send_fn, **kwargs) -> None:
+    """Background task: send an email after the response; SMTP failures are only logged."""
+    try:
+        await send_fn(**kwargs)
+    except Exception as exc:
+        logger.warning("%s email failed for user_id=%s: %s", label, user_id, exc)
 
 
 def _create_password_reset_token(*, user: User, expires_at: datetime) -> str:
@@ -302,6 +310,7 @@ async def login(
 @router.post("/accept-staff-invite", response_model=TokenResponse)
 async def accept_staff_invite_public(
     body: AcceptStaffInviteRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     """Public: accept staff invitation and return internal JWT (same as login)."""
@@ -312,15 +321,16 @@ async def accept_staff_invite_public(
         first_name=body.first_name,
         last_name=body.last_name,
     )
-    try:
-        await send_staff_welcome_email(
-            to_email=user.email,
-            recipient_name=user.first_name or user.email,
-            tenant_name=tenant.name,
-            company_code=tenant.company_code,
-        )
-    except Exception as exc:
-        logger.warning("Staff welcome email failed for user_id=%s: %s", user.id, exc)
+    background_tasks.add_task(
+        _send_email_quietly,
+        "Staff welcome",
+        user.id,
+        send_staff_welcome_email,
+        to_email=user.email,
+        recipient_name=user.first_name or user.email,
+        tenant_name=tenant.name,
+        company_code=tenant.company_code,
+    )
     try:
         await log_action(
             db,
@@ -344,6 +354,7 @@ async def accept_staff_invite_public(
 async def register(
     request: Request,
     body: RegisterRequest,
+    background_tasks: BackgroundTasks,
     current_user: User | None = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
@@ -458,15 +469,16 @@ async def register(
         )
     if is_bootstrap and clear_tenant_bootstrap_hash:
         tenant.bootstrap_token_hash = None
-    try:
-        await send_registration_confirmation_email(
-            to_email=user.email,
-            recipient_name=user.first_name or user.username or user.email,
-            tenant_name=tenant.name,
-            company_code=tenant.company_code,
-        )
-    except Exception as exc:
-        logger.warning("Registration confirmation email failed for user_id=%s: %s", user.id, exc)
+    background_tasks.add_task(
+        _send_email_quietly,
+        "Registration confirmation",
+        user.id,
+        send_registration_confirmation_email,
+        to_email=user.email,
+        recipient_name=user.first_name or user.username or user.email,
+        tenant_name=tenant.name,
+        company_code=tenant.company_code,
+    )
     return UserResponse(
         id=user.id,
         tenant_id=user.tenant_id,
@@ -481,6 +493,7 @@ async def register(
 @router.post("/forgot-password", response_model=MessageResponse)
 async def forgot_password(
     body: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     user, tenant = await _resolve_user_for_forgot_password(
@@ -494,14 +507,17 @@ async def forgot_password(
         user.password_reset_token_hash = _hash_reset_token(reset_token)
         user.password_reset_expires_at = expires_at
         await db.flush()
-        try:
-            await send_forgot_password_email(
-                to_email=user.email,
-                reset_token=reset_token,
-                recipient_name=user.first_name or user.username or user.email,
-            )
-        except Exception as exc:
-            logger.warning("Forgot password email failed for user_id=%s: %s", user.id, exc)
+        # Sent after the response (and after the token is committed), so response time no
+        # longer depends on SMTP or reveals whether the account exists.
+        background_tasks.add_task(
+            _send_email_quietly,
+            "Forgot password",
+            user.id,
+            send_forgot_password_email,
+            to_email=user.email,
+            reset_token=reset_token,
+            recipient_name=user.first_name or user.username or user.email,
+        )
         try:
             await log_action(
                 db,
@@ -518,6 +534,7 @@ async def forgot_password(
 @router.post("/reset-password", response_model=MessageResponse)
 async def reset_password(
     body: ResetPasswordRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     token_plain = (body.token or "").strip()
@@ -558,13 +575,14 @@ async def reset_password(
             action="PASSWORD_RESET_COMPLETED",
             resource="auth",
         )
-    try:
-        await send_password_changed_notification_email(
-            to_email=user.email,
-            recipient_name=user.first_name or user.username or user.email,
-        )
-    except Exception as exc:
-        logger.warning("Password changed notification email failed for user_id=%s: %s", user.id, exc)
+    background_tasks.add_task(
+        _send_email_quietly,
+        "Password changed notification",
+        user.id,
+        send_password_changed_notification_email,
+        to_email=user.email,
+        recipient_name=user.first_name or user.username or user.email,
+    )
     return MessageResponse(message="Password updated")
 
 

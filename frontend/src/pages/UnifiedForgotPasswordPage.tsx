@@ -56,7 +56,10 @@ export function UnifiedForgotPasswordPage() {
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
       <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden">
-        <img src="/images/auth-bg-login.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <picture>
+          <source srcSet="/images/auth-bg-login.webp" type="image/webp" />
+          <img src="/images/auth-bg-login.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
+        </picture>
         <div className="absolute inset-0 bg-gradient-to-br from-surface-inverse/85 via-surface-inverse/70 to-brand-primary/30" />
         <div className="relative z-10 flex flex-col justify-center px-12 xl:px-16 w-full">
           <img src="/images/logo-white.svg" alt="Prime7 ERP" className="h-24 w-auto mb-6" />

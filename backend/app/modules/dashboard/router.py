@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
@@ -8,10 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.auth import get_current_user
 from app.common.gemini_client import generate_text_for_tenant
 from app.common.tenant import require_tenant
+from app.config import get_settings
 from app.database import get_db, safe_async_session_rollback
 from app.modules.dashboard.ai_services import (
     generate_ai_brief,
     generate_ai_profitability,
+)
+from app.modules.dashboard.ai_summary_cache import (
+    ai_summary_cache_key,
+    get_cached_ai_summary,
+    set_cached_ai_summary,
 )
 from app.modules.dashboard.kpi_service import (
     build_attention_summary,
@@ -173,6 +179,7 @@ async def customer_map(
 
 @router.get("/ai-insights")
 async def ai_insights(
+    refresh: bool = Query(False, description="Ignore the cached AI summary and ask the LLM again"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -228,19 +235,37 @@ async def ai_insights(
         "encourage onboarding steps. Max 120 words.\n\n"
         f"{json.dumps(snapshot, default=str)}"
     )
-    try:
-        summary = await generate_text_for_tenant(db, tenant.id, user.id, "brief", prompt)
-        if summary and len(summary.strip()) > 20:
-            insights.append(
-                {
-                    "id": "gemini-daily-summary",
-                    "title": "AI summary",
-                    "message": summary.strip()[:2000],
-                    "type": "info",
-                }
+    ttl = int(get_settings().dashboard_ai_summary_ttl_seconds or 0)
+    cache_key = ai_summary_cache_key(tenant.id, snapshot)
+    cached = None if (refresh or ttl <= 0) else await get_cached_ai_summary(cache_key)
+    if cached is not None:
+        summary = cached.get("summary") or ""
+        cached_at = cached.get("cached_at")
+    else:
+        summary = ""
+        cached_at = datetime.now(timezone.utc).isoformat()
+        try:
+            summary = await generate_text_for_tenant(db, tenant.id, user.id, "brief", prompt) or ""
+        except Exception:
+            await safe_async_session_rollback(db)
+        if ttl > 0:
+            usable = len(summary.strip()) > 20
+            # Cache "no summary" only briefly so a newly configured AI key shows up soon.
+            await set_cached_ai_summary(
+                cache_key,
+                {"summary": summary, "cached_at": cached_at},
+                ttl if usable else min(ttl, 300),
             )
-    except Exception:
-        pass
+    if summary and len(summary.strip()) > 20:
+        insights.append(
+            {
+                "id": "gemini-daily-summary",
+                "title": "AI summary",
+                "message": summary.strip()[:2000],
+                "type": "info",
+                "cached_at": cached_at,
+            }
+        )
 
     return insights
 

@@ -38,6 +38,8 @@ export default defineConfig(async ({ mode }) => {
     chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
+        // Only third-party libraries get named chunks. App pages are split per route by
+        // React.lazy; forcing whole page folders into one chunk made every route preload them.
         manualChunks(id) {
           if (id.includes("node_modules")) {
             if (id.includes("react-dom") || id.includes("/react/")) return "vendor-react";
@@ -47,13 +49,10 @@ export default defineConfig(async ({ mode }) => {
             if (id.includes("qrcode.react")) return "vendor-qrcode";
             if (id.includes("react-helmet-async")) return "vendor-helmet";
             if (id.includes("@radix-ui")) return "vendor-radix";
+            if (id.includes("i18next")) return "vendor-i18n";
+            if (id.includes("@tanstack/react-query") || id.includes("@tanstack/query-core")) return "vendor-query";
             return undefined;
           }
-          if (id.includes("/src/pages/app/hr/")) return "pages-hr";
-          if (id.includes("/src/pages/app/manufacturing/")) return "pages-manufacturing";
-          if (id.includes("/src/pages/app/reports/")) return "pages-reports";
-          if (id.includes("/src/pages/public/")) return "pages-public";
-          if (id.includes("/src/api/client.ts")) return "api-client";
           return undefined;
         },
       },

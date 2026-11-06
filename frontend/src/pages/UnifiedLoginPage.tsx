@@ -142,7 +142,10 @@ export function UnifiedLoginPage() {
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
       <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden">
-        <img src="/images/auth-bg-login.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <picture>
+          <source srcSet="/images/auth-bg-login.webp" type="image/webp" />
+          <img src="/images/auth-bg-login.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
+        </picture>
         <div className="absolute inset-0 bg-gradient-to-br from-surface-inverse/85 via-surface-inverse/70 to-brand-primary/30" />
         <div className="absolute top-[15%] left-[10%] w-64 h-64 bg-brand-primary/20 rounded-full blur-3xl" />
         <div className="absolute bottom-[20%] right-[15%] w-48 h-48 bg-brand-primary/10 rounded-full blur-3xl" />

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -105,7 +106,8 @@ class PgVectorRetrievalAdapter(BaseRetrievalAdapter):
         from app.modules.ai_tool.retrieval.embeddings import embed_query
 
         top_k = max(1, min(20, top_k))
-        qvec = embed_query(query)
+        # CPU-bound model call (and first-time model load): keep it off the event loop.
+        qvec = await asyncio.to_thread(embed_query, query)
         vec_lit = "[" + ",".join(f"{float(x):.8f}" for x in qvec) + "]"
         filt = self.filters or {}
         clauses = [

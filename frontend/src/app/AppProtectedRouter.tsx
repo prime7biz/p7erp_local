@@ -5,6 +5,8 @@ import { TradeFeatureRouteGuard } from "@/components/TradeFeatureRouteGuard";
 import { KnittingFeatureRouteGuard } from "@/components/KnittingFeatureRouteGuard";
 import { PermissionRouteGuard } from "@/components/auth/PermissionRouteGuard";
 import { ROUTE_PERMISSION } from "@/app/routePermissions";
+// Translations are only used inside the app, so i18n starts here instead of in main.tsx.
+import "@/i18n";
 
 const Dashboard = lazy(() => import("@/pages/Dashboard").then((m) => ({ default: m.Dashboard })));
 const PlaceholderPage = lazy(() => import("@/pages/app/PlaceholderPage").then((m) => ({ default: m.PlaceholderPage })));

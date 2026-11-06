@@ -1,5 +1,6 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api, type AiMessageResponse, type AiToolInvocationResult } from "@/api/client";
+import { useAuth } from "@/context/AuthContext";
 import type { ScreenContext } from "@/lib/screenContext";
 
 const LAST_SESSION_KEY = "p7_ai_last_session_id";
@@ -34,6 +35,8 @@ function getSavedSessionId(): number | null {
 }
 
 export function AiChatProvider({ children }: { children: React.ReactNode }) {
+  const { me } = useAuth();
+  const userId = me?.user_id ?? null;
   const [activeSessionId, setActiveSessionIdState] = useState<number | null>(null);
   const [messages, setMessages] = useState<AiMessageResponse[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -53,8 +56,7 @@ export function AiChatProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const ensureSession = useCallback(async (): Promise<number | null> => {
-    if (activeSessionId) return activeSessionId;
+  const pickOrCreateSession = useCallback(async (): Promise<number | null> => {
     setError("");
     try {
       const rows = await api.aiListSessions({ limit: 50, offset: 0 });
@@ -71,7 +73,12 @@ export function AiChatProvider({ children }: { children: React.ReactNode }) {
       setError(e instanceof Error ? e.message : "Failed to initialize AI session");
       return null;
     }
-  }, [activeSessionId, setActiveSessionId]);
+  }, [setActiveSessionId]);
+
+  const ensureSession = useCallback(async (): Promise<number | null> => {
+    if (activeSessionId) return activeSessionId;
+    return pickOrCreateSession();
+  }, [activeSessionId, pickOrCreateSession]);
 
   const createSession = useCallback(async (): Promise<number | null> => {
     setError("");
@@ -110,26 +117,24 @@ export function AiChatProvider({ children }: { children: React.ReactNode }) {
     [activeSessionId]
   );
 
+  // Load the chat only when the widget is first opened by a signed-in user (once per user),
+  // so public pages and normal app navigation make no AI API calls.
+  const bootstrappedUserIdRef = useRef<number | null>(null);
   useEffect(() => {
-    let cancelled = false;
-    const bootstrap = async () => {
-      const token = localStorage.getItem("p7_token");
-      const tenantId = localStorage.getItem("p7_tenant_id");
-      if (!token || !tenantId) {
-        if (!cancelled) setLoadingBootstrap(false);
-        return;
-      }
-      const sid = await ensureSession();
-      if (!cancelled && sid) {
-        await loadMessages(sid);
-      }
-      if (!cancelled) setLoadingBootstrap(false);
-    };
-    void bootstrap();
-    return () => {
-      cancelled = true;
-    };
-  }, [ensureSession, loadMessages]);
+    if (!widgetOpen || userId === null || bootstrappedUserIdRef.current === userId) return;
+    const switchedUser = bootstrappedUserIdRef.current !== null;
+    bootstrappedUserIdRef.current = userId;
+    if (switchedUser) {
+      setMessages([]);
+      setLastToolResults([]);
+    }
+    setLoadingBootstrap(true);
+    void (async () => {
+      const sid = await pickOrCreateSession();
+      if (sid) await loadMessages(sid);
+      setLoadingBootstrap(false);
+    })();
+  }, [widgetOpen, userId, pickOrCreateSession, loadMessages]);
 
   const sendMessage = useCallback(
     async (prompt: string, sessionId?: number | null, context?: ScreenContext | null) => {

@@ -7,7 +7,6 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ConfirmProvider } from "./components/app/ConfirmDialog";
 import "./index.css";
 import "@/lib/theme";
-import "@/i18n";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>

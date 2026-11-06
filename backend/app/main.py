@@ -92,6 +92,7 @@ from app.modules.inventory.po_color_size_router import router as po_color_size_r
 from app.modules.governed_ai.router import router as governed_ai_router
 from app.modules.mcp_server import mount_mcp
 from app.common.external_audit_middleware import ExternalAuditMiddleware
+from app.common.gzip_middleware import SelectiveGZipMiddleware
 from app.common.request_logger import RequestLoggingMiddleware
 from app.common.rate_limiter import TenantRateLimitMiddleware
 settings = get_settings()
@@ -187,6 +188,8 @@ app = FastAPI(
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(ExternalAuditMiddleware)
 app.add_middleware(TenantRateLimitMiddleware)
+# Compress JSON responses >= 1 KB when the client accepts gzip. Added before CORS so CORS stays outermost.
+app.add_middleware(SelectiveGZipMiddleware, minimum_size=1024)
 mount_mcp(app)
 # CORS registered last so it wraps all other middleware: short-circuit responses (e.g. 429) still get
 # Access-Control-Allow-Origin; otherwise browsers report a misleading CORS failure.

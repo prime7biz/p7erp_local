@@ -45,6 +45,7 @@ from app.models.inventory import (
     WarehouseTransfer,
     WarehouseTransferLine,
 )
+from app.modules.inventory.stock_on_hand import on_hand_qty_by_item_warehouse
 from app.modules.inventory.stock_batch_service import (
     batch_out,
     get_batch_availability,
@@ -397,13 +398,14 @@ async def get_stock_item_detail(
             gid = b.get("godown_id")
             godown_map[gid] = godown_map.get(gid, Decimal("0")) + _d(b["current_qty"])
     else:
-        from app.modules.inventory.router import _on_hand_qty
-
         whs = (
             await db.execute(select(Warehouse).where(Warehouse.tenant_id == tenant.id, Warehouse.is_active.is_(True)))
         ).scalars().all()
+        qty_by_pair = await on_hand_qty_by_item_warehouse(
+            db, tenant.id, warehouse_ids=[wh.id for wh in whs], item_ids=[item_id]
+        )
         for wh in whs:
-            qty = await _on_hand_qty(db, tenant.id, item_id, wh.id)
+            qty = qty_by_pair.get((item_id, wh.id), 0.0)
             if qty > 0:
                 godown_map[wh.id] = Decimal(str(qty))
 
@@ -631,14 +633,13 @@ async def godown_stock(
             )
         return {"godown_id": godown_id, "godown_name": wh.name, "items": rows}
 
-    from app.modules.inventory.router import _on_hand_qty
-
     items = (
         await db.execute(select(Item).where(Item.tenant_id == tenant.id, Item.is_active.is_(True)))
     ).scalars().all()
+    qty_by_pair = await on_hand_qty_by_item_warehouse(db, tenant.id, warehouse_ids=[godown_id])
     rows = []
     for it in items:
-        qty = await _on_hand_qty(db, tenant.id, it.id, godown_id)
+        qty = qty_by_pair.get((it.id, godown_id), 0.0)
         if qty > 0:
             rows.append(
                 {
@@ -674,17 +675,22 @@ async def stock_by_godown_matrix(
         item_q = item_q.where(Item.stock_group_id == group_id)
     items = list((await db.execute(item_q.order_by(Item.item_code).limit(200))).scalars().all())
 
-    from app.modules.inventory.router import _on_hand_qty
+    batch_tracking = is_batch_tracking_enabled(tenant.feature_flags)
+    qty_by_pair: dict[tuple[int, int], float] = {}
+    if not batch_tracking:
+        qty_by_pair = await on_hand_qty_by_item_warehouse(
+            db, tenant.id, warehouse_ids=[w.id for w in warehouses], item_ids=[it.id for it in items]
+        )
 
     matrix = []
     for it in items:
         cells = {}
         for wh in warehouses:
-            if is_batch_tracking_enabled(tenant.feature_flags):
+            if batch_tracking:
                 avail = await get_batch_availability(db, tenant.id, it.id, wh.id)
                 qty = sum((_d(b["current_qty"]) for b in avail), Decimal("0"))
             else:
-                qty = Decimal(str(await _on_hand_qty(db, tenant.id, it.id, wh.id)))
+                qty = Decimal(str(qty_by_pair.get((it.id, wh.id), 0.0)))
             cells[str(wh.id)] = str(_money(qty))
         matrix.append(
             {

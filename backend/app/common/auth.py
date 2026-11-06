@@ -130,6 +130,9 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+    # Reused later in the same request (require_tenant, request audit log) to avoid repeat queries.
+    request.state.auth_user_id = user.id
+    request.state.auth_user_tenant_id = user.tenant_id
     token_sv = payload.get("sv")
     # Backward compatibility: pre-rollout JWTs have no `sv` claim.
     # When absent, skip tenant feature-flag lookup entirely.
@@ -138,6 +141,7 @@ async def get_current_user(
 
     tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
     tenant = tenant_result.scalar_one_or_none()
+    request.state.auth_user_tenant = tenant
     request.state.tenant_feature_flags = tenant.feature_flags if tenant else None
     request.state.tenant_feature_flags_cached = True
     if tenant and is_single_session_enforced(tenant.feature_flags):

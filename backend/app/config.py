@@ -190,6 +190,17 @@ class Settings(BaseSettings):
     api_cache_enabled: bool = False
     api_cache_tax_config_ttl_seconds: int = 300
 
+    # Dashboard "AI summary" card: reuse the LLM answer per tenant for this many seconds
+    # (Redis when available, else in-process). 0 = call the LLM on every dashboard load.
+    dashboard_ai_summary_ttl_seconds: int = 1800
+
+    # Request audit log (RequestLoggingMiddleware). false = only log writes (POST/PUT/PATCH/DELETE) and 5xx errors.
+    audit_log_read_requests: bool = True
+    # Max audit rows waiting to be written; extra rows are dropped with a warning instead of piling up.
+    audit_log_max_pending: int = 1000
+    # Max audit rows written at the same time (each write uses one DB connection).
+    audit_log_max_concurrency: int = 4
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

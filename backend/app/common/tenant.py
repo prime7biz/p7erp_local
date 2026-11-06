@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,7 +40,18 @@ async def get_tenant(
     return tenant
 
 
+def _tenant_already_loaded(request: Request, tenant_id: int) -> Tenant | None:
+    """Tenant row that get_current_user loaded earlier in this request (same DB session), if usable."""
+    tenant = getattr(request.state, "auth_user_tenant", None)
+    if tenant is None or tenant.id != tenant_id:
+        return None
+    if tenant.is_active is not True or tenant.deleted_at is not None:
+        return None
+    return tenant
+
+
 async def require_tenant(
+    request: Request,
     tenant_id: Annotated[int | None, Depends(get_tenant_id_from_header)],
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
@@ -60,7 +71,7 @@ async def require_tenant(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="X-Tenant-Id does not match your account tenant",
         )
-    tenant = await get_tenant(db, tenant_id)
+    tenant = _tenant_already_loaded(request, tenant_id) or await get_tenant(db, tenant_id)
     if tenant is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

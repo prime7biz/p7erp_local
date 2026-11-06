@@ -4814,6 +4814,40 @@ async def list_bank_reconciliations(
     return [_bank_reconciliation_to_out(row) for row in rows]
 
 
+async def _bank_book_balance(db: AsyncSession, tenant_id: int, bank: BankAccount, as_of: date) -> Decimal:
+    """Bank balance as per our books on `as_of`: the bank's ledger (GL) account opening balance plus
+    posted, in-books voucher lines up to that date, in base currency.
+
+    Bank accounts without a GL link have no ledger to read, so the stored current_balance is used.
+    """
+    account = await db.get(ChartOfAccount, bank.gl_account_id) if bank.gl_account_id else None
+    if account is None or account.tenant_id != tenant_id:
+        return Decimal(str(bank.current_balance or 0)).quantize(Decimal("0.01"))
+    base = line_base_amount_sql()
+    debit, credit = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(case((VoucherLine.entry_type == "DEBIT", base), else_=0)), 0),
+                func.coalesce(func.sum(case((VoucherLine.entry_type == "CREDIT", base), else_=0)), 0),
+            )
+            .join(Voucher, VoucherLine.voucher_id == Voucher.id)
+            .where(
+                VoucherLine.tenant_id == tenant_id,
+                Voucher.tenant_id == tenant_id,
+                VoucherLine.account_id == account.id,
+                Voucher.status == "POSTED",
+                voucher_in_books_clause(),
+                Voucher.voucher_date <= as_of,
+            )
+        )
+    ).one()
+    opening = Decimal(str(account.opening_balance or 0))
+    debit = Decimal(str(debit))
+    credit = Decimal(str(credit))
+    balance = opening + debit - credit if account.normal_balance == "debit" else opening + credit - debit
+    return balance.quantize(Decimal("0.01"))
+
+
 @router.post("/banking/reconciliation", response_model=BankReconciliationOut)
 async def create_bank_reconciliation(
     body: BankReconciliationBody,
@@ -4825,7 +4859,7 @@ async def create_bank_reconciliation(
     bank = await db.get(BankAccount, body.bank_account_id)
     if not bank or bank.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Bank account not found")
-    book_balance = _to_float(bank.current_balance)
+    book_balance = float(await _bank_book_balance(db, tenant.id, bank, body.statement_date))
     statement_balance = _to_float(body.statement_balance)
     diff = round(statement_balance - book_balance, 2)
     row = BankReconciliation(
@@ -5452,9 +5486,23 @@ async def execute_payment_run(
         bank = await db.get(BankAccount, run.bank_account_id)
         if not bank or bank.tenant_id != tenant.id:
             raise HTTPException(status_code=404, detail="Linked bank account not found")
+    # Bills may only be marked paid together with a posted payment voucher.
+    if bank is None or not bank.gl_account_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Link this payment run to a bank account that has a ledger (GL) account before executing; "
+            "bills are only marked paid when a posted payment voucher is created.",
+        )
+    if run.executed_voucher_id is not None:
+        existing_voucher = await db.get(Voucher, run.executed_voucher_id)
+        if not existing_voucher or existing_voucher.tenant_id != tenant.id or existing_voucher.status != "POSTED":
+            raise HTTPException(
+                status_code=400,
+                detail="The payment voucher for this run is missing or not posted; bills were not marked paid.",
+            )
 
     # Auto-voucher posting for payment run (debit AP clearing, credit bank GL).
-    if bank and bank.gl_account_id and run.executed_voucher_id is None:
+    if run.executed_voucher_id is None:
         open_period = (
             await db.execute(
                 select(AccountingPeriod).where(
@@ -5484,6 +5532,8 @@ async def execute_payment_run(
                 continue
             supplier_ap = await _find_or_create_supplier_ap_account(db, tenant.id, party_name)
             supplier_party_lines.append((party_name, rounded_amount, supplier_ap))
+        if not supplier_party_lines:
+            raise HTTPException(status_code=400, detail="Payment run has no positive amounts to pay")
 
         lock_ids = [bank_gl_probe.id] + [ap.id for _, _, ap in supplier_party_lines]
         locked_gl = await _lock_chart_accounts_for_subset(db, tenant.id, lock_ids)
@@ -5536,6 +5586,7 @@ async def execute_payment_run(
                     cost_center_id=None,
                     entry_type="DEBIT",
                     amount=str(rounded_amount),
+                    base_amount=str(rounded_amount),
                     notes=f"Payment run {run.run_code} - {party_name} ({run.base_currency})",
                 )
             )
@@ -5547,6 +5598,7 @@ async def execute_payment_run(
             cost_center_id=None,
             entry_type="CREDIT",
             amount=str(total_amount),
+            base_amount=str(total_amount),
             notes=f"Payment run {run.run_code} ({run.base_currency})",
         )
         db.add(credit_line)
@@ -5569,9 +5621,9 @@ async def execute_payment_run(
             bill = await db.get(OutstandingBill, item.bill_id)
             if not bill or bill.tenant_id != tenant.id:
                 raise HTTPException(status_code=404, detail=f"Bill not found: {item.bill_id}")
-            paid = _to_float(bill.paid_amount) + _to_float(item.amount)
-            total = _to_float(bill.amount)
-            bill.paid_amount = str(round(min(paid, total), 2))
+            paid = Decimal(str(bill.paid_amount or 0)) + Decimal(str(item.amount or 0))
+            total = Decimal(str(bill.amount or 0))
+            bill.paid_amount = str(min(paid, total).quantize(Decimal("0.01")))
             bill.status = "PAID" if paid >= total else "PARTIAL"
     if bank and bank.tenant_id == tenant.id:
         bank.current_balance = str(round(_to_float(bank.current_balance) - _to_float(run.total_amount), 2))

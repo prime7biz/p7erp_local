@@ -8,9 +8,11 @@ from decimal import ROUND_HALF_UP, Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import exists, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.db_errors import is_duplicate_document_code_violation
 from app.common.ownership import ensure_owned
 from app.common.permissions import PERMISSION_BOM_PRICE_OVERRIDE, assert_delegate_manager_or_permission
 from app.database import get_db, safe_async_session_rollback
@@ -332,11 +334,16 @@ async def create_bom_from_order(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    # Row lock on the order so two clicks cannot both pass the "no active BOM yet" check.
+    order = (
+        await db.execute(
+            select(Order).where(Order.id == body.order_id, Order.tenant_id == tenant.id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
     if await _active_bom_for_order(db, tenant.id, body.order_id):
         raise HTTPException(status_code=400, detail="An active BOM already exists for this order")
-    order = await db.get(Order, body.order_id)
-    if not order or order.tenant_id != tenant.id:
-        raise HTTPException(status_code=404, detail="Order not found")
     if not order.quotation_id:
         raise HTTPException(status_code=400, detail="Order has no quotation")
     quotation = await db.get(Quotation, order.quotation_id)
@@ -355,6 +362,11 @@ async def create_bom_from_order(
     except ValueError as e:
         await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except IntegrityError as e:
+        await safe_async_session_rollback(db)
+        if is_duplicate_document_code_violation(e):
+            raise HTTPException(status_code=409, detail="An active BOM already exists for this order") from e
+        raise
     return await _load_bom_detail(db, tenant, bom)
 
 

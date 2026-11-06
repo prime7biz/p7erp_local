@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.models.merch import Order
 from app.models.production import CutTicket, HourlyProductionEntry, SewingLineStyleConfig
 
@@ -27,7 +28,7 @@ def _rm_pct(o: Order) -> float:
 
 
 async def score_order_otd(db: AsyncSession, tenant_id: int, o: Order) -> dict[str, Any]:
-    today = date.today()
+    today = today_local()
     oqty = _f(o)
     rm = _rm_pct(o)
     delivery = o.delivery_date

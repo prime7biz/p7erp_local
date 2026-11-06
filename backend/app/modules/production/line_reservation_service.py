@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import tenant_today
 from app.common.control_tower_flags import auto_line_booking_enabled
 from app.models import FactoryCalendarOverride, Order, Quotation, Tenant
 from app.models.production import OperationBulletin, SewingLine, SewingLineStyleConfig
@@ -107,7 +108,7 @@ async def propose_line_reservation(
     s = await _get_or_create_settings(db, tenant_id)
     weekend = list(s.weekend_days or [])
     ov = await _calendar_map(db, tenant_id)
-    sd = date.today()
+    sd = await tenant_today(db, tenant_id)
     planned_end = add_working_days(sd, 5, weekend_days=weekend, overrides=ov)
 
     qty = float(order.quantity or 0)

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.models.commercial import MasterContract
 from app.models.finance import ChartOfAccount, Voucher, VoucherLine
 from app.models.merch import Order
@@ -63,7 +64,7 @@ async def build_cash_ladder(
 ) -> dict[str, Any]:
     """Weekly buckets for 8 weeks: planned_cm_outflow from quotation CM × remaining pcs / 8."""
     weeks: list[dict[str, Any]] = []
-    today = date.today()
+    today = today_local()
     monday = today - timedelta(days=today.weekday())
 
     total_planned_cm = 0.0

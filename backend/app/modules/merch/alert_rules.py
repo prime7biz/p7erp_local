@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import tenant_today
 from app.common.db_datetime import utc_naive_plus
 from app.models import (
     Bom,
@@ -94,7 +95,7 @@ async def rule_followup_overdue(
     db: AsyncSession, tenant_id: int, config: dict[str, Any] | None
 ) -> list[dict[str, Any]]:
     """Follow-up overdue: due_date < today, status != DONE."""
-    today = date.today()
+    today = await tenant_today(db, tenant_id)
     critical_days = (config or {}).get("followup_overdue_critical_days", FOLLOWUP_CRITICAL_DAYS)
     stmt = select(Followup).where(
         and_(
@@ -177,7 +178,8 @@ async def rule_quotation_pending_too_long(
 ) -> list[dict[str, Any]]:
     """Quotation status DRAFT/NEW/SENT and (quotation_date or created_at) older than threshold days."""
     days = (config or {}).get("quotation_pending_days", QUOTATION_PENDING_DAYS)
-    cutoff = date.today() - timedelta(days=days)
+    today = await tenant_today(db, tenant_id)
+    cutoff = today - timedelta(days=days)
     stmt = select(Quotation).where(
         and_(
             Quotation.tenant_id == tenant_id,
@@ -190,7 +192,7 @@ async def rule_quotation_pending_too_long(
     for r in rows:
         ref_date = r.quotation_date if r.quotation_date else (r.created_at.date() if r.created_at else None)
         if ref_date is None:
-            ref_date = r.created_at.date() if r.created_at else date.today()
+            ref_date = r.created_at.date() if r.created_at else today
         if ref_date <= cutoff:
             out.append({
                 "natural_key": f"quotation_pending_too_long:quotation:{r.id}",
@@ -241,11 +243,12 @@ async def rule_order_missing_tna(
     )
     plan_result = await db.execute(plan_stmt)
     orders_with_tna = {r[0] for r in plan_result.all() if r[0] is not None}
+    today = await tenant_today(db, tenant_id)
     out: list[dict[str, Any]] = []
     for o in orders:
         if o.id in orders_with_tna:
             continue
-        days_to_delivery = (o.delivery_date - date.today()).days if o.delivery_date else 999
+        days_to_delivery = (o.delivery_date - today).days if o.delivery_date else 999
         severity = "critical" if days_to_delivery <= 14 else "high"
         out.append({
             "natural_key": f"order_missing_tna:order:{o.id}",
@@ -495,7 +498,7 @@ async def rule_tna_action_overdue(
     db: AsyncSession, tenant_id: int, config: dict[str, Any] | None
 ) -> list[dict[str, Any]]:
     """TNA action overdue: planned_date < today, status not completed/approved/cancelled, is_active."""
-    today = date.today()
+    today = await tenant_today(db, tenant_id)
     stmt = select(OrderFollowupAction).where(
         and_(
             OrderFollowupAction.tenant_id == tenant_id,
@@ -540,7 +543,7 @@ async def rule_tna_action_due_soon(
     db: AsyncSession, tenant_id: int, config: dict[str, Any] | None
 ) -> list[dict[str, Any]]:
     """TNA action due soon: planned_date in [today, today+N], status open, is_active. Config: tna_due_soon_days (default 7)."""
-    today = date.today()
+    today = await tenant_today(db, tenant_id)
     n_days = (config or {}).get("tna_due_soon_days", TNA_DUE_SOON_DAYS)
     due_end = today + timedelta(days=n_days)
     stmt = select(OrderFollowupAction).where(
@@ -587,7 +590,8 @@ async def rule_trade_lc_expiry_soon(
 ) -> list[dict[str, Any]]:
     """Trade case with linked LC expiring soon."""
     days = int((config or {}).get("trade_lc_expiry_days", 14))
-    cutoff = date.today() + timedelta(days=days)
+    today = await tenant_today(db, tenant_id)
+    cutoff = today + timedelta(days=days)
     cases = (
         await db.execute(
             select(TradeCase).where(
@@ -610,7 +614,7 @@ async def rule_trade_lc_expiry_soon(
         if not expiry_date:
             continue
         if expiry_date <= cutoff:
-            days_left = (expiry_date - date.today()).days
+            days_left = (expiry_date - today).days
             severity = "critical" if days_left <= 3 else "high"
             out.append(
                 {
@@ -646,7 +650,8 @@ async def rule_trade_docs_missing_before_etd(
     """Trade case near ETD with missing core docs."""
     days = int((config or {}).get("trade_docs_before_etd_days", 5))
     required_docs = {str(x).upper() for x in ((config or {}).get("trade_required_docs") or ["PI", "INVOICE", "PACKING_LIST"])}
-    cutoff = date.today() + timedelta(days=days)
+    today = await tenant_today(db, tenant_id)
+    cutoff = today + timedelta(days=days)
     cases = (
         await db.execute(
             select(TradeCase).where(
@@ -671,7 +676,7 @@ async def rule_trade_docs_missing_before_etd(
         missing = sorted(required_docs - have)
         if not missing:
             continue
-        days_left = (c.etd - date.today()).days if c.etd else 999
+        days_left = (c.etd - today).days if c.etd else 999
         severity = "critical" if days_left <= 2 else "high"
         out.append(
             {
@@ -708,12 +713,13 @@ async def rule_trade_shipment_delayed(
 ) -> list[dict[str, Any]]:
     """Shipment has ETA in the past and not delivered/closed."""
     delayed_status_block = {"DELIVERED", "CLOSED"}
+    today = await tenant_today(db, tenant_id)
     rows = (
         await db.execute(
             select(Shipment).where(
                 Shipment.tenant_id == tenant_id,
                 Shipment.eta.isnot(None),
-                Shipment.eta < date.today(),
+                Shipment.eta < today,
             )
         )
     ).scalars().all()
@@ -721,7 +727,7 @@ async def rule_trade_shipment_delayed(
     for s in rows:
         if (s.status or "").upper() in delayed_status_block:
             continue
-        days_over = (date.today() - s.eta).days if s.eta else 0
+        days_over = (today - s.eta).days if s.eta else 0
         case = await db.get(TradeCase, s.trade_case_id)
         if not case or case.tenant_id != tenant_id:
             continue
@@ -890,7 +896,7 @@ async def rule_btb_lc_maturity_due_or_overdue(
     - due_soon_days = 7
     """
     due_soon_days = int((config or {}).get("due_soon_days", 7))
-    today = date.today()
+    today = await tenant_today(db, tenant_id)
     due_cutoff = today + timedelta(days=due_soon_days)
     rows = (
         await db.execute(

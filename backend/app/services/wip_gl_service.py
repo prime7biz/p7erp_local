@@ -7,13 +7,13 @@ so inventory posting paths are never blocked by GL wiring issues.
 from __future__ import annotations
 
 import logging
-from datetime import date
 from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.tenant_feature_keys import is_auto_post_wip_journal_enabled
 from app.models import ProductionMaterialIssue, StockMovement, Tenant, Voucher
 from app.modules.finance.auto_posting_service import AutoPostingLine, create_system_voucher
@@ -167,7 +167,7 @@ async def maybe_post_production_material_issue_wip(
         if not lines:
             return None
 
-        v_date = issue.issue_date or date.today()
+        v_date = issue.issue_date or today_local(tenant)
         async with db.begin_nested():
             voucher = await create_system_voucher(
                 db,

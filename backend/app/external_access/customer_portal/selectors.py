@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date
 
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.models import (
     ExternalPrincipal,
     ManufacturingProductionPlanLine,
@@ -21,7 +22,7 @@ from app.external_access.deps import get_allowed_customer_ids
 
 
 def _today() -> date:
-    return datetime.now(timezone.utc).date()
+    return today_local()
 
 
 async def customer_ids_for_principal(db: AsyncSession, principal: ExternalPrincipal) -> list[int]:

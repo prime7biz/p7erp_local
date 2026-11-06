@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.models.commercial import BtbLc, BtbMaturityTranche
 from app.models.merch import Order
 from app.models.trade import Shipment, TradeCase
@@ -45,7 +46,7 @@ async def score_btb_maturities(
             ed = await _expected_ship_date_for_order(db, tenant_id, o.id)
             if ed:
                 etd_dates.append(ed)
-    inflow_proxy = min(etd_dates) + timedelta(days=30) if etd_dates else date.today() + timedelta(days=60)
+    inflow_proxy = min(etd_dates) + timedelta(days=30) if etd_dates else today_local() + timedelta(days=60)
 
     tranche_payload: list[dict[str, Any]] = []
     threats = 0

@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import tenant_today
 from app.models import CommercialChangeRequest, Inquiry, Order, Quotation
 from app.models.merch import Bom, MerchSampleRequest, OrderFollowupAction
 from app.modules.merch.merch_control_tower_schemas import (
@@ -77,7 +78,7 @@ async def _count_orders_commercial_drift(db: AsyncSession, *, tenant_id: int) ->
 
 
 async def build_merch_control_tower_summary(db: AsyncSession, *, tenant_id: int) -> MerchControlTowerSummaryOut:
-    today = date.today()
+    today = await tenant_today(db, tenant_id)
     soon = today + timedelta(days=14)
 
     inq_count = int(

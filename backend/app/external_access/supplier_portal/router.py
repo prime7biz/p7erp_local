@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import tenant_today
 from app.database import get_db, safe_async_session_rollback
 from app.models import ExternalPrincipal, Role, User, Vendor
 from app.models.costing import Item
@@ -228,7 +229,7 @@ async def supplier_dashboard(principal: Principal, db: AsyncSession = Depends(ge
         ).scalars()
     )
     items = await _list_items(db, principal, open_pos)
-    today = date.today()
+    today = await tenant_today(db, principal.tenant_id)
     recent_rows = list(
         (
             await db.execute(
@@ -355,7 +356,7 @@ async def supplier_post_update(
         raise HTTPException(status_code=400, detail="Choose the date you expect to ship")
     if body.kind == UPDATE_NOTE and not body.message:
         raise HTTPException(status_code=400, detail="Write a message")
-    if body.expected_ship_date and body.expected_ship_date < date.today() - timedelta(days=1):
+    if body.expected_ship_date and body.expected_ship_date < await tenant_today(db, principal.tenant_id) - timedelta(days=1):
         raise HTTPException(status_code=400, detail="The ship date cannot be in the past")
     count = int(
         await db.scalar(select(func.count()).select_from(SupplierPoUpdate).where(SupplierPoUpdate.purchase_order_id == po.id)) or 0

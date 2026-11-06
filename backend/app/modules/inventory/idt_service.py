@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.codegen import next_tenant_code
 from app.common.inventory_policy import tenant_allows_negative_stock
 from app.common.tenant_feature_keys import (
@@ -182,7 +183,7 @@ async def create_idt_issue(
     idt = InterDepartmentTransfer(
         tenant_id=tenant_id,
         idt_number=number,
-        idt_date=idt_date or date.today(),
+        idt_date=idt_date or today_local(tenant),
         from_warehouse_id=from_warehouse_id,
         to_warehouse_id=to_warehouse_id,
         process_name=process_name,
@@ -358,7 +359,7 @@ async def receive_idt(
         movement_kind="IDT_RECEIVE",
         order_id=idt.linked_order_id,
         lot_number=batch_number,
-        movement_date=date.today(),
+        movement_date=today_local(tenant),
     )
     db.add(mv_in)
     await db.flush()

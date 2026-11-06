@@ -9,6 +9,7 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import tenant_today
 from app.modules.finance.voucher_controls import (
     allocate_series_voucher_number,
     finalize_posted_voucher_metadata,
@@ -202,7 +203,7 @@ async def post_grn_receipt_gl(
     grn: GoodsReceiving,
     items: list[GoodsReceivingItem],
 ) -> None:
-    v_date = grn.received_date or date.today()
+    v_date = grn.received_date or await tenant_today(db, tenant_id)
     buckets: dict[tuple[int | None, int | None], float] = defaultdict(float)
 
     for line in items:
@@ -275,7 +276,7 @@ async def post_delivery_challan_gl(
     challan_code: str,
     lines: list[DeliveryChallanItem],
 ) -> None:
-    v_date = delivery_date or date.today()
+    v_date = delivery_date or await tenant_today(db, tenant_id)
     buckets: dict[tuple[int | None, int | None], float] = defaultdict(float)
 
     # Value each OUT movement of the challan once (one per line). Looking movements up per
@@ -356,7 +357,7 @@ async def post_process_order_issue_gl(
     wip = out_acc["wip"]
     if not inv_in or not wip:
         return
-    v_date = mv.movement_date or date.today()
+    v_date = mv.movement_date or await tenant_today(db, tenant_id)
     entries = [
         (wip, "DEBIT", val, notes),
         (inv_in, "CREDIT", val, notes),
@@ -402,7 +403,7 @@ async def post_process_order_receive_gl(
     wip = out_acc["wip"]
     if not inv_out or not wip:
         return
-    v_date = mv.movement_date or date.today()
+    v_date = mv.movement_date or await tenant_today(db, tenant_id)
     entries = [
         (inv_out, "DEBIT", val, notes),
         (wip, "CREDIT", val, notes),
@@ -452,7 +453,7 @@ async def post_idt_issue_gl(
     wip = out_acc.get("wip") or out_acc.get("inventory")
     if not inv_in or not wip:
         return
-    v_date = mv.movement_date or date.today()
+    v_date = mv.movement_date or await tenant_today(db, tenant_id)
     entries = [
         (wip, "DEBIT", val, notes),
         (inv_in, "CREDIT", val, notes),
@@ -523,7 +524,7 @@ async def post_idt_receive_gl(
     inv_out = tgt_acc.get("inventory")
     if not inv_out or not wip:
         return
-    v_date = mv.movement_date or date.today()
+    v_date = mv.movement_date or await tenant_today(db, tenant_id)
     entries = [
         (inv_out, "DEBIT", val, notes),
         (wip, "CREDIT", val, notes),
@@ -572,7 +573,7 @@ async def post_stock_adjustment_gl(
     adj_id = acc["adjustment"]
     if not inv_id or not adj_id:
         return
-    v_date = mv.movement_date or date.today()
+    v_date = mv.movement_date or await tenant_today(db, tenant_id)
     if mv.movement_type == "IN":
         entries = [(inv_id, "DEBIT", val, adj.adjust_code), (adj_id, "CREDIT", val, adj.adjust_code)]
     else:
@@ -599,7 +600,7 @@ async def post_physical_inventory_gl(
     session_code: str,
     count_date: date | None,
 ) -> None:
-    v_date = count_date or date.today()
+    v_date = count_date or await tenant_today(db, tenant_id)
     mvs = (
         await db.execute(
             select(StockMovement).where(
@@ -686,7 +687,7 @@ async def post_consumption_issue_gl(
     cogs_id = acc["cogs"]
     if not inv_id or not cogs_id:
         return
-    v_date = mv.movement_date or date.today()
+    v_date = mv.movement_date or await tenant_today(db, tenant_id)
     entries = [
         (cogs_id, "DEBIT", val, memo),
         (inv_id, "CREDIT", val, memo),

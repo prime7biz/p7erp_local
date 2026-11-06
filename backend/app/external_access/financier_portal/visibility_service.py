@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import tenant_today
 from app.external_access.financier_portal import facility_selectors as fsel
 from app.models import BtbLc, BtbLcAccounting, Customer, Order, Quotation
 from app.models.commercial import MasterContract
@@ -935,7 +936,7 @@ async def build_production_detail_for_order(
     o = await db.get(Order, order_id)
     if not o or o.tenant_id != tenant_id:
         return None
-    today = date.today()
+    today = await tenant_today(db, tenant_id)
     d0 = today - timedelta(days=13)
     daily_rows = await db.execute(
         select(HourlyProductionEntry.production_date, func.coalesce(func.sum(HourlyProductionEntry.good_qty), 0))

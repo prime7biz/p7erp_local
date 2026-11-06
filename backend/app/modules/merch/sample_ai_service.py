@@ -10,6 +10,7 @@ from fastapi import HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import tenant_today
 from app.models import GarmentStyle, User
 from app.models.merch import MerchSampleAiProposal, MerchSampleRequest, MerchSampleTask
 from app.modules.ai_tool.audit import log_ai_event
@@ -66,7 +67,7 @@ async def create_plan_proposal(
     style_name = (style.name or "") if style else ""
 
     target = sample.target_date
-    start_hint = date.today()
+    start_hint = await tenant_today(db, tenant_id)
     prompt = f"""You are a garment factory sample room planner. Propose a realistic sequence of production steps.
 Rules:
 - Return JSON-matching schema only: tasks with step_name, sort_order, days_from_start, duration_days.
@@ -146,7 +147,7 @@ async def apply_plan_proposal(
 
     payload = prop.proposal_json or {}
     raw_tasks = payload.get("tasks") or []
-    start = schedule_start or date.today()
+    start = schedule_start or await tenant_today(db, tenant_id)
 
     created: list[MerchSampleTask] = []
     for i, t in enumerate(raw_tasks):

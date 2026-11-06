@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.business_date import today_local
 from app.common.permissions import (
     PERMISSION_INVENTORY_ABC_ANALYSIS_RUN,
     PERMISSION_INVENTORY_ABC_ANALYSIS_VIEW,
@@ -233,7 +234,7 @@ async def cycle_count_schedule(
     try:
         if generate:
             await cycle_count_service.generate_cycle_count_schedule(
-                db, tenant, for_date=for_date or date.today()
+                db, tenant, for_date=for_date or today_local(tenant)
             )
             await db.commit()
         tasks = await cycle_count_service.list_cycle_count_tasks(
@@ -245,7 +246,7 @@ async def cycle_count_schedule(
         )
         if for_date is None and history_days is None:
             tasks = await cycle_count_service.list_cycle_count_tasks(
-                db, tenant.id, for_date=date.today(), status=status
+                db, tenant.id, for_date=today_local(tenant), status=status
             )
         return [await cycle_count_service.task_to_dict(db, t) for t in tasks]
     except HTTPException:

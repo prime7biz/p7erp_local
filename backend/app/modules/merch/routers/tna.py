@@ -10,6 +10,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.business_date import today_local
 from app.common.db_datetime import utc_now_naive
 from app.common.ownership import ensure_owned
 from app.common.pagination import MAX_PAGE_SIZE
@@ -483,7 +484,7 @@ async def list_followup_actions(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    today = date.today()
+    today = today_local(tenant)
     stmt = select(OrderFollowupAction).where(OrderFollowupAction.tenant_id == tenant.id)
     if order_id is not None:
         stmt = stmt.where(OrderFollowupAction.order_id == order_id)
@@ -530,7 +531,7 @@ async def get_followup_actions_summary(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    today = date.today()
+    today = today_local(tenant)
     week_end = today + timedelta(days=7)
     stmt = select(OrderFollowupAction).where(
         OrderFollowupAction.tenant_id == tenant.id,
@@ -705,7 +706,7 @@ async def list_overdue_followup_actions(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    today = date.today()
+    today = today_local(tenant)
     stmt = (
         select(OrderFollowupAction)
         .where(
@@ -1018,7 +1019,7 @@ async def complete_followup_action(
     row.status = "completed"
     row.approval_status = "approved"
     row.is_rejected = False
-    row.actual_completion_date = date.today()
+    row.actual_completion_date = today_local(tenant)
     row.completed_at = utc_now_naive()
     row.completed_by_id = user.id
     await db.commit()

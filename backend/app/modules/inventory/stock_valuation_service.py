@@ -9,6 +9,7 @@ from typing import Any, Literal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.models.costing import Item
 from app.models.inventory import StockBatch, StockGroup
 from app.models.inventory import InventoryCostLayer
@@ -81,7 +82,7 @@ async def get_stock_value(
         }
 
     resolved = await resolve_valuation_method(db, tenant_id, item, method)
-    as_of = as_of_date or date.today()
+    as_of = as_of_date or today_local()
 
     if resolved == "STD":
         # On-hand from batch or current_stock cache

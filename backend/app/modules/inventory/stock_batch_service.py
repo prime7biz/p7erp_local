@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import tenant_today
 from app.common.tenant_feature_keys import is_batch_tracking_enabled
 from app.models.costing import Item
 from app.models.inventory import GoodsReceivingItem, StockBatch, StockMovement, Warehouse
@@ -286,7 +287,7 @@ async def get_expiring_batches(
     days: int = 30,
     as_of: date | None = None,
 ) -> list[dict[str, Any]]:
-    as_of = as_of or date.today()
+    as_of = as_of or await tenant_today(db, tenant_id)
     until = as_of + timedelta(days=max(0, days))
     rows = (
         await db.execute(
@@ -314,7 +315,7 @@ async def mark_expired_batches(
     tenant_id: int,
     as_of: date | None = None,
 ) -> int:
-    as_of = as_of or date.today()
+    as_of = as_of or await tenant_today(db, tenant_id)
     rows = (
         await db.execute(
             select(StockBatch).where(

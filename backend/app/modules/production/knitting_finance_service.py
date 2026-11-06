@@ -9,6 +9,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.codegen import next_tenant_code
 from app.models import Customer, OutstandingBill, ProcessOrder, Tenant, Vendor
 from app.modules.finance.auto_posting_service import AutoPostingLine, create_system_voucher
@@ -49,6 +50,7 @@ async def maybe_post_knitting_subcontract_accrual_before_receive_gl(
     if tenant is None:
         return
     base_currency = (tenant.base_currency or "BDT").strip().upper()[:10] or "BDT"
+    doc_date = movement_date or today_local(tenant)
 
     acc_map = await resolve_inventory_accounts(db, tenant_id, po.output_item_id)
     wip_acc = acc_map.get("wip")
@@ -62,7 +64,7 @@ async def maybe_post_knitting_subcontract_accrual_before_receive_gl(
         tenant_id=tenant_id,
         user_id=user_id,
         voucher_type="JOURNAL",
-        voucher_date=movement_date or date.today(),
+        voucher_date=doc_date,
         lines=[
             AutoPostingLine(entry_type="DEBIT", amount=amt, account_id=int(wip_acc), notes=narration),
             AutoPostingLine(
@@ -93,13 +95,13 @@ async def maybe_post_knitting_subcontract_accrual_before_receive_gl(
         prefix=prefix,
         width=4,
     )
-    due = (movement_date or date.today()) + timedelta(days=30)
+    due = doc_date + timedelta(days=30)
     bill = OutstandingBill(
         tenant_id=tenant_id,
         bill_no=bill_code,
         party_name=party_name,
         bill_type="PAYABLE",
-        bill_date=movement_date or date.today(),
+        bill_date=doc_date,
         due_date=due,
         amount=str(round(float(knitting_charge_amount), 2)),
         paid_amount="0",
@@ -141,6 +143,7 @@ async def maybe_post_knitting_jobwork_revenue_after_receive_gl(
     if tenant is None:
         return
     base_currency = (tenant.base_currency or "BDT").strip().upper()[:10] or "BDT"
+    doc_date = movement_date or today_local(tenant)
 
     amt = _money_to_decimal(knitting_charge_amount)
     narration = f"Knitting jobwork revenue {po.process_number}"
@@ -149,7 +152,7 @@ async def maybe_post_knitting_jobwork_revenue_after_receive_gl(
         tenant_id=tenant_id,
         user_id=user_id,
         voucher_type="JOURNAL",
-        voucher_date=movement_date or date.today(),
+        voucher_date=doc_date,
         lines=[
             AutoPostingLine(entry_type="DEBIT", amount=amt, system_code="ACCOUNTS_RECEIVABLE_TRADE", notes=narration),
             AutoPostingLine(entry_type="CREDIT", amount=amt, system_code="SERVICE_REVENUE", notes=narration),
@@ -169,7 +172,7 @@ async def maybe_post_knitting_jobwork_revenue_after_receive_gl(
     party_name = customer.name.strip() if customer and customer.name else f"CUSTOMER-{po.customer_id}"
 
     bill_code = await next_tenant_code(db, model=OutstandingBill, tenant_id=tenant_id, prefix="AR-", width=4)
-    due = (movement_date or date.today()) + timedelta(days=30)
+    due = doc_date + timedelta(days=30)
     # Keep bill currency aligned with voucher currency. No FX conversion is applied here.
     currency = base_currency
     bill = OutstandingBill(
@@ -177,7 +180,7 @@ async def maybe_post_knitting_jobwork_revenue_after_receive_gl(
         bill_no=bill_code,
         party_name=party_name,
         bill_type="RECEIVABLE",
-        bill_date=movement_date or date.today(),
+        bill_date=doc_date,
         due_date=due,
         amount=str(round(float(knitting_charge_amount), 2)),
         paid_amount="0",

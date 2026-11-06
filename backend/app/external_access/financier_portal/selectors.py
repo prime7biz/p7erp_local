@@ -3,19 +3,20 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
+from app.common.business_date import today_local
 from app.models import Customer, Inquiry, Order, Quotation, StockMovement, Voucher
 from app.models.finance import OutstandingBill
 from app.models.trade import Shipment
 
 
 def _today() -> date:
-    return datetime.now(timezone.utc).date()
+    return today_local()
 
 
 async def count_inquiries_by_status(db: AsyncSession, tenant_id: int) -> dict[str, int]:

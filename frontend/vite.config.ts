@@ -90,6 +90,11 @@ export default defineConfig(async ({ mode }) => {
         target: process.env.VITE_DEV_PROXY_TARGET ?? "http://localhost:8000",
         changeOrigin: true,
       },
+      // Uploaded files, same as `location /media/` in nginx.prod.conf.
+      "/media/": {
+        target: process.env.VITE_DEV_PROXY_TARGET ?? "http://localhost:8000",
+        changeOrigin: true,
+      },
     },
   },
   };

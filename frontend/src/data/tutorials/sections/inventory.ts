@@ -1212,13 +1212,14 @@ Other approvals in Inventory (PO **Approve**, requisition **Approve** / **Select
         "Delivery challans, gate passes, GRNs, material issues, process orders and transfers print with a QR code that proves the paper matches the system.",
       content: `## Overview
 
-Paper challans and gate passes can be copied or changed by hand. P7 ERP **signs** each inventory document and prints a **QR code** on it. Scanning the QR opens the document's verification record, so security, the buyer's forwarder or an auditor can check that the paper matches the system.
+Paper challans and gate passes can be copied or changed by hand. P7 ERP **signs** each inventory document and prints a **QR code** on it. Scanning the QR opens a public verification page, so security, the buyer's forwarder or an auditor can check that the paper matches the system — without an account.
 
 Documents with QR: **Delivery challan**, **Gate pass**, **GRN**, **Production material issue**, **Process order**, **Warehouse transfer**.
 
 ## Before you start
 
-- The verification link opens inside P7 ERP, so the person scanning must be **signed in** to your company.
+- An admin turns on **Public document verification** once in **Settings → Configuration**. Until then, scans show **Not found**.
+- The public page shows only your company name, document type and number, date, status and total quantity — no prices, lines or names.
 
 ## Steps
 
@@ -1226,11 +1227,12 @@ Documents with QR: **Delivery challan**, **Gate pass**, **GRN**, **Production ma
 2. **Actions → Print** (or **Print preview**, or **Print (layout)** on a GRN). A print preview opens.
 3. Choose the template (**Standard**, **Compact** or **Audit**) and the number of copies (**1 copy**, 2, 3…), then click **Print / Save PDF**. Copies are labelled (for example *Original*, *Duplicate*, *Triplicate*). Click **Close** to go back.
 4. On the paper you see the QR at the top right (**SCAN TO VERIFY**), the signature boxes (*Prepared*, *Checked*, *Security*, *Approved*) and, at the bottom, the **Verification ID** (for example \`VFY-…\`) with the signing time.
-5. To check a paper copy, scan the QR with a phone that is signed in to P7 ERP, and compare the code, date, lines and status.
+5. To check a paper copy, scan the QR with any phone camera. **Genuine document** (green) means the code, date, status and quantity match the system; **Document changed after signing** (red) means the record was altered after it was signed — do not accept that paper.
 
 ## What happens next
 
-- When a document's status changes (for example a gate pass becomes **RELEASED**), it is signed again so the QR shows the latest status.
+- When a document's status changes (for example a challan is **POSTED** or a gate pass becomes **RELEASED**), it is signed again, so the QR keeps showing **Genuine document** with the latest status.
+- QR codes printed earlier still work: phones opening the older link are sent to the new page.
 
 ## Tips
 
@@ -1239,8 +1241,8 @@ Documents with QR: **Delivery challan**, **Gate pass**, **GRN**, **Production ma
 
 ## Common problems
 
-- **Scanning shows a sign-in page or an error.** → The person scanning is not signed in to your company in P7 ERP.
-- **"Verification record not found".** → The paper is not from this company, or it was printed before signing was set up — ask an admin to re-sign old documents.`,
+- **Scanning shows "Not found".** → Public document verification is off (ask an admin to turn it on in **Settings → Configuration**), the paper is not from this company, or it was printed before signing was set up — ask an admin to re-sign old documents.
+- **Scanning shows "Document changed after signing".** → Someone changed the record outside the normal screens. Open the document in the app and check its history before accepting the paper.`,
       tags: ["QR", "verification", "print", "challan", "gate pass", "GRN", "anti-fraud"],
       keywords: ["QR code", "verify challan", "fake challan", "document verification", "signed document", "print copies", "original duplicate triplicate"],
       estimatedMinutes: 3,
@@ -1251,6 +1253,11 @@ Documents with QR: **Delivery challan**, **Gate pass**, **GRN**, **Production ma
           src: `${S}/inv-dc-print-preview.jpg`,
           alt: "Print preview of a delivery challan with QR code, copy count and template options",
           caption: "Actions → Print opens the preview: choose copies and template, then print.",
+        },
+        {
+          src: "/tutorials/screens/wf-public-verify-genuine.jpg",
+          alt: "Public Genuine document page shown after scanning a QR code, with company, number, date, status and Verification ID",
+          caption: "Scanning the QR opens this public page (shown here for a voucher; stock documents show the total quantity instead of an amount).",
         },
       ],
       relatedAppRoutes: ["/app/inventory/delivery-challans", "/app/inventory/enhanced-gate-passes", "/app/inventory/goods-receiving", "/app/inventory/process-orders", "/app/inventory/warehouse-transfers"],

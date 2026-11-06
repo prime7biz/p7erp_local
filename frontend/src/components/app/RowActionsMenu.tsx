@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 export type RowActionItem = {
   key: string;
@@ -20,7 +21,16 @@ type RowActionsMenuProps = {
   className?: string;
   /** Rendered after built-in items (e.g. custom buttons already built) */
   children?: ReactNode;
+  /**
+   * Float the menu on top of the page (fixed position on <body>) so tables with
+   * `overflow-x-auto` cannot cut it off. It opens upward when there is no room below.
+   */
+  menuPortal?: boolean;
 };
+
+const MENU_WIDTH = 160;
+const VIEWPORT_GAP = 8;
+const OPEN_UP_THRESHOLD = 220;
 
 /**
  * Shared row Actions dropdown (Quotations / Customers pattern).
@@ -34,17 +44,21 @@ export function RowActionsMenu({
   label = "Actions",
   className = "",
   children,
+  menuPortal = false,
 }: RowActionsMenuProps) {
   const open = openId === rowId;
   const menuId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [portalStyle, setPortalStyle] = useState<CSSProperties | null>(null);
 
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) {
-        onOpenChange(null);
-      }
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      onOpenChange(null);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onOpenChange(null);
@@ -57,9 +71,88 @@ export function RowActionsMenu({
     };
   }, [open, onOpenChange]);
 
+  const updatePortalPosition = useCallback(() => {
+    const btn = buttonRef.current;
+    if (!btn) return;
+    const r = btn.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const left = Math.max(VIEWPORT_GAP, Math.min(r.right - MENU_WIDTH, vw - MENU_WIDTH - VIEWPORT_GAP));
+    const spaceBelow = vh - r.bottom - VIEWPORT_GAP;
+    const spaceAbove = r.top - VIEWPORT_GAP;
+    const openUp = spaceBelow < OPEN_UP_THRESHOLD && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(120, openUp ? spaceAbove : spaceBelow);
+    setPortalStyle(
+      openUp
+        ? { position: "fixed", left, width: MENU_WIDTH, bottom: vh - r.top + 4, maxHeight, overflowY: "auto" }
+        : { position: "fixed", left, width: MENU_WIDTH, top: r.bottom + 4, maxHeight, overflowY: "auto" },
+    );
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open || !menuPortal) return;
+    updatePortalPosition();
+    window.addEventListener("scroll", updatePortalPosition, true);
+    window.addEventListener("resize", updatePortalPosition);
+    return () => {
+      window.removeEventListener("scroll", updatePortalPosition, true);
+      window.removeEventListener("resize", updatePortalPosition);
+    };
+  }, [open, menuPortal, updatePortalPosition]);
+
+  const menu = open ? (
+    <div
+      ref={menuRef}
+      id={menuId}
+      role="menu"
+      style={menuPortal ? portalStyle ?? { position: "fixed", visibility: "hidden" } : undefined}
+      className={
+        menuPortal
+          ? "z-50 rounded-lg border border-border bg-surface-raised p-1 shadow-lg"
+          : "absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg"
+      }
+    >
+      {items.map((item) => {
+        const itemClass = item.danger
+          ? "block w-full rounded-md px-2 py-1.5 text-left text-xs text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+          : "block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-50";
+        if (item.href) {
+          return (
+            <a
+              key={item.key}
+              role="menuitem"
+              href={item.href}
+              className={itemClass}
+              onClick={() => onOpenChange(null)}
+            >
+              {item.label}
+            </a>
+          );
+        }
+        return (
+          <button
+            key={item.key}
+            type="button"
+            role="menuitem"
+            disabled={item.disabled}
+            className={itemClass}
+            onClick={() => {
+              onOpenChange(null);
+              item.onClick?.();
+            }}
+          >
+            {item.label}
+          </button>
+        );
+      })}
+      {children}
+    </div>
+  ) : null;
+
   return (
     <div ref={rootRef} className={`relative inline-block text-left ${className}`}>
       <button
+        ref={buttonRef}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -69,48 +162,7 @@ export function RowActionsMenu({
       >
         {label}
       </button>
-      {open ? (
-        <div
-          id={menuId}
-          role="menu"
-          className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg"
-        >
-          {items.map((item) => {
-            const itemClass = item.danger
-              ? "block w-full rounded-md px-2 py-1.5 text-left text-xs text-rose-600 hover:bg-rose-50 disabled:opacity-50"
-              : "block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-50";
-            if (item.href) {
-              return (
-                <a
-                  key={item.key}
-                  role="menuitem"
-                  href={item.href}
-                  className={itemClass}
-                  onClick={() => onOpenChange(null)}
-                >
-                  {item.label}
-                </a>
-              );
-            }
-            return (
-              <button
-                key={item.key}
-                type="button"
-                role="menuitem"
-                disabled={item.disabled}
-                className={itemClass}
-                onClick={() => {
-                  onOpenChange(null);
-                  item.onClick?.();
-                }}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-          {children}
-        </div>
-      ) : null}
+      {menuPortal && menu ? createPortal(menu, document.body) : menu}
     </div>
   );
 }

@@ -47,6 +47,7 @@ from app.modules.procurement.router import router as procurement_router
 from app.modules.facility.router import router as facility_router
 from app.modules.manufacturing.router import router as manufacturing_router
 from app.modules.marketing.router import router as marketing_public_router
+from app.modules.document_verify.public_router import router as document_verify_public_router
 from app.modules.saved_views.router import router as saved_views_router
 from app.modules.global_search.router import router as global_search_router
 from app.modules.notifications.router import router as notifications_router
@@ -99,6 +100,7 @@ from app.common.external_audit_middleware import ExternalAuditMiddleware
 from app.common.gzip_middleware import SelectiveGZipMiddleware
 from app.common.request_logger import RequestLoggingMiddleware
 from app.common.rate_limiter import TenantRateLimitMiddleware
+from app.common.legacy_verify_redirect import LegacyVerifyRedirectMiddleware
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
@@ -232,6 +234,8 @@ app = FastAPI(
 
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(ExternalAuditMiddleware)
+# Added before the rate limiter so it runs inside it: legacy QR scans still count against the per-IP limit.
+app.add_middleware(LegacyVerifyRedirectMiddleware, api_v1_prefix=settings.api_v1_prefix)
 app.add_middleware(TenantRateLimitMiddleware)
 # Compress JSON responses >= 1 KB when the client accepts gzip. Added before CORS so CORS stays outermost.
 app.add_middleware(SelectiveGZipMiddleware, minimum_size=1024)
@@ -256,6 +260,7 @@ app.include_router(external_supplier_router, prefix="/api/external")
 app.include_router(files_router, prefix=settings.api_v1_prefix)
 app.include_router(profile_router, prefix=settings.api_v1_prefix)
 app.include_router(marketing_public_router, prefix=settings.api_v1_prefix)
+app.include_router(document_verify_public_router, prefix=settings.api_v1_prefix)
 app.include_router(saved_views_router, prefix=settings.api_v1_prefix)
 app.include_router(global_search_router, prefix=settings.api_v1_prefix)
 app.include_router(notifications_router, prefix=settings.api_v1_prefix)

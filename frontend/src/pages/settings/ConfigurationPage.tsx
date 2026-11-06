@@ -271,6 +271,31 @@ export function ConfigurationPage() {
           </label>
         </div>
 
+        <div className="rounded-lg border border-border bg-surface-subtle p-3">
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.public_document_verification_enabled === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  public_document_verification_enabled: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Public document verification (QR codes)</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                When enabled, anyone who scans the QR code on a printed voucher, delivery challan, gate pass, GRN,
+                material issue, process order or warehouse transfer sees a &quot;Genuine document&quot; page without
+                signing in. It shows your company name, document type and number, date, status and the amount (or
+                quantity). When off, scans show &quot;Not found&quot;. Proforma invoice QR codes are always public.
+              </span>
+            </span>
+          </label>
+        </div>
+
         <div className="rounded-lg border border-border bg-surface-subtle p-3" hidden={!showTier("more")}>
           <label className="flex items-start gap-3 text-sm text-text-secondary">
             <input

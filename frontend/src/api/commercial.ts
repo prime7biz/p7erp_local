@@ -65,6 +65,7 @@ import type {
   ProformaInvoiceUpdate,
   ProformaPaymentSummary,
   ProformaVerifyResponse,
+  PublicDocumentVerification,
   RequisitionDetail,
   RequisitionInput,
   RequisitionSummary,
@@ -538,7 +539,13 @@ export const commercialApi = {
   },
   async verifyProformaToken(token: string): Promise<ProformaVerifyResponse> {
     const q = new URLSearchParams({ token });
-    return requestPublic<ProformaVerifyResponse>(`/api/v1/commercial/verify?${q.toString()}`);
+    return requestPublic<ProformaVerifyResponse>(`/api/v1/public/verify/proforma?${q.toString()}`);
+  },
+  /** Public (no login) check of a printed voucher / inventory document QR code. */
+  async verifyDocumentPublic(verificationId: string): Promise<PublicDocumentVerification> {
+    return requestPublic<PublicDocumentVerification>(
+      `/api/v1/public/verify/document/${encodeURIComponent(verificationId)}`,
+    );
   },
   async listBtbLcs(params?: {
     status?: string;

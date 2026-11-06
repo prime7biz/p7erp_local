@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
-import secrets
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from typing import Literal
 
@@ -14,7 +11,6 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.orm_numeric import decimal_to_money_response, decimal_to_rate_response
 from app.models.finance import (
     AccountGroup,
     AccountingPeriod,
@@ -24,6 +20,7 @@ from app.models.finance import (
     VoucherType,
 )
 from app.modules.finance.system_coa_seeding_service import resolve_system_ledger
+from app.modules.finance.voucher_signature import apply_voucher_signature, voucher_signature_payload
 from app.modules.finance.voucher_controls import (
     allocate_series_voucher_number,
     finalize_posted_voucher_metadata,
@@ -51,39 +48,8 @@ def _to_float(v: object) -> float:
     return float(str(v).replace(",", "").strip() or 0)
 
 
-def _voucher_signature_payload(voucher: Voucher, lines: list[VoucherLine]) -> dict:
-    serialized_lines = [
-        {
-            "account_id": line.account_id,
-            "cost_center_id": line.cost_center_id,
-            "entry_type": line.entry_type,
-            "amount": decimal_to_money_response(line.amount),
-            "base_amount": decimal_to_money_response(line.base_amount),
-            "currency": line.currency,
-            "exchange_rate": decimal_to_rate_response(line.exchange_rate),
-            "notes": line.notes,
-        }
-        for line in lines
-    ]
-    return {
-        "voucher_id": voucher.id,
-        "voucher_number": voucher.voucher_number,
-        "voucher_type": voucher.voucher_type,
-        "voucher_date": voucher.voucher_date.isoformat(),
-        "status": voucher.status,
-        "currency": voucher.currency,
-        "base_currency": voucher.base_currency,
-        "exchange_rate": decimal_to_rate_response(voucher.exchange_rate),
-        "lines": serialized_lines,
-    }
-
-
-def _apply_internal_signature(voucher: Voucher, lines: list[VoucherLine]) -> None:
-    canonical = json.dumps(_voucher_signature_payload(voucher, lines), sort_keys=True, separators=(",", ":"))
-    voucher.signature_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-    voucher.verification_id = voucher.verification_id or f"VFY-{secrets.token_hex(8).upper()}"
-    voucher.signed_at = datetime.utcnow()
-    voucher.signed_by_system = True
+_voucher_signature_payload = voucher_signature_payload
+_apply_internal_signature = apply_voucher_signature
 
 
 async def _validate_posting_account(db: AsyncSession, tenant_id: int, account_id: int) -> ChartOfAccount:

@@ -208,5 +208,12 @@ export function getSeoForPath(pathname: string): SeoMeta {
     };
   }
 
+  if (pathname.startsWith("/verify/document")) {
+    return {
+      title: "Verify Document – Prime7 ERP",
+      description: "Check that a printed voucher or inventory document is genuine.",
+    };
+  }
+
   return NOT_FOUND_SEO;
 }

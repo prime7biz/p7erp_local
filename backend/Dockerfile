@@ -8,15 +8,22 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc libpq-dev && rm -rf /var/lib/apt/lists/*
 
-# CPU-only PyTorch is installed BEFORE requirements.txt. sentence-transformers depends on torch;
+# CPU-only PyTorch is installed BEFORE requirements-ai.txt. sentence-transformers depends on torch;
 # if torch is not already present, pip pulls the CUDA build from PyPI (+ ~4 GB of nvidia-* and
 # triton wheels) that this CPU-only server never uses. Bump TORCH_VERSION deliberately.
+# INSTALL_AI_EXTRAS=true (default; CI and production) installs torch + requirements-ai.txt.
+# Dev compose sets false: much smaller, faster image (embedding search falls back to keyword search).
 ARG TORCH_VERSION=2.15.0
-COPY requirements.txt .
+ARG INSTALL_AI_EXTRAS=true
+COPY requirements.txt requirements-ai.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install "torch==${TORCH_VERSION}" --index-url https://download.pytorch.org/whl/cpu \
-    && pip install -r requirements.txt \
-    && python -c "import torch, sys; v = torch.__version__; print('torch', v); sys.exit(0 if '+cpu' in v else 'CUDA torch was installed; expected CPU-only build')" \
+    if [ "$INSTALL_AI_EXTRAS" = "true" ]; then \
+        pip install "torch==${TORCH_VERSION}" --index-url https://download.pytorch.org/whl/cpu \
+        && pip install -r requirements.txt -r requirements-ai.txt \
+        && python -c "import torch, sys; v = torch.__version__; print('torch', v); sys.exit(0 if '+cpu' in v else 'CUDA torch was installed; expected CPU-only build')"; \
+    else \
+        pip install -r requirements.txt; \
+    fi \
     && ! pip list 2>/dev/null | grep -Ei '^(nvidia-|triton )'
 
 # Unprivileged runtime user (added after pip so the big dependency layer stays cached).
@@ -34,11 +41,13 @@ COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY . .
 # Code stays root-owned (read-only for the app user); only runtime data folders are writable.
 # Bytecode is compiled here because the app user cannot write __pycache__ next to the code.
+# Dev compose sets COMPILE_BYTECODE=false: its bind mount (./backend:/app) hides these files anyway.
+ARG COMPILE_BYTECODE=true
 RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
     && chmod 0755 /usr/local/bin/docker-entrypoint.sh \
     && mkdir -p /app/media /app/backups \
     && chown app:app /app/media /app/backups \
-    && python -m compileall -q -j 0 app alembic
+    && if [ "$COMPILE_BYTECODE" = "true" ]; then python -m compileall -q -j 0 app alembic; fi
 
 # true = entrypoint drops from root to the "app" user; false = run as root (old behaviour).
 ENV RUN_AS_NON_ROOT=true

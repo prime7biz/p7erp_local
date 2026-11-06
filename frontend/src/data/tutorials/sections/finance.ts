@@ -559,12 +559,12 @@ It shows **live hints from your posted vouchers (last 12 months)** and never sav
       id: "fin-voucher-approval-queue",
       title: "Step-by-step: check, approve and post vouchers",
       summary:
-        "Use the Voucher Approval Queue to find submitted vouchers and move them through Check, Recommend, Approve and Post — or reject, reverse or cancel posting with a reason.",
+        "Use the Voucher Approval Queue to see every voucher's approval stage, then move vouchers through Check, Recommend, Approve and Post — or reject, reverse or cancel posting with a reason.",
       content: `## Overview
 
-The **Voucher Approval Queue** (\`/app/accounts/vouchers/approval-queue\`) lists every voucher that is waiting in the approval chain — status **SUBMITTED**, **CHECKED**, **RECOMMENDED** or **APPROVED** — so reviewers can work in one place.
+The **Voucher Approval Queue** (\`/app/accounts/vouchers/approval-queue\`) lists **every voucher** in the date range with its approval stage — from **Draft** to **Posted**, plus **Rejected**, **Cancelled** and **Reversed**. Each row shows a coloured status, a six-step progress bar (Draft → Submitted → Checked → Recommended → Approved → Posted) and what happens next, e.g. *Preparer to submit*, *Waiting for Check* or *Done (in books)*.
 
-**Who uses it:** finance managers and admins (checkers and approvers). Accountants use it to see where their voucher is.
+**Who uses it:** finance managers and admins (checkers and approvers) use **Waiting for approval** as their work list. Accountants use **All** or **Draft** to see where their voucher is.
 
 ## Before you start
 
@@ -574,13 +574,15 @@ The **Voucher Approval Queue** (\`/app/accounts/vouchers/approval-queue\`) lists
 ## Steps
 
 1. Open **Finance → Transactions → Voucher Approvals** (or **Approval queue** on the Vouchers page).
-2. Choose a status in **All Queue Statuses** (Submitted, Checked, Recommended, Approved) to narrow the list.
-3. Check the two dates. They start at **the last 3 months** — move the From date back if a voucher seems missing.
-4. Use the search box to find a voucher by number, reference or description.
-5. Click the **voucher number** (or **Actions → View details**) and read the lines, narration and **Approval Progress**.
-6. Back in the queue, open **Actions** and click the next step. Only the allowed step is shown: **Check** → **Recommend** → **Approve** → **Post**, or **Reject**.
-7. For **Reject**, **Cancel**, **Reverse** and **Cancel posting** a box asks for a reason. Type a short, clear reason and confirm — it is saved in the voucher's **History**.
-8. Use **Print Queue**, **Export CSV** or **Refresh** at the top when needed.
+2. Click a status button above the filters: **All**, **Waiting for approval**, **Draft**, **Rejected**, **Posted** or **Cancelled / Reversed**. Each button shows how many vouchers it holds. Reviewers usually work from **Waiting for approval** (Submitted, Checked, Recommended and Approved).
+3. To narrow to one stage (for example only **Checked**), pick it in the status box next to the search.
+4. Check the two dates. They start at **the last 3 months** — move the From date back if a voucher seems missing.
+5. Use the search box to find a voucher by number, reference or description.
+6. Read the **Status & progress** column: the bar shows how far the voucher has gone and the line under it says who acts next.
+7. Click the **voucher number** (or **Actions → View details**) and read the lines, narration and **Approval Progress**.
+8. Back in the queue, open **Actions** and click the next step. Only the allowed step is shown: **Submit** (drafts), **Check** → **Recommend** → **Approve** → **Post**, or **Reject**.
+9. For **Reject**, **Cancel**, **Reverse** and **Cancel posting** a box asks for a reason. Type a short, clear reason and confirm — it is saved in the voucher's **History**.
+10. Use **Print Current Page**, **Export CSV** or **Refresh** when needed. **Export CSV** includes every voucher that matches the filters, on all pages.
 
 ## What happens next
 
@@ -600,7 +602,7 @@ The **Voucher Approval Queue** (\`/app/accounts/vouchers/approval-queue\`) lists
 
 ## Common problems
 
-- **"No pending vouchers in approval queue for this filter."** → widen the dates or choose **All Queue Statuses**. Drafts are not in the queue until someone clicks **Submit**.
+- **"No vouchers between … and …"** → widen the dates or click **All**. A new voucher starts as **Draft**; it appears under **Waiting for approval** only after someone clicks **Submit**.
 - **No Approve / Post in Actions** → your role is not manager or admin.
 - **Posting fails with a period error** → ask finance to open the accounting period for the voucher date (or for today when reversing).
 - **Budget exceeded / near limit** banner on the voucher → a budget control is active; a manager with budget override permission must decide.`,
@@ -628,8 +630,8 @@ The **Voucher Approval Queue** (\`/app/accounts/vouchers/approval-queue\`) lists
           poster: "/tutorials/videos/fin-approval-queue-tour-poster.jpg",
           title: "Tour of the voucher approval queue",
           caption:
-            "Filter the queue by status and date, see where the workflow actions are, then open a voucher's Approval Progress and History. Nothing is approved in the demo.",
-          durationSeconds: 54,
+            "Read each voucher's stage and progress bar, use the status buttons (Waiting for approval is the reviewer's list), see where the workflow actions are, then open a voucher's Approval Progress and History. Nothing is approved in the demo.",
+          durationSeconds: 63,
         },
       ],
       infographics: [
@@ -694,7 +696,7 @@ Every voucher can be printed or saved as PDF. The printout shows the company, vo
 ## What happens next
 
 - Only the voucher sheets are printed — the menu and buttons are hidden automatically.
-- Anyone can scan the QR code with a phone to check that the voucher is genuine.
+- Anyone can scan the QR code with a phone to check that the voucher is genuine. It opens a public **Genuine document** page (no sign-in) with your company name, voucher number, date, status and amount — once an admin turns on **Public document verification** in **Settings → Configuration**. While it is off, scans show **Not found**.
 - **Signed** = **Yes** in the voucher list means the system has digitally signed it.
 
 ## Tips

@@ -16,14 +16,9 @@ import { GlPostingsPanel } from "@/components/inventory/GlPostingsPanel";
 import { InventoryDocumentPrintSheets } from "@/components/print/InventoryDocumentPrintSheets";
 import { PrintPreviewModal } from "@/components/print/PrintPreviewModal";
 import { logApiError } from "@/utils/logApiError";
+import { publicVerifyUrl } from "@/utils/verifyPrintUrl";
 
 const STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "RELEASED"];
-
-function verifyUrl(verificationId: string | null | undefined) {
-  if (!verificationId) return "";
-  const o = typeof window !== "undefined" ? window.location.origin : "";
-  return `${o}/api/v1/inventory/documents/verify/${encodeURIComponent(verificationId)}`;
-}
 
 export function GatePassDetailPage() {
   const navigate = useNavigate();
@@ -198,7 +193,7 @@ export function GatePassDetailPage() {
     return <div className="p-6 text-sm text-text-muted">{error || "Loading…"}</div>;
   }
 
-  const vUrl = verifyUrl(row.verification_id);
+  const vUrl = publicVerifyUrl(row.verification_id);
 
   return (
     <div className="min-w-0 space-y-6">

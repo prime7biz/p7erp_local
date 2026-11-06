@@ -26,6 +26,8 @@ services:
       retries: 5
 
   # Optional connection pooler (enable with USE_PGBOUNCER=true on backend). Local/staging only until validated.
+  # 2026-11-06 local check: intermittent HTTP 500 (InvalidSQLStatementNameError) under concurrent
+  # requests with USE_PGBOUNCER=true. Keep it off (docs/perf_baseline_2026-05-13.md).
   pgbouncer:
     image: edoburu/pgbouncer:1.22.1-p0
     restart: always
@@ -86,6 +88,11 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      # Dev-only speedups (worker and beat reuse this image). CI and production builds keep the
+      # Dockerfile defaults (true). Set INSTALL_AI_EXTRAS=true in .env for local embedding search.
+      args:
+        INSTALL_AI_EXTRAS: ${INSTALL_AI_EXTRAS:-false}
+        COMPILE_BYTECODE: ${COMPILE_BYTECODE:-false}
     restart: always
     environment:
       APP_ENV: ${APP_ENV:-development}
@@ -254,20 +261,23 @@ services:
           cpus: "0.5"
           memory: 256M
 
+  # Dev only: Vite dev server with hot reload (edits show up without rebuilding the image).
+  # Production uses the prebuilt Nginx image from frontend/Dockerfile.prod (docker-compose.prod.yml).
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.prod
+      dockerfile: Dockerfile
       args:
-        # Empty = same-origin /api/* via container nginx (no browser CORS; 300s proxy timeouts).
+        # Empty = same-origin /api/* through the Vite dev proxy (no browser CORS).
         - VITE_API_BASE_URL=${VITE_API_BASE_URL:-}
         - VITE_ALLOWED_HOSTS=${VITE_ALLOWED_HOSTS:-localhost,127.0.0.1}
     restart: always
     ports:
-      - "5173:80"
+      - "5173:5173"
     environment:
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
       VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      VITE_DEV_PROXY_TARGET: ${VITE_DEV_PROXY_TARGET:-http://backend:8000}
       CHOKIDAR_USEPOLLING: true
       CHOKIDAR_INTERVAL: 1000
     volumes:
@@ -277,7 +287,9 @@ services:
       backend:
         condition: service_healthy
 
+  # Optional platform admin UI: start it with `docker compose --profile admin up -d`.
   frontend-admin:
+    profiles: ["admin"]
     build:
       context: ./frontend-admin
       dockerfile: Dockerfile.prod

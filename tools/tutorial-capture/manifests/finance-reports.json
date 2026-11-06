@@ -33,6 +33,15 @@
       "actions": [{ "fill": ["input[type=date] >> nth=0", "2026-01-01"], "waitMs": 2500 }]
     },
     {
+      "name": "fin-rpt-daybook-actions",
+      "route": "/app/accounts/reports/day-book",
+      "waitMs": 2500,
+      "actions": [
+        { "fill": ["input[type=date] >> nth=0", "2026-01-01"], "waitMs": 2500 },
+        { "click": "table tbody tr >> nth=0 >> role=button[name=\"Actions\"]", "waitMs": 1200 }
+      ]
+    },
+    {
       "name": "fin-rpt-finance-config",
       "route": "/app/settings/config",
       "waitMs": 2500,

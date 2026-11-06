@@ -237,15 +237,20 @@ export const financeApi = {
   },
   async listVouchersWithTotal(params?: {
     status_filter?: string;
+    /** Match any of these statuses (cannot be combined with `status_filter`). */
+    status_filters?: readonly string[];
     from_date?: string;
     to_date?: string;
     search?: string;
     voucher_id?: number;
     limit?: number;
     offset?: number;
+    sort?: "id" | "date";
   }): Promise<ListWithTotal<VoucherResponse>> {
     const q = new URLSearchParams();
     if (params?.status_filter) q.set("status_filter", params.status_filter);
+    for (const s of params?.status_filters ?? []) q.append("status_filters", s);
+    if (params?.sort) q.set("sort", params.sort);
     if (params?.from_date) q.set("from_date", params.from_date);
     if (params?.to_date) q.set("to_date", params.to_date);
     if (params?.search != null && params.search.trim() !== "") q.set("search", params.search.trim());

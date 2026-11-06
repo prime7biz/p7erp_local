@@ -1,0 +1,9 @@
+# Optional AI extras (large: pulls torch, transformers, scipy).
+# Installed when the image is built with INSTALL_AI_EXTRAS=true (the Dockerfile default, used by
+# CI and production). Local dev compose sets it to false for faster rebuilds.
+# Install CPU-only torch BEFORE this file (see backend/Dockerfile), otherwise pip pulls the CUDA build.
+#
+# Without these packages the app still starts: embedding search falls back to keyword search,
+# and forecasts use the built-in trend formula instead of scikit-learn.
+sentence-transformers>=3.3.0
+scikit-learn>=1.5.0,<1.7

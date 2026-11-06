@@ -18,6 +18,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.database import AsyncSessionLocal, safe_async_session_rollback
 from app.modules.inventory import stock_snapshot_service

@@ -22,7 +22,7 @@ Use this when you run the stack with **`docker compose`** (see repo root `docker
 
    If the service name differs, use: `docker compose ps` and replace `backend` with your API service name.
 
-3. **API URL:** Backend is exposed at **`http://localhost:8000`** by default. The frontend container typically maps **`http://localhost:5173`** → nginx port 80 (see `docker-compose.yml`).
+3. **API URL:** Backend is exposed at **`http://localhost:8000`** by default. The dev frontend container runs the **Vite dev server** on **`http://localhost:5173`** and proxies `/api`, `/health` and `/media` to the backend (`VITE_DEV_PROXY_TARGET=http://backend:8000`), just like the production Nginx does.
 
 4. **When to re-run migrations:** After pulling code that adds Alembic revisions (e.g. new files under `backend/alembic/versions/`). The compose file notes that migrations are **manual** in dev.
 
@@ -46,6 +46,45 @@ Use this when you run the stack with **`docker compose`** (see repo root `docker
 - **Full clean rebuild** (slow; use rarely): `docker compose build --no-cache`
 
 - **Optional helper:** `scripts/docker-rebuild.ps1` runs a normal cached build and restarts the stack.
+
+### Dev-only speedups in `docker-compose.yml`
+
+These only affect **local development**. Production pulls prebuilt images (`docker-compose.prod.yml`), and CI builds them with the Dockerfile defaults, so the live server is unchanged.
+
+| Setting | Dev value | CI / production | What it does |
+|---------|-----------|-----------------|--------------|
+| `frontend` service | `frontend/Dockerfile` (Vite dev server, port 5173) | `frontend/Dockerfile.prod` (Nginx) | Saved frontend changes hot-reload in the browser. No image rebuild needed. |
+| `frontend-admin` service | `profiles: ["admin"]` (off) | built in CI (unchanged) | Start it only when needed: `docker compose --profile admin up -d` |
+| `INSTALL_AI_EXTRAS` build arg | `false` | `true` | `false` skips CPU torch + `backend/requirements-ai.txt` (sentence-transformers, scikit-learn). |
+| `COMPILE_BYTECODE` build arg | `false` | `true` | `false` skips `python -m compileall` (the dev bind mount hides the image code anyway). |
+
+**What changes in a slim dev backend (`INSTALL_AI_EXTRAS=false`):** the app starts and works normally, but AI semantic search falls back to keyword (BM25) search, an admin AI re-index fails with a clear "build with INSTALL_AI_EXTRAS=true" error, and AI forecasts use the built-in trend formula instead of scikit-learn (numbers can differ slightly from production). To get the full AI set locally, add to the repo-root `.env` and rebuild:
+
+```powershell
+# .env (repo root)
+INSTALL_AI_EXTRAS=true
+```
+
+```powershell
+docker compose build backend
+docker compose up -d backend worker beat
+```
+
+**First switch to the Vite dev frontend:** if the container log shows `vite: not found`, the old `frontend_node_modules` volume is empty or stale. Recreate it once:
+
+```powershell
+docker compose rm -sf frontend
+docker volume rm p7erp_local_frontend_node_modules
+docker compose up -d --build frontend
+```
+
+### Antivirus HTTPS scanning breaks Docker downloads (Windows)
+
+If `pip` or `npm` inside Docker fails with `CERTIFICATE_VERIFY_FAILED`, `InvalidChunkLength`, `Read timed out`, or npm's `Exit handler never called!`, check whether your antivirus scans encrypted (HTTPS) traffic. For example, **Norton Web/Mail Shield** replaces every site certificate with "Norton Web/Mail Shield Root" and can corrupt large package downloads, so builds become very slow or fail.
+
+- Check: `docker run --rm node:20-alpine node -e "require('tls').connect(443,'pypi.org',{servername:'pypi.org',rejectUnauthorized:false},function(){console.log(this.getPeerCertificate().issuer)})"`. If the issuer mentions your antivirus, it is intercepting.
+- Fix (your choice, on your PC): turn off encrypted-traffic scanning in the antivirus, or exclude Docker Desktop / WSL from it, then rebuild.
+- **Do not** add the antivirus certificate or `--trusted-host` to the repo Dockerfiles. Images built in CI and production must not trust a local scanner.
 
 ## B1 – Backend build
 
@@ -132,7 +171,7 @@ The API and DB can be fine while the browser still shows nothing. Check in order
 
 1. **Correct app and login role** — Main ERP lists live under **`http://localhost:5173`** (not `5174/admin`). On the **unified login**, choose **Staff** or **Tenant admin**, enter **company code `LAKH806201`**, then your user email/password. **Customer** / **Financier** roles use the **portal** (`/portal/...`), not the full `/app` merchandising lists.
 2. **Clear stale session** — In the browser, open DevTools → **Application** → **Local storage** for your site. Remove **`p7_token`** and **`p7_tenant_id`**, then log in again. A wrong or missing tenant id breaks `X-Tenant-Id` on API calls.
-3. **Verify the network call** — DevTools → **Network** → reload **Orders**. You should see **`GET .../api/v1/orders/paginated`** with status **200** and JSON **`total`** greater than 0. **401** means log in again. If the request goes to the **wrong host** (not the machine running Docker), set a repo-root **`.env`** for Compose with `VITE_API_BASE_URL=` (empty) and **`docker compose build frontend && docker compose up -d`** so the SPA uses **same-origin** `/api/...` (nginx proxies to `backend:8000`).
+3. **Verify the network call** — DevTools → **Network** → reload **Orders**. You should see **`GET .../api/v1/orders/paginated`** with status **200** and JSON **`total`** greater than 0. **401** means log in again. If the request goes to the **wrong host** (not the machine running Docker), set a repo-root **`.env`** for Compose with `VITE_API_BASE_URL=` (empty) and run **`docker compose up -d frontend`** so the SPA uses **same-origin** `/api/...` (the Vite dev proxy forwards it to `backend:8000`).
 4. **Financier portal data** — Log in as **Financier** with the same company code, email **`financier.portal.demo@p7erp.local`** (password from first seed create), after **`seed_financier_full_demo.py`** has been run.
 
 ## Quick reference

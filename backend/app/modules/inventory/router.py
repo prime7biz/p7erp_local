@@ -61,6 +61,7 @@ from app.modules.inventory.document_qr_service import (
     backfill_signatures_for_tenant,
     inventory_doc_signatories,
     list_gl_postings_for_inventory_doc,
+    resign_inventory_document,
     sign_delivery_challan,
     sign_gate_pass,
     sign_goods_receiving,
@@ -4541,9 +4542,13 @@ async def update_delivery_challan_status(
             )
         )
         row.signed_by_user_id = user.id
+        # The QR hash includes status, so it must be computed after the status flips to POSTED.
+        row.status = next_status
         sign_delivery_challan(row, lines, oids_for_sign)
 
     row.status = next_status
+    if not posting_now and row.verification_id:
+        await resign_inventory_document(db, tenant.id, "DELIVERY_CHALLAN", row)
     await db.commit()
     await db.refresh(row)
     if posting_now:
@@ -4651,9 +4656,11 @@ async def update_enhanced_gate_pass_status(
         if next_status == "RELEASED" and prev_status != "RELEASED":
             if row.signed_by_user_id is None:
                 row.signed_by_user_id = user.id
-            sign_gate_pass(row)
     if "guard_acknowledged" in body:
         row.guard_acknowledged = bool(body["guard_acknowledged"])
+    # Status and guard acknowledgement are both in the QR hash; sign after both are set.
+    if row.verification_id or (row.status or "").upper() == "RELEASED":
+        sign_gate_pass(row)
     await db.commit()
     await db.refresh(row)
     return row
@@ -6587,8 +6594,9 @@ async def post_warehouse_transfer(
         await db.flush()
         await finalize_movement_fifo(db, tenant.id, in_mv, in_unit_cost=uc)
     row.signed_by_user_id = user.id
-    sign_warehouse_transfer(row, lines)
+    # The QR hash includes status, so it must be computed after the status flips to POSTED.
     row.status = "POSTED"
+    sign_warehouse_transfer(row, lines)
     await db.commit()
     await db.refresh(row)
     lines_result = await db.execute(

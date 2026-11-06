@@ -24,7 +24,8 @@ def get_embedding_model():
                     from sentence_transformers import SentenceTransformer
                 except ImportError as exc:  # pragma: no cover
                     raise RuntimeError(
-                        "sentence-transformers is not installed. Add it to requirements.txt and reinstall."
+                        "sentence-transformers is not installed. Build the backend image with "
+                        "INSTALL_AI_EXTRAS=true (installs requirements-ai.txt)."
                     ) from exc
                 logger.info("Loading embedding model %s on CPU", MODEL_NAME)
                 _model = SentenceTransformer(MODEL_NAME, device="cpu")

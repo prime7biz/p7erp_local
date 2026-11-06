@@ -77,6 +77,14 @@ Tuned via host `.env` / compose env (code defaults in `backend/app/config.py`; p
 
 **Rollback:** set flags to `false` / `0` and restart backend.
 
+## 5b. Toggle status (validated locally 2026-11-06)
+
+Full results: [perf_baseline_2026-05-13.md](perf_baseline_2026-05-13.md) → *Toggle validation*.
+
+- `stock_snapshot_reads`: ready (tenant flag, no compose change). Enable per tenant only after `--diff-check` prints `diff_rows=0`.
+- `API_CACHE_ENABLED`: works (identical responses, ~23% faster on the cached endpoints), but `docker-compose.prod.yml` does not pass it to the container yet, so a live `.env` line alone does nothing.
+- `USE_PGBOUNCER`: **do not enable** — intermittent HTTP 500 (`InvalidSQLStatementNameError`) under concurrent requests until `backend/app/database.py` is fixed and load-tested.
+
 ## 6. Staged rollout checklist
 
 1. Merge to a feature branch → PR → review.

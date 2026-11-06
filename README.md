@@ -162,6 +162,9 @@ See **`docs/BUILD_VERIFICATION.md`** for the B1–B3 checklist.
 - Logs in the terminal: `docker compose up` (no `-d`).
 - Frontend: http://localhost:5173 | Backend docs: http://localhost:8000/docs
 - Migrations when schema changes: `docker compose exec backend alembic upgrade head`
+- **Hot reload:** the dev `frontend` container runs the Vite dev server (`frontend/Dockerfile`), so saved `.tsx` changes show up in the browser without rebuilding. Production still serves the Nginx build from `frontend/Dockerfile.prod`.
+- **Platform admin UI** (http://localhost:5174/admin/) is optional: `docker compose --profile admin up -d`.
+- **Smaller dev backend image:** dev builds skip the large AI packages (`INSTALL_AI_EXTRAS=false`). For local embedding search, add `INSTALL_AI_EXTRAS=true` to the repo-root `.env` and run `docker compose build backend`. Details: `docs/BUILD_VERIFICATION.md`.
 
 ---
 
@@ -240,13 +243,13 @@ Each tenant is one of: **manufacturer** | **buying_house** | **both**. This cont
 
 | Task | Command |
 |------|---------|
-| Backend deps | `cd backend` → `pip install -r requirements.txt` |
+| Backend deps | `cd backend` → `pip install -r requirements.txt` (AI extras: `-r requirements-ai.txt`, CPU torch first) |
 | Migrations | `cd backend` → `alembic upgrade head` |
 | Backend run (dev) | `cd backend` → `uvicorn app.main:app --reload --port 8000` |
 | Backend run (prod) | `uvicorn app.main:app --host 0.0.0.0 --port 8000` |
 | Frontend build | `cd frontend` → `npm ci` → `npm run build` |
 | Frontend dev | `cd frontend` → `npm run dev` |
-| Docker dev | `docker compose up` |
+| Docker dev | `docker compose up` (admin UI too: `docker compose --profile admin up`) |
 | Docker migrations | `docker compose exec backend alembic upgrade head` |
 
 ---

@@ -190,9 +190,17 @@ VAT_BIN = "vat_bin"
 # Benchmark roadmap item 15: Tally-style "save = post" for small teams (default OFF; maker-checker stays the default).
 DIRECT_POST_VOUCHERS = "direct_post_vouchers"
 
+# Printed QR codes on vouchers and inventory documents open a public, no-login verification page
+# (company, document number, date, status, amount). Default OFF: an admin opts in per tenant.
+PUBLIC_DOCUMENT_VERIFICATION_ENABLED = "public_document_verification_enabled"
+
 
 def is_direct_post_vouchers_enabled(feature_flags: Any) -> bool:
     return _flag_true(feature_flags, DIRECT_POST_VOUCHERS)
+
+
+def is_public_document_verification_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, PUBLIC_DOCUMENT_VERIFICATION_ENABLED)
 
 
 def _flag_true(feature_flags: Any, key: str) -> bool:

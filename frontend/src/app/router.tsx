@@ -52,6 +52,9 @@ const SupportPage = lazy(() => import("@/pages/public/SupportPage").then((m) => 
 const VerifyProformaPage = lazy(() =>
   import("@/pages/VerifyProformaPage").then((m) => ({ default: m.VerifyProformaPage })),
 );
+const VerifyDocumentPage = lazy(() =>
+  import("@/pages/VerifyDocumentPage").then((m) => ({ default: m.VerifyDocumentPage })),
+);
 const GlobalAiChatWidget = lazy(() =>
   import("@/components/GlobalAiChatWidget").then((m) => ({ default: m.GlobalAiChatWidget })),
 );
@@ -273,6 +276,7 @@ export function AppRouter() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/signup" element={<SignUp />} />
         <Route path="/verify/proforma" element={<VerifyProformaPage />} />
+        <Route path="/verify/document/:verificationId" element={<VerifyDocumentPage />} />
         <Route path="/portal/customer/login" element={<PortalLegacyLoginRedirect role="customer" />} />
         <Route
           path="/portal/customer/accept-invite"

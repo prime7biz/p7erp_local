@@ -190,6 +190,12 @@
       "waitMs": 3000
     },
     {
+      "name": "wf-public-verify-genuine",
+      "route": "/verify/document/VFY-7D01D3684ECDAEE1",
+      "waitMs": 2500,
+      "waitFor": "text=Genuine document"
+    },
+    {
       "name": "wf-voucher-print-signatures",
       "route": "/app/accounts/vouchers/print?voucher_id=15",
       "waitMs": 3500,

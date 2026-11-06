@@ -388,7 +388,7 @@ The path is: **Financial Statements → Trial Balance → Ledger Activity → Vo
 
 ### Shortcuts
 
-- **Day Book** (\`/app/accounts/reports/day-book\`) → click a **Voucher** number to open it directly.
+- **Day Book** (\`/app/accounts/reports/day-book\`) → click a **Voucher** number to open it directly, or use the row's **Actions** menu (**View Details**, **Edit** for drafts / rejected vouchers, **Print / PDF**).
 - **Exception Reports → Negative cash / bank** → click the ledger to open its Ledger Activity.
 - **Exception Reports → Overdue bills** → click the bill number to open its voucher (or the Bills list).
 
@@ -443,6 +443,13 @@ The path is: **Financial Statements → Trial Balance → Ledger Activity → Vo
           ],
         },
       ],
+      images: [
+        {
+          src: `${SCREENS}/fin-rpt-daybook-actions.jpg`,
+          alt: "Day Book voucher list with the row Actions menu open showing View Details and Print / PDF",
+          caption: "Actions on a Day Book row: View Details, Print / PDF, and Edit for draft or rejected vouchers.",
+        },
+      ],
       content: `## Overview
 
 - **Day Book** (\`/app/accounts/reports/day-book\`) is the register of vouchers by date. Use it every morning to see what was entered yesterday, including vouchers created automatically by inventory, payroll and payment runs.
@@ -460,8 +467,12 @@ The path is: **Financial Statements → Trial Balance → Ledger Activity → Vo
 1. Open **Finance → Reports → Day Book**.
 2. Set the two date boxes (**from** and **to**). By default they cover the current month up to today.
 3. Narrow the list if needed: **All Types** (voucher type, e.g. PAYMENT, RECEIPT, JOURNAL), **All Groups**, **All Accounts**, or type part of a party name or reference in **Party/Ref contains...**.
-4. Read the columns **Voucher**, **Date**, **Type**, **Status**, **Description**, **Amount**. The **Total** row adds up the amounts.
-5. Click a **Voucher** number to open it.
+4. Read the columns **Voucher**, **Date**, **Type**, **Status**, **Description**, **Amount**. The **Total** row adds up the amounts. Long descriptions are shortened — point at one to read it in full. The heading shows how many vouchers are listed.
+5. Click a **Voucher** number to open it, or click **Actions** on the row:
+   - **View Details** — opens the voucher page.
+   - **Edit** — only for **DRAFT** or **REJECTED** vouchers; opens the voucher form.
+   - **Print / PDF** — opens the voucher print page.
+6. **Print**, **Export CSV** and **Export Excel** leave out the Actions column.
 
 ### Read one account in Ledger Activity
 
@@ -488,7 +499,7 @@ If your company uses bill-wise party ledgers, **Finance → Transactions → Par
 
 ## Common problems
 
-- **Day Book is empty** → the date range has no vouchers. Move the first date back (the default is only the current month).
+- **"No vouchers found for this period."** → the date range has no vouchers. Move the first date back (the default is only the current month).
 - **Ledger Activity shows a different closing balance from the Trial Balance** → the **Opening** on Ledger Activity is the account's opening balance only, not vouchers before **From**. Set **From** to your first voucher date.
 - **Party Ledgers is not in my sidebar** → the feature is off for your company. Use **AR/AP Aging** or **Bills** instead, or ask an admin.`,
     },

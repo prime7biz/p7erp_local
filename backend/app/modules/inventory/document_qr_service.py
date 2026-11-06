@@ -8,7 +8,11 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.document_signature import apply_document_signature, verify_payload_against_hash
+from app.common.document_signature import (
+    apply_document_signature,
+    compute_signature_hash,
+    verify_payload_against_hash,
+)
 from app.common.signatories import SignatoryEntry, build_signatories
 from app.models.finance import Voucher, VoucherLine
 from app.models.inventory import (
@@ -314,6 +318,45 @@ async def rebuild_payload_for_verify(
     return None
 
 
+async def resign_inventory_document(db: AsyncSession, tenant_id: int, doc_type: str, row: Any) -> None:
+    """Re-sign from the exact payload verification rebuilds, so the two can never drift apart."""
+    payload = await rebuild_payload_for_verify(db, tenant_id, doc_type, row.id)
+    if payload is not None:
+        apply_document_signature(row, payload)
+
+
+# Older builds signed some documents before their final status (and gate pass acknowledgement)
+# was saved, so their stored hash carries a stale status. Only that field may differ.
+_LEGACY_STALE_STATUSES: dict[str, tuple[str, ...]] = {
+    "DELIVERY_CHALLAN": ("DRAFT", "SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED", "POSTED", "REJECTED"),
+    "ENHANCED_GATE_PASS": ("DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "RELEASED"),
+    "WAREHOUSE_TRANSFER": ("DRAFT",),
+}
+
+
+def matches_legacy_signature(doc_type: str, stored_hash: str | None, payload: dict[str, Any]) -> bool:
+    statuses = _LEGACY_STALE_STATUSES.get(doc_type)
+    if not stored_hash or not statuses:
+        return False
+    for status in statuses:
+        variant = {**payload, "status": status}
+        if compute_signature_hash(variant) == stored_hash:
+            return True
+        if doc_type == "ENHANCED_GATE_PASS":
+            flipped = {**variant, "guard_acknowledged": not payload.get("guard_acknowledged")}
+            if compute_signature_hash(flipped) == stored_hash:
+                return True
+    return False
+
+
+def payload_signature_is_valid(doc_type: str, stored_hash: str | None, payload: dict[str, Any]) -> tuple[bool, str]:
+    """Return (is_valid, recalculated_hash), accepting the known legacy stale-status hashes."""
+    is_valid, recalc = verify_payload_against_hash(stored_hash, payload)
+    if not is_valid and matches_legacy_signature(doc_type, stored_hash, payload):
+        is_valid = True
+    return is_valid, recalc
+
+
 async def find_doc_by_verification_id(
     db: AsyncSession,
     tenant_id: int,
@@ -578,7 +621,7 @@ async def verify_inventory_document(
     payload = await rebuild_payload_for_verify(db, tenant_id, doc_type, row.id)
     if payload is None:
         return None
-    is_valid, recalc = verify_payload_against_hash(getattr(row, "signature_hash", None), payload)
+    is_valid, recalc = payload_signature_is_valid(doc_type, getattr(row, "signature_hash", None), payload)
     code = getattr(row, "challan_code", None) or getattr(row, "gate_pass_code", None) or getattr(
         row, "grn_code", None
     ) or getattr(row, "issue_code", None) or getattr(row, "process_number", None) or getattr(

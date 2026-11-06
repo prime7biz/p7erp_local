@@ -51,8 +51,9 @@ export const workflowSection: TutorialSection = {
         },
         {
           src: "/tutorials/screens/wf-voucher-approval-queue.jpg",
-          alt: "Voucher Approval Queue page with search, queue status filter, date range, Print Queue, Export CSV and Refresh",
-          caption: "Quick link Voucher Approvals: the finance-only queue with date range (last 3 months by default).",
+          alt: "Voucher Approval Queue page with search, status filter, date range, print, Export CSV and Refresh",
+          caption:
+            "Quick link Voucher Approvals: every voucher with its approval stage (last 3 months by default). Click Waiting for approval for the reviewer's work list.",
         },
       ],
       content: `## Overview
@@ -238,6 +239,12 @@ Approving means you take responsibility: your name and signature print on the do
               imageSrc: "/tutorials/screens/wf-voucher-print-signatures.jpg",
               imageAlt: "Printed voucher with QR code, Verification ID and Prepared By, Checked By, Approved By and Posted By signature blocks",
             },
+            {
+              title: "Anyone scans the QR",
+              body: "A phone opens the public **Genuine document** page — no sign-in — once an admin turns on **Public document verification** in **Settings → Configuration**.",
+              imageSrc: "/tutorials/screens/wf-public-verify-genuine.jpg",
+              imageAlt: "Public Genuine document page showing company, voucher number, date, status, amount and Verification ID",
+            },
           ],
         },
       ],
@@ -276,7 +283,15 @@ If a voucher is **rejected** and sent back to draft, the earlier Checked / Recom
 
 Printed vouchers and inventory documents (delivery challan, gate pass, GRN, material issue, process order, warehouse transfer) carry a **QR code** (*Scan to verify*) and a **Verification ID**. They tie the paper to the record in P7 ERP.
 
-To check a paper copy, open the same document in the app, click **Print** to see its print preview, and compare the **Verification ID**. If the IDs match, the paper came from P7 ERP.
+Scanning the QR code with any phone opens a public page — no sign-in needed — once an admin turns on **Public document verification** in **Settings → Configuration** (it is off until then). The page shows:
+
+- **Genuine document** (green) with your company name, document type and number, date, status and the amount (vouchers) or total quantity (stock documents);
+- **Document changed after signing** (red) if the record no longer matches its signature — do not rely on that paper;
+- **Not found** if the code is unknown or public verification is off.
+
+QR codes printed before this page existed still work: a phone opening the old link is sent to the new page.
+
+You can also check a paper copy inside the app: open the same document, click **Print** to see its print preview, and compare the **Verification ID**.
 
 Proforma invoices have their own public verification link that buyers can open without signing in.
 
@@ -294,7 +309,7 @@ Proforma invoices have their own public verification link that buyers can open w
 
 - **My block is blank on the print** → you have not done that step (someone else did), or you have no signature image. The name and date still print; upload an image in **My Signature**.
 - **"Image is too large (max 2 MB)."** → crop or save as a smaller JPG.
-- **Scanning the QR code on a phone shows an error or raw text** → the link needs a signed-in P7 ERP session. Compare the **Verification ID** in the app instead.`,
+- **Scanning the QR code shows "Not found"** → an admin has not turned on **Public document verification** in **Settings → Configuration**, or the code was mistyped. Compare the **Verification ID** in the app instead.`,
       tags: ["signature", "digital signature", "approval", "print", "voucher", "delivery challan", "gate pass", "GRN", "QR"],
       keywords: [
         "sign",

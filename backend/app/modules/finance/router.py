@@ -5,7 +5,6 @@ import calendar
 import hashlib
 import json
 import logging
-import secrets
 from collections import defaultdict
 from io import StringIO
 from datetime import date, datetime, timedelta
@@ -83,6 +82,7 @@ from app.common.tenant import require_tenant
 from app.config import get_settings
 from app.database import get_db, safe_async_session_rollback
 from app.modules.finance.auto_posting_service import AutoPostingLine, create_system_voucher
+from app.modules.finance.voucher_signature import apply_voucher_signature, voucher_signature_payload
 from app.modules.finance.exposure_service import build_maturity_ladder, compute_master_lc_exposure
 from app.models import (
     AccountGroup,
@@ -244,39 +244,8 @@ async def _lookup_exchange_rate(
     )
 
 
-def _voucher_signature_payload(voucher: Voucher, lines: list[VoucherLine]) -> dict:
-    serialized_lines = [
-        {
-            "account_id": line.account_id,
-            "cost_center_id": line.cost_center_id,
-            "entry_type": line.entry_type,
-            "amount": decimal_to_money_response(line.amount),
-            "base_amount": decimal_to_money_response(line.base_amount),
-            "currency": line.currency,
-            "exchange_rate": decimal_to_rate_response(line.exchange_rate),
-            "notes": line.notes,
-        }
-        for line in lines
-    ]
-    return {
-        "voucher_id": voucher.id,
-        "voucher_number": voucher.voucher_number,
-        "voucher_type": voucher.voucher_type,
-        "voucher_date": voucher.voucher_date.isoformat(),
-        "status": voucher.status,
-        "currency": voucher.currency,
-        "base_currency": voucher.base_currency,
-        "exchange_rate": decimal_to_rate_response(voucher.exchange_rate),
-        "lines": serialized_lines,
-    }
-
-
-def _apply_internal_signature(voucher: Voucher, lines: list[VoucherLine]) -> None:
-    canonical_payload = json.dumps(_voucher_signature_payload(voucher, lines), sort_keys=True, separators=(",", ":"))
-    voucher.signature_hash = hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest()
-    voucher.verification_id = voucher.verification_id or f"VFY-{secrets.token_hex(8).upper()}"
-    voucher.signed_at = datetime.utcnow()
-    voucher.signed_by_system = True
+_voucher_signature_payload = voucher_signature_payload
+_apply_internal_signature = apply_voucher_signature
 
 
 def _add_months(base_date: date, months: int) -> date:
@@ -2384,6 +2353,10 @@ async def upsert_voucher_type(
 async def list_vouchers(
     response: Response,
     status_filter: str | None = Query(default=None),
+    status_filters: list[str] | None = Query(
+        default=None,
+        description="Repeat to match any of several statuses (e.g. ?status_filters=SUBMITTED&status_filters=CHECKED)",
+    ),
     from_date: date | None = Query(default=None),
     to_date: date | None = Query(default=None),
     search: str | None = Query(
@@ -2401,9 +2374,14 @@ async def list_vouchers(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    multi_statuses = sorted({s.strip().upper() for s in (status_filters or []) if s and s.strip()})
+    if status_filter and multi_statuses:
+        raise HTTPException(status_code=400, detail="Use either status_filter or status_filters, not both")
     filters = [Voucher.tenant_id == tenant.id]
     if status_filter:
         filters.append(Voucher.status == status_filter.strip().upper())
+    if multi_statuses:
+        filters.append(Voucher.status.in_(multi_statuses))
     if from_date:
         filters.append(Voucher.voucher_date >= from_date)
     if to_date:

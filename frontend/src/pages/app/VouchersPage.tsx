@@ -16,6 +16,7 @@ import {
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
+import { RowActionsMenu } from "@/components/app/RowActionsMenu";
 import { VoucherActionReasonModal } from "@/components/vouchers/VoucherActionReasonModal";
 import { VoucherEntryAssistPanel } from "@/components/vouchers/VoucherEntryAssistPanel";
 import { formatDrCr, formatShortDate } from "@/components/vouchers/voucherAssistFormat";
@@ -1380,27 +1381,24 @@ export function VouchersPage() {
                       <td className="px-3 py-2 text-right font-medium">{amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
                       <td className="px-3 py-2">{row.signed_by_system ? <span className="text-status-success-foreground">Yes</span> : <span className="text-text-muted">No</span>}</td>
                       <td className="px-3 py-2">
-                        <div className="relative" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            type="button"
-                            className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
-                            onClick={() => setOpenActionsId((prev) => (prev === row.id ? null : row.id))}
-                          >
-                            Actions
-                          </button>
-                          {openActionsId === row.id ? (
-                            <div className="absolute right-0 z-10 mt-1 w-40 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
-                              <button type="button" className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => navigate(`/app/accounts/vouchers/${row.id}`)}>View Details</button>
-                              <button type="button" className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => startEdit(row)}>Edit</button>
-                              <button type="button" className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => navigate(`/app/accounts/vouchers/print?voucher_id=${row.id}`)}>Print / PDF</button>
-                              {(availableActionMap[row.id] ?? []).map((action) => (
-                                <button key={action} type="button" className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => void takeAction(row.id, action)}>
-                                  {ACTION_LABEL[action] ?? action}
-                                </button>
-                              ))}
-                              <button type="button" className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-danger-foreground hover:bg-status-danger-subtle" onClick={() => void handleDelete(row.id)}>Delete</button>
-                            </div>
-                          ) : null}
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <RowActionsMenu
+                            menuPortal
+                            rowId={row.id}
+                            openId={openActionsId}
+                            onOpenChange={(id) => setOpenActionsId(id == null ? null : Number(id))}
+                            items={[
+                              { key: "view", label: "View Details", onClick: () => navigate(`/app/accounts/vouchers/${row.id}`) },
+                              { key: "edit", label: "Edit", onClick: () => startEdit(row) },
+                              { key: "print", label: "Print / PDF", onClick: () => navigate(`/app/accounts/vouchers/print?voucher_id=${row.id}`) },
+                              ...(availableActionMap[row.id] ?? []).map((action) => ({
+                                key: `wf-${action}`,
+                                label: ACTION_LABEL[action] ?? action,
+                                onClick: () => void takeAction(row.id, action),
+                              })),
+                              { key: "delete", label: "Delete", danger: true, onClick: () => void handleDelete(row.id) },
+                            ]}
+                          />
                         </div>
                       </td>
                     </tr>

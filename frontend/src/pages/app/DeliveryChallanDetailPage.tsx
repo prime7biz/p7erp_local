@@ -20,16 +20,10 @@ import { InventoryDocumentPrintSheets } from "@/components/print/InventoryDocume
 import { PrintPreviewModal } from "@/components/print/PrintPreviewModal";
 import { fetchInventoryItemPage, hydrateInventoryItem } from "@/lib/remoteSelectFetchers";
 import { logApiError } from "@/utils/logApiError";
+import { publicVerifyUrl } from "@/utils/verifyPrintUrl";
 import { getWarehousesCached } from "@/lib/masterData";
 
 const STATUSES = ["DRAFT", "SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED", "POSTED", "REJECTED"];
-
-function verifyUrlFromPath(path: string | null | undefined): string {
-  if (!path) return "";
-  if (path.startsWith("http")) return path;
-  const o = typeof window !== "undefined" ? window.location.origin : "";
-  return `${o}${path.startsWith("/") ? "" : "/"}${path}`;
-}
 
 function newIdempotencyKey(challanId: number) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -352,9 +346,7 @@ export function DeliveryChallanDetailPage() {
     );
   }
 
-  const vUrl = verifyUrlFromPath(
-    challan.verification_id ? `/api/v1/inventory/documents/verify/${encodeURIComponent(challan.verification_id)}` : "",
-  );
+  const vUrl = publicVerifyUrl(challan.verification_id);
 
   const createInvoice = async (opts: { allowSplit?: boolean; key?: string }) => {
     if (!challan) return;

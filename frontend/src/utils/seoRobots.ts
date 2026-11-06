@@ -22,6 +22,7 @@ const NOINDEX_EXACT = new Set([
 export function getRobotsMetaContent(pathname: string): string {
   if (pathname.startsWith("/app")) return ROBOTS_NOINDEX;
   if (pathname.startsWith("/portal")) return ROBOTS_NOINDEX;
+  if (pathname.startsWith("/verify/document")) return ROBOTS_NOINDEX;
   if (NOINDEX_EXACT.has(pathname)) return ROBOTS_NOINDEX;
 
   const resourceMatch = pathname.match(/^\/resources\/([^/]+)$/);

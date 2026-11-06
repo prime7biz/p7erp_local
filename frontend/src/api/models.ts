@@ -10566,11 +10566,28 @@ export interface ProformaInvoiceForPrint {
 export interface ProformaVerifyResponse {
   valid: boolean;
   company_name?: string | null;
+  issued_by?: string | null;
   reference?: string | null;
   invoice_date?: string | null;
   amount?: number | null;
   currency?: string | null;
   message?: string | null;
+}
+
+/** Public QR verification result (no login). Only what is printed on the paper. */
+export interface PublicDocumentVerification {
+  is_valid: boolean;
+  document_type: string;
+  document_label: string;
+  document_number: string | null;
+  document_date: string | null;
+  status: string | null;
+  company_name: string;
+  amount: string | null;
+  currency: string | null;
+  quantity: string | null;
+  line_count: number | null;
+  signed_at: string | null;
 }
 
 export interface BtbLcRow {

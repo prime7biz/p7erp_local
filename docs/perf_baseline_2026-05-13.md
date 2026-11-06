@@ -76,14 +76,65 @@ Capture procedure (do this before adding more indexes):
 | 4 | _(pending live capture)_ | Order related counts | — | — | Parallel/multi-count SQL |
 | 5 | _(pending live capture)_ | Merch control tower | — | — | Count fan-out |
 
+**Production capture without any config change** (read-only; `pg_stat_statements` is already preloaded by `docker-compose.prod.yml`). Run on the server, then fill the table above:
+
+```bash
+cd /home/primeadmin/p7erp_local
+PSQL='docker compose -f docker-compose.prod.yml exec -T postgres sh -c'
+# One time (idempotent):
+$PSQL 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;"'
+# Optional: start a clean measurement window (only resets statistics, no data change):
+$PSQL 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT pg_stat_statements_reset();"'
+# After a normal working day - top 15 by total time:
+$PSQL 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT calls, round(total_exec_time) AS total_ms, round(mean_exec_time) AS mean_ms, left(query, 100) AS query FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 15;"'
+```
+
+**Important (production env pass-through):** `docker-compose.prod.yml` only passes the variables it lists into the backend container; the server `.env` is used for `${...}` substitution, not loaded inside the container. `PERF_TIMING_ENABLED`, `API_CACHE_ENABLED` and `USE_PGBOUNCER` are **not** listed today, so putting them in the live `.env` has **no effect**. Using them in production first needs pass-through lines (for example `API_CACHE_ENABLED: ${API_CACHE_ENABLED:-false}`) added to the backend environment in `docker-compose.prod.yml`, which is a production compose change and should be its own reviewed release. `pg_stat_statements` and the tenant flag `stock_snapshot_reads` need no compose change.
+
+### Local dev measurement (2026-11-06) - not a production baseline
+
+Local demo tenant `LAKH806201` has very little data (41 vouchers, 72 stock movements), so these numbers only show per-request overhead. Seven requests per endpoint, first one discarded as warm-up, direct to the backend on `:8000`:
+
+| Endpoint | Median ms | Max ms |
+|----------|-----------|--------|
+| `GET /api/v1/merch/control-tower/summary` | 111 | 123 |
+| `GET /api/v1/orders/paginated` | 101 | 118 |
+| `GET /api/v1/finance/vouchers` | 86 | 130 |
+| `GET /api/v1/inventory/stock-summary` | 77 | 98 |
+| `GET /api/v1/inventory/stock-summary/overview` | 49 | 75 |
+| `GET /api/v1/finance/account-groups/hierarchy` | 47 | 50 |
+| `GET /api/v1/inventory/stock-summary/by-warehouse` | 46 | 54 |
+| `GET /api/v1/compliance/tax-config` | 41 | 56 |
+| `GET /api/v1/inventory/stock-summary/by-group` | 37 | 41 |
+
+Locally every single SQL statement took under 2 ms; most of the time is framework work per request (auth, tenant lookup, middleware). The statement with the highest total time was the `INSERT INTO audit_logs` written for every request (64 inserts for 63 requests). On production, check its share in the `pg_stat_statements` output above.
+
+### Toggle validation (2026-11-06, local Docker)
+
+Each toggle was switched on, compared with off (same tenant, same user, response bodies hashed), then switched back.
+
+| Toggle | Result | Production readiness |
+|--------|--------|----------------------|
+| `API_CACHE_ENABLED=true` | Identical responses; tax-config and account-group hierarchy median 35 ms to 27 ms (about 23% faster); Redis keys `cache:tenant:<id>:...` created. | Safe, but needs the compose pass-through above before it can be turned on in production. Rollback: `false` + restart backend. |
+| `stock_snapshot_reads` (tenant flag) | Rebuild `rows_written=21 diff_rows=0`; all four stock-summary endpoints return identical bodies; no speed difference with 72 movements (benefit grows with movement volume). | Ready: no compose change. Per tenant: rebuild with `--diff-check`, enable only when `diff_rows=0`. Rollback: remove the flag. |
+| `USE_PGBOUNCER=true` | **Fails under concurrency**: 5 of 20 concurrent logins returned HTTP 500 (`asyncpg.exceptions.InvalidSQLStatementNameError`, prepared statements in PgBouncer transaction mode), even with one uvicorn worker. Same load with direct Postgres: 0 errors. | **Do not enable.** Needs a separate code fix in `backend/app/database.py` (unique prepared statement names / statement cache off) plus a load test first. |
+| DB pool tuning (`DB_POOL_SIZE` / `DB_MAX_OVERFLOW`) | Not changed: no `QueuePool limit` warnings locally. | Only if production logs show `QueuePool limit ... reached`; keep the budget under `PG_MAX_CONNECTIONS` (see `docs/DEPLOYMENT_PROCESS.md`). |
+
 ## 5b. Stock snapshot rollout (ops)
 
 Feature flag: `tenants.feature_flags.stock_snapshot_reads` (default **off**).
 
 ```powershell
-# Rebuild snapshot for one tenant, then compare
+# Rebuild snapshot for one tenant, then compare (local)
 docker compose exec backend python scripts/rebuild_stock_balance_snapshot.py --tenant-id <id> --diff-check
 ```
+
+```bash
+# Same on the production server (as the app user so nothing becomes root-owned)
+docker compose -f docker-compose.prod.yml exec -u app backend python scripts/rebuild_stock_balance_snapshot.py --tenant-id <id> --diff-check
+```
+
+Enable only when the output shows `diff_rows=0`.
 
 Then set `stock_snapshot_reads: true` on that tenant’s `feature_flags` JSON. Rollback: set flag back to `false` (see [PERF_ROLLBACK_RUNBOOK.md](PERF_ROLLBACK_RUNBOOK.md)).
 

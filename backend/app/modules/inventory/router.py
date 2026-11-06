@@ -673,18 +673,18 @@ async def _fifo_layer_qty_value_map(
     """Map (item_id, warehouse_id) -> (qty_remaining, value). Exhausted layers are skipped in SQL.
 
     ``pairs`` limits the scan to those (item_id, warehouse_id) keys (e.g. one report page).
+    With ``as_of_date`` the qty/value is what FIFO held on that date (not today's remaining qty).
     """
+    if as_of_date is not None:
+        return await stock_report_queries.fifo_qty_value_map_as_of(
+            db, tenant_id, as_of_date, list(pairs) if pairs is not None else None
+        )
     layer = InventoryCostLayer
     stmt = (
         select(layer.item_id, layer.warehouse_id, layer.qty_remaining, layer.unit_cost)
         .where(layer.tenant_id == tenant_id, layer.qty_remaining > 0)
         .order_by(layer.id)
     )
-    if as_of_date is not None:
-        stmt = stmt.where(
-            layer.layer_date.is_not(None),
-            layer.layer_date <= as_of_date,
-        )
     if pairs is not None:
         wanted = sorted({(int(i), int(w) if w is not None else -1) for i, w in pairs})
         if not wanted:
@@ -766,7 +766,7 @@ async def _positive_stock_lines_grouped(
     ``limit`` / ``offset`` page over the groups (all groups when ``limit`` is None).
     """
     balances = await stock_report_queries.load_stock_balance_lines(
-        db, tenant.id, tenant.feature_flags, positive_only=True
+        db, tenant.id, tenant.feature_flags, positive_only=True, as_of_date=as_of_date
     )
     by_key: dict[int | None, list[stock_report_queries.StockBalanceLine]] = defaultdict(list)
     for s in balances:
@@ -1575,11 +1575,17 @@ class StockValuationRow(BaseModel):
 
 
 class StockValuationOut(BaseModel):
-    """Valuation using FIFO layers (qty_remaining × unit_cost); falls back to default_cost if no layers."""
+    """Valuation using FIFO layers (qty_remaining × unit_cost); falls back to default_cost if no layers.
+
+    ``total_value`` covers every line (all pages); ``page_total_value`` only the returned ``rows``.
+    """
 
     method: str = "fifo"
     total_value: float
     rows: list[StockValuationRow]
+    page_total_value: float = 0.0
+    total_count: int = 0
+    as_of_date: date | None = None
 
 
 class StockDashboardOut(BaseModel):
@@ -2698,6 +2704,19 @@ async def create_purchase_order(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    row = await add_purchase_order_rows(db, tenant, body)
+    await commit_handling_duplicate_document_code(db)
+    await db.refresh(row)
+    items_result = await db.execute(select(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == row.id))
+    return _purchase_order_to_out(row, list(items_result.scalars().all()))
+
+
+async def add_purchase_order_rows(db: AsyncSession, tenant: Tenant, body: PurchaseOrderBody) -> PurchaseOrder:
+    """Validate and add a purchase order with its lines (flushed, NOT committed).
+
+    Callers that must save something else in the same transaction (e.g. the requisition -> PO link)
+    use this directly and commit once at the end.
+    """
     await ensure_owned(db, BtbLc, body.btb_lc_id, tenant.id, "BTB LC")
     await ensure_owned(db, Bom, body.source_bom_id, tenant.id, "BOM")
     await ensure_all_owned(
@@ -2770,10 +2789,8 @@ async def create_purchase_order(
         ld = line.model_dump()
         ld["warehouse_id"] = wh_id
         db.add(PurchaseOrderItem(tenant_id=tenant.id, purchase_order_id=row.id, **ld))
-    await commit_handling_duplicate_document_code(db)
-    await db.refresh(row)
-    items_result = await db.execute(select(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == row.id))
-    return _purchase_order_to_out(row, list(items_result.scalars().all()))
+    await flush_handling_duplicate_document_code(db)
+    return row
 
 
 @router.post("/purchase-orders/generate-from-bom/{bom_id}")
@@ -3764,19 +3781,29 @@ async def stock_valuation(
 ):
     _ensure_tenant(user, tenant)
     page = await stock_report_queries.load_stock_balance_lines(
-        db, tenant.id, tenant.feature_flags, limit=limit, offset=offset
+        db, tenant.id, tenant.feature_flags, limit=limit, offset=offset, as_of_date=as_of_date
     )
     fifo_map = await _fifo_layer_qty_value_map(
         db, tenant.id, as_of_date, pairs=[(s.item_id, s.warehouse_id) for s in page]
     )
     out_rows: list[StockValuationRow] = []
-    total = 0.0
+    page_total = 0.0
     for s in page:
         line = _inventory_line_from_balance(s, fifo_map)
-        total += line.line_value
+        page_total += line.line_value
         out_rows.append(StockValuationRow(**line.model_dump()))
     out_rows.sort(key=lambda r: (r.item_code, r.warehouse_name or ""))
-    return StockValuationOut(method="fifo", total_value=round(total, 2), rows=out_rows)
+    total_value, total_count = await stock_report_queries.stock_valuation_totals(
+        db, tenant.id, tenant.feature_flags, as_of_date=as_of_date
+    )
+    return StockValuationOut(
+        method="fifo",
+        total_value=total_value,
+        rows=out_rows,
+        page_total_value=round(page_total, 2),
+        total_count=total_count,
+        as_of_date=as_of_date,
+    )
 
 
 @router.post("/fifo-rebuild")
@@ -7008,18 +7035,44 @@ async def bulk_receive_grn(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    # Plain ids: after a rollback the ORM objects are expired and touching them would fail.
+    tenant_id = tenant.id
+    user_id = user.id
     out: list[dict] = []
-    for gid in body.ids:
+    for gid in list(dict.fromkeys(body.ids)):
+        # Each GRN runs inside its own savepoint; a successful receive commits everything so far.
+        savepoint = await db.begin_nested()
         try:
             res = await _apply_grn_receive_goods(db, tenant, user, gid)
             out.append({"id": gid, "ok": True, "grn_code": res.grn_code})
+            continue
         except HTTPException as e:
-            # Each GRN commits on success; drop this one's half-applied changes before the next.
-            await safe_async_session_rollback(db)
-            out.append({"id": gid, "ok": False, "detail": e.detail})
+            detail = e.detail
         except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception("bulk GRN receive failed grn=%s tenant=%s", gid, tenant_id)
+            detail = "Receive failed"
+        if savepoint.is_active:
+            await savepoint.rollback()
+        else:
+            # The savepoint is gone (receive already committed, or a DB error ended it): start clean.
             await safe_async_session_rollback(db)
-            out.append({"id": gid, "ok": False, "detail": "Receive failed"})
+            tenant = await db.get(Tenant, tenant_id, populate_existing=True)
+            user = await db.get(User, user_id, populate_existing=True)
+        received_code = (
+            await db.execute(
+                select(GoodsReceiving.grn_code).where(
+                    GoodsReceiving.id == gid,
+                    GoodsReceiving.tenant_id == tenant_id,
+                    GoodsReceiving.status == "RECEIVED",
+                )
+            )
+        ).scalar_one_or_none()
+        if received_code is not None and detail != "GRN already received":
+            out.append({"id": gid, "ok": True, "grn_code": received_code, "warning": "Received; a follow-up step failed"})
+        else:
+            out.append({"id": gid, "ok": False, "detail": detail})
     return out
 
 

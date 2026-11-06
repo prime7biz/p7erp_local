@@ -240,13 +240,20 @@ async def fifo_on_hand_value(
     *,
     as_of_date: date | None = None,
 ) -> float:
-    """Sum of qty_remaining * unit_cost for open layers (optional as-of by layer_date)."""
-    stmt = select(InventoryCostLayer).where(InventoryCostLayer.tenant_id == tenant_id)
+    """Sum of qty_remaining * unit_cost for open layers.
+
+    With ``as_of_date``: the FIFO value of the stock held on that date (see
+    ``stock_report_queries.fifo_subquery``), not today's remaining layers.
+    """
     if as_of_date is not None:
-        stmt = stmt.where(
-            InventoryCostLayer.layer_date.is_not(None),
-            InventoryCostLayer.layer_date <= as_of_date,
-        )
+        from sqlalchemy import func
+
+        from app.modules.inventory.stock_report_queries import fifo_subquery
+
+        fifo = fifo_subquery(tenant_id, as_of_date)
+        total = (await db.execute(select(func.coalesce(func.sum(fifo.c.fifo_value), 0)))).scalar()
+        return round(float(total or 0), 4)
+    stmt = select(InventoryCostLayer).where(InventoryCostLayer.tenant_id == tenant_id)
     layers = list((await db.execute(stmt)).scalars().all())
     total = 0.0
     for layer in layers:

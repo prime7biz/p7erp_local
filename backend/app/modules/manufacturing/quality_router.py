@@ -6,6 +6,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.db_errors import commit_handling_duplicate_document_code
 from app.common.tenant import require_tenant
 from app.database import get_db
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -17,6 +18,7 @@ from app.models import (
     Tenant,
     User,
 )
+from app.modules.manufacturing.codes import next_mfg_code
 from app.modules.manufacturing.schemas import (
     CapaCreate,
     CapaResponse,
@@ -357,8 +359,9 @@ async def create_ncr(
     if body.ncr_code:
         ncr_code = body.ncr_code.strip().upper()
     else:
-        last_id = (await db.execute(select(func.max(ManufacturingNcr.id)).where(ManufacturingNcr.tenant_id == tenant.id))).scalar()
-        ncr_code = f"NCR-{(last_id or 0) + 1:04d}"
+        ncr_code = await next_mfg_code(
+            db, model=ManufacturingNcr, code_column=ManufacturingNcr.ncr_code, tenant_id=tenant.id, prefix="NCR-"
+        )
     row = ManufacturingNcr(
         tenant_id=tenant.id,
         ncr_code=ncr_code,
@@ -371,7 +374,7 @@ async def create_ncr(
         created_by_user_id=user.id,
     )
     db.add(row)
-    await db.commit()
+    await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     return _to_ncr_response(row)
 

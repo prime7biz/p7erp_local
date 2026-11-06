@@ -1169,8 +1169,13 @@ async def create_order_amendment(
 ):
   if user.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
-  order = await db.get(Order, order_id)
-  if not order or order.tenant_id != tenant.id:
+  # Row lock on the order: two amendments saved at the same time must not get the same number.
+  order = (
+    await db.execute(
+      select(Order).where(Order.id == order_id, Order.tenant_id == tenant.id).with_for_update()
+    )
+  ).scalar_one_or_none()
+  if not order:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
   current = await db.execute(
     select(func.max(OrderAmendment.amendment_no)).where(
@@ -1189,7 +1194,7 @@ async def create_order_amendment(
     status=body.status,
   )
   db.add(row)
-  await db.flush()
+  await flush_handling_duplicate_document_code(db)
   await db.refresh(row)
   return row
 

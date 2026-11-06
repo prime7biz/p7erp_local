@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +10,7 @@ from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.tenant import require_tenant
 from app.database import get_db, safe_async_session_rollback
 from app.models import Item, ManufacturingSampleRequest, Order, Tenant, User
+from app.modules.manufacturing.codes import next_mfg_code
 from app.modules.manufacturing.schemas import (
     SampleRequestCreate,
     SampleRequestResponse,
@@ -23,10 +24,6 @@ router = APIRouter(prefix="/manufacturing/samples", tags=["manufacturing-samples
 def _ensure_tenant(user: User, tenant: Tenant) -> None:
     if user.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
-
-
-def _next_code(last_id: int | None) -> str:
-    return f"SMP-{(last_id or 0) + 1:04d}"
 
 
 async def _role_name(db: AsyncSession, user: User, tenant_id: int) -> str:
@@ -106,12 +103,13 @@ async def create_sample_request(
     if body.sample_no and body.sample_no.strip():
         sample_no = body.sample_no.strip()
     else:
-        last_id = (
-            await db.execute(
-                select(func.max(ManufacturingSampleRequest.id)).where(ManufacturingSampleRequest.tenant_id == tenant.id)
-            )
-        ).scalar()
-        sample_no = _next_code(last_id)
+        sample_no = await next_mfg_code(
+            db,
+            model=ManufacturingSampleRequest,
+            code_column=ManufacturingSampleRequest.sample_no,
+            tenant_id=tenant.id,
+            prefix="SMP-",
+        )
 
     row = ManufacturingSampleRequest(
         tenant_id=tenant.id,

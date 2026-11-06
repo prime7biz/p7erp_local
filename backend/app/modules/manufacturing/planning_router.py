@@ -24,6 +24,7 @@ from app.models import (
     Tenant,
     User,
 )
+from app.modules.manufacturing.codes import next_mfg_code
 from app.modules.manufacturing.schemas import (
     CapacityLoadRow,
     MrpRecommendationResponse,
@@ -41,10 +42,6 @@ router = APIRouter(prefix="/manufacturing/planning", tags=["manufacturing-planni
 def _ensure_tenant(user: User, tenant: Tenant) -> None:
     if user.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
-
-
-def _next_code(prefix: str, last_id: int | None) -> str:
-    return f"{prefix}{(last_id or 0) + 1:04d}"
 
 
 def _to_plan_line_response(row: ManufacturingProductionPlanLine) -> ProductionPlanLineResponse:
@@ -149,10 +146,13 @@ async def create_production_plan(
     if body.plan_code:
         plan_code = body.plan_code.strip()
     else:
-        last_id = (
-            await db.execute(select(func.max(ManufacturingProductionPlan.id)).where(ManufacturingProductionPlan.tenant_id == tenant.id))
-        ).scalar()
-        plan_code = _next_code("PLAN-", last_id)
+        plan_code = await next_mfg_code(
+            db,
+            model=ManufacturingProductionPlan,
+            code_column=ManufacturingProductionPlan.plan_code,
+            tenant_id=tenant.id,
+            prefix="PLAN-",
+        )
 
     row = ManufacturingProductionPlan(
         tenant_id=tenant.id,
@@ -163,7 +163,7 @@ async def create_production_plan(
         created_by_user_id=user.id,
     )
     db.add(row)
-    await db.flush()
+    await flush_handling_duplicate_document_code(db)
 
     for line in body.lines:
         item = await db.get(Item, line.item_id)
@@ -186,7 +186,7 @@ async def create_production_plan(
                 priority=line.priority,
             )
         )
-    await db.commit()
+    await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     lines_result = await db.execute(
         select(ManufacturingProductionPlanLine).where(
@@ -205,8 +205,15 @@ async def generate_work_orders(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    plan = await db.get(ManufacturingProductionPlan, plan_id)
-    if not plan or plan.tenant_id != tenant.id:
+    # Row lock on the plan: two "generate" clicks must not both create work orders for the same lines.
+    plan = (
+        await db.execute(
+            select(ManufacturingProductionPlan)
+            .where(ManufacturingProductionPlan.id == plan_id, ManufacturingProductionPlan.tenant_id == tenant.id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if not plan:
         raise HTTPException(status_code=404, detail="Production plan not found")
 
     lines_result = await db.execute(
@@ -229,10 +236,13 @@ async def generate_work_orders(
         )
         if existing.scalars().first():
             continue
-        last_id = (
-            await db.execute(select(func.max(ManufacturingWorkOrder.id)).where(ManufacturingWorkOrder.tenant_id == tenant.id))
-        ).scalar()
-        mo_number = _next_code("MWO-", last_id)
+        mo_number = await next_mfg_code(
+            db,
+            model=ManufacturingWorkOrder,
+            code_column=ManufacturingWorkOrder.mo_number,
+            tenant_id=tenant.id,
+            prefix="MWO-",
+        )
         wo = ManufacturingWorkOrder(
             tenant_id=tenant.id,
             mo_number=mo_number,
@@ -296,8 +306,9 @@ async def run_mrp(
         if not plan or plan.tenant_id != tenant.id:
             raise HTTPException(status_code=404, detail="Production plan not found")
 
-    last_id = (await db.execute(select(func.max(ManufacturingMrpRun.id)).where(ManufacturingMrpRun.tenant_id == tenant.id))).scalar()
-    run_code = _next_code("MRP-", last_id)
+    run_code = await next_mfg_code(
+        db, model=ManufacturingMrpRun, code_column=ManufacturingMrpRun.run_code, tenant_id=tenant.id, prefix="MRP-"
+    )
     run = ManufacturingMrpRun(
         tenant_id=tenant.id,
         run_code=run_code,
@@ -308,7 +319,7 @@ async def run_mrp(
         created_by_user_id=user.id,
     )
     db.add(run)
-    await db.flush()
+    await flush_handling_duplicate_document_code(db)
 
     lines_stmt = select(ManufacturingProductionPlanLine).where(ManufacturingProductionPlanLine.tenant_id == tenant.id)
     if body.plan_id is not None:

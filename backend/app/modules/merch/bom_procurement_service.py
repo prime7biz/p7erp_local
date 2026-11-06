@@ -83,6 +83,22 @@ async def total_po_qty_for_line(db: AsyncSession, tenant_id: int, bom_line_id: i
     return total
 
 
+async def total_po_qty_for_lines(db: AsyncSession, tenant_id: int, bom_line_ids: list[int]) -> dict[int, float]:
+    """Same as ``total_po_qty_for_line`` for many BOM lines in one query: {bom_line_id: ordered qty}."""
+    if not bom_line_ids:
+        return {}
+    r = await db.execute(
+        select(PurchaseOrderItem.source_bom_line_id, PurchaseOrderItem.quantity).where(
+            PurchaseOrderItem.tenant_id == tenant_id,
+            PurchaseOrderItem.source_bom_line_id.in_(bom_line_ids),
+        )
+    )
+    totals: dict[int, float] = {}
+    for line_id, q in r.all():
+        totals[line_id] = totals.get(line_id, 0.0) + _po_qty_float(q)
+    return totals
+
+
 async def total_accepted_for_po_line(
     db: AsyncSession,
     tenant_id: int,
@@ -269,20 +285,33 @@ async def bulk_create_pos_by_vendor(
     bom: Bom,
     lines: list[BomItem],
 ) -> list[tuple[PurchaseOrder, list[PurchaseOrderItem]]]:
-    """One draft PO per distinct preferred_vendor_id; lines grouped."""
+    """One draft PO per distinct preferred_vendor_id; lines grouped.
+
+    The BOM row is locked first and stays locked until the caller commits, so two requests at the
+    same time cannot both order the same remaining quantity. A PO is only created when it gets at
+    least one line (no empty draft POs).
+    """
     from collections import defaultdict
 
-    groups: dict[int | None, list[BomItem]] = defaultdict(list)
+    await db.execute(select(Bom.id).where(Bom.id == bom.id, Bom.tenant_id == tenant_id).with_for_update())
+
     owned_items: set[int] = set()
     item_ids = {ln.item_id for ln in lines if ln.item_id}
     if item_ids:
         owned_items = set(
             (await db.execute(select(Item.id).where(Item.tenant_id == tenant_id, Item.id.in_(item_ids)))).scalars().all()
         )
-    for line in lines:
-        if not line.item_id or line.item_id not in owned_items:
+    candidates = [ln for ln in lines if ln.item_id and ln.item_id in owned_items]
+    already_by_line = await total_po_qty_for_lines(db, tenant_id, [ln.id for ln in candidates])
+
+    # Work out what is still to be ordered before creating any PO header.
+    groups: dict[int | None, list[tuple[BomItem, str]]] = defaultdict(list)
+    for line in candidates:
+        already = already_by_line.get(line.id, 0.0)
+        remaining = quantize_qty(to_qty_decimal(line.required_gross_qty) - to_qty_decimal(already))
+        if remaining <= 0:
             continue
-        groups[line.preferred_vendor_id].append(line)
+        groups[line.preferred_vendor_id].append((line, format_qty(remaining)))
 
     created: list[tuple[PurchaseOrder, list[PurchaseOrderItem]]] = []
     for vid, grp in groups.items():
@@ -317,13 +346,8 @@ async def bulk_create_pos_by_vendor(
         db.add(po)
         await db.flush()
         pois: list[PurchaseOrderItem] = []
-        for line in grp:
-            already = await total_po_qty_for_line(db, tenant_id, line.id)
-            remaining = quantize_qty(to_qty_decimal(line.required_gross_qty) - to_qty_decimal(already))
-            if remaining <= 0:
-                continue
+        for line, qty_str in grp:
             price = str(line.bom_expected_unit_price) if line.bom_expected_unit_price is not None else "0"
-            qty_str = format_qty(remaining)
             poi = PurchaseOrderItem(
                 tenant_id=tenant_id,
                 purchase_order_id=po.id,
@@ -338,6 +362,5 @@ async def bulk_create_pos_by_vendor(
             db.add(poi)
             pois.append(poi)
         await db.flush()
-        if pois:
-            created.append((po, pois))
+        created.append((po, pois))
     return created

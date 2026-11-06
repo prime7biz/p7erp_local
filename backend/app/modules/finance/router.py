@@ -225,20 +225,11 @@ async def _lookup_exchange_rate(
     if latest:
         return max(_to_float(latest.exchange_rate), 0.000001), "manual-rate-table", datetime.utcnow()
 
-    try:
-        import httpx
+    from app.common.fx_rate_cache import get_live_rate
 
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"https://open.er-api.com/v6/latest/{from_code}")
-            response.raise_for_status()
-            payload = response.json()
-        rates = payload.get("rates") if isinstance(payload, dict) else {}
-        raw_rate = rates.get(to_code) if isinstance(rates, dict) else None
-        live_rate = float(raw_rate)
-        if live_rate > 0:
-            return live_rate, "open.er-api.com", datetime.utcnow()
-    except Exception:
-        logger.warning("live FX lookup failed %s->%s", from_code, to_code, exc_info=True)
+    live_rate = await get_live_rate(from_code, to_code)
+    if live_rate:
+        return live_rate, "open.er-api.com", datetime.utcnow()
 
     # A silent 1.0 would book e.g. USD 10,000 as BDT 10,000; make the user supply a rate.
     raise HTTPException(
@@ -2395,6 +2386,9 @@ async def list_vouchers(
     voucher_id: int | None = Query(default=None, description="Exact voucher id filter (e.g. ?voucher_id= from deep link)"),
     limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
+    sort: Literal["id", "date"] = Query(
+        default="id", description="id = newest created first (default); date = newest voucher_date first"
+    ),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -2422,7 +2416,8 @@ async def list_vouchers(
         )
     total = int((await db.execute(select(func.count(Voucher.id)).where(*filters))).scalar() or 0)
     response.headers["X-Total-Count"] = str(total)
-    stmt = select(Voucher).where(*filters).order_by(Voucher.id.desc()).offset(offset).limit(limit)
+    order_cols = (Voucher.voucher_date.desc(), Voucher.id.desc()) if sort == "date" else (Voucher.id.desc(),)
+    stmt = select(Voucher).where(*filters).order_by(*order_cols).offset(offset).limit(limit)
     result = await db.execute(stmt)
     rows = list(result.scalars().all())
     if not rows:

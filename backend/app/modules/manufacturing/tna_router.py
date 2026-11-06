@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +21,7 @@ from app.models import (
     Tenant,
     User,
 )
+from app.modules.manufacturing.codes import next_mfg_code
 from app.modules.manufacturing.schemas import (
     TnaDashboardSummary,
     TnaPlanCreate,
@@ -39,10 +40,6 @@ router = APIRouter(prefix="/manufacturing/tna", tags=["manufacturing-tna"])
 def _ensure_tenant(user: User, tenant: Tenant) -> None:
     if user.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
-
-
-def _next_code(prefix: str, last_id: int | None) -> str:
-    return f"{prefix}{(last_id or 0) + 1:04d}"
 
 
 async def _role_name(db: AsyncSession, user: User, tenant_id: int) -> str:
@@ -164,10 +161,13 @@ async def create_template(
     if body.template_code and body.template_code.strip():
         template_code = body.template_code.strip()
     else:
-        last_id = (
-            await db.execute(select(func.max(ManufacturingTnaTemplate.id)).where(ManufacturingTnaTemplate.tenant_id == tenant.id))
-        ).scalar()
-        template_code = _next_code("TNA-TPL-", last_id)
+        template_code = await next_mfg_code(
+            db,
+            model=ManufacturingTnaTemplate,
+            code_column=ManufacturingTnaTemplate.template_code,
+            tenant_id=tenant.id,
+            prefix="TNA-TPL-",
+        )
     row = ManufacturingTnaTemplate(
         tenant_id=tenant.id,
         template_code=template_code,
@@ -315,10 +315,13 @@ async def create_plan(
     if body.plan_code and body.plan_code.strip():
         plan_code = body.plan_code.strip()
     else:
-        last_id = (
-            await db.execute(select(func.max(ManufacturingTnaPlan.id)).where(ManufacturingTnaPlan.tenant_id == tenant.id))
-        ).scalar()
-        plan_code = _next_code("TNA-PLAN-", last_id)
+        plan_code = await next_mfg_code(
+            db,
+            model=ManufacturingTnaPlan,
+            code_column=ManufacturingTnaPlan.plan_code,
+            tenant_id=tenant.id,
+            prefix="TNA-PLAN-",
+        )
 
     plan = ManufacturingTnaPlan(
         tenant_id=tenant.id,
@@ -331,7 +334,11 @@ async def create_plan(
         created_by_user_id=user.id,
     )
     db.add(plan)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        await safe_async_session_rollback(db)
+        raise HTTPException(status_code=400, detail="Plan code already exists")
 
     latest_planned_date = body.start_date
     for task in template_tasks:

@@ -524,6 +524,23 @@ async def list_employees(
     return [_employee_to_response(r, mask_sensitive=mask) for r in result.scalars().all()]
 
 
+# Must stay above "/employees/{employee_id}", otherwise "export" is parsed as an employee id (422).
+@router.get("/employees/export")
+async def export_employees(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    data = await hr_domain.export_employees_excel(db, tenant.id)
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="employees.xlsx"'},
+    )
+
+
 @router.get("/employees/{employee_id}", response_model=EmployeeResponse)
 async def get_employee(
     employee_id: int,
@@ -1029,22 +1046,6 @@ async def create_employee_status_history(
         remarks=row.remarks,
         changed_by=row.changed_by,
         created_at=row.created_at.isoformat(),
-    )
-
-
-@router.get("/employees/export")
-async def export_employees(
-    tenant: Tenant = Depends(require_tenant),
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    _ensure_user_tenant(user, tenant)
-    await _require_manager_or_admin(db, user, tenant.id)
-    data = await hr_domain.export_employees_excel(db, tenant.id)
-    return StreamingResponse(
-        io.BytesIO(data),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": 'attachment; filename="employees.xlsx"'},
     )
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta
 from io import BytesIO
@@ -845,13 +846,22 @@ async def get_consumption_reconciliation_dashboard_export(
         db=db,
     )
     try:
-        from openpyxl import Workbook
+        from openpyxl import Workbook  # noqa: F401
     except ImportError:
         raise HTTPException(status_code=500, detail="Excel export not available (openpyxl missing)")
+    content = await asyncio.to_thread(_build_dashboard_xlsx, body)
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="consumption_recon_dashboard.xlsx"'},
+    )
+
+
+def _build_dashboard_xlsx(body: ConsumptionReconDashboardResponse) -> bytes:
+    from openpyxl import Workbook
+
     wb = Workbook()
     ws = wb.active
-    if ws is None:
-        raise HTTPException(status_code=500, detail="Workbook error")
     ws.title = "Summary"
     ws.append(["Consumption reconciliation dashboard"])
     ws.append(["Total orders (in scan)", body.summary.total_orders])
@@ -888,12 +898,7 @@ async def get_consumption_reconciliation_dashboard_export(
         )
     buf = BytesIO()
     wb.save(buf)
-    buf.seek(0)
-    return StreamingResponse(
-        buf,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": 'attachment; filename="consumption_recon_dashboard.xlsx"'},
-    )
+    return buf.getvalue()
 
 
 @router.get(
@@ -1031,13 +1036,23 @@ async def get_consumption_reconciliation_export(
     if data is None:
         raise HTTPException(status_code=404, detail="Order not found")
     try:
-        from openpyxl import Workbook
+        from openpyxl import Workbook  # noqa: F401
     except ImportError:
         raise HTTPException(status_code=500, detail="Excel export not available (openpyxl missing)")
+    content = await asyncio.to_thread(_build_order_recon_xlsx, data)
+    safe_code = "".join(c if c.isalnum() or c in "-_" else "_" for c in data.order.order_code)
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="consumption_recon_order_{safe_code}.xlsx"'},
+    )
+
+
+def _build_order_recon_xlsx(data: ConsumptionReconResponse) -> bytes:
+    from openpyxl import Workbook
+
     wb = Workbook()
     ws = wb.active
-    if ws is None:
-        raise HTTPException(status_code=500, detail="Workbook error")
     ws.title = "Reconciliation"
     ws.append(["Order", data.order.order_code, "Style", data.order.style_code, "Qty", data.order.quantity or ""])
     ws.append([])
@@ -1082,10 +1097,4 @@ async def get_consumption_reconciliation_export(
     ws.append(["Cost variance %", data.summary.cost_variance_pct])
     buf = BytesIO()
     wb.save(buf)
-    buf.seek(0)
-    safe_code = "".join(c if c.isalnum() or c in "-_" else "_" for c in data.order.order_code)
-    return StreamingResponse(
-        buf,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="consumption_recon_order_{safe_code}.xlsx"'},
-    )
+    return buf.getvalue()

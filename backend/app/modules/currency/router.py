@@ -271,45 +271,26 @@ FALLBACK_RATES: dict[str, float] = {
 }
 
 
-def _fetch_live_rates_sync(base: str) -> dict:
-    """Synchronous fetch for use in thread."""
-    import json
-    import urllib.request
-    url = f"https://open.er-api.com/v6/latest/{base}"
-    req = urllib.request.Request(url)
-    with urllib.request.urlopen(req, timeout=5) as resp:
-        data = json.loads(resp.read().decode())
-    if data.get("result") != "success":
-        raise ValueError("API returned non-success")
-    return {
-        "rates": data.get("rates", {}),
-        "base": data.get("base_code", base),
-        "source": "open.er-api.com",
-        "fetched_at": data.get("time_last_update_utc", ""),
-        "live": True,
-    }
-
-
 @router.get("/live-rates")
 async def get_live_rates(
     base: str = Query("USD", description="Base currency code"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
 ):
-    """Fetch live rates from open.er-api.com (no key). On failure return fallback rates (PrimeX parity)."""
-    import asyncio
+    """Fetch live rates from open.er-api.com (no key, cached). On failure return fallback rates (PrimeX parity)."""
+    from app.common import fx_rate_cache
+
     _ensure_tenant(user, tenant)
     base = base.upper()
-    try:
-        data = await asyncio.to_thread(_fetch_live_rates_sync, base)
-        return data
-    except Exception as e:
-        all_rates = {"USD": 1.0, **FALLBACK_RATES}
-        return {
-            "rates": all_rates,
-            "base": "USD",
-            "source": "fallback",
-            "fetched_at": "",
-            "live": False,
-            "error": str(e),
-        }
+    data = await fx_rate_cache.get_live_rates(base)
+    if data:
+        return {**data, "source": "open.er-api.com", "live": True}
+    all_rates = {"USD": 1.0, **FALLBACK_RATES}
+    return {
+        "rates": all_rates,
+        "base": "USD",
+        "source": "fallback",
+        "fetched_at": "",
+        "live": False,
+        "error": "Live rates unavailable",
+    }

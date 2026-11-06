@@ -18,6 +18,7 @@ import {
 } from "@/api/client";
 import { chartColorAt } from "@/lib/chartColors";
 import { tenantKey } from "@/lib/queryKeys";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import {
   STALE_DASHBOARD_ATTENTION,
   STALE_DASHBOARD_CUSTOMER_MAP,
@@ -139,13 +140,17 @@ export function useDashboardHome({ dateRange }: UseDashboardHomeOptions) {
   const [promiseRefreshing, setPromiseRefreshing] = useState(false);
   const [promiseLastUpdated, setPromiseLastUpdated] = useState<Date | null>(null);
 
+  const promiseRequest = useLatestRequest();
   const refreshPromiseAndCommercial = useCallback((statuses = "NEW,IN_PROGRESS") => {
+    const token = promiseRequest.begin();
     setPromiseRefreshing(true);
     return Promise.allSettled([
       api.getOrderPromiseSummary({ statuses, limit: 25 }),
       api.getCommercialChangePendingSummary(),
     ])
       .then((results) => {
+        // A newer status filter was chosen while this request was running: keep its result instead.
+        if (!promiseRequest.isCurrent(token)) return;
         if (results[0].status === "fulfilled") {
           setPromiseSummary(results[0].value);
           setPromiseLastUpdated(new Date());
@@ -159,8 +164,10 @@ export function useDashboardHome({ dateRange }: UseDashboardHomeOptions) {
           logApiError("useDashboardHome.commercialPending", results[1].reason);
         }
       })
-      .finally(() => setPromiseRefreshing(false));
-  }, []);
+      .finally(() => {
+        if (promiseRequest.isCurrent(token)) setPromiseRefreshing(false);
+      });
+  }, [promiseRequest]);
 
   const refresh = useCallback(
     (promiseStatuses = "NEW,IN_PROGRESS", options?: { bypassCache?: boolean }) => {

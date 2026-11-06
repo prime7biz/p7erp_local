@@ -126,10 +126,32 @@ export async function request<T>(
     const requestId = res.headers.get("X-Request-Id");
     throw new ApiError(message, res.status, requestId, parsed.code);
   }
+  forgetMasterListsAfterWrite(path, init.method);
   if (res.status === 204) {
     return undefined as T;
   }
   return res.json() as Promise<T>;
+}
+
+/** API path prefix -> cached dropdown list in lib/masterData.ts that a write there makes stale. */
+const MASTER_LIST_PREFIXES: [string, string][] = [
+  ["/api/v1/customers", "customers"],
+  ["/api/v1/inventory/vendors", "vendors"],
+  ["/api/v1/inventory/items", "inventory-items"],
+  ["/api/v1/inventory/warehouses", "warehouses"],
+];
+
+/** After a successful create/update/delete (or a data import), drop the cached dropdown lists. */
+function forgetMasterListsAfterWrite(path: string, method: string | undefined): void {
+  const m = (method ?? "GET").toUpperCase();
+  if (m === "GET" || m === "HEAD") return;
+  if (path.startsWith("/api/v1/data-migration/")) {
+    void queryClient.invalidateQueries({ queryKey: ["master"] });
+    return;
+  }
+  for (const [prefix, kind] of MASTER_LIST_PREFIXES) {
+    if (path.startsWith(prefix)) void queryClient.invalidateQueries({ queryKey: ["master", kind] });
+  }
 }
 
 export async function requestPlatformAdmin<T>(

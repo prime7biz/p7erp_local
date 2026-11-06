@@ -8,6 +8,7 @@ import {
   type UserWithRoleResponse,
 } from "@/api/client";
 import { PasswordFieldInput } from "@/components/auth/PasswordFieldInput";
+import { logApiError } from "@/utils/logApiError";
 
 function userLabel(u: UserWithRoleResponse): string {
   return (u.username && u.username.trim()) || u.email;
@@ -48,7 +49,10 @@ export function UsersPage() {
       const [userRows, roleRows, inviteRows] = await Promise.all([
         api.settingsListUsers(),
         api.settingsListRoles(),
-        api.settingsListStaffInvitations().catch(() => [] as StaffInviteRowResponse[]),
+        api.settingsListStaffInvitations().catch((e) => {
+          logApiError("UsersPage.settingsListStaffInvitations", e);
+          return [] as StaffInviteRowResponse[];
+        }),
       ]);
       setUsers(userRows);
       setRoles(roleRows);

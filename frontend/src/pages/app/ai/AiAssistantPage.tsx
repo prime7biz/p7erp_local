@@ -79,7 +79,8 @@ export function AiAssistantPage() {
       try {
         const data = await api.aiQuickActions();
         setQuickActions(data.items || []);
-      } catch {
+      } catch (e) {
+        logApiError("AiAssistantPage.quickActions", e);
         setQuickActions([]);
       } finally {
         setQuickActionsLoading(false);
@@ -94,7 +95,8 @@ export function AiAssistantPage() {
       try {
         const rows = await api.aiListReportRuns({ limit: 12 });
         setReportRuns(rows);
-      } catch {
+      } catch (e) {
+        logApiError("AiAssistantPage.reportRuns", e);
         setReportRuns([]);
       } finally {
         setReportRunsLoading(false);
@@ -109,7 +111,8 @@ export function AiAssistantPage() {
       try {
         const rows = await api.aiListForecastRuns({ limit: 12 });
         setForecastRuns(rows);
-      } catch {
+      } catch (e) {
+        logApiError("AiAssistantPage.forecastRuns", e);
         setForecastRuns([]);
       } finally {
         setForecastRunsLoading(false);
@@ -124,7 +127,8 @@ export function AiAssistantPage() {
       try {
         const rows = await api.aiListKnowledgeDocuments({ limit: 20 });
         setKnowledgeDocs(rows);
-      } catch {
+      } catch (e) {
+        logApiError("AiAssistantPage.knowledgeDocs", e);
         setKnowledgeDocs([]);
       } finally {
         setKnowledgeDocsLoading(false);
@@ -139,7 +143,8 @@ export function AiAssistantPage() {
       try {
         const rows = await api.aiListActionRuns({ limit: 20 });
         setActionRuns(rows);
-      } catch {
+      } catch (e) {
+        logApiError("AiAssistantPage.actionRuns", e);
         setActionRuns([]);
       } finally {
         setActionRunsLoading(false);
@@ -154,7 +159,8 @@ export function AiAssistantPage() {
       try {
         const rows = await api.aiListAnomalyEvents({ limit: 30 });
         setAnomalyEvents(rows);
-      } catch {
+      } catch (e) {
+        logApiError("AiAssistantPage.anomalies", e);
         setAnomalyEvents([]);
       } finally {
         setAnomalyEventsLoading(false);
@@ -168,7 +174,8 @@ export function AiAssistantPage() {
       try {
         const payload = await api.aiOpsOverview({ period_hours: 24 });
         setOpsOverview(payload);
-      } catch {
+      } catch (e) {
+        logApiError("AiAssistantPage.opsOverview", e);
         setOpsOverview(null);
       }
     };

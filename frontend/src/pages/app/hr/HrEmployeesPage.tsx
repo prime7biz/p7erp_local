@@ -65,8 +65,7 @@ export function HrEmployeesPage() {
     } finally {
       if (isCurrent(token)) setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showInactive, debouncedSearch]);
+  }, [showInactive, debouncedSearch, begin, isCurrent]);
 
   useEffect(() => {
     void load();

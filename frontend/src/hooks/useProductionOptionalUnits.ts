@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { TenantType } from "@/api/client";
 import { api } from "@/api/client";
+import { logApiError } from "@/utils/logApiError";
 
 /**
  * Optional departments (knitting, dyeing, …) enabled in Production setup.
@@ -14,7 +15,8 @@ export function useProductionOptionalUnits(tenantType: TenantType | undefined) {
     try {
       const s = await api.getProductionSettings();
       setEnabledOptionalUnits(s.enabled_optional_units ?? []);
-    } catch {
+    } catch (e) {
+      logApiError("useProductionOptionalUnits.getProductionSettings", e);
       setEnabledOptionalUnits([]);
     } finally {
       setLoaded(true);

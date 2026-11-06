@@ -46,9 +46,12 @@ export function FinancierContractDetailPage() {
 
   useEffect(() => {
     if (tab !== "production" || !Number.isFinite(id)) return;
-    void financierPortalApi.contractProduction(id).then((d) => {
-      setProductionItems((d.items as Record<string, unknown>[]) ?? []);
-    });
+    void financierPortalApi
+      .contractProduction(id)
+      .then((d) => {
+        setProductionItems((d.items as Record<string, unknown>[]) ?? []);
+      })
+      .catch((e) => logApiError("contract production", e));
   }, [tab, id]);
 
   if (!Number.isFinite(id)) return <PortalErrorState message="Invalid contract" />;

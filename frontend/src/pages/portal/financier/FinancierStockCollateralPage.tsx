@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { financierPortalApi } from "@/hooks/useFinancierPortal";
 import { PortalErrorState } from "@/components/external-access/PortalErrorState";
+import { sumMoneyBy } from "@/lib/money";
 
 type Row = Record<string, unknown>;
 
@@ -34,8 +35,7 @@ export function FinancierStockCollateralPage() {
       m.get(k)!.push(r);
     }
     const entries = Array.from(m.entries());
-    let total = 0;
-    for (const r of items) total += num(r.estimated_value_open);
+    const total = sumMoneyBy(items, (r) => num(r.estimated_value_open));
     return { grouped: entries, grandTotal: total, rowCount: items.length };
   }, [data?.items]);
 
@@ -54,7 +54,7 @@ export function FinancierStockCollateralPage() {
       {rowCount === 0 && !data?.note ? <p className="text-sm text-text-muted">No rows.</p> : null}
 
       {grouped.map(([key, rows]) => {
-        const sub = rows.reduce((s, r) => s + num(r.estimated_value_open), 0);
+        const sub = sumMoneyBy(rows, (r) => num(r.estimated_value_open));
         const ref = rows[0]?.btb_lc_reference;
         const title = ref != null ? String(ref) : key === "no-btb" ? "No BTB LC" : key;
         return (

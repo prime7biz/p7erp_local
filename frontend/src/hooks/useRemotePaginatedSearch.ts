@@ -79,6 +79,8 @@ export function useRemotePaginatedSearch<T = unknown>({
   const resetAndFetch = useCallback(async () => {
     if (!enabled || !open) return;
     const seq = ++listSeq.current;
+    appendSeq.current += 1;
+    setLoadingMore(false);
     setLoading(true);
     setError("");
     try {

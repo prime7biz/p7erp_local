@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type AiForecastRunResponse } from "@/api/client";
 import { formatAiError } from "@/pages/app/ai/predictions/utils/formatAiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 export interface GenerateForecastInput {
   prompt: string;
@@ -24,7 +25,10 @@ export function useForecastRuns(limit = 30, filters: ForecastRunFilters = {}) {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const latest = useLatestRequest();
+
   const refresh = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     try {
       const rows = await api.aiListForecastRuns({
@@ -36,13 +40,16 @@ export function useForecastRuns(limit = 30, filters: ForecastRunFilters = {}) {
         min_confidence: filters.min_confidence,
         offset: filters.offset,
       });
+      if (!latest.isCurrent(token)) return;
       setRuns(rows);
     } catch (err) {
+      if (!latest.isCurrent(token)) return;
       setError(formatAiError(err, "Failed to load forecast runs"));
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
   }, [
+    latest,
     limit,
     filters.forecast_code,
     filters.status,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type HrPayrollPeriodCreate, type HrPayrollPeriodResponse } from "@/api/client";
 import { HrSimpleCrudPage } from "@/pages/app/hr/components/HrSimpleCrudPage";
+import { logApiError } from "@/utils/logApiError";
 
 export function HrPayrollPeriodsPage() {
   const [periods, setPeriods] = useState<HrPayrollPeriodResponse[]>([]);
@@ -9,7 +10,8 @@ export function HrPayrollPeriodsPage() {
   const refreshFooter = useCallback(async () => {
     try {
       setPeriods(await api.listHrPayrollPeriods());
-    } catch {
+    } catch (e) {
+      logApiError("HrPayrollPeriodsPage.listHrPayrollPeriods", e);
       setPeriods([]);
     }
   }, []);

@@ -10,6 +10,7 @@ import {
   type VendorResponse,
 } from "@/api/client";
 import type { RemoteSelectOption } from "@/hooks/useRemotePaginatedSearch";
+import { logApiError } from "@/utils/logApiError";
 
 function customerLabel(c: CustomerResponse): string {
   return `${c.customer_code} · ${c.name}`;
@@ -42,7 +43,8 @@ export async function hydrateCustomer(
   try {
     const c = await api.getCustomer(id);
     return { value: c.id, label: customerLabel(c), meta: c };
-  } catch {
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateCustomer", e);
     return null;
   }
 }
@@ -74,7 +76,8 @@ export async function hydrateInventoryItem(
   try {
     const it = await api.getInventoryItem(id);
     return { value: it.id, label: `${it.item_code} · ${it.name}`, meta: it };
-  } catch {
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateInventoryItem", e);
     return null;
   }
 }
@@ -103,7 +106,8 @@ export async function hydrateVendor(id: number): Promise<RemoteSelectOption<Vend
   try {
     const v = await api.getVendor(id);
     return { value: v.id, label: `${v.vendor_code} · ${v.name}`, meta: v };
-  } catch {
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateVendor", e);
     return null;
   }
 }
@@ -136,7 +140,8 @@ export async function hydrateOrder(id: number): Promise<RemoteSelectOption<Order
       label: `${o.order_code}${o.style_ref ? ` · ${o.style_ref}` : ""}`,
       meta: o,
     };
-  } catch {
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateOrder", e);
     return null;
   }
 }
@@ -174,7 +179,8 @@ export async function hydrateChartAccount(
   try {
     const a = await api.getChartOfAccount(id);
     return { value: a.id, label: chartAccountLabel(a), meta: a };
-  } catch {
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateChartAccount", e);
     return null;
   }
 }
@@ -205,7 +211,8 @@ export async function hydrateCostCenter(id: number): Promise<RemoteSelectOption<
   try {
     const c = await api.getCostCenter(id);
     return { value: c.id, label: `${c.center_code} — ${c.name}`, meta: c };
-  } catch {
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateCostCenter", e);
     return null;
   }
 }
@@ -243,7 +250,8 @@ export async function hydrateTradeCase(id: number): Promise<RemoteSelectOption<T
   try {
     const t = await api.getTradeCase(id);
     return { value: t.id, label: tradeCaseLabel(t), meta: t };
-  } catch {
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateTradeCase", e);
     return null;
   }
 }
@@ -290,7 +298,8 @@ export async function hydrateBtbLc(id: number): Promise<RemoteSelectOption<BtbLc
   try {
     const b = await api.getBtbLc(id);
     return { value: b.id, label: btbLcLabel(b), meta: b };
-  } catch {
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateBtbLc", e);
     return null;
   }
 }

@@ -4,6 +4,7 @@ import { api, type CustomerResponse, type InquiryResponse, type QuotationDetailR
 import { useAuth } from "@/context/AuthContext";
 import { SecureImage } from "@/components/SecureImage";
 import { logApiError } from "@/utils/logApiError";
+import { subtractMoney, sumMoneyBy } from "@/lib/money";
 import "@/styles/quotation-print.css";
 
 function formatMoney(value: string | number | null | undefined): string {
@@ -147,14 +148,14 @@ export function QuotationPrintPage() {
   const totalQty = quotation.size_ratios.reduce((acc, row) => acc + (row.quantity ?? 0), 0);
   const fobCost = Number(quotation.total_cost ?? 0);
   const quotedPrice = Number(quotation.quoted_price ?? quotation.total_amount ?? 0);
-  const marginAmount = quotedPrice - fobCost;
+  const marginAmount = subtractMoney(quotedPrice, fobCost);
   const marginPct = fobCost ? (marginAmount / fobCost) * 100 : 0;
   const tenantName = settings?.company_name || me?.tenant_name || "Tenant";
   const tenantAddress = settings?.domain ? `Domain: ${settings.domain}` : "Address not configured in settings";
   const projectedQtyValue = quotation.projected_quantity ?? totalQty;
-  const materialTotal = quotation.materials.reduce((acc, line) => acc + Number(line.total_amount ?? 0), 0);
-  const manufacturingTotal = quotation.manufacturing.reduce((acc, line) => acc + Number(line.total_order_cost ?? 0), 0);
-  const otherTotal = quotation.other_costs.reduce((acc, line) => acc + Number(line.calculated_amount || line.total_amount || 0), 0);
+  const materialTotal = sumMoneyBy(quotation.materials, (line) => line.total_amount);
+  const manufacturingTotal = sumMoneyBy(quotation.manufacturing, (line) => line.total_order_cost);
+  const otherTotal = sumMoneyBy(quotation.other_costs, (line) => line.calculated_amount || line.total_amount || 0);
   const commissionAmount = Number(quotation.commission_value ?? 0);
   const breakdownRows = [
     { label: "Materials", value: materialTotal },
@@ -162,7 +163,7 @@ export function QuotationPrintPage() {
     { label: "Other Costs", value: otherTotal },
     { label: "Commission", value: commissionAmount },
   ];
-  const breakdownBase = breakdownRows.reduce((acc, row) => acc + row.value, 0) || 1;
+  const breakdownBase = sumMoneyBy(breakdownRows, (row) => row.value) || 1;
   const watermarkText = ["APPROVED", "SENT", "CONVERTED"].includes((quotation.status || "").toUpperCase()) ? "Final" : "Draft";
   const watermarkClass = watermarkText === "Final" ? "qp-watermark-final" : "qp-watermark-draft";
 

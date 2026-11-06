@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import type { PipelineOrderRow, PipelineStyleGroup } from "@/types/productionPlanning";
 
 export type PipelineViewMode = "order" | "style";
@@ -11,7 +12,10 @@ export function useProductionPipeline(view: PipelineViewMode) {
   const [orderRows, setOrderRows] = useState<PipelineOrderRow[]>([]);
   const [styleGroups, setStyleGroups] = useState<PipelineStyleGroup[]>([]);
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setError(null);
     setLoading(true);
     try {
@@ -22,6 +26,7 @@ export function useProductionPipeline(view: PipelineViewMode) {
         items?: PipelineOrderRow[];
         styles?: PipelineStyleGroup[];
       };
+      if (!latest.isCurrent(token)) return;
       if (view === "style" && res.styles) {
         setStyleGroups(res.styles);
         setOrderRows([]);
@@ -34,11 +39,12 @@ export function useProductionPipeline(view: PipelineViewMode) {
       }
     } catch (e) {
       logApiError(e, "useProductionPipeline.load");
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load pipeline");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [view]);
+  }, [latest, view]);
 
   useEffect(() => {
     void load();

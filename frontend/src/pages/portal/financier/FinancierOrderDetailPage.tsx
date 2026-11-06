@@ -5,6 +5,7 @@ import { PortalErrorState } from "@/components/external-access/PortalErrorState"
 import { Badge } from "@/components/ui/badge";
 import { OrderPipelineRibbon } from "./components/OrderPipelineRibbon";
 import { listTableHeadCellClass, listTableRowClass } from "@/components/app/listPageLayout";
+import { logApiError } from "@/utils/logApiError";
 
 type Tab = "overview" | "production" | "finance" | "materials";
 
@@ -43,8 +44,11 @@ export function FinancierOrderDetailPage() {
         const x = await financierPortalApi.orderDetail(id, { includeProductionDetail: true });
         if (ok) {
           setO(x);
-          const docs = await financierPortalApi.orderDocuments(id).catch(() => null);
-          if (docs) {
+          const docs = await financierPortalApi.orderDocuments(id).catch((e) => {
+            logApiError("FinancierOrderDetailPage.orderDocuments", e);
+            return null;
+          });
+          if (docs && ok) {
             setDocuments((docs.items as Record<string, unknown>[]) ?? []);
             setDocumentsNote(docs.note ?? null);
           }

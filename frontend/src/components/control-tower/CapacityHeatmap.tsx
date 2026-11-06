@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
 import type { ControlTowerCapacityHeatmapCell } from "@/api/client";
+import { toLocalISODate } from "@/lib/dates";
 
 function enumerateDates(fromIso: string, toIso: string): string[] {
   const out: string[] = [];
@@ -9,7 +10,7 @@ function enumerateDates(fromIso: string, toIso: string): string[] {
   const end = new Date(toIso + "T12:00:00");
   if (Number.isNaN(d.getTime()) || Number.isNaN(end.getTime()) || d > end) return out;
   while (d <= end) {
-    out.push(d.toISOString().slice(0, 10));
+    out.push(toLocalISODate(d));
     d.setDate(d.getDate() + 1);
   }
   return out;

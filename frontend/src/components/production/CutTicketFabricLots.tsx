@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { toast } from "sonner";
 import { api, type CutTicketFabricLot } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 /** Record which received fabric lots and rolls a cut ticket used (traceability). */
 export function CutTicketFabricLots({ cutTicketId }: { cutTicketId: number }) {
@@ -25,12 +26,19 @@ export function CutTicketFabricLots({ cutTicketId }: { cutTicketId: number }) {
     void load();
   }, [load]);
 
+  const optionsRequest = useLatestRequest();
   useEffect(() => {
     const t = window.setTimeout(() => {
-      api.listFabricLotOptions(search.trim() || undefined).then(setOptions).catch((e) => logApiError("CutTicketFabricLots.options", e));
+      const token = optionsRequest.begin();
+      api
+        .listFabricLotOptions(search.trim() || undefined)
+        .then((rows) => {
+          if (optionsRequest.isCurrent(token)) setOptions(rows);
+        })
+        .catch((e) => logApiError("CutTicketFabricLots.options", e));
     }, 250);
     return () => window.clearTimeout(t);
-  }, [search]);
+  }, [optionsRequest, search]);
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault();

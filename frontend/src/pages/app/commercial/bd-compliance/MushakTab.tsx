@@ -5,6 +5,7 @@ import { api, type MushakRegister } from "@/api/client";
 import { DataGrid, type GridColumn } from "@/components/app/data-grid/DataGrid";
 import { listPageTableCardClass } from "@/components/app/listPageLayout";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { btnSecondary, errMsg, inputClass, labelClass, num } from "./shared";
 
 type Row = MushakRegister["rows"][number];
@@ -39,19 +40,25 @@ export function MushakTab({ register }: { register: "6-1" | "6-2" }) {
   const [data, setData] = useState<MushakRegister | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
     const [y, m] = period.split("-").map(Number);
     if (!y || !m) return;
+    const token = latest.begin();
     setLoading(true);
     try {
-      setData(await api.getMushakRegister(register, y, m));
+      const result = await api.getMushakRegister(register, y, m);
+      if (!latest.isCurrent(token)) return;
+      setData(result);
     } catch (e) {
       logApiError("MushakTab.load", e);
+      if (!latest.isCurrent(token)) return;
       toast.error(errMsg(e, "Could not load register"));
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [period, register]);
+  }, [latest, period, register]);
 
   useEffect(() => {
     void load();

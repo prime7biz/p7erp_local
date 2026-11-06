@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   api,
@@ -11,7 +11,8 @@ import {
   type OrderSewingLineSummaryOut,
 } from "@/api/client";
 import { useListPagination } from "@/hooks/useListPagination";
-import { useDebouncedValue, useLatestRequest } from "@/hooks/useDebouncedValue";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { toast } from "sonner";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
@@ -168,7 +169,7 @@ export function OrdersPage() {
   const debouncedSearch = useDebouncedValue(search);
   const latest = useLatestRequest();
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const token = latest.begin();
     setLoading(true);
     setError("");
@@ -197,12 +198,13 @@ export function OrdersPage() {
       if (!latest.isCurrent(token)) return;
       setGroundingByOrderId(gmap);
     } catch (e) {
+      logApiError("OrdersPage.load", e);
       if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load orders");
     } finally {
       if (latest.isCurrent(token)) setLoading(false);
     }
-  };
+  }, [latest, debouncedSearch, statusFilter, page, pageSize, setPage]);
 
   const filteredItems = useMemo(() => {
     if (quickFilter === "linked_quotation") return items.filter((row) => row.quotation_id != null);
@@ -219,9 +221,8 @@ export function OrdersPage() {
     o.quotation_id == null ? "—" : o.quotation_code?.trim() ? o.quotation_code : `#${o.quotation_id}`;
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, statusFilter, page, pageSize]);
+    void load();
+  }, [load]);
 
   useEffect(() => {
     if (!modalOpen || !editing) return;
@@ -236,8 +237,8 @@ export function OrdersPage() {
           setCustomers(custRes.items);
           setQuotations(quotRes.items);
         }
-      } catch {
-        /* ignore */
+      } catch (e) {
+        logApiError("OrdersPage.loadEditOptions", e);
       }
     })();
     return () => {

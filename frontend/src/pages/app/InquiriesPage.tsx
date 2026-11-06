@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, type InquiryResponse } from "@/api/client";
 import { useListPagination } from "@/hooks/useListPagination";
-import { useDebouncedValue, useLatestRequest } from "@/hooks/useDebouncedValue";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { logApiError } from "@/utils/logApiError";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
 import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
 import {
@@ -72,7 +74,7 @@ export function InquiriesPage() {
   const debouncedSearch = useDebouncedValue(search);
   const latest = useLatestRequest();
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const token = latest.begin();
     setLoading(true);
     setError("");
@@ -90,12 +92,13 @@ export function InquiriesPage() {
       setListTotal(res.total);
       if (res.page !== page) setPage(res.page);
     } catch (e) {
+      logApiError("InquiriesPage.load", e);
       if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load inquiries");
     } finally {
       if (latest.isCurrent(token)) setLoading(false);
     }
-  };
+  }, [latest, debouncedSearch, statusFilter, departmentFilter, page, pageSize, setPage]);
 
   const filteredItems = useMemo(() => items, [items]);
 
@@ -103,9 +106,8 @@ export function InquiriesPage() {
     row.customer_name?.trim() ? row.customer_name : `#${row.customer_id}`;
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, statusFilter, departmentFilter, page, pageSize]);
+    void load();
+  }, [load]);
 
   return (
     <div className={listPageRootClass}>

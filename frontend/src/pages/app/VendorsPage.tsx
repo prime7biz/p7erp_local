@@ -8,6 +8,8 @@ import {
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { useListPagination } from "@/hooks/useListPagination";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { logApiError } from "@/utils/logApiError";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
 import {
   VendorKpiCards,
@@ -49,7 +51,10 @@ export function VendorsPage() {
     setPage(1);
   }, [search, activeOnly, vendorType, currency, hasLedger, pageSize]);
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
@@ -62,15 +67,18 @@ export function VendorsPage() {
         page,
         page_size: pageSize,
       });
+      if (!latest.isCurrent(token)) return;
       setItems(res.items);
       setTotal(res.total);
       setTotalPages(res.total_pages);
     } catch (e) {
+      logApiError("VendorsPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load vendors");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [search, activeOnly, vendorType, currency, hasLedger, page, pageSize]);
+  }, [latest, search, activeOnly, vendorType, currency, hasLedger, page, pageSize]);
 
   useEffect(() => {
     load();

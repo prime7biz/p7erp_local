@@ -19,7 +19,8 @@ import {
 } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { todayLocalISO } from "@/lib/dates";
+import { addDaysLocalISO, toLocalISODate, todayLocalISO } from "@/lib/dates";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 const TNA_PHASES = [
   "pre_order",
@@ -69,9 +70,9 @@ function formatDate(s: string | null) {
 }
 
 function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr);
+  const d = new Date(`${dateStr.slice(0, 10)}T00:00:00`);
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return toLocalISODate(d);
 }
 
 function phaseBadgeClass(phase: string) {
@@ -298,7 +299,13 @@ export function FollowupPage() {
   }>({ code: "", name: "", phase: "pre_order", sequence_no: 0, default_days_before_delivery: null, is_mandatory: false, is_active: true });
   const [rejectionHistory, setRejectionHistory] = useState<FollowupActionRejectionLogEntry[]>([]);
 
+  const latestTna = useLatestRequest();
+  const latestSimple = useLatestRequest();
+  const latestCalendar = useLatestRequest();
+  const latestTemplates = useLatestRequest();
+
   const loadTna = useCallback(async () => {
+    const token = latestTna.begin();
     setLoading(true);
     setError("");
     try {
@@ -334,6 +341,7 @@ export function FollowupPage() {
             return [] as UnifiedTnaActionResponse[];
           }),
       ]);
+      if (!latestTna.isCurrent(token)) return;
       setSummary(sum);
       setActions(list);
       setOverdue(od);
@@ -345,11 +353,12 @@ export function FollowupPage() {
       setUnifiedActions(unifiedList);
     } catch (e) {
       logApiError("FollowupPage.loadTna", e);
+      if (!latestTna.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load follow-up data");
     } finally {
-      setLoading(false);
+      if (latestTna.isCurrent(token)) setLoading(false);
     }
-  }, [filterOrderId, filterAssignedToId, filterStatus, filterPhase, overdueOnly, dueFrom, dueTo]);
+  }, [latestTna, filterOrderId, filterAssignedToId, filterStatus, filterPhase, overdueOnly, dueFrom, dueTo]);
 
   useEffect(() => {
     loadTna();
@@ -389,16 +398,19 @@ export function FollowupPage() {
   }, []);
 
   const loadSimple = useCallback(async () => {
+    const token = latestSimple.begin();
     try {
       const list = await api.listFollowupsWithTotal(simpleOrderId ? { order_id: simpleOrderId } : undefined);
+      if (!latestSimple.isCurrent(token)) return;
       setSimpleRows(list.rows);
       setSimpleTotal(list.total);
     } catch (e) {
       logApiError("FollowupPage.loadSimple", e);
+      if (!latestSimple.isCurrent(token)) return;
       setSimpleRows([]);
       setSimpleTotal(null);
     }
-  }, [simpleOrderId]);
+  }, [latestSimple, simpleOrderId]);
 
   useEffect(() => {
     if (simpleSectionOpen) loadSimple();
@@ -410,33 +422,41 @@ export function FollowupPage() {
     const m = parts[1] ?? 1;
     const first = new Date(y, m - 1, 1);
     const last = new Date(y, m, 0);
-    const dueFrom = first.toISOString().slice(0, 10);
-    const dueTo = last.toISOString().slice(0, 10);
+    const dueFrom = toLocalISODate(first);
+    const dueTo = toLocalISODate(last);
+    const token = latestCalendar.begin();
     setCalendarLoading(true);
     try {
       const list = await api.listFollowupActions({ due_from: dueFrom, due_to: dueTo });
+      if (!latestCalendar.isCurrent(token)) return;
       setCalendarActions(list);
-    } catch {
+    } catch (e) {
+      logApiError("FollowupPage.loadCalendar", e);
+      if (!latestCalendar.isCurrent(token)) return;
       setCalendarActions([]);
     } finally {
-      setCalendarLoading(false);
+      if (latestCalendar.isCurrent(token)) setCalendarLoading(false);
     }
-  }, [calendarMonth]);
+  }, [latestCalendar, calendarMonth]);
 
   useEffect(() => {
     if (viewMode === "calendar") loadCalendar();
   }, [viewMode, loadCalendar]);
 
   const loadManageTemplates = useCallback(async () => {
+    const token = latestTemplates.begin();
     try {
       const params: { buyer_id?: number } = {};
       if (filterTemplateBuyerId != null) params.buyer_id = filterTemplateBuyerId;
       const list = await api.listFollowupTemplates(params);
+      if (!latestTemplates.isCurrent(token)) return;
       setManageTemplates(list);
-    } catch {
+    } catch (e) {
+      logApiError("FollowupPage.loadManageTemplates", e);
+      if (!latestTemplates.isCurrent(token)) return;
       setManageTemplates([]);
     }
-  }, [filterTemplateBuyerId]);
+  }, [latestTemplates, filterTemplateBuyerId]);
 
   useEffect(() => {
     if (templatesSectionOpen) loadManageTemplates();
@@ -632,16 +652,13 @@ export function FollowupPage() {
     const end = new Date(d);
     end.setDate(d.getDate() + daysToSunday);
     setDueFrom(todayIso());
-    setDueTo(end.toISOString().slice(0, 10));
+    setDueTo(toLocalISODate(end));
     setOverdueOnly(false);
   };
   /** Next 7 days – matches summary "Due this week" count (backend uses today..today+7). */
   const setDueSoon7Days = () => {
-    const start = new Date();
-    const end = new Date(start);
-    end.setDate(end.getDate() + 7);
-    setDueFrom(start.toISOString().slice(0, 10));
-    setDueTo(end.toISOString().slice(0, 10));
+    setDueFrom(todayIso());
+    setDueTo(addDaysLocalISO(7));
     setOverdueOnly(false);
   };
   const setOverdueFilter = () => {

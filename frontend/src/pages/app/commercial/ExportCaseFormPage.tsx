@@ -123,8 +123,8 @@ export function ExportCaseFormPage() {
         try {
           const customer = await api.getCustomer(order.customer_id);
           country = customer.country || "";
-        } catch {
-          /* ignore */
+        } catch (e) {
+          logApiError("ExportCaseFormPage.getCustomer", e);
         }
         setForm((prev) => ({
           ...prev,

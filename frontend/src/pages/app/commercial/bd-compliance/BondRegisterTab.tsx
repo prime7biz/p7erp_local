@@ -4,29 +4,31 @@ import { api, type BondRegister, type BondRegisterRow } from "@/api/client";
 import { DataGrid, type GridColumn } from "@/components/app/data-grid/DataGrid";
 import { listPageTableCardClass } from "@/components/app/listPageLayout";
 import { logApiError } from "@/utils/logApiError";
+import { startOfMonthLocalISO } from "@/lib/dates";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { btnSecondary, errMsg, inputClass, labelClass, num } from "./shared";
 
-function monthStart() {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
-}
-
 export function BondRegisterTab() {
-  const [filters, setFilters] = useState({ from_date: monthStart(), to_date: "", ud_no: "" });
+  const [filters, setFilters] = useState({ from_date: startOfMonthLocalISO(), to_date: "", ud_no: "" });
   const [data, setData] = useState<BondRegister | null>(null);
   const [loading, setLoading] = useState(true);
+  const latest = useLatestRequest();
 
   const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     try {
-      setData(await api.getBondRegister(filters));
+      const result = await api.getBondRegister(filters);
+      if (!latest.isCurrent(token)) return;
+      setData(result);
     } catch (e) {
       logApiError("BondRegisterTab.load", e);
+      if (!latest.isCurrent(token)) return;
       toast.error(errMsg(e, "Could not load bond register"));
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [filters]);
+  }, [latest, filters]);
 
   useEffect(() => {
     void load();

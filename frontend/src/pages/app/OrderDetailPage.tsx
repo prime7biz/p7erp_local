@@ -128,13 +128,15 @@ export function OrderDetailPage() {
         try {
           const packs = await api.listPackingLists({ order_id: order.id, limit: 20 });
           setPackingLists(packs);
-        } catch {
+        } catch (e) {
+          logApiError("OrderDetailPage.listPackingLists", e);
           setPackingLists([]);
         }
         try {
           const ms = await api.getOrderMilestones(order.id);
           syncPipelineDraftFromApi(ms.order_type, ms.pipeline_na_steps);
-        } catch {
+        } catch (e) {
+          logApiError("OrderDetailPage.getOrderMilestones", e);
           syncPipelineDraftFromApi(order.order_type, order.pipeline_na_steps ?? null);
         }
       } catch (e) {

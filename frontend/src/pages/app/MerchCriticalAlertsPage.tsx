@@ -10,6 +10,7 @@ import {
 } from "@/api/client";
 import { RefreshCw, Play, X, LayoutGrid, List, Bookmark } from "lucide-react";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { MerchAlertCard } from "@/components/merch/MerchAlertCard";
 import { MerchAlertEvidence } from "@/components/merch/MerchAlertEvidence";
 import { merchAlertPrimaryHref } from "@/utils/merchAlertLinks";
@@ -76,7 +77,10 @@ export function MerchCriticalAlertsPage() {
   const [loadingComments, setLoadingComments] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
+  const latest = useLatestRequest();
+
   const fetchList = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
@@ -99,16 +103,18 @@ export function MerchCriticalAlertsPage() {
           entity_id: entityIdFilter,
         }),
       ]);
+      if (!latest.isCurrent(token)) return;
       setItems(listRes.items);
       setTotal(listRes.total);
       setSummary(summaryRes);
     } catch (e) {
       logApiError("MerchCriticalAlertsPage.fetchList", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load alerts");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [page, pageSize, severityFilter, statusFilter, entityTypeFromUrl, entityIdFilter, alertTypeFromUrl]);
+  }, [latest, page, pageSize, severityFilter, statusFilter, entityTypeFromUrl, entityIdFilter, alertTypeFromUrl]);
 
   useEffect(() => {
     fetchList();
@@ -194,47 +200,72 @@ export function MerchCriticalAlertsPage() {
 
   useEffect(() => {
     if (drawerAlertId == null) {
+      setDrawerLoading(false);
       setDrawerAlert(null);
       setDrawerTab("summary");
       setDrawerComments([]);
       setDrawerHistory([]);
       return;
     }
+    let cancelled = false;
     setDrawerLoading(true);
     api
       .getMerchAlertDetail(drawerAlertId)
-      .then((r) => setDrawerAlert(r as MerchAlertItem))
+      .then((r) => {
+        if (!cancelled) setDrawerAlert(r as MerchAlertItem);
+      })
       .catch((e) => {
         logApiError("MerchCriticalAlertsPage.getMerchAlertDetail", e);
-        setDrawerAlert(null);
+        if (!cancelled) setDrawerAlert(null);
       })
-      .finally(() => setDrawerLoading(false));
+      .finally(() => {
+        if (!cancelled) setDrawerLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [drawerAlertId]);
 
   useEffect(() => {
     if (drawerAlertId == null || drawerTab !== "comments") return;
+    let cancelled = false;
     setLoadingComments(true);
     api
       .getMerchAlertComments(drawerAlertId)
-      .then(setDrawerComments)
+      .then((rows) => {
+        if (!cancelled) setDrawerComments(rows);
+      })
       .catch((e) => {
         logApiError("MerchCriticalAlertsPage.getMerchAlertComments", e);
-        setDrawerComments([]);
+        if (!cancelled) setDrawerComments([]);
       })
-      .finally(() => setLoadingComments(false));
+      .finally(() => {
+        if (!cancelled) setLoadingComments(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [drawerAlertId, drawerTab]);
 
   useEffect(() => {
     if (drawerAlertId == null || drawerTab !== "timeline") return;
+    let cancelled = false;
     setLoadingHistory(true);
     api
       .getMerchAlertHistory(drawerAlertId)
-      .then(setDrawerHistory)
+      .then((rows) => {
+        if (!cancelled) setDrawerHistory(rows);
+      })
       .catch((e) => {
         logApiError("MerchCriticalAlertsPage.getMerchAlertHistory", e);
-        setDrawerHistory([]);
+        if (!cancelled) setDrawerHistory([]);
       })
-      .finally(() => setLoadingHistory(false));
+      .finally(() => {
+        if (!cancelled) setLoadingHistory(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [drawerAlertId, drawerTab]);
 
   const updateStatus = async (alertId: number, status: string) => {

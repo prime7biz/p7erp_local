@@ -19,6 +19,7 @@ import { useConfirm } from "@/components/app/useConfirm";
 import { listPageRootClass, listPageTableCardClass } from "@/components/app/listPageLayout";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
+import { addMoney, sumMoneyBy } from "@/lib/money";
 
 type Tab = "shipments" | "statements" | "rules";
 type Option = { id: number; label: string };
@@ -182,7 +183,7 @@ function ShipmentsTab({ options }: { options: ReturnType<typeof useOptions> }) {
 
   const columns = useMemo<GridColumn<CommissionShipment>[]>(() => {
     const sumDir = (s: CommissionShipment, d: CommissionDirection) =>
-      s.entries.filter((e) => e.direction === d).reduce((n, e) => n + Number(e.gross_amount), 0);
+      sumMoneyBy(s.entries.filter((e) => e.direction === d), (e) => e.gross_amount);
     return [
       { id: "date", header: "Date", value: (s) => s.shipment_date, cell: (s) => s.shipment_date },
       { id: "ref", header: "Shipment ref", alwaysVisible: true, value: (s) => s.shipment_ref, cell: (s) => <span className="font-medium text-text-primary">{s.shipment_ref}</span> },
@@ -364,8 +365,8 @@ function StatementsTab() {
         net: 0,
       };
       g.count += 1;
-      g.gross += Number(e.gross_amount);
-      g.net += Number(e.net_amount);
+      g.gross = addMoney(g.gross, e.gross_amount);
+      g.net = addMoney(g.net, e.net_amount);
       map.set(key, g);
     }
     return [...map.values()];
@@ -396,7 +397,7 @@ function StatementsTab() {
       { id: "direction", header: "Type", value: (s) => dirLabel(s.direction), cell: (s) => dirLabel(s.direction) },
       { id: "party", header: "Party", value: (s) => s.counterparty_name ?? "", cell: (s) => s.counterparty_name ?? "—" },
       { id: "gross", header: "Gross", align: "right", value: (s) => Number(s.gross_total), cell: (s) => fmt(s.gross_total, s.currency) },
-      { id: "tax", header: "TDS + VDS", align: "right", value: (s) => Number(s.tds_total) + Number(s.vds_total), cell: (s) => fmt(Number(s.tds_total) + Number(s.vds_total), s.currency) },
+      { id: "tax", header: "TDS + VDS", align: "right", value: (s) => addMoney(s.tds_total, s.vds_total), cell: (s) => fmt(addMoney(s.tds_total, s.vds_total), s.currency) },
       { id: "net", header: "Net", align: "right", value: (s) => Number(s.net_total), cell: (s) => fmt(s.net_total, s.currency) },
       { id: "status", header: "Status", value: (s) => s.status, cell: (s) => s.status },
       {

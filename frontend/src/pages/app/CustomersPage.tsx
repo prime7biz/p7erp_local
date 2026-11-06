@@ -10,6 +10,7 @@ import { DataGrid, type GridColumn } from "@/components/app/data-grid/DataGrid";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
 import { useListPagination } from "@/hooks/useListPagination";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
+import { logApiError } from "@/utils/logApiError";
 import {
   listPageErrorClass,
   listPageFilterPanelClass,
@@ -253,7 +254,8 @@ export function CustomersPage() {
     for (const c of targets) {
       try {
         await api.updateCustomer(c.id, { status });
-      } catch {
+      } catch (e) {
+        logApiError("CustomersPage.bulkSetStatus", e);
         failed += 1;
       }
     }

@@ -10,6 +10,7 @@ import {
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 const SAMPLE_TYPES = [
   "proto",
@@ -58,7 +59,10 @@ export function MerchSamplesPage() {
   });
   const [saving, setSaving] = useState(false);
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
@@ -71,15 +75,17 @@ export function MerchSamplesPage() {
         limit: 200,
         offset: 0,
       });
+      if (!latest.isCurrent(token)) return;
       setRows(list);
     } catch (e) {
       logApiError("MerchSamplesPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load");
       setRows([]);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [statusFilter, sampleTypeFilter, styleFilter, targetFrom, targetTo]);
+  }, [latest, statusFilter, sampleTypeFilter, styleFilter, targetFrom, targetTo]);
 
   useEffect(() => {
     void load();

@@ -8,6 +8,7 @@ import {
 } from "@/api/client";
 import { LayoutGrid, List, RefreshCw, ChevronDown, BarChart3 } from "lucide-react";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { PipelineCard } from "@/components/merch/PipelineCard";
 
 type ViewMode = "kanban" | "list";
@@ -41,7 +42,10 @@ export function MerchPipelinePage() {
   const [moving, setMoving] = useState(false);
   const [dragItemKey, setDragItemKey] = useState<string | null>(null);
 
+  const latest = useLatestRequest();
+
   const loadPipeline = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
@@ -50,14 +54,16 @@ export function MerchPipelinePage() {
         customer_id: customerId ? Number(customerId) : undefined,
         search: search || undefined,
       });
+      if (!latest.isCurrent(token)) return;
       setData(res);
     } catch (e) {
       logApiError("MerchPipelinePage.loadPipeline", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load pipeline");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [documentType, customerId, search]);
+  }, [latest, documentType, customerId, search]);
 
   useEffect(() => {
     loadPipeline();

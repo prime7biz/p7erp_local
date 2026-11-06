@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type CustomerResponse, type StyleCreate, type StyleReportRow, type StyleResponse } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
@@ -20,6 +20,7 @@ import {
 } from "@/components/app/listPageLayout";
 import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
 import { useListPagination } from "@/hooks/useListPagination";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { cn } from "@/lib/utils";
 
@@ -60,7 +61,10 @@ export function StylesPage() {
       .catch((e) => logApiError("StylesPage.listCustomers", e));
   }, []);
 
-  const load = async () => {
+  const latest = useLatestRequest();
+
+  const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
@@ -80,6 +84,7 @@ export function StylesPage() {
           report_limit: pageSize,
           report_offset: offset,
         });
+        if (!latest.isCurrent(token)) return;
         const repTotal = reportRes.total ?? reportRes.rows.length;
         setListTotal(repTotal);
         setReportRows(reportRes.rows);
@@ -92,6 +97,7 @@ export function StylesPage() {
             limit: Math.max(ids.length, 1),
             offset: 0,
           });
+          if (!latest.isCurrent(token)) return;
           const byId = new Map(styleRes.rows.map((s) => [s.id, s]));
           setItems(ids.map((id) => byId.get(id)).filter((s): s is StyleResponse => s != null));
         }
@@ -101,6 +107,7 @@ export function StylesPage() {
           limit: pageSize,
           offset,
         });
+        if (!latest.isCurrent(token)) return;
         setItems(styleRes.rows);
         setListTotal(styleRes.total ?? 0);
         const ids = styleRes.rows.map((s) => s.id);
@@ -113,24 +120,25 @@ export function StylesPage() {
             report_limit: Math.max(ids.length, 1),
             report_offset: 0,
           });
+          if (!latest.isCurrent(token)) return;
           setReportRows(reports);
         }
       }
     } catch (e) {
       logApiError("StylesPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load styles");
       setListTotal(0);
       setItems([]);
       setReportRows([]);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  };
+  }, [latest, search, statusFilter, lifecycleFilter, buyerFilter, departmentFilter, criticalOnly, pageSize, offset]);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, statusFilter, lifecycleFilter, buyerFilter, departmentFilter, criticalOnly, page, pageSize]);
+  }, [load]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

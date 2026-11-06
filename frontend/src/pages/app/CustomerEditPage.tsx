@@ -113,7 +113,9 @@ export function CustomerEditPage() {
       });
   }, []);
 
+  const clearCustomerAi = customerAi.clear;
   useEffect(() => {
+    let cancelled = false;
     const load = async () => {
       if (!id) {
         setError("Invalid customer id.");
@@ -124,21 +126,26 @@ export function CustomerEditPage() {
       setError("");
       try {
         const customer = await api.getCustomer(Number(id));
+        if (cancelled) return;
         setForm(customerFromApiToFormState(customer));
-        customerAi.clear();
+        clearCustomerAi();
         setAutofilled({});
         setReviewRows([]);
         setEnrichReviewRows([]);
         setAiUndoStack([]);
       } catch (e) {
+        logApiError("CustomerEditPage.load", e);
+        if (cancelled) return;
         setError(e instanceof Error ? e.message : "Failed to load customer.");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset AI state when navigating to another id
-  }, [id]);
+    return () => {
+      cancelled = true;
+    };
+  }, [id, clearCustomerAi]);
 
   useEffect(() => {
     const res = customerAi.extraction;

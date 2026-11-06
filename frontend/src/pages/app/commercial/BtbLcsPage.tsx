@@ -16,6 +16,8 @@ import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { listPageRootClass } from "@/components/app/listPageLayout";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
+import { addMoney, subtractMoney, sumMoneyBy } from "@/lib/money";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 const STATUS_OPTIONS = ["DRAFT", "OPEN", "AMENDED", "CLOSED"] as const;
 
@@ -126,7 +128,10 @@ export function BtbLcsPage() {
     informational: 1,
   };
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
@@ -153,6 +158,7 @@ export function BtbLcsPage() {
           return { items: [] as MerchAlertItem[] };
         }),
       ]);
+      if (!latest.isCurrent(token)) return;
       setItems(Array.isArray(lcRows) ? lcRows : []);
       setAllLcs(Array.isArray(allLcRows) ? allLcRows : []);
       setMasterContracts(masters);
@@ -171,13 +177,15 @@ export function BtbLcsPage() {
       }
       setAlertMap(grouped);
     } catch (e) {
+      logApiError("BtbLcsPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setItems([]);
       setError(e instanceof Error ? e.message : "Failed to load BTB LC workflow");
       setAlertMap({});
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [statusFilter, selectedMaster, selectedVendor]);
+  }, [latest, statusFilter, selectedMaster, selectedVendor]);
 
   useEffect(() => {
     void load();
@@ -207,7 +215,7 @@ export function BtbLcsPage() {
   }, [openActionsId]);
 
   const totals = useMemo(() => {
-    const totalAmount = items.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const totalAmount = sumMoneyBy(items, (row) => row.amount);
     const openCount = items.filter((row) => {
       const s = (row.status || "").toUpperCase();
       return s === "OPEN" || s === "DRAFT";
@@ -220,7 +228,7 @@ export function BtbLcsPage() {
     for (const lc of allLcs) {
       const key = Number(lc.master_contract_id ?? 0);
       if (!key) continue;
-      byMaster.set(key, (byMaster.get(key) ?? 0) + Number(lc.amount || 0));
+      byMaster.set(key, addMoney(byMaster.get(key) ?? 0, lc.amount));
     }
     return byMaster;
   }, [allLcs]);
@@ -234,7 +242,7 @@ export function BtbLcsPage() {
     if (!selectedMasterContract?.id) return null;
     const totalAmount = Number(selectedMasterContract.amount || 0);
     const usedAmount = Number(utilizationMap.get(selectedMasterContract.id) || 0);
-    const remaining = Math.max(totalAmount - usedAmount, 0);
+    const remaining = Math.max(subtractMoney(totalAmount, usedAmount), 0);
     const rawPercent = totalAmount > 0 ? (usedAmount / totalAmount) * 100 : 0;
     const band = getBand(rawPercent);
     return { totalAmount, usedAmount, remaining, percent: rawPercent, band };

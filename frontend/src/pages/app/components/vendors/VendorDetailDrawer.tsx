@@ -25,6 +25,7 @@ import {
   formatExtractedValue,
 } from "@/utils/extractionHelpers";
 import { logApiError } from "@/utils/logApiError";
+import { sumMoneyBy } from "@/lib/money";
 import { safeHref } from "@/utils/safeUrl";
 import {
   emptyVendorCreate,
@@ -129,8 +130,8 @@ export function VendorDetailDrawer({
             return (r.party_name || "").trim().toLowerCase() === vendorName;
           })
         );
-      } catch {
-        // Keep drawer usable even if one dataset fails
+      } catch (e) {
+        logApiError("VendorDetailDrawer.loadLinkage", e);
       }
     };
     loadLinkage();
@@ -161,7 +162,8 @@ export function VendorDetailDrawer({
         );
         setPaymentVouchers(vFiltered.slice(0, 40));
         setPaymentRuns(runsFiltered.slice(0, 25));
-      } catch {
+      } catch (e) {
+        logApiError("VendorDetailDrawer.loadPayments", e);
         if (mounted) {
           setPaymentVouchers([]);
           setPaymentRuns([]);
@@ -175,15 +177,15 @@ export function VendorDetailDrawer({
   }, [open, vendor, tab]);
 
   const payableTotal = useMemo(() => {
-    return payables.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    return sumMoneyBy(payables, (row) => row.amount);
   }, [payables]);
 
   const paidTotal = useMemo(() => {
-    return payables.reduce((sum, row) => sum + Number(row.paid_amount || 0), 0);
+    return sumMoneyBy(payables, (row) => row.paid_amount);
   }, [payables]);
 
   const btbTotal = useMemo(() => {
-    return btbLcs.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    return sumMoneyBy(btbLcs, (row) => row.amount);
   }, [btbLcs]);
 
   const paymentHistoryCount = useMemo(() => paymentVouchers.length + paymentRuns.length, [paymentVouchers, paymentRuns]);
@@ -211,20 +213,14 @@ export function VendorDetailDrawer({
     [aiFieldCurrent],
   );
 
+  const clearVendorAi = vendorAi.clear;
+  const vendorId = vendor?.id;
   useEffect(() => {
-    if (!open) {
-      vendorAi.clear();
-      setVendorExtractRows([]);
-      setVendorEnrichRows([]);
-      setVendorAiAuditItems([]);
-      return;
-    }
-    vendorAi.clear();
+    clearVendorAi();
     setVendorExtractRows([]);
     setVendorEnrichRows([]);
     setVendorAiAuditItems([]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when drawer target changes; vendorAi instance methods are stable enough for this pattern
-  }, [open, vendor?.id, mode]);
+  }, [open, vendorId, mode, clearVendorAi]);
 
   useEffect(() => {
     const res = vendorAi.extraction;
@@ -268,9 +264,12 @@ export function VendorDetailDrawer({
       return;
     }
     let cancelled = false;
-    void api.vendorAiAuditLog({ vendor_id: vendor.id, limit: 30 }).then((r) => {
-      if (!cancelled) setVendorAiAuditItems(r.items);
-    });
+    void api
+      .vendorAiAuditLog({ vendor_id: vendor.id, limit: 30 })
+      .then((r) => {
+        if (!cancelled) setVendorAiAuditItems(r.items);
+      })
+      .catch((e) => logApiError("VendorDetailDrawer.vendorAiAuditLog", e));
     return () => {
       cancelled = true;
     };

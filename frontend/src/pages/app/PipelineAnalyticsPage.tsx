@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, type PipelineAnalyticsBucket, type PipelineAnalyticsResponse } from "@/api/client";
 import { BarChart3, Calendar, RefreshCw, TrendingUp, ArrowLeft } from "lucide-react";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 type ViewMode = "month" | "quarter";
 
@@ -22,19 +23,24 @@ export function PipelineAnalyticsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [yearsBack, setYearsBack] = useState(2);
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
       const res = await api.getMerchPipelineAnalytics({ years_back: yearsBack });
+      if (!latest.isCurrent(token)) return;
       setData(res);
     } catch (e) {
       logApiError("PipelineAnalyticsPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load analytics");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [yearsBack]);
+  }, [latest, yearsBack]);
 
   useEffect(() => {
     load();

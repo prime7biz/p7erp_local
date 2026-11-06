@@ -841,7 +841,8 @@ export function InquiryCreatePage() {
           const upload = await api.uploadStyleImage(created.id, quickStyleImageFile);
           styleForSelect = { ...created, style_image_url: upload.style_image_url };
           setQuickStyleNotice("Style created and picture uploaded.");
-        } catch {
+        } catch (e) {
+          logApiError("InquiryCreatePage.uploadStyleImage", e);
           setQuickStyleNotice("Style created. Picture upload failed, upload later from style detail.");
         }
       } else {

@@ -56,8 +56,9 @@ def _join(*parts: Any) -> str | None:
     return text or None
 
 
-# kind, label, permission key, model, searchable columns, ordering column, hit builder
-_SOURCES: list[tuple[str, str, str, Any, Callable[[Any], list], Any, Callable[[Any], SearchHit]]] = [
+# kind, label, permission key, model, searchable columns, ordering column, hit builder,
+# selected columns (everything the hit builder reads; only these are loaded from the database)
+_SOURCES: list[tuple[str, str, str, Any, Callable[[Any], list], Any, Callable[[Any], SearchHit], Callable[[Any], list]]] = [
     (
         "customer",
         "Customers",
@@ -68,6 +69,7 @@ _SOURCES: list[tuple[str, str, str, Any, Callable[[Any], list], Any, Callable[[A
         lambda r: SearchHit(
             kind="customer", id=r.id, title=r.name, subtitle=_join(r.customer_code, r.status), href=f"/app/customers/{r.id}"
         ),
+        lambda m: [m.id, m.name, m.customer_code, m.status],
     ),
     (
         "order",
@@ -79,6 +81,7 @@ _SOURCES: list[tuple[str, str, str, Any, Callable[[Any], list], Any, Callable[[A
         lambda r: SearchHit(
             kind="order", id=r.id, title=r.order_code, subtitle=_join(r.style_ref, r.status), href=f"/app/orders/{r.id}"
         ),
+        lambda m: [m.id, m.order_code, m.style_ref, m.status],
     ),
     (
         "purchase_order",
@@ -94,6 +97,7 @@ _SOURCES: list[tuple[str, str, str, Any, Callable[[Any], list], Any, Callable[[A
             subtitle=_join(r.supplier_name, r.status),
             href=f"/app/inventory/purchase-orders/{r.id}/print",
         ),
+        lambda m: [m.id, m.po_code, m.supplier_name, m.status],
     ),
     (
         "voucher",
@@ -109,6 +113,7 @@ _SOURCES: list[tuple[str, str, str, Any, Callable[[Any], list], Any, Callable[[A
             subtitle=_join(r.voucher_type, r.voucher_date.isoformat() if r.voucher_date else None, r.status),
             href=f"/app/accounts/vouchers/{r.id}",
         ),
+        lambda m: [m.id, m.voucher_number, m.voucher_type, m.voucher_date, m.status],
     ),
     (
         "item",
@@ -120,6 +125,7 @@ _SOURCES: list[tuple[str, str, str, Any, Callable[[Any], list], Any, Callable[[A
         lambda r: SearchHit(
             kind="item", id=r.id, title=r.name, subtitle=r.item_code, href=f"/app/inventory/items?item={r.id}"
         ),
+        lambda m: [m.id, m.name, m.item_code],
     ),
     (
         "vendor",
@@ -135,6 +141,7 @@ _SOURCES: list[tuple[str, str, str, Any, Callable[[Any], list], Any, Callable[[A
             subtitle=_join(r.vendor_code, None if r.is_active else "inactive"),
             href=f"/app/inventory/vendors?search={r.vendor_code}",
         ),
+        lambda m: [m.id, m.name, m.vendor_code, m.is_active],
     ),
     (
         "employee",
@@ -150,6 +157,7 @@ _SOURCES: list[tuple[str, str, str, Any, Callable[[Any], list], Any, Callable[[A
             subtitle=_join(r.employee_code, None if r.is_active else "inactive"),
             href=f"/app/hr/employees/{r.id}",
         ),
+        lambda m: [m.id, m.first_name, m.last_name, m.employee_code, m.is_active],
     ),
 ]
 
@@ -174,17 +182,17 @@ async def global_search(
     pattern = _like(query)
     groups: list[SearchGroup] = []
 
-    for kind, label, perm, model, cols, order_by, build in _SOURCES:
+    for kind, label, perm, model, cols, order_by, build, fields in _SOURCES:
         if enforce and not internal_permission_granted(role=role, permission_key=perm):
             continue
         try:
             stmt = (
-                select(model)
+                select(*fields(model))
                 .where(model.tenant_id == tenant.id, or_(*[c.ilike(pattern, escape="\\") for c in cols(model)]))
                 .order_by(order_by)
                 .limit(limit)
             )
-            rows = (await db.execute(stmt)).scalars().all()
+            rows = (await db.execute(stmt)).all()
         except Exception:
             logger.exception("global_search_source_failed kind=%s tenant_id=%s", kind, tenant.id)
             await safe_async_session_rollback(db)

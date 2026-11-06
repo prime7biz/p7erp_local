@@ -77,7 +77,7 @@
   --shadow-modal: 0 20px 25px -5px rgba(28, 25, 23, 0.12), 0 10px 10px -5px rgba(28, 25, 23, 0.04);
   --shadow-card-hover: 0 12px 24px -8px rgba(28, 25, 23, 0.18), 0 4px 8px -4px rgba(28, 25, 23, 0.08);
 
-  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-display: "Crimson Pro", "Playfair Display", Georgia, serif;
 }
 

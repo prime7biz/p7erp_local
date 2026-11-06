@@ -85,6 +85,11 @@ export default defineConfig(async ({ mode }) => {
         target: process.env.VITE_DEV_PROXY_TARGET ?? "http://localhost:8000",
         changeOrigin: true,
       },
+      // Exact path only (keys starting with ^ are regexes), same as `location = /health` in nginx.prod.conf.
+      "^/health(\\?|$)": {
+        target: process.env.VITE_DEV_PROXY_TARGET ?? "http://localhost:8000",
+        changeOrigin: true,
+      },
     },
   },
   };

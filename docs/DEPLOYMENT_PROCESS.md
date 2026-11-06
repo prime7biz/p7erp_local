@@ -321,6 +321,9 @@ port-80 server block (keep `X-Forwarded-For`), or use machines that support HTTP
 check uses the right-most **public** IP in `X-Forwarded-For`, so machines on a private LAN talking
 to an on-premise server cannot be matched (use the `X-Device-Key` push with a bridge there).
 
+Paths the frontend container (`frontend/nginx.prod.conf`) proxies to the backend: `/api/`, `/iclock/`,
+`/media/` and `/health` (footer platform status); everything else is the React app.
+
 ---
 
 ## Rollback

@@ -29,6 +29,55 @@ def _async_database_url() -> str | None:
     return raw
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _rls_pin_stubbed_auth():
+    """RLS test mode only: tests that stub ``get_current_user`` (or the external principal) still
+    pin the request session to that user's tenant, as the real dependency does."""
+    if not _rls_app_role_mode():
+        yield
+        return
+    import inspect
+
+    from fastapi import Depends
+
+    from app.common.auth import get_current_user
+    from app.common.rls import bind_session_tenant
+    from app.database import get_db, rls_request_scope
+    from app.external_access.tokens import get_current_external_principal
+    from app.main import app
+
+    targets = {get_current_user, get_current_external_principal}
+
+    def pin(stub):
+        if getattr(stub, "_p7_rls_pinned", False) or inspect.signature(stub).parameters:
+            return stub
+
+        async def pinned(db=Depends(get_db), _scope=Depends(rls_request_scope)):
+            value = stub()
+            if inspect.isawaitable(value):
+                value = await value
+            await bind_session_tenant(db, getattr(value, "tenant_id", None))
+            return value
+
+        pinned._p7_rls_pinned = True
+        return pinned
+
+    class _PinningOverrides(dict):
+        def __setitem__(self, key, value):
+            super().__setitem__(key, pin(value) if key in targets else value)
+
+        def update(self, *args, **kwargs):
+            for key, value in dict(*args, **kwargs).items():
+                self[key] = value
+
+    original = app.dependency_overrides
+    app.dependency_overrides = _PinningOverrides(original)
+    try:
+        yield
+    finally:
+        app.dependency_overrides = original
+
+
 @pytest_asyncio.fixture
 async def db_session_integration() -> AsyncSession:
     url = _async_database_url()

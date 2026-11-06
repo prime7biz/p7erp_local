@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from starlette.requests import Request
 
 from app.common import rls
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.database import select_runtime_database_url
 from app.models import Customer, Role
 from tests.merch_fixtures import create_customer, create_merch_tenant_with_user
@@ -36,11 +36,16 @@ def _owner_url() -> str | None:
 
 
 @pytest_asyncio.fixture
-async def owner_session():
-    """Session on the owner connection inside one transaction that is always rolled back."""
+async def owner_session(monkeypatch):
+    """Session on the owner connection inside one transaction that is always rolled back.
+
+    The app flag is forced off here so policy tests control app.tenant_id / app.rls_bypass
+    themselves (the ``rls_flag_on`` fixture turns it back on).
+    """
     url = _owner_url()
     if not url:
         pytest.skip("DATABASE_URL not set — run inside the backend container.")
+    monkeypatch.setattr(get_settings(), "rls_session_tenant_enabled", False)
     engine = create_async_engine(url)
     async with engine.connect() as conn:
         trans = await conn.begin()
@@ -249,7 +254,8 @@ async def _db_context(db: AsyncSession) -> tuple[str | None, str | None]:
 
 @pytest.mark.asyncio
 async def test_flag_off_helpers_do_nothing(owner_session):
-    assert get_settings().rls_session_tenant_enabled is False
+    assert Settings.model_fields["rls_session_tenant_enabled"].default is False
+    assert Settings.model_fields["database_url_app"].default == ""
     before = await _db_context(owner_session)
     await rls.bind_session_tenant(owner_session, 123)
     assert rls.session_rls_tenant_id(owner_session) is None
@@ -317,6 +323,65 @@ async def test_get_current_user_pins_session_to_user_tenant(owner_session, rls_f
     assert await _db_context(owner_session) == (str(tenant.id), "off")
     await rls.reset_session_context(owner_session)
     assert await _db_context(owner_session) == ("", "on")
+
+
+@pytest.mark.asyncio
+async def test_authenticated_session_hides_other_tenant_even_without_filter(owner_session, rls_flag_on):
+    """The point of RLS: a query that forgets ``WHERE tenant_id = ...`` still only sees the caller's tenant."""
+    from app.common.auth import create_access_token, get_current_user
+
+    data = await _two_tenants_with_customers(owner_session)
+    await _become_probe_role(owner_session)
+    await rls.bind_session_bypass(owner_session)  # what a fresh request looks like before auth
+    token = create_access_token(
+        data.user_a.id, tenant_id=data.a.id, session_version=int(data.user_a.auth_session_version or 0)
+    )
+    creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+    await get_current_user(db=owner_session, request=_request(), credentials=creds)
+    assert await _visible_customer_ids(owner_session, [data.cust_a, data.cust_b]) == {data.cust_a}
+
+
+@pytest.mark.asyncio
+async def test_http_request_pins_tenant_and_resets_after(owner_session, rls_flag_on, monkeypatch):
+    """Real app + real auth dependency under the non-owner role; the shared session is unpinned afterwards."""
+    from httpx import ASGITransport, AsyncClient
+
+    import app.common.auth as auth_module
+    from app.common.auth import create_access_token
+    from app.database import get_db
+    from app.main import app
+
+    seen_during_request: list[tuple] = []
+    real_bind = auth_module.bind_session_tenant
+
+    async def recording_bind(db, tenant_id):
+        await real_bind(db, tenant_id)
+        seen_during_request.append((tenant_id, await _db_context(db)))
+
+    monkeypatch.setattr(auth_module, "bind_session_tenant", recording_bind)
+    data = await _two_tenants_with_customers(owner_session)
+    await _become_probe_role(owner_session)
+    token = create_access_token(
+        data.user_a.id, tenant_id=data.a.id, session_version=int(data.user_a.auth_session_version or 0)
+    )
+
+    async def override_db():
+        yield owner_session
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            r = await ac.get(
+                "/api/v1/auth/me",
+                headers={"Authorization": f"Bearer {token}", "X-Tenant-Id": str(data.a.id)},
+            )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+    assert r.status_code == 200, r.text
+    assert seen_during_request == [(data.a.id, (str(data.a.id), "off"))]
+    assert rls.session_rls_tenant_id(owner_session) is None
+    assert await _db_context(owner_session) == ("", "on")
+    assert await _visible_customer_ids(owner_session, [data.cust_a, data.cust_b]) == {data.cust_a, data.cust_b}
 
 
 def test_app_role_url_used_only_with_flag_on():

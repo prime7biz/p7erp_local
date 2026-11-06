@@ -204,8 +204,11 @@ async def import_employees_excel(db: AsyncSession, tenant: Tenant, user: User, f
                     )
                 )
                 created += 1
-        except Exception as e:  # noqa: BLE001
+        except (ValueError, TypeError) as e:
             errors.append(f"Row {idx}: {e!s}")
+        except Exception:  # noqa: BLE001
+            logger.exception("employee_import_row_failed tenant_id=%s row=%s", tenant.id, idx)
+            errors.append(f"Row {idx}: could not be imported")
     try:
         await db.commit()
     except IntegrityError as e:

@@ -141,7 +141,7 @@ class CommissionStatement(Base):
     base_gross_total: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
     # DRAFT | ISSUED | CANCELLED
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="DRAFT", index=True)
-    voucher_id: Mapped[int | None] = mapped_column(ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True)
+    voucher_id: Mapped[int | None] = mapped_column(ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True, index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     issued_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

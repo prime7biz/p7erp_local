@@ -21,9 +21,12 @@ from app.database import Base
 
 class ExternalRole(Base):
     __tablename__ = "external_roles"
+    __table_args__ = (
+        UniqueConstraint("code", name="external_roles_code_key"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    code: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    code: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     principal_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -50,7 +53,7 @@ class ExternalPrincipal(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     invited_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     invited_by_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     locked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -150,7 +153,7 @@ class ExternalNote(Base):
     body: Mapped[str] = mapped_column(Text, nullable=False)
     visibility: Mapped[str] = mapped_column(String(32), nullable=False, default="external_only")
     created_by_internal_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
@@ -169,7 +172,7 @@ class ExternalAuditLog(Base):
         ForeignKey("external_principals.id", ondelete="SET NULL"), nullable=True, index=True
     )
     internal_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     action: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     resource_type: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -193,7 +196,7 @@ class ExternalInvitation(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     invited_by_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

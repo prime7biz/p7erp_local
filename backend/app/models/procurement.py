@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -16,7 +16,10 @@ from app.database import Base
 
 class PurchaseRequisition(Base):
     __tablename__ = "purchase_requisitions"
-    __table_args__ = (UniqueConstraint("tenant_id", "pr_code", name="uq_purchase_requisitions_tenant_pr_code"),)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "pr_code", name="uq_purchase_requisitions_tenant_pr_code"),
+        Index("ix_purchase_requisitions_tenant_status", "tenant_id", "status"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -35,7 +38,7 @@ class PurchaseRequisition(Base):
     selected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     purchase_order_id: Mapped[int | None] = mapped_column(
         ForeignKey("purchase_orders.id", ondelete="SET NULL"), nullable=True
-    )
+    , index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

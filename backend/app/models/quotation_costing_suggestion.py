@@ -22,12 +22,12 @@ class QuotationCostingSuggestionBatch(Base):
     quotation_id: Mapped[int | None] = mapped_column(
         ForeignKey("quotations.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    action_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    action_type: Mapped[str] = mapped_column(String(32), nullable=False)
     provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
     model_hint: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     generated_by_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     source_type: Mapped[str] = mapped_column(String(32), nullable=False, default="deterministic")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="generated", index=True)

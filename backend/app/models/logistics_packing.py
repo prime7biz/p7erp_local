@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -23,7 +23,7 @@ class PackingList(Base):
     tenant_id: Mapped[int] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    packing_list_number: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    packing_list_number: Mapped[str] = mapped_column(String(32), nullable=False)
     shipment_id: Mapped[int | None] = mapped_column(
         ForeignKey("shipments.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -57,6 +57,14 @@ class ShipmentContainer(Base):
             "shipment_id",
             "container_number",
             name="uq_shipment_containers_tenant_shipment_number",
+        ),
+        Index(
+            "uq_shipment_containers_tenant_pl_number",
+            "tenant_id",
+            "packing_list_id",
+            "container_number",
+            unique=True,
+            postgresql_where=text("packing_list_id IS NOT NULL"),
         ),
     )
 

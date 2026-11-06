@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -51,6 +51,9 @@ class ComplianceRequirement(Base):
 
 class EmployeeComplianceRecord(Base):
     __tablename__ = "hr_employee_compliance_records"
+    __table_args__ = (
+        Index("ix_hr_ecr_tenant_employee_req", "tenant_id", "employee_id", "requirement_id", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -105,7 +108,7 @@ class EmployeeMedicalRecord(Base):
     )
     certificate_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
     examination_date: Mapped[date] = mapped_column(Date, nullable=False)
-    expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     doctor_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     doctor_registration: Mapped[str | None] = mapped_column(String(64), nullable=True)
     hospital_clinic: Mapped[str | None] = mapped_column(String(128), nullable=True)

@@ -6,7 +6,20 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -87,6 +100,14 @@ class ExportCase(Base):
 
 class ProformaInvoice(Base):
     __tablename__ = "proforma_invoices"
+    __table_args__ = (
+        Index(
+            "uq_proforma_invoices_purchase_order_id_not_null",
+            "purchase_order_id",
+            unique=True,
+            postgresql_where=text("purchase_order_id IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -135,7 +156,7 @@ class ProformaInvoice(Base):
     shipper_bank_address: Mapped[str | None] = mapped_column(String(255), nullable=True)
     shipper_bank_swift: Mapped[str | None] = mapped_column(String(255), nullable=True)
     shipper_bank_account_id: Mapped[int | None] = mapped_column(
-        ForeignKey("bank_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("bank_accounts.id", name="fk_proforma_invoices_shipper_bank_account_id"), nullable=True
     )
     verification_token: Mapped[str | None] = mapped_column(
         String(255), nullable=True, unique=True, index=True
@@ -157,6 +178,9 @@ class ProformaInvoice(Base):
 
 class ProformaInvoiceOrder(Base):
     __tablename__ = "proforma_invoice_orders"
+    __table_args__ = (
+        UniqueConstraint("proforma_invoice_id", "order_id", name="uq_proforma_invoice_orders_pi_order"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     proforma_invoice_id: Mapped[int] = mapped_column(
@@ -175,6 +199,10 @@ class ProformaInvoiceOrder(Base):
 
 class BtbLc(Base):
     __tablename__ = "btb_lcs"
+    __table_args__ = (
+        Index("ix_btb_lcs_tenant_master_contract", "tenant_id", "master_contract_id"),
+        Index("ix_btb_lcs_tenant_status", "tenant_id", "status"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -221,18 +249,21 @@ class BtbMaturityTranche(Base):
     """Installment / tranche maturity under a BTB LC (multi-due-date ladder)."""
 
     __tablename__ = "btb_maturity_tranches"
-    __table_args__ = (UniqueConstraint("btb_lc_id", "tranche_no", name="uq_btb_maturity_tranches_lc_tranche"),)
+    __table_args__ = (
+        UniqueConstraint("btb_lc_id", "tranche_no", name="uq_btb_maturity_tranches_lc_tranche"),
+        Index("ix_bmt_tenant_btb_date", "tenant_id", "btb_lc_id", "maturity_date"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    btb_lc_id: Mapped[int] = mapped_column(ForeignKey("btb_lcs.id", ondelete="CASCADE"), nullable=False, index=True)
+    btb_lc_id: Mapped[int] = mapped_column(ForeignKey("btb_lcs.id", ondelete="CASCADE"), nullable=False)
     tranche_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    maturity_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    maturity_date: Mapped[date] = mapped_column(Date, nullable=False)
     amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
     currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default="UPCOMING", index=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="UPCOMING")
     payment_voucher_id: Mapped[int | None] = mapped_column(
         ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -251,13 +282,16 @@ class BtbLcAccounting(Base):
     """
 
     __tablename__ = "btb_lc_accounting"
+    __table_args__ = (
+        Index("ix_btb_lc_accounting_btb_lc_id", "btb_lc_id", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
     )
     btb_lc_id: Mapped[int] = mapped_column(
-        ForeignKey("btb_lcs.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("btb_lcs.id", ondelete="CASCADE"), nullable=False
     )
     # When BTB LC opened: LC liability + blocked credit facility posting
     lc_open_voucher_id: Mapped[int | None] = mapped_column(
@@ -355,7 +389,7 @@ class CommercialInvoice(Base):
     tenant_id: Mapped[int] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    invoice_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    invoice_code: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT", index=True)
     customer_id: Mapped[int] = mapped_column(
         ForeignKey("customers.id", ondelete="RESTRICT"), nullable=False, index=True
@@ -400,13 +434,16 @@ class CommercialInvoice(Base):
 
 class CommercialInvoiceLine(Base):
     __tablename__ = "commercial_invoice_lines"
+    __table_args__ = (
+        Index("ix_commercial_invoice_lines_invoice_id", "commercial_invoice_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
     )
     commercial_invoice_id: Mapped[int] = mapped_column(
-        ForeignKey("commercial_invoices.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("commercial_invoices.id", ondelete="CASCADE"), nullable=False
     )
     order_id: Mapped[int] = mapped_column(
         ForeignKey("orders.id", ondelete="RESTRICT"), nullable=False, index=True
@@ -453,17 +490,21 @@ class CommercialInvoiceReceiptAllocation(Base):
             "idempotency_key",
             name="uq_ci_receipt_alloc_tenant_ci_idempotency",
         ),
+        Index("ix_ci_receipt_alloc_ci_id", "commercial_invoice_id"),
+        Index("ix_ci_receipt_alloc_status", "status"),
+        Index("ix_ci_receipt_alloc_tenant_id", "tenant_id"),
+        Index("ix_ci_receipt_alloc_voucher_id", "voucher_id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
-        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
     )
     commercial_invoice_id: Mapped[int] = mapped_column(
-        ForeignKey("commercial_invoices.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("commercial_invoices.id", ondelete="CASCADE"), nullable=False
     )
     voucher_id: Mapped[int] = mapped_column(
-        ForeignKey("vouchers.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("vouchers.id", ondelete="CASCADE"), nullable=False
     )
     order_id: Mapped[int | None] = mapped_column(
         ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True
@@ -476,7 +517,7 @@ class CommercialInvoiceReceiptAllocation(Base):
     )
     currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
     exchange_rate_to_base: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING", index=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_by: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True

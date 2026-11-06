@@ -42,7 +42,7 @@ class BondedWarehouseEntry(Base):
     ud_no: Mapped[str | None] = mapped_column(String(64), nullable=True)
     up_no: Mapped[str | None] = mapped_column(String(64), nullable=True)
     trade_case_id: Mapped[int | None] = mapped_column(ForeignKey("trade_cases.id", ondelete="SET NULL"), nullable=True)
-    btb_lc_id: Mapped[int | None] = mapped_column(nullable=True, index=True)
+    btb_lc_id: Mapped[int | None] = mapped_column(nullable=True)
     # Optional link to a UD permitted-import line (BD bond registers); NULL = matched by ud_no + description.
     ud_entitlement_id: Mapped[int | None] = mapped_column(
         ForeignKey("bd_ud_entitlements.id", ondelete="SET NULL"), nullable=True, index=True

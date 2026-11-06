@@ -217,6 +217,34 @@ docker compose -f docker-compose.prod.yml logs --since 20m beat | grep scheduled
 Rollback: remove the line from `.env` (or set it to `true`) and run the same `up -d` command.
 Never run both: the flag decides which scheduler owns the jobs.
 
+### Portal refresh token in an HttpOnly cookie (`AUTH_REFRESH_COOKIE_ENABLED`)
+
+Default `false` = unchanged behaviour. Full explanation, CSRF design and Nginx requirements:
+`docs/FRONTEND_SECURITY_HEADERS.md` → *Login tokens and the HttpOnly refresh cookie*.
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `AUTH_REFRESH_COOKIE_ENABLED` | `false` | `true` = portal login/refresh set the refresh token as an HttpOnly cookie |
+| `AUTH_COOKIE_SECURE` | `true` | Cookie only over HTTPS. Keep `true` on the live server |
+| `AUTH_COOKIE_SAMESITE` | `strict` | Needs frontend and API on one site (`prime7erp.com`) |
+| `AUTH_COOKIE_DOMAIN` | empty | Empty = API host only. Set `.prime7erp.com` only for a split API host |
+
+Rollout: (1) deploy the release with the flag off; (2) then turn it on:
+
+```bash
+cd /home/primeadmin/p7erp_local
+echo "AUTH_REFRESH_COOKIE_ENABLED=true" >> .env
+docker compose -f docker-compose.prod.yml up -d backend
+```
+
+Check: portal login at https://prime7erp.com → DevTools → Application → Cookies shows
+`p7_ext_refresh` (HttpOnly, Secure, SameSite Strict); Local Storage has no `p7_ext_refresh_token`;
+portal logout removes the cookie. Host Nginx must not hide or strip `Set-Cookie` / `Cookie` on `/api/`.
+(3) A later release removes the body refresh token.
+
+Rollback: set the line to `false` (or remove it) and run the same `up -d backend`. Portal users in
+cookie mode log in again once when their access token expires.
+
 ---
 
 ## Rollback

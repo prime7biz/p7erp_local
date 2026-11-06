@@ -17,6 +17,7 @@ def _checkout_payload(
     email: str,
     tenant_id: int,
     user_id: int,
+    checkout_ref: str,
     redirect_url: str | None,
 ) -> dict[str, Any]:
     product_options: dict[str, Any] = {}
@@ -27,6 +28,7 @@ def _checkout_payload(
         "checkout_data": {
             "email": email,
             "custom": {
+                "checkout_ref": checkout_ref,
                 "tenant_id": str(tenant_id),
                 "user_id": str(user_id),
             },
@@ -57,6 +59,7 @@ async def create_checkout(
     email: str,
     tenant_id: int,
     user_id: int,
+    checkout_ref: str,
     redirect_url: str | None,
     timeout_seconds: float = 30.0,
 ) -> str:
@@ -74,6 +77,7 @@ async def create_checkout(
         email=email,
         tenant_id=tenant_id,
         user_id=user_id,
+        checkout_ref=checkout_ref,
         redirect_url=redirect_url,
     )
     async with httpx.AsyncClient(timeout=timeout_seconds) as client:

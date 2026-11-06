@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -65,7 +66,11 @@ async def assert_subscription_active(db: AsyncSession, tenant_id: int) -> None:
     sub, _plan = await _subscription_plan(db, tenant_id)
     if not sub:
         return
-    if sub.status in {"suspended", "cancelled", "past_due"}:
+    # A cancelled subscription stays usable until the end of the period that was already paid.
+    paid_until = sub.current_period_end
+    if sub.status == "cancelled" and paid_until is not None and paid_until > datetime.utcnow():
+        return
+    if sub.status in {"suspended", "cancelled", "past_due", "expired"}:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="Subscription inactive. Please renew to continue.",

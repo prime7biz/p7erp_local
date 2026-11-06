@@ -20,6 +20,10 @@ RBAC_MODES: tuple[str, str, str] = (RBAC_MODE_OFF, RBAC_MODE_SHADOW, RBAC_MODE_E
 # Internal single-session policy toggle.
 SINGLE_SESSION_ENFORCED = "single_session_enforced"
 
+# true: finance.* / hr.* fine-grained keys need an explicit grant (manager-type roles bypass)
+# instead of "missing key = allowed". Default off; turn on per tenant after granting roles.
+STRICT_SENSITIVE_PERMISSIONS = "strict_sensitive_permissions"
+
 # When true, read stock summary rows from `inventory_stock_balance_snapshots` if populated (see stock_snapshot_service).
 STOCK_SNAPSHOT_READS = "stock_snapshot_reads"
 
@@ -197,6 +201,9 @@ def with_effective_default_flags(feature_flags: Any) -> dict[str, Any]:
     for key in DEFAULT_ON_FEATURE_FLAGS:
         if key not in flags:
             flags[key] = True
+    # The frontend mirrors get_tenant_rbac_mode; report the effective mode when the tenant has none.
+    if RBAC_ENFORCEMENT not in flags and default_rbac_mode() != RBAC_MODE_OFF:
+        flags[RBAC_ENFORCEMENT] = default_rbac_mode()
     return flags
 
 
@@ -265,21 +272,33 @@ def is_payroll_auto_calculate_enabled(feature_flags: Any) -> bool:
     return _flag_true(feature_flags, PAYROLL_AUTO_CALCULATE_ENABLED)
 
 
+def is_strict_sensitive_permissions(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, STRICT_SENSITIVE_PERMISSIONS)
+
+
 def is_demo_mode_enabled(feature_flags: Any) -> bool:
     """Show Demo Mode banner when flag is explicitly true."""
     return _flag_true(feature_flags, DEMO_MODE_ENABLED)
 
 
+def default_rbac_mode() -> Literal["off", "shadow", "enforce"]:
+    """Mode for tenants without their own ``rbac_enforcement`` flag (env RBAC_DEFAULT_MODE, default off)."""
+    from app.config import get_settings
+
+    raw = str(getattr(get_settings(), "rbac_default_mode", "") or "").strip().lower()
+    return raw if raw in RBAC_MODES else RBAC_MODE_OFF  # type: ignore[return-value]
+
+
 def get_tenant_rbac_mode(feature_flags: Any) -> Literal["off", "shadow", "enforce"]:
-    """Return normalized RBAC mode from tenant feature flags (safe default: off)."""
+    """Return normalized RBAC mode from tenant feature flags (fallback: ``default_rbac_mode()``)."""
     if not isinstance(feature_flags, dict):
-        return RBAC_MODE_OFF
+        return default_rbac_mode()
     raw = feature_flags.get(RBAC_ENFORCEMENT)
     if isinstance(raw, str):
         normalized = raw.strip().lower()
         if normalized in RBAC_MODES:
             return normalized  # type: ignore[return-value]
-    return RBAC_MODE_OFF
+    return default_rbac_mode()
 
 
 def is_single_session_enforced(feature_flags: Any) -> bool:

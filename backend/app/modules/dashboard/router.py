@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.gemini_client import generate_text_for_tenant
+from app.common.permissions import require_internal_permission
 from app.common.tenant import require_tenant
 from app.config import get_settings
 from app.database import get_db, safe_async_session_rollback
@@ -284,7 +285,7 @@ async def ai_brief(
     return await generate_ai_brief(db, tenant.id)
 
 
-@router.get("/ai-profitability")
+@router.get("/ai-profitability", dependencies=[Depends(require_internal_permission("merch.access"))])
 async def ai_profitability(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -371,7 +372,7 @@ async def dashboard_tasks(
     ]
 
 
-@router.get("/employee-summary")
+@router.get("/employee-summary", dependencies=[Depends(require_internal_permission("hr.access"))])
 async def employee_summary(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -396,7 +397,7 @@ async def payroll_summary(
     return []
 
 
-@router.get("/revenue-trend")
+@router.get("/revenue-trend", dependencies=[Depends(require_internal_permission("merch.access"))])
 async def revenue_trend(
     from_date: str | None = Query(default=None, description="ISO date YYYY-MM-DD"),
     to_date: str | None = Query(default=None, description="ISO date YYYY-MM-DD"),

@@ -5,6 +5,7 @@
  * Types still live in `api/client.ts`.
  */
 import { fetchAllPaginated, request, requestBlob, requestWithTotal } from "@/api/core";
+import type { ListWithTotal, PaginatedRows } from "@/api/core";
 import { API_BASE } from "@/api/apiBase";
 import type {
   AbcAnalysisReport,
@@ -45,7 +46,6 @@ import type {
   ItemUnitCreate,
   ItemUnitResponse,
   ItemUnitUpdate,
-  ListWithTotal,
   LotTraceResponse,
   ManufacturingOrderCreate,
   ManufacturingOrderResponse,
@@ -53,7 +53,6 @@ import type {
   ManufacturingStageUpdate,
   MaterialControlStockMovementRow,
   MrpRunResult,
-  PaginatedRows,
   PlannedOrderReleaseResult,
   PlannedOrderResponse,
   PoColorSizeGrid,
@@ -122,7 +121,7 @@ import type {
   WarehouseUpdate,
   WipSummaryResponse,
   WipVsGlResponse,
-} from "@/api/client";
+} from "@/api/models";
 
 export const inventoryApi = {
   async listPurchaseOrderSupplierUpdates(

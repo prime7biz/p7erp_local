@@ -3,7 +3,7 @@
  * Also merged into `api` in `api/client.ts`, so `api.aiSendMessage()` etc. still work.
  */
 import { request } from "@/api/core";
-import type { AiChatResponse, AiMessageResponse, AiSessionResponse } from "@/api/client";
+import type { AiChatResponse, AiMessageResponse, AiSessionResponse } from "@/api/models";
 
 export const aiChatApi = {
   async aiListSessions(params?: { limit?: number; offset?: number }): Promise<AiSessionResponse[]> {

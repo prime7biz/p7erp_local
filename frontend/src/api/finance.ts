@@ -5,6 +5,7 @@
  * Types still live in `api/client.ts`.
  */
 import { request, requestText, requestWithTotal } from "@/api/core";
+import type { ListWithTotal } from "@/api/core";
 import type {
   AccountGroupCreate,
   AccountGroupHierarchyNode,
@@ -72,7 +73,6 @@ import type {
   GstReturnPayload,
   GstSettings,
   LedgerActivityResponse,
-  ListWithTotal,
   MemorandumRegisterRow,
   MisHealthResponse,
   MisRatioAnalysisResponse,
@@ -136,7 +136,7 @@ import type {
   VoucherTaxLineResponse,
   VoucherUpdate,
   VoucherVerificationResponse,
-} from "@/api/client";
+} from "@/api/models";
 
 export const financeApi = {
   /** Phase 17 — voucher activity series (requires FINANCE_AI_READONLY_ENABLED + tenant flag). */

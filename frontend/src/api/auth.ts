@@ -3,7 +3,7 @@
  * Also merged into `api` in `api/client.ts`, so `api.me()` / `api.login()` still work.
  */
 import { request, requestPublic, getTenantId } from "@/api/core";
-import type { MeResponse, ResolveTenantResponse, TokenResponse } from "@/api/client";
+import type { MeResponse, ResolveTenantResponse, TokenResponse } from "@/api/models";
 
 export const authApi = {
   /** Reference-style: companyCode + username + password. Or tenant_id + email + password. */

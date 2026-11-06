@@ -95,7 +95,7 @@ import type {
   PayrollStatutoryConfigResponse,
   PayrollStatutoryPreviewBody,
   PayrollStatutoryPreviewResponse,
-} from "@/api/client";
+} from "@/api/models";
 
 export const hrApi = {
   async listHrDepartments(params?: { active_only?: boolean }): Promise<HrDepartmentResponse[]> {

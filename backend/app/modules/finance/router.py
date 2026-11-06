@@ -224,20 +224,11 @@ async def _lookup_exchange_rate(
     if latest:
         return max(_to_float(latest.exchange_rate), 0.000001), "manual-rate-table", datetime.utcnow()
 
-    try:
-        import httpx
+    from app.common.fx_rate_cache import get_live_rate
 
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"https://open.er-api.com/v6/latest/{from_code}")
-            response.raise_for_status()
-            payload = response.json()
-        rates = payload.get("rates") if isinstance(payload, dict) else {}
-        raw_rate = rates.get(to_code) if isinstance(rates, dict) else None
-        live_rate = float(raw_rate)
-        if live_rate > 0:
-            return live_rate, "open.er-api.com", datetime.utcnow()
-    except Exception:
-        logger.warning("live FX lookup failed %s->%s", from_code, to_code, exc_info=True)
+    live_rate = await get_live_rate(from_code, to_code)
+    if live_rate:
+        return live_rate, "open.er-api.com", datetime.utcnow()
 
     # A silent 1.0 would book e.g. USD 10,000 as BDT 10,000; make the user supply a rate.
     raise HTTPException(

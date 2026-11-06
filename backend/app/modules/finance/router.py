@@ -1384,6 +1384,36 @@ async def _lock_voucher(db: AsyncSession, tenant_id: int, voucher_id: int) -> Vo
     return row
 
 
+async def _refresh_voucher_fiscal_year(db: AsyncSession, tenant: Tenant, row: Voucher) -> str | None:
+    """After a draft's date changes, keep fiscal_year (and the number series) in step with the date.
+
+    Same financial year: number is kept. Different financial year on a series-numbered voucher:
+    a new number is taken from the new year's series. Returns the old number when renumbered.
+    """
+    from app.modules.finance.fiscal_year import fiscal_year_of, fy_start_month
+
+    new_fy = fiscal_year_of(row.voucher_date, fy_start_month(tenant.feature_flags))
+    if row.fiscal_year == new_fy:
+        return None
+    if row.fiscal_year is None or not row.number_series_key:
+        # Legacy / unnumbered-series voucher: record the year, keep the existing number.
+        row.fiscal_year = new_fy
+        return None
+    old_number = row.voucher_number
+    voucher_number, series_seq, series_key, fy = await allocate_series_voucher_number(
+        db,
+        tenant_id=tenant.id,
+        voucher_date=row.voucher_date,
+        voucher_type=row.voucher_type,
+        branch_code=row.branch_code,
+    )
+    row.voucher_number = voucher_number
+    row.series_sequence = series_seq
+    row.number_series_key = series_key
+    row.fiscal_year = fy
+    return old_number
+
+
 async def _assert_open_period(db: AsyncSession, tenant_id: int, on_date: date, *, what: str = "this voucher date") -> None:
     open_period = (
         await db.execute(
@@ -2652,9 +2682,9 @@ async def update_voucher(
     _ensure_tenant(user, tenant)
     if not (body.description or "").strip():
         raise HTTPException(status_code=400, detail="Narration / description is required for audit purposes")
-    row = await db.get(Voucher, voucher_id)
-    if not row or row.tenant_id != tenant.id:
-        raise HTTPException(status_code=404, detail="Voucher not found")
+    # Row lock: a concurrent approve/post waits for this edit (and vice versa), and the status
+    # check below sees the latest committed status instead of a stale copy.
+    row = await _lock_voucher(db, tenant.id, voucher_id)
     _require_manual_voucher_edit(row)
     if row.status not in {"DRAFT", "REJECTED"}:
         raise HTTPException(status_code=400, detail="Only DRAFT or REJECTED vouchers can be edited")
@@ -2693,8 +2723,7 @@ async def update_voucher(
         row.instrument_reference = (body.instrument_reference.strip()[:128] or None)
     if body.bank_reconciliation_id is not None:
         row.bank_reconciliation_id = body.bank_reconciliation_id
-    if getattr(row, "fiscal_year", None) is None:
-        row.fiscal_year = fiscal_year_calendar(row.voucher_date)
+    renumbered_from = await _refresh_voucher_fiscal_year(db, tenant, row)
     row.currency = txn_currency
     row.base_currency = base_currency
     row.exchange_rate = str(round(exchange_rate_value, 8))
@@ -2772,6 +2801,8 @@ async def update_voucher(
     except Exception:
         pass
     changes = diff_voucher(before_header, before_lines, header_snapshot(row), lines_snapshot(updated_lines))
+    if renumbered_from is not None:
+        changes["voucher_number"] = {"from": renumbered_from, "to": row.voucher_number}
     changed_names = [k for k in changes if k != "lines"] + (["lines"] if "lines" in changes else [])
     await record_voucher_event(
         db,

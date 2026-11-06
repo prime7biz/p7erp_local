@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import os
 
+# The whole suite runs from one client address; the per-IP limit for anonymous API calls
+# would otherwise trip on login-heavy tests. tests/test_security_round2_auth.py covers it.
+os.environ.setdefault("ANON_RATE_LIMIT_REQUESTS_PER_MINUTE", "0")
+
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine

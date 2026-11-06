@@ -20,6 +20,8 @@ class StaffInvitation(Base):
     last_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     role_id: Mapped[int] = mapped_column(ForeignKey("roles.id", ondelete="RESTRICT"), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Public lookup half of a "selector.verifier" token; NULL for invitations created before revision 251.
+    token_selector: Mapped[str | None] = mapped_column(String(32), nullable=True, unique=True)
     invited_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )

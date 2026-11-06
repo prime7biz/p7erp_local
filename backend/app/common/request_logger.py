@@ -12,6 +12,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.common.client_ip import client_ip_from_request
 from app.config import get_settings
 from app.database import AsyncSessionLocal, engine
 from sqlalchemy import select
@@ -29,11 +30,17 @@ def _should_skip(path: str) -> bool:
     return any(path.startswith(p) for p in SKIP_PREFIXES)
 
 
-def _decode_tenant_user(token: str) -> tuple[int | None, int | None]:
+def _decode_payload(token: str) -> dict | None:
     settings = get_settings()
     try:
-        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
     except JWTError:
+        return None
+
+
+def _decode_tenant_user(token: str) -> tuple[int | None, int | None]:
+    payload = _decode_payload(token)
+    if payload is None:
         return None, None
     aud = payload.get("aud")
     if aud == "platform-admin":
@@ -61,6 +68,7 @@ async def _insert_audit_row(
     response_status: int,
     duration_ms: int,
     user_tenant_id: int | None = None,
+    details: str | None = None,
 ) -> None:
     """``user_tenant_id`` is the user's tenant when the request already resolved it (skips a query)."""
     try:
@@ -87,7 +95,7 @@ async def _insert_audit_row(
                 user_id=user_id,
                 action=action,
                 resource=resource,
-                details=None,
+                details=details,
                 ip_address=ip_address,
                 user_agent=user_agent,
                 request_method=request_method,
@@ -216,24 +224,27 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         if status_code >= 500:
             action = "API_ERROR"
         ua = request.headers.get("user-agent")
-        client = request.client.host if request.client else None
+        client_ip = client_ip_from_request(request)
+        client = None if client_ip == "unknown" else client_ip[:45]
         # get_current_user stores the user's tenant on request.state; reuse it to skip a DB lookup.
         user_tenant_id = None
         if user_id is not None and getattr(request.state, "auth_user_id", None) == user_id:
             user_tenant_id = getattr(request.state, "auth_user_tenant_id", None)
-        _submit_audit_row(
-            {
-                "tenant_id_hdr": tenant_id,
-                "user_id": user_id,
-                "user_tenant_id": user_tenant_id,
-                "action": action,
-                "resource": "http",
-                "ip_address": client,
-                "user_agent": ua,
-                "request_method": request.method,
-                "request_path": path[:500],
-                "response_status": status_code,
-                "duration_ms": duration_ms,
-            }
-        )
+        row = {
+            "tenant_id_hdr": tenant_id,
+            "user_id": user_id,
+            "user_tenant_id": user_tenant_id,
+            "action": action,
+            "resource": "http",
+            "ip_address": client,
+            "user_agent": ua,
+            "request_method": request.method,
+            "request_path": path[:500],
+            "response_status": status_code,
+            "duration_ms": duration_ms,
+        }
+        impersonator = getattr(request.state, "impersonator_admin_id", None)
+        if impersonator is not None:
+            row["details"] = f"impersonated_by_platform_admin={impersonator}"
+        _submit_audit_row(row)
         return response

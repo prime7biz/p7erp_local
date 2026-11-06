@@ -18,5 +18,8 @@ class TenantResponse(BaseModel):
     tenant_type: TenantType
     company_code: str | None
     is_active: bool
+    # Only returned by POST /tenants: one-time key the creator sends as bootstrap_key when
+    # registering the first (admin) user of this tenant.
+    bootstrap_token: str | None = None
 
     model_config = {"from_attributes": True}

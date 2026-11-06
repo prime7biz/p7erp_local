@@ -17,10 +17,10 @@ from app.common.auth import (
     verify_password_constant_time,
 )
 from app.common.login_lockout import (
-    assert_staff_not_locked,
     clear_staff_failed_login,
     enforce_login_rate_limit,
     record_staff_failed_login,
+    staff_ip_lock_active,
     staff_lock_active,
 )
 from app.common.tenant_feature_keys import is_single_session_enforced, with_effective_default_flags
@@ -268,18 +268,21 @@ async def login(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    if staff_lock_active(user):
+    if staff_lock_active(user) or await staff_ip_lock_active(user, request):
         # Only reveal the lock to someone who already proved the password.
         if password_ok:
-            assert_staff_not_locked(user)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account temporarily locked due to failed login attempts",
+            )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     if not password_ok:
-        await record_staff_failed_login(db, user)
+        await record_staff_failed_login(db, user, request)
         await db.commit()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    await clear_staff_failed_login(db, user)
+    await clear_staff_failed_login(db, user, request)
 
     role_row = await db.execute(select(Role).where(Role.id == user.role_id, Role.tenant_id == tenant.id).limit(1))
     role_obj = role_row.scalar_one_or_none()
@@ -303,17 +306,19 @@ async def login(
         session_version = user.auth_session_version
     await db.flush()
     await log_action(db, tenant_id=user.tenant_id, action="LOGIN", user_id=user.id, resource="auth")
-    token = create_access_token(subject=user.id, session_version=session_version)
+    token = create_access_token(subject=user.id, session_version=session_version, tenant_id=tenant.id)
     return TokenResponse(access_token=token, tenant_id=tenant.id)
 
 
 @router.post("/accept-staff-invite", response_model=TokenResponse)
 async def accept_staff_invite_public(
+    request: Request,
     body: AcceptStaffInviteRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     """Public: accept staff invitation and return internal JWT (same as login)."""
+    await enforce_login_rate_limit(request, company_key="staff_invite", scope="staff_invite")
     user, tenant = await accept_staff_invitation(
         db,
         token=body.token,
@@ -346,7 +351,7 @@ async def accept_staff_invite_public(
         user.auth_session_version = int(user.auth_session_version or 0) + 1
         session_version = user.auth_session_version
         await db.flush()
-    token = create_access_token(subject=user.id, session_version=session_version)
+    token = create_access_token(subject=user.id, session_version=session_version, tenant_id=tenant.id)
     return TokenResponse(access_token=token, tenant_id=tenant.id)
 
 
@@ -492,10 +497,12 @@ async def register(
 
 @router.post("/forgot-password", response_model=MessageResponse)
 async def forgot_password(
+    request: Request,
     body: ForgotPasswordRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
+    await enforce_login_rate_limit(request, company_key=str(body.email), scope="forgot_password")
     user, tenant = await _resolve_user_for_forgot_password(
         db,
         email=str(body.email),

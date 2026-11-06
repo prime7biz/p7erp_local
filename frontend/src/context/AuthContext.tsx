@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api, ApiError, clearAuth, MeResponse } from "@/api/client";
 
 interface AuthState {
@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refetch();
+    void refetch();
   }, [refetch]);
 
   const logout = useCallback(() => {
@@ -72,11 +72,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [me],
   );
 
-  return (
-    <AuthContext.Provider value={{ me, loading, error, logout, refetch, hasPermission }}>
-      {children}
-    </AuthContext.Provider>
+  // Same object between renders unless something changed, so every useAuth() consumer does not re-render.
+  const value = useMemo(
+    () => ({ me, loading, error, logout, refetch, hasPermission }),
+    [me, loading, error, logout, refetch, hasPermission],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 // Hook is intentionally colocated with AuthProvider for a single import surface.

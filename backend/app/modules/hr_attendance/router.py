@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import and_, false, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -480,13 +480,56 @@ async def list_regularizations(
     return [_regularization_out(x) for x in rows]
 
 
+def month_date_condition(column, month: str | None):
+    """SQL filter for a "YYYY-MM" month on a date column. None means "no month filter"."""
+    if not (month and len(month) == 7 and "-" in month):
+        return None
+    year_str, mon_str = month.split("-", 1)
+    try:
+        y = int(year_str)
+        m = int(mon_str)
+    except ValueError:
+        return None
+    if not (1 <= y <= 9998 and 1 <= m <= 12):
+        return false()
+    start = date(y, m, 1)
+    end = date(y + 1, 1, 1) if m == 12 else date(y, m + 1, 1)
+    return and_(column >= start, column < end)
+
+
+async def attendance_status_counts(
+    db: AsyncSession, tenant_id: int, employee_ids: list[int], month: str | None
+) -> dict[int, dict[str, int]]:
+    """{employee_id: {UPPER(status): number of attendance rows}} for the given employees (and month)."""
+    if not employee_ids:
+        return {}
+    status_upper = func.upper(AttendanceEntry.status)
+    stmt = select(AttendanceEntry.employee_id, status_upper, func.count()).where(
+        AttendanceEntry.tenant_id == tenant_id,
+        AttendanceEntry.employee_id.in_(employee_ids),
+    )
+    month_filter = month_date_condition(AttendanceEntry.attendance_date, month)
+    if month_filter is not None:
+        stmt = stmt.where(month_filter)
+    rows = await db.execute(stmt.group_by(AttendanceEntry.employee_id, status_upper))
+    counts: dict[int, dict[str, int]] = {}
+    for employee_id, status_value, n in rows.all():
+        counts.setdefault(employee_id, {})[status_value or ""] = int(n)
+    return counts
+
+
 @router.get("/summary", response_model=list[AttendanceSummaryRow])
 async def attendance_summary(
     month: str | None = Query(default=None, description="YYYY-MM"),
     department_id: int | None = Query(default=None),
     limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Max employees in summary (Finding #3)"),
     offset: int = Query(default=0, ge=0),
-    entries_limit: int = Query(default=HR_REPORT_SUB_LIMIT, ge=1, le=HR_REPORT_SUB_MAX, description="Cap attendance rows loaded for aggregation"),
+    entries_limit: int = Query(
+        default=HR_REPORT_SUB_LIMIT,
+        ge=1,
+        le=HR_REPORT_SUB_MAX,
+        description="Deprecated, ignored: counts are aggregated in SQL over all matching rows",
+    ),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -501,34 +544,15 @@ async def attendance_summary(
     if not employees:
         return []
 
-    entries = (
-        await db.execute(
-            select(AttendanceEntry)
-            .where(
-                AttendanceEntry.tenant_id == tenant.id,
-                AttendanceEntry.employee_id.in_([e.id for e in employees]),
-            )
-            .order_by(AttendanceEntry.attendance_date.desc(), AttendanceEntry.id.desc())
-            .limit(entries_limit)
-        )
-    ).scalars().all()
-
-    if month and len(month) == 7 and "-" in month:
-        year_str, mon_str = month.split("-", 1)
-        try:
-            y = int(year_str)
-            m = int(mon_str)
-            entries = [x for x in entries if x.attendance_date.year == y and x.attendance_date.month == m]
-        except ValueError:
-            pass
+    counts = await attendance_status_counts(db, tenant.id, [e.id for e in employees], month)
 
     result: list[AttendanceSummaryRow] = []
     for emp in employees:
-        emp_entries = [x for x in entries if x.employee_id == emp.id]
-        present = sum(1 for x in emp_entries if (x.status or "").upper() in {"PRESENT", "LATE", "HALF_DAY"})
-        absent = sum(1 for x in emp_entries if (x.status or "").upper() == "ABSENT")
-        late = sum(1 for x in emp_entries if (x.status or "").upper() == "LATE")
-        leave_days = sum(1 for x in emp_entries if (x.status or "").upper() == "LEAVE")
+        by_status = counts.get(emp.id, {})
+        present = sum(by_status.get(s, 0) for s in ("PRESENT", "LATE", "HALF_DAY"))
+        absent = by_status.get("ABSENT", 0)
+        late = by_status.get("LATE", 0)
+        leave_days = by_status.get("LEAVE", 0)
         full_name = f"{emp.first_name} {emp.last_name}".strip() if emp.last_name else emp.first_name
         result.append(
             AttendanceSummaryRow(

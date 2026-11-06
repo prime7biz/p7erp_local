@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, extract, func, select
+from sqlalchemy import and_, extract, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
@@ -14,6 +14,7 @@ from app.common.pagination import (
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import AttendanceEntry, Employee, LeaveRequest, LeaveType, PayrollPeriod, PayrollRun, PayrollRunLine, Tenant, User
+from app.modules.hr_attendance.router import attendance_status_counts
 
 router = APIRouter(prefix="/hr/reports", tags=["hr-reports"])
 
@@ -84,7 +85,12 @@ async def report_attendance(
     department_id: int | None = Query(default=None),
     limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Max employees (Finding #3)"),
     offset: int = Query(default=0, ge=0),
-    entries_limit: int = Query(default=HR_REPORT_SUB_LIMIT, ge=1, le=HR_REPORT_SUB_MAX, description="Cap attendance rows loaded"),
+    entries_limit: int = Query(
+        default=HR_REPORT_SUB_LIMIT,
+        ge=1,
+        le=HR_REPORT_SUB_MAX,
+        description="Deprecated, ignored: counts are aggregated in SQL over all matching rows",
+    ),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -94,36 +100,18 @@ async def report_attendance(
     if department_id is not None:
         employees_stmt = employees_stmt.where(Employee.department_id == department_id)
     employees = (await db.execute(employees_stmt.order_by(Employee.employee_code).offset(offset).limit(limit))).scalars().all()
-    att_entries = (
-        await db.execute(
-            select(AttendanceEntry)
-            .where(
-                AttendanceEntry.tenant_id == tenant.id,
-                AttendanceEntry.employee_id.in_([e.id for e in employees]) if employees else False,
-            )
-            .order_by(AttendanceEntry.attendance_date.desc(), AttendanceEntry.id.desc())
-            .limit(entries_limit)
-        )
-    ).scalars().all()
-    if month and len(month) == 7 and "-" in month:
-        y_s, m_s = month.split("-", 1)
-        try:
-            y = int(y_s)
-            m = int(m_s)
-            att_entries = [x for x in att_entries if x.attendance_date.year == y and x.attendance_date.month == m]
-        except ValueError:
-            pass
+    counts = await attendance_status_counts(db, tenant.id, [e.id for e in employees], month)
     output: list[dict[str, object]] = []
     for emp in employees:
-        rows = [x for x in att_entries if x.employee_id == emp.id]
+        by_status = counts.get(emp.id, {})
         full_name = f"{emp.first_name} {emp.last_name}".strip() if emp.last_name else emp.first_name
         output.append(
             {
                 "employee_code": emp.employee_code,
                 "employee_name": full_name,
-                "present_days": sum(1 for x in rows if (x.status or "").upper() in {"PRESENT", "LATE", "HALF_DAY"}),
-                "absent_days": sum(1 for x in rows if (x.status or "").upper() == "ABSENT"),
-                "leave_days": sum(1 for x in rows if (x.status or "").upper() == "LEAVE"),
+                "present_days": sum(by_status.get(s, 0) for s in ("PRESENT", "LATE", "HALF_DAY")),
+                "absent_days": by_status.get("ABSENT", 0),
+                "leave_days": by_status.get("LEAVE", 0),
             }
         )
     return output
@@ -136,7 +124,7 @@ async def report_leave(
         default=HR_REPORT_SUB_LIMIT,
         ge=1,
         le=HR_REPORT_SUB_MAX,
-        description="Cap leave requests scanned for aggregation (Finding #3)",
+        description="Deprecated, ignored: counts are aggregated in SQL over all matching rows",
     ),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -155,26 +143,27 @@ async def report_leave(
         .scalars()
         .all()
     )
-    requests = (
-        await db.execute(
-            select(LeaveRequest)
-            .where(LeaveRequest.tenant_id == tenant.id)
-            .order_by(LeaveRequest.id.desc())
-            .limit(requests_limit)
-        )
-    ).scalars().all()
+    counts_stmt = select(LeaveRequest.leave_type_id, LeaveRequest.status, func.count()).where(
+        LeaveRequest.tenant_id == tenant.id
+    )
     if year is not None:
-        requests = [x for x in requests if x.from_date.year == year or x.to_date.year == year]
+        counts_stmt = counts_stmt.where(
+            or_(extract("year", LeaveRequest.from_date) == year, extract("year", LeaveRequest.to_date) == year)
+        )
+    counts_rows = await db.execute(counts_stmt.group_by(LeaveRequest.leave_type_id, LeaveRequest.status))
+    counts: dict[int, dict[str, int]] = {}
+    for leave_type_id, status_value, n in counts_rows.all():
+        counts.setdefault(leave_type_id, {})[status_value] = int(n)
     output: list[dict[str, object]] = []
     for lt in leave_types:
-        rows = [x for x in requests if x.leave_type_id == lt.id]
+        by_status = counts.get(lt.id, {})
         output.append(
             {
                 "leave_type": lt.name,
-                "total_requests": len(rows),
-                "approved_requests": len([x for x in rows if x.status == "APPROVED"]),
-                "pending_requests": len([x for x in rows if x.status == "PENDING"]),
-                "rejected_requests": len([x for x in rows if x.status == "REJECTED"]),
+                "total_requests": sum(by_status.values()),
+                "approved_requests": by_status.get("APPROVED", 0),
+                "pending_requests": by_status.get("PENDING", 0),
+                "rejected_requests": by_status.get("REJECTED", 0),
             }
         )
     return output
@@ -184,47 +173,53 @@ async def report_leave(
 async def report_payroll(
     year: int | None = Query(default=None),
     runs_limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Cap payroll runs (Finding #3)"),
-    lines_limit: int = Query(default=HR_REPORT_SUB_LIMIT, ge=1, le=HR_REPORT_SUB_MAX, description="Cap payroll run lines loaded"),
+    lines_limit: int = Query(
+        default=HR_REPORT_SUB_LIMIT,
+        ge=1,
+        le=HR_REPORT_SUB_MAX,
+        description="Deprecated, ignored: employee counts are aggregated in SQL",
+    ),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    periods = (
-        (
-            await db.execute(
-                select(PayrollPeriod)
-                .where(PayrollPeriod.tenant_id == tenant.id)
-                .order_by(PayrollPeriod.id.desc())
-                .limit(HR_LIST_MAX_LIMIT)
-            )
-        )
-        .scalars()
-        .all()
-    )
     runs = (
         await db.execute(
             select(PayrollRun).where(PayrollRun.tenant_id == tenant.id).order_by(PayrollRun.id.desc()).limit(runs_limit)
         )
     ).scalars().all()
-    lines = (
+    if not runs:
+        return []
+    periods = (
         await db.execute(
-            select(PayrollRunLine).where(PayrollRunLine.tenant_id == tenant.id).order_by(PayrollRunLine.id.asc()).limit(lines_limit)
+            select(PayrollPeriod).where(
+                PayrollPeriod.tenant_id == tenant.id,
+                PayrollPeriod.id.in_({run.period_id for run in runs}),
+            )
         )
     ).scalars().all()
     if year is not None:
         periods = [x for x in periods if x.start_date.year == year or x.end_date.year == year]
     period_map = {p.id: p for p in periods}
+    line_counts = dict(
+        (
+            await db.execute(
+                select(PayrollRunLine.run_id, func.count())
+                .where(PayrollRunLine.tenant_id == tenant.id, PayrollRunLine.run_id.in_([run.id for run in runs]))
+                .group_by(PayrollRunLine.run_id)
+            )
+        ).all()
+    )
     output: list[dict[str, object]] = []
     for run in runs:
         period = period_map.get(run.period_id)
         if not period:
             continue
-        run_lines = [x for x in lines if x.run_id == run.id]
         output.append(
             {
                 "payroll_period": period.period_code,
-                "total_employees": len(run_lines),
+                "total_employees": int(line_counts.get(run.id, 0)),
                 "gross_total": float(run.gross_total or 0),
                 "deduction_total": float(run.deduction_total or 0),
                 "net_total": float(run.net_total or 0),

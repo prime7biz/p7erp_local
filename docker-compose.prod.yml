@@ -48,7 +48,8 @@ services:
       retries: 5
 
   ollama:
-    image: ollama/ollama:latest
+    # Pin a tested version in the server .env (e.g. OLLAMA_IMAGE_TAG=0.12.6) so restarts never pull a surprise upgrade.
+    image: ollama/ollama:${OLLAMA_IMAGE_TAG:-latest}
     restart: always
     volumes:
       - ollama_data:/root/.ollama
@@ -62,7 +63,7 @@ services:
       start_period: 30s
 
   ollama-init:
-    image: ollama/ollama:latest
+    image: ollama/ollama:${OLLAMA_IMAGE_TAG:-latest}
     restart: "no"
     depends_on:
       ollama:
@@ -144,8 +145,10 @@ services:
       ollama:
         condition: service_healthy
       # Backend must not wait for ollama-init (large model pull); otherwise API is down for a long time.
+    # BACKEND_BIND_ADDR=127.0.0.1 keeps port 8000 reachable only from the host itself (host Nginx),
+    # not from the internet. Default 0.0.0.0 = unchanged behaviour.
     ports:
-      - "8000:8000"
+      - "${BACKEND_BIND_ADDR:-0.0.0.0}:8000:8000"
     volumes:
       - backend_media:/app/media
     # Fewer workers than CPU count to leave headroom for Ollama on shared low-spec hosts.
@@ -256,10 +259,13 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /home/primeadmin/.docker/config.json:/config.json
+    # Label filtering on: only containers labelled com.centurylinklabs.watchtower.enable=true are
+    # auto-updated (none are), so app images change only through the manual deploy script.
+    # WATCHTOWER_LABEL_ENABLE=false restores the old "update every unlabelled container" behaviour.
     environment:
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_POLL_INTERVAL=300
-      - WATCHTOWER_LABEL_ENABLE=false
+      - WATCHTOWER_LABEL_ENABLE=${WATCHTOWER_LABEL_ENABLE:-true}
     command: --include-stopped --revive-stopped --interval 300
 
 volumes:

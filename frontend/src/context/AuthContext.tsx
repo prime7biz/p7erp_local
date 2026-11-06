@@ -1,5 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { api, ApiError, clearAuth, MeResponse } from "@/api/client";
+// Small modules only: importing "@/api/client" here would put every API method in the first download.
+import { authApi } from "@/api/auth";
+import { ApiError, clearAuth } from "@/api/core";
+import type { MeResponse } from "@/api/client";
 
 interface AuthState {
   me: MeResponse | null;
@@ -27,7 +30,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.me();
+      const data = await authApi.me();
       setMe(data);
     } catch (e) {
       setMe(null);

@@ -13,15 +13,27 @@ import type {
   ExternalPrincipalAdminRow,
   ExternalPrincipalListResponse,
 } from "@/types/externalAccess";
-import { parseFastApiErrorDetail } from "@/utils/fastApiDetail";
 import { API_BASE } from "@/api/apiBase";
 import {
-  INTERNAL_TENANT_KEY,
-  INTERNAL_TOKEN_KEY,
-  clearAllSessionsForNewLogin,
-  clearInternalSessionStorage,
-} from "@/api/authStorage";
-import { queryClient } from "@/lib/queryClient";
+  fetchAllPaginated,
+  getTenantId,
+  request,
+  requestBlob,
+  requestPlatformAdmin,
+  requestPublic,
+  requestText,
+  requestWithTotal,
+  type ListWithTotal,
+  type PaginatedRows,
+} from "@/api/core";
+import { authApi } from "@/api/auth";
+import { aiChatApi } from "@/api/aiChat";
+
+// Public helpers now live in api/core.ts; re-exported so existing imports keep working.
+export { ApiError, clearAuth, getTenantId, getToken, setAuth } from "@/api/core";
+export type { ListWithTotal, PaginatedRows } from "@/api/core";
+export { authApi } from "@/api/auth";
+export { aiChatApi } from "@/api/aiChat";
 
 export const APP_VERSION = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? "dev";
 
@@ -1448,70 +1460,6 @@ export interface HrPayrollReportRow {
   net_total: number;
 }
 
-export function getToken(): string | null {
-  return localStorage.getItem(INTERNAL_TOKEN_KEY);
-}
-
-export function getTenantId(): string | null {
-  return localStorage.getItem(INTERNAL_TENANT_KEY);
-}
-
-/** Store a new staff login. Any older staff or portal session in this browser is removed first. */
-export function setAuth(token: string, tenantId: number): void {
-  clearAllSessionsForNewLogin();
-  localStorage.setItem(INTERNAL_TOKEN_KEY, token);
-  localStorage.setItem(INTERNAL_TENANT_KEY, String(tenantId));
-}
-
-/** Remove stored credentials and drop cached API data so the next user cannot see it. */
-export function clearAuth(): void {
-  clearInternalSessionStorage();
-  queryClient.clear();
-}
-
-/**
- * JWT expired or rejected while a token was sent. Clears auth; redirects to login when on `/app/*`.
- * Does not redirect on `/login` or `/signup` (wrong password / stale token during sign-in).
- * See docs/PRE_PRODUCTION_AUDIT.md Finding #5.
- */
-function handleSessionExpiredUnauthorized(sentAuthorization: boolean, code?: string | null): void {
-  if (!sentAuthorization) return;
-  clearAuth();
-  try {
-    const path = window.location.pathname;
-    if (path === "/login" || path === "/signup") return;
-    if (!path.startsWith("/app")) return;
-    const next = path + window.location.search;
-    const reason = code === "session_superseded" ? "session_replaced" : "session_expired";
-    window.location.replace(`/login?reason=${reason}&next=${encodeURIComponent(next)}`);
-  } catch {
-    const reason = code === "session_superseded" ? "session_replaced" : "session_expired";
-    window.location.replace(`/login?reason=${reason}`);
-  }
-}
-
-export class ApiError extends Error {
-  status: number;
-  requestId: string | null;
-  /** Machine-readable code when API returns `{ detail: { code, message } }`. */
-  code: string | null;
-  constructor(message: string, status: number, requestId: string | null = null, code: string | null = null) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.requestId = requestId;
-    this.code = code;
-  }
-}
-
-/** Standard shape for paginated list endpoints (Finding #3). */
-export interface PaginatedRows<T> {
-  items: T[];
-  total: number;
-  page: number;
-  page_size: number;
-  total_pages: number;
-}
 
 export interface PackingCartonLine {
   carton_from: number;
@@ -2011,190 +1959,7 @@ export interface SavedView {
   updated_at: string;
 }
 
-export interface ListWithTotal<T> {
-  rows: T[];
-  total: number | null;
-}
 
-async function fetchAllPaginated<T>(
-  fetchPage: (page: number, pageSize: number) => Promise<PaginatedRows<T>>,
-  pageSize = 500,
-): Promise<T[]> {
-  const out: T[] = [];
-  let page = 1;
-  while (true) {
-    const r = await fetchPage(page, pageSize);
-    out.push(...r.items);
-    if (page >= r.total_pages || r.items.length === 0) break;
-    page += 1;
-  }
-  return out;
-}
-
-async function request<T>(
-  path: string,
-  options: RequestInit & { tenantId?: number | null; omitTenantHeader?: boolean } = {}
-): Promise<T> {
-  const { tenantId, omitTenantHeader, ...init } = options;
-  const tid = omitTenantHeader ? null : (tenantId ?? getTenantId());
-  const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
-  const headers: Record<string, string> = {
-    ...(isFormData ? {} : { "Content-Type": "application/json" }),
-    ...(init.headers as Record<string, string>),
-  };
-  if (tid) headers["X-Tenant-Id"] = String(tid);
-  const token = getToken();
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  const sentAuthorization = Boolean(token);
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    const raw = err as { detail?: unknown; message?: string };
-    const parsed = parseFastApiErrorDetail(raw.detail);
-    if (res.status === 401) handleSessionExpiredUnauthorized(sentAuthorization, parsed.code);
-    const fallback = typeof raw.message === "string" ? raw.message : null;
-    const message = parsed.message !== "Request failed" ? parsed.message : fallback ?? "Request failed";
-    const requestId = res.headers.get("X-Request-Id");
-    throw new ApiError(message, res.status, requestId, parsed.code);
-  }
-  if (res.status === 204) {
-    return undefined as T;
-  }
-  return res.json() as Promise<T>;
-}
-
-async function requestPlatformAdmin<T>(
-  path: string,
-  options: RequestInit & { adminToken?: string | null } = {},
-): Promise<T> {
-  const { adminToken, ...init } = options;
-  const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
-  const headers: Record<string, string> = {
-    ...(isFormData ? {} : { "Content-Type": "application/json" }),
-    ...(init.headers as Record<string, string>),
-  };
-  if (adminToken) headers["Authorization"] = `Bearer ${adminToken}`;
-  const res = await fetch(`${API_BASE}/api/v1/admin${path}`, { ...init, headers });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    const raw = err as { detail?: unknown; message?: string };
-    const parsed = parseFastApiErrorDetail(raw.detail);
-    const fallback = typeof raw.message === "string" ? raw.message : null;
-    const message = parsed.message !== "Request failed" ? parsed.message : fallback ?? "Request failed";
-    const requestId = res.headers.get("X-Request-Id");
-    throw new ApiError(message, res.status, requestId, parsed.code);
-  }
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
-}
-
-async function requestWithTotal<T>(
-  path: string,
-  options: RequestInit & { tenantId?: number | null } = {}
-): Promise<ListWithTotal<T>> {
-  const { tenantId, ...init } = options;
-  const tid = tenantId ?? getTenantId();
-  const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
-  const headers: Record<string, string> = {
-    ...(isFormData ? {} : { "Content-Type": "application/json" }),
-    ...(init.headers as Record<string, string>),
-  };
-  if (tid) headers["X-Tenant-Id"] = String(tid);
-  const token = getToken();
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  const sentAuthorization = Boolean(token);
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    const raw = err as { detail?: unknown; message?: string };
-    const parsed = parseFastApiErrorDetail(raw.detail);
-    if (res.status === 401) handleSessionExpiredUnauthorized(sentAuthorization, parsed.code);
-    const fallback = typeof raw.message === "string" ? raw.message : null;
-    const message = parsed.message !== "Request failed" ? parsed.message : fallback ?? "Request failed";
-    const requestId = res.headers.get("X-Request-Id");
-    throw new ApiError(message, res.status, requestId, parsed.code);
-  }
-  if (res.status === 204) {
-    return { rows: [] as T[], total: 0 };
-  }
-  const totalHeader = res.headers.get("X-Total-Count");
-  const parsedTotal = totalHeader != null ? Number(totalHeader) : Number.NaN;
-  return {
-    rows: (await res.json()) as T[],
-    total: Number.isFinite(parsedTotal) ? parsedTotal : null,
-  };
-}
-
-/** Public request without auth (e.g. verify proforma token). */
-async function requestPublic<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(options.headers as Record<string, string>),
-  };
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    const raw = err as { detail?: string | { msg?: string }[]; message?: string };
-    const d = raw.detail;
-    const message = typeof d === "string" ? d : Array.isArray(d) && d[0]?.msg ? d[0].msg : raw.message ?? "Request failed";
-    throw new ApiError(message, res.status);
-  }
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
-}
-
-async function requestBlob(
-  path: string,
-  options: RequestInit & { tenantId?: number | null } = {}
-): Promise<Blob> {
-  const { tenantId, ...init } = options;
-  const tid = tenantId ?? getTenantId();
-  const headers: Record<string, string> = {
-    ...(init.headers as Record<string, string>),
-  };
-  if (tid) headers["X-Tenant-Id"] = String(tid);
-  const token = getToken();
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  const sentAuthorization = Boolean(token);
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    const raw = err as { detail?: unknown; message?: string };
-    const parsed = parseFastApiErrorDetail(raw.detail);
-    if (res.status === 401) handleSessionExpiredUnauthorized(sentAuthorization, parsed.code);
-    const message = typeof raw.detail === "string" ? raw.detail : "Export failed";
-    throw new ApiError(message, res.status);
-  }
-  return res.blob();
-}
-
-async function requestText(
-  path: string,
-  options: RequestInit & { tenantId?: number | null } = {}
-): Promise<string> {
-  const { tenantId, ...init } = options;
-  const tid = tenantId ?? getTenantId();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(init.headers as Record<string, string>),
-  };
-  if (tid) headers["X-Tenant-Id"] = String(tid);
-  const token = getToken();
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  const sentAuthorization = Boolean(token);
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    const raw = err as { detail?: unknown; message?: string };
-    const parsed = parseFastApiErrorDetail(raw.detail);
-    if (res.status === 401) handleSessionExpiredUnauthorized(sentAuthorization, parsed.code);
-    const d = raw.detail as string | { msg?: string }[] | undefined;
-    const message = typeof d === "string" ? d : Array.isArray(d) && d[0]?.msg ? d[0].msg : raw.message ?? "Request failed";
-    const requestId = res.headers.get("X-Request-Id");
-    throw new ApiError(message, res.status, requestId);
-  }
-  return res.text();
-}
 
 export type AiIntent =
   | "search_query"
@@ -2638,59 +2403,8 @@ export type BusinessOverviewResponse = Record<string, unknown>;
 export type BusinessHealthScoreResponse = Record<string, unknown>;
 
 export const api = {
-  /** Reference-style: companyCode + username + password. Or tenant_id + email + password. */
-  async login(params: {
-    company_code?: string;
-    tenant_id?: number;
-    username?: string;
-    email?: string;
-    login_as?: string;
-    password: string;
-  }): Promise<TokenResponse> {
-    const { company_code, tenant_id, username, email, login_as, password } = params;
-    // Send only non-empty fields so backend accepts company_code + username + password (no 422)
-    const body: Record<string, unknown> = { password };
-    if (company_code?.trim()) body.company_code = company_code.trim();
-    if (tenant_id != null && Number.isFinite(tenant_id)) body.tenant_id = tenant_id;
-    if (username?.trim()) body.username = username.trim();
-    if (email?.trim()) body.email = email.trim();
-    if (login_as?.trim()) body.login_as = login_as.trim().toLowerCase();
-    const res = await request<TokenResponse>("/api/v1/auth/login", {
-      method: "POST",
-      body: JSON.stringify(body),
-      tenantId: tenant_id ?? undefined,
-      /** Avoid sending a previous session's X-Tenant-Id while switching company codes. */
-      omitTenantHeader: true,
-    });
-    return res;
-  },
-  async resolveTenant(company_code: string): Promise<ResolveTenantResponse> {
-    return requestPublic<ResolveTenantResponse>("/api/v1/auth/resolve-tenant", {
-      method: "POST",
-      body: JSON.stringify({ company_code: company_code.trim() }),
-    });
-  },
-  async acceptStaffInvite(data: {
-    token: string;
-    password: string;
-    first_name?: string | null;
-    last_name?: string | null;
-  }): Promise<TokenResponse> {
-    return requestPublic<TokenResponse>("/api/v1/auth/accept-staff-invite", {
-      method: "POST",
-      body: JSON.stringify({
-        token: data.token.trim(),
-        password: data.password,
-        first_name: data.first_name?.trim() || undefined,
-        last_name: data.last_name?.trim() || undefined,
-      }),
-    });
-  },
-  async me(): Promise<MeResponse> {
-    const tid = getTenantId();
-    if (!tid) throw new Error("No tenant");
-    return request<MeResponse>("/api/v1/auth/me", { tenantId: Number(tid) });
-  },
+  ...authApi,
+  ...aiChatApi,
   async register(data: {
     tenant_id: number;
     email: string;
@@ -2872,45 +2586,6 @@ export const api = {
     return request<AuditLogResponse[]>(`/api/v1/audit${suffix}`);
   },
   // AI Tool module
-  async aiListSessions(params?: { limit?: number; offset?: number }): Promise<AiSessionResponse[]> {
-    const q = new URLSearchParams();
-    if (params?.limit != null) q.set("limit", String(params.limit));
-    if (params?.offset != null) q.set("offset", String(params.offset));
-    const suffix = q.toString() ? `?${q.toString()}` : "";
-    return request<AiSessionResponse[]>(`/api/v1/ai-tool/sessions${suffix}`);
-  },
-  async aiCreateSession(data?: { title?: string | null }): Promise<AiSessionResponse> {
-    return request<AiSessionResponse>("/api/v1/ai-tool/sessions", {
-      method: "POST",
-      body: JSON.stringify({ title: data?.title ?? null }),
-    });
-  },
-  async aiListMessages(sessionId: number): Promise<AiMessageResponse[]> {
-    return request<AiMessageResponse[]>(`/api/v1/ai-tool/sessions/${sessionId}/messages`);
-  },
-  async aiSendMessage(
-    sessionId: number,
-    prompt: string,
-    context?: { route?: string; record_type?: string; record_id?: number } | null,
-  ): Promise<AiChatResponse> {
-    return request<AiChatResponse>(`/api/v1/ai-tool/sessions/${sessionId}/messages`, {
-      method: "POST",
-      body: JSON.stringify(context ? { prompt, context } : { prompt }),
-    });
-  },
-  async aiApproveEscalation(
-    sessionId: number,
-    data: { message_id: number; tool_required: string; approved?: boolean },
-  ): Promise<AiChatResponse> {
-    return request<AiChatResponse>(`/api/v1/ai-tool/sessions/${sessionId}/approve-escalation`, {
-      method: "POST",
-      body: JSON.stringify({
-        message_id: data.message_id,
-        tool_required: data.tool_required,
-        approved: data.approved ?? true,
-      }),
-    });
-  },
   async aiQuickActions(): Promise<AiQuickActionsResponse> {
     return request<AiQuickActionsResponse>("/api/v1/ai-tool/quick-actions");
   },

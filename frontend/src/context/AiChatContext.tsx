@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { api, type AiMessageResponse, type AiToolInvocationResult } from "@/api/client";
+import { aiChatApi } from "@/api/aiChat";
+import type { AiMessageResponse, AiToolInvocationResult } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import type { ScreenContext } from "@/lib/screenContext";
 
@@ -59,14 +60,14 @@ export function AiChatProvider({ children }: { children: React.ReactNode }) {
   const pickOrCreateSession = useCallback(async (): Promise<number | null> => {
     setError("");
     try {
-      const rows = await api.aiListSessions({ limit: 50, offset: 0 });
+      const rows = await aiChatApi.aiListSessions({ limit: 50, offset: 0 });
       const saved = getSavedSessionId();
       const picked = saved && rows.some((x) => x.id === saved) ? saved : rows[0]?.id ?? null;
       if (picked) {
         setActiveSessionId(picked);
         return picked;
       }
-      const created = await api.aiCreateSession({ title: "New AI Session" });
+      const created = await aiChatApi.aiCreateSession({ title: "New AI Session" });
       setActiveSessionId(created.id);
       return created.id;
     } catch (e) {
@@ -83,7 +84,7 @@ export function AiChatProvider({ children }: { children: React.ReactNode }) {
   const createSession = useCallback(async (): Promise<number | null> => {
     setError("");
     try {
-      const created = await api.aiCreateSession({ title: "New AI Session" });
+      const created = await aiChatApi.aiCreateSession({ title: "New AI Session" });
       setActiveSessionId(created.id);
       return created.id;
     } catch (e) {
@@ -103,7 +104,7 @@ export function AiChatProvider({ children }: { children: React.ReactNode }) {
       setLoadingMessages(true);
       setError("");
       try {
-        const rows = await api.aiListMessages(sid);
+        const rows = await aiChatApi.aiListMessages(sid);
         setMessages(rows);
         const lastAssistant = [...rows].reverse().find((x) => x.role === "assistant");
         const raw = (lastAssistant?.content_json || {}) as { tool_results?: AiToolInvocationResult[] };
@@ -144,7 +145,7 @@ export function AiChatProvider({ children }: { children: React.ReactNode }) {
       setSending(true);
       setError("");
       try {
-        const result = await api.aiSendMessage(sid, prompt, context);
+        const result = await aiChatApi.aiSendMessage(sid, prompt, context);
         setMessages((prev) => [...prev, result.user_message, result.assistant_message]);
         setLastToolResults(result.tool_results || []);
         return true;
@@ -165,7 +166,7 @@ export function AiChatProvider({ children }: { children: React.ReactNode }) {
       setApprovingEscalationId(messageId);
       setError("");
       try {
-        const result = await api.aiApproveEscalation(sid, {
+        const result = await aiChatApi.aiApproveEscalation(sid, {
           message_id: messageId,
           tool_required: toolRequired,
           approved: true,

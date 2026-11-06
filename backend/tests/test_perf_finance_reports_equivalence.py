@@ -192,6 +192,7 @@ async def _seed(db):
 async def _old_budget_vs_actual(db, tenant, budget) -> dict:
     """Row-by-row reference. Since 2026-11 it is limited to the budget's financial year and sums base_amount."""
     from app.modules.finance.fiscal_year import fiscal_year_bounds_from_label, fy_start_month
+    from app.modules.finance.posting_core import line_base_amount
 
     fy_bounds = fiscal_year_bounds_from_label(budget.fiscal_year, fy_start_month(tenant.feature_flags))
     lines = list((await db.execute(select(BudgetLine).where(BudgetLine.budget_id == budget.id))).scalars().all())
@@ -217,7 +218,7 @@ async def _old_budget_vs_actual(db, tenant, budget) -> dict:
                 continue
             if line.cost_center_id is not None and voucher_line.cost_center_id != line.cost_center_id:
                 continue
-            actual_amount += _to_float(voucher_line.base_amount)
+            actual_amount += _to_float(line_base_amount(voucher_line))
         total_budget += budget_amount
         total_actual += actual_amount
         rows.append(

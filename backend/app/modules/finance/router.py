@@ -4694,7 +4694,7 @@ async def budget_vs_actual(
     # so only filter by account when all lines name one.
     fy_bounds = fiscal_year_bounds_from_label(budget.fiscal_year, fy_start_month(tenant.feature_flags))
     actual_query = (
-        select(VoucherLine.account_id, VoucherLine.cost_center_id, func.sum(VoucherLine.base_amount))
+        select(VoucherLine.account_id, VoucherLine.cost_center_id, func.sum(line_base_amount_sql()))
         .join(Voucher, VoucherLine.voucher_id == Voucher.id)
         .where(VoucherLine.tenant_id == tenant.id, Voucher.status == "POSTED", voucher_in_books_clause())
         .group_by(VoucherLine.account_id, VoucherLine.cost_center_id)

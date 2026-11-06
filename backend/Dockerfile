@@ -8,10 +8,16 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc libpq-dev && rm -rf /var/lib/apt/lists/*
 
+# CPU-only PyTorch is installed BEFORE requirements.txt. sentence-transformers depends on torch;
+# if torch is not already present, pip pulls the CUDA build from PyPI (+ ~4 GB of nvidia-* and
+# triton wheels) that this CPU-only server never uses. Bump TORCH_VERSION deliberately.
+ARG TORCH_VERSION=2.15.0
 COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -r requirements.txt \
-    && pip install torch --index-url https://download.pytorch.org/whl/cpu
+    pip install "torch==${TORCH_VERSION}" --index-url https://download.pytorch.org/whl/cpu \
+    && pip install -r requirements.txt \
+    && python -c "import torch, sys; v = torch.__version__; print('torch', v); sys.exit(0 if '+cpu' in v else 'CUDA torch was installed; expected CPU-only build')" \
+    && ! pip list 2>/dev/null | grep -Ei '^(nvidia-|triton )'
 
 COPY . .
 EXPOSE 8000

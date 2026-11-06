@@ -16,6 +16,15 @@ def tax_config_cache_key(tenant_id: int) -> str:
     return f"cache:tenant:{tenant_id}:compliance:tax-config"
 
 
+# Ledgers are also auto-created outside the finance router (party ledgers, seeding), which do not
+# invalidate this key, so keep the TTL short.
+ACCOUNT_GROUP_HIERARCHY_CACHE_TTL_SECONDS = 60
+
+
+def account_group_hierarchy_cache_key(tenant_id: int) -> str:
+    return f"cache:tenant:{tenant_id}:finance:account-group-hierarchy"
+
+
 async def cache_get_json(key: str) -> Any | None:
     settings = get_settings()
     if not settings.api_cache_enabled:

@@ -53,12 +53,12 @@ docker compose exec backend python scripts/rebuild_stock_balance_snapshot.py --t
 
 ## 4. Environment — DB pool (`DB_POOL_*`)
 
-Tuned only via host `.env` / compose env (defaults unchanged in code):
+Tuned via host `.env` / compose env (code defaults in `backend/app/config.py`; per-process budget in `docs/DEPLOYMENT_PROCESS.md`):
 
 | Variable | Role |
 |----------|------|
-| `DB_POOL_SIZE` | Base pool size |
-| `DB_MAX_OVERFLOW` | Extra connections under burst |
+| `DB_POOL_SIZE` | Base pool size (default 10; was 20) |
+| `DB_MAX_OVERFLOW` | Extra connections under burst (default 10; was 30) |
 | `DB_POOL_TIMEOUT` | Wait for a connection (seconds) |
 | `DB_POOL_RECYCLE` | Recycle connections after N seconds |
 
@@ -72,8 +72,8 @@ Tuned only via host `.env` / compose env (defaults unchanged in code):
 | `PERF_TIMING_SLOW_MS` | Threshold for slow log (default 750) |
 | `PERF_POOL_METRICS_ENABLED` | Append pool stats to slow-request log line |
 | `PERF_REQUEST_QUERY_WARN_BYTES` | Warn on oversized query string |
-| `PERF_SESSION_STATEMENT_TIMEOUT_MS` | `SET LOCAL statement_timeout` per request (0 = off) |
-| `PERF_SESSION_LOCK_TIMEOUT_MS` | `SET LOCAL lock_timeout` per request (0 = off) |
+| `PERF_SESSION_STATEMENT_TIMEOUT_MS` | `statement_timeout` set once per DB connection (all sessions incl. background jobs); `SET LOCAL` per request when `USE_PGBOUNCER=true` (0 = off) |
+| `PERF_SESSION_LOCK_TIMEOUT_MS` | `lock_timeout`, same scope as above (0 = off) |
 
 **Rollback:** set flags to `false` / `0` and restart backend.
 

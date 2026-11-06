@@ -117,6 +117,16 @@ class Settings(BaseSettings):
     # Celery / async jobs (defaults to redis_url when empty)
     celery_broker_url: str = ""
     celery_result_backend: str = ""
+    # 1 = a worker process reserves one task at a time (long tasks do not hoard queued ones).
+    celery_worker_prefetch_multiplier: int = 1
+    # Recycle a worker child after N tasks so slow memory growth (pandas/torch) is released. 0 = never.
+    celery_worker_max_tasks_per_child: int = 200
+    # Soft limit raises SoftTimeLimitExceeded inside the task; hard limit kills the child. 0 = no limit.
+    celery_task_soft_time_limit_seconds: int = 3300
+    celery_task_time_limit_seconds: int = 3600
+    # Delete merch alert_scan_log rows older than this many days (platform maintenance). 0 = keep forever.
+    alert_scan_log_retention_days: int = 30
+    alert_scan_log_purge_batch_size: int = 5000
     forecast_max_concurrent: int = 2
     analysis_max_concurrent: int = 4
     # MCP sync forecast path: guardrails (async Celery path can raise these later)
@@ -170,10 +180,20 @@ class Settings(BaseSettings):
     perf_pool_metrics_enabled: bool = False
     # Warn once per request if the URL query string exceeds this many bytes (abnormally large GET).
     perf_request_query_warn_bytes: int = 8192
-    # Per-request DB session: SET LOCAL statement_timeout (ms). 0 = disabled. Use only after profiling.
+    # DB statement_timeout (ms). 0 = disabled. Use only after profiling. Direct Postgres: set once per
+    # pooled connection (applies to every session of this process, incl. background jobs).
+    # PgBouncer (USE_PGBOUNCER=true): SET LOCAL at the start of each API request instead.
     perf_session_statement_timeout_ms: int = 0
-    # Per-request DB session: SET LOCAL lock_timeout (ms). 0 = disabled.
+    # DB lock_timeout (ms). 0 = disabled. Same scope rules as perf_session_statement_timeout_ms.
     perf_session_lock_timeout_ms: int = 0
+
+    # SQLAlchemy pool per process (each uvicorn worker / Celery child has its own pool).
+    # Budget: (uvicorn workers + celery processes) x (pool + overflow) must stay below Postgres
+    # max_connections (default 100) minus headroom for alembic/psql/backups.
+    db_pool_size: int = 10
+    db_max_overflow: int = 10
+    db_pool_timeout: int = 10
+    db_pool_recycle: int = 1800
 
     # Subscription plan enforcement: when True, block user creation over plan max_users and inactive subscriptions.
     plan_enforcement_enabled: bool = False

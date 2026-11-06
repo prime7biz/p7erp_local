@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from openai import AsyncOpenAI
-
 from app.config import get_settings
 from app.modules.ai_tool.llm_provider.base import BaseLlmProvider
 from app.modules.ai_tool.llm_provider.ollama_provider import TRIAGE_SYSTEM_PROMPT
@@ -22,6 +20,8 @@ class VllmLlmProvider(BaseLlmProvider):
         timeout = float(max(15, settings.ai_timeout_chat_seconds + 15))
 
         try:
+            from openai import AsyncOpenAI
+
             client = AsyncOpenAI(base_url=api_base, api_key="not-needed", timeout=timeout)
             resp = await client.chat.completions.create(
                 model=model,

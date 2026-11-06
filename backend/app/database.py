@@ -1,4 +1,3 @@
-import os
 import re
 
 from sqlalchemy import event, text
@@ -171,19 +170,30 @@ if settings.use_pgbouncer:
     # Required for PgBouncer transaction pooling with asyncpg prepared statements.
     _connect_args["statement_cache_size"] = 0
 
-_pool_size = int(os.environ.get("DB_POOL_SIZE", "20"))
-_max_overflow = int(os.environ.get("DB_MAX_OVERFLOW", "30"))
-_pool_timeout = int(os.environ.get("DB_POOL_TIMEOUT", "10"))
-_pool_recycle = int(os.environ.get("DB_POOL_RECYCLE", "1800"))
+_stmt_timeout_ms = max(0, int(settings.perf_session_statement_timeout_ms or 0))
+_lock_timeout_ms = max(0, int(settings.perf_session_lock_timeout_ms or 0))
+# PgBouncer (transaction pooling) rejects unknown startup parameters and shares server
+# connections between clients, so timeouts must be SET LOCAL per request there (see get_db).
+_timeouts_per_request = settings.use_pgbouncer
+if not _timeouts_per_request:
+    _server_settings: dict[str, str] = {}
+    if _stmt_timeout_ms > 0:
+        _server_settings["statement_timeout"] = str(_stmt_timeout_ms)
+    if _lock_timeout_ms > 0:
+        _server_settings["lock_timeout"] = str(_lock_timeout_ms)
+    if _server_settings:
+        _connect_args["server_settings"] = _server_settings
 
 engine = create_async_engine(
     db_url,
     echo=False,
+    # One cheap round-trip on checkout; replaces dead connections after a Postgres restart
+    # instead of failing the first request that gets them.
     pool_pre_ping=True,
-    pool_size=_pool_size,
-    max_overflow=_max_overflow,
-    pool_timeout=_pool_timeout,
-    pool_recycle=_pool_recycle,
+    pool_size=settings.db_pool_size,
+    max_overflow=settings.db_max_overflow,
+    pool_timeout=settings.db_pool_timeout,
+    pool_recycle=settings.db_pool_recycle,
     connect_args=_connect_args,
 )
 
@@ -220,13 +230,11 @@ async def get_db() -> AsyncSession:
     """
     async with AsyncSessionLocal() as session:
         try:
-            _perf = get_settings()
-            _stmt_ms = int(getattr(_perf, "perf_session_statement_timeout_ms", 0) or 0)
-            if _stmt_ms > 0:
-                await session.execute(text(f"SET LOCAL statement_timeout = {_stmt_ms}"))
-            _lock_ms = int(getattr(_perf, "perf_session_lock_timeout_ms", 0) or 0)
-            if _lock_ms > 0:
-                await session.execute(text(f"SET LOCAL lock_timeout = {_lock_ms}"))
+            if _timeouts_per_request:
+                if _stmt_timeout_ms > 0:
+                    await session.execute(text(f"SET LOCAL statement_timeout = {_stmt_timeout_ms}"))
+                if _lock_timeout_ms > 0:
+                    await session.execute(text(f"SET LOCAL lock_timeout = {_lock_timeout_ms}"))
             yield session
             if (
                 session.new

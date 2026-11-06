@@ -30,6 +30,13 @@ from sqlalchemy import case, cast, func, Numeric, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.cache import (
+    ACCOUNT_GROUP_HIERARCHY_CACHE_TTL_SECONDS,
+    account_group_hierarchy_cache_key,
+    cache_delete,
+    cache_get_json,
+    cache_set_json,
+)
 from app.common.permissions import (
     PERMISSION_FINANCE_AP_POSTING_APPROVE,
     PERMISSION_FINANCE_BUDGET_OVERRIDE,
@@ -1470,6 +1477,13 @@ async def list_account_groups_hierarchy(
 ):
     """Return account groups as a tree (Group → Type → hierarchy) for tree UX and reports."""
     _ensure_tenant(user, tenant)
+    # Only the default page (what the UI requests) is cached, so one key per tenant covers it.
+    use_cache = get_settings().api_cache_enabled and limit == 500 and offset == 0
+    cache_key = account_group_hierarchy_cache_key(tenant.id)
+    if use_cache:
+        cached = await cache_get_json(cache_key)
+        if cached is not None:
+            return cached
     result = await db.execute(
         select(AccountGroup)
         .where(AccountGroup.tenant_id == tenant.id)
@@ -1520,7 +1534,17 @@ async def list_account_groups_hierarchy(
     for r in roots:
         set_depth_and_sort(r, 0)
     roots.sort(key=lambda r: (r.sort_order, r.name))
+    if use_cache:
+        await cache_set_json(
+            cache_key,
+            [r.model_dump(mode="json") for r in roots],
+            ACCOUNT_GROUP_HIERARCHY_CACHE_TTL_SECONDS,
+        )
     return roots
+
+
+async def _invalidate_account_group_hierarchy_cache(tenant_id: int) -> None:
+    await cache_delete(account_group_hierarchy_cache_key(tenant_id))
 
 
 @router.post("/account-groups", response_model=AccountGroupOut)
@@ -1556,6 +1580,7 @@ async def create_account_group(
     row = AccountGroup(tenant_id=tenant.id, **payload)
     db.add(row)
     await db.commit()
+    await _invalidate_account_group_hierarchy_cache(tenant.id)
     await db.refresh(row)
     return row
 
@@ -1579,6 +1604,7 @@ async def update_account_group(
             if key in data:
                 setattr(row, key, data[key])
         await db.commit()
+        await _invalidate_account_group_hierarchy_cache(tenant.id)
         await db.refresh(row)
         return row
     await ensure_owned(db, AccountGroup, body.parent_group_id, tenant.id, "Parent account group")
@@ -1593,6 +1619,7 @@ async def update_account_group(
             continue
         setattr(row, key, value)
     await db.commit()
+    await _invalidate_account_group_hierarchy_cache(tenant.id)
     await db.refresh(row)
     return row
 
@@ -1624,6 +1651,7 @@ async def delete_account_group(
         )
     await db.delete(row)
     await db.commit()
+    await _invalidate_account_group_hierarchy_cache(tenant.id)
     return {"ok": True}
 
 
@@ -1678,6 +1706,7 @@ async def seed_account_groups(
         await db.commit()
     await seed_tenant_system_coa(db, tenant.id)
     await db.commit()
+    await _invalidate_account_group_hierarchy_cache(tenant.id)
     result = await db.execute(
         select(AccountGroup).where(AccountGroup.tenant_id == tenant.id).order_by(AccountGroup.sort_order)
     )
@@ -1703,6 +1732,7 @@ async def seed_system_coa_for_tenant(
     _ensure_tenant(user, tenant)
     summary = await seed_tenant_system_coa(db, tenant.id)
     await db.commit()
+    await _invalidate_account_group_hierarchy_cache(tenant.id)
     return SystemCoaSeedSummary(**summary)
 
 
@@ -1801,6 +1831,7 @@ async def create_chart_account(
     row = ChartOfAccount(tenant_id=tenant.id, **payload)
     db.add(row)
     await db.commit()
+    await _invalidate_account_group_hierarchy_cache(tenant.id)
     await db.refresh(row)
     return row
 
@@ -1834,6 +1865,7 @@ async def update_chart_account(
             if key in data:
                 setattr(row, key, data[key])
         await db.commit()
+        await _invalidate_account_group_hierarchy_cache(tenant.id)
         await db.refresh(row)
         return row
     group = await db.get(AccountGroup, body.group_id)
@@ -1849,6 +1881,7 @@ async def update_chart_account(
     for key, value in body.model_dump(exclude={"account_number"}).items():
         setattr(row, key, value)
     await db.commit()
+    await _invalidate_account_group_hierarchy_cache(tenant.id)
     await db.refresh(row)
     return row
 
@@ -1878,6 +1911,7 @@ async def delete_chart_account(
         raise HTTPException(status_code=400, detail="Cannot delete ledger with voucher entries")
     await db.delete(row)
     await db.commit()
+    await _invalidate_account_group_hierarchy_cache(tenant.id)
     return {"ok": True}
 
 
@@ -2228,6 +2262,7 @@ async def coa_import(
         await safe_async_session_rollback(db)
         return {"ok": False, "groups_created": 0, "groups_updated": 0, "accounts_created": 0, "accounts_updated": 0, "errors": errors}
     await db.commit()
+    await _invalidate_account_group_hierarchy_cache(tenant.id)
     return {"ok": True, "groups_created": created_g, "groups_updated": updated_g, "accounts_created": created_a, "accounts_updated": updated_a, "errors": errors}
 
 

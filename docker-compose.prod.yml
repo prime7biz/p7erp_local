@@ -6,6 +6,24 @@ services:
     restart: always
     labels:
       - "com.centurylinklabs.watchtower.enable=false"
+    # Memory tuning for a small VPS shared with Ollama + API + Celery. Override any value in the
+    # server .env (e.g. PG_SHARED_BUFFERS=1GB on a 8 GB host). Changing these needs a Postgres
+    # restart (brief downtime). pg_stat_statements also needs a one-time
+    # `CREATE EXTENSION IF NOT EXISTS pg_stat_statements;` (see docs/DEPLOYMENT_PROCESS.md).
+    # idle_in_transaction_session_timeout stays 0 (off): background jobs hold an advisory-lock
+    # connection idle inside a transaction for the whole job (app/common/background_lock.py).
+    command: >
+      postgres
+      -c shared_buffers=${PG_SHARED_BUFFERS:-512MB}
+      -c effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-1536MB}
+      -c work_mem=${PG_WORK_MEM:-8MB}
+      -c maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-128MB}
+      -c max_connections=${PG_MAX_CONNECTIONS:-100}
+      -c idle_in_transaction_session_timeout=${PG_IDLE_IN_TRANSACTION_SESSION_TIMEOUT:-0}
+      -c random_page_cost=${PG_RANDOM_PAGE_COST:-1.1}
+      -c shared_preload_libraries=pg_stat_statements
+    # Docker's default 64 MB /dev/shm is too small for parallel queries with these settings.
+    shm_size: ${PG_SHM_SIZE:-256mb}
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-p7erp}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-p7erp}
@@ -104,6 +122,20 @@ services:
       EMAILS_FROM_EMAIL: ${EMAILS_FROM_EMAIL:-}
       EMAILS_FROM_NAME: ${EMAILS_FROM_NAME:-Prime7 ERP}
       FRONTEND_URL: ${FRONTEND_URL:-https://prime7erp.com}
+      # DB pool per process. API: 2 uvicorn workers x (10 + 10) = 40 connections max.
+      # worker/beat override these below; total must stay under PG_MAX_CONNECTIONS (100).
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
+      PERF_SESSION_STATEMENT_TIMEOUT_MS: ${PERF_SESSION_STATEMENT_TIMEOUT_MS:-0}
+      PERF_SESSION_LOCK_TIMEOUT_MS: ${PERF_SESSION_LOCK_TIMEOUT_MS:-0}
+      # true = alert scans / weekly AI report / platform maintenance run inside the API process.
+      # Switch to false only after beat + worker are healthy (docs/DEPLOYMENT_PROCESS.md).
+      INPROCESS_SCHEDULERS_ENABLED: ${INPROCESS_SCHEDULERS_ENABLED:-true}
+      ALERT_SCAN_LOG_RETENTION_DAYS: ${ALERT_SCAN_LOG_RETENTION_DAYS:-30}
+      CELERY_WORKER_PREFETCH_MULTIPLIER: ${CELERY_WORKER_PREFETCH_MULTIPLIER:-1}
+      CELERY_WORKER_MAX_TASKS_PER_CHILD: ${CELERY_WORKER_MAX_TASKS_PER_CHILD:-200}
+      CELERY_TASK_SOFT_TIME_LIMIT_SECONDS: ${CELERY_TASK_SOFT_TIME_LIMIT_SECONDS:-3300}
+      CELERY_TASK_TIME_LIMIT_SECONDS: ${CELERY_TASK_TIME_LIMIT_SECONDS:-3600}
     depends_on:
       postgres:
         condition: service_healthy
@@ -142,7 +174,11 @@ services:
   worker:
     image: ${BACKEND_IMAGE:-your-dockerhub-user/p7erp-backend:latest}
     restart: always
-    environment: *backend_env
+    environment:
+      <<: *backend_env
+      # Each Celery child process has its own pool: CELERY_CONCURRENCY x (2 + 3) = 10 max by default.
+      DB_POOL_SIZE: ${CELERY_DB_POOL_SIZE:-2}
+      DB_MAX_OVERFLOW: ${CELERY_DB_MAX_OVERFLOW:-3}
     depends_on:
       postgres:
         condition: service_healthy
@@ -152,7 +188,7 @@ services:
         condition: service_healthy
     volumes:
       - backend_media:/app/media
-    command: celery -A app.common.celery_app.celery_app worker --loglevel=info
+    command: celery -A app.common.celery_app.celery_app worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-2}
     deploy:
       resources:
         limits:
@@ -164,7 +200,11 @@ services:
   beat:
     image: ${BACKEND_IMAGE:-your-dockerhub-user/p7erp-backend:latest}
     restart: always
-    environment: *backend_env
+    environment:
+      <<: *backend_env
+      # Beat only schedules; it never runs tasks.
+      DB_POOL_SIZE: "1"
+      DB_MAX_OVERFLOW: "1"
     depends_on:
       postgres:
         condition: service_healthy

@@ -3,7 +3,7 @@ import logging
 import os
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -139,6 +139,30 @@ async def _every(name: str, job, *, first_delay: float, interval: float) -> None
         await asyncio.sleep(interval)
 
 
+def _seconds_until_weekly(weekday: int, hour: int, minute: int = 0, now: datetime | None = None) -> float:
+    """Seconds from ``now`` (UTC) until the next ``weekday`` (Mon=0..Sun=6) at ``hour:minute`` UTC."""
+    now = now or datetime.now(timezone.utc)
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    target += timedelta(days=(weekday - now.weekday()) % 7)
+    if target <= now:
+        target += timedelta(days=7)
+    return (target - now).total_seconds()
+
+
+async def _weekly_at(name: str, job, *, weekday: int, hour: int, minute: int = 0) -> None:
+    """In-process scheduler loop pinned to a wall-clock slot, so restarts/deploys do not shift it."""
+    while True:
+        await asyncio.sleep(_seconds_until_weekly(weekday, hour, minute))
+        try:
+            await job()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Scheduled job %s failed", name)
+        # Step past the slot so a very fast run cannot fire twice in the same minute.
+        await asyncio.sleep(61)
+
+
 async def _seed_system_coa_startup() -> None:
     """Self-heal: ensure system groups/ledgers/mappings exist for every tenant (idempotent)."""
     from app.common.scheduled_jobs import seed_system_coa_once
@@ -160,7 +184,15 @@ async def lifespan(app: FastAPI):
         tasks = [
             asyncio.create_task(_every("merch_alert_scan", jobs.run_merch_alert_scan_once, first_delay=60, interval=60 * 15)),
             asyncio.create_task(_every("trade_alert_scan", jobs.run_trade_alert_scan_once, first_delay=60 * 5, interval=86400)),
-            asyncio.create_task(_every("weekly_ai_reports", jobs.run_weekly_ai_reports_once, first_delay=86400, interval=86400)),
+            # Sunday 02:00 UTC — same slot as the Celery beat crontab (scheduled.weekly_ai_reports).
+            asyncio.create_task(
+                _weekly_at(
+                    "weekly_ai_reports",
+                    lambda: jobs.run_weekly_ai_reports_once(only_on_sunday=False),
+                    weekday=6,
+                    hour=2,
+                )
+            ),
             asyncio.create_task(_every("platform_maintenance", jobs.run_platform_maintenance_once, first_delay=3600, interval=3600)),
         ]
     try:
@@ -173,6 +205,9 @@ async def lifespan(app: FastAPI):
                 await t
             except asyncio.CancelledError:
                 pass
+        from app.common.http_clients import close_shared_http_clients
+
+        await close_shared_http_clients()
 
 
 app = FastAPI(

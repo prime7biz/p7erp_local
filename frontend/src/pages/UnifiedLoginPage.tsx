@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
-import { api, setAuth } from "@/api/client";
+// Small modules only, so the login page does not download every API method.
+import { authApi } from "@/api/auth";
+import { setAuth } from "@/api/core";
 import { safeInternalPath } from "@/utils/safeUrl";
 import { logApiError } from "@/utils/logApiError";
 import { externalLogin, setExtAuth } from "@/api/externalClient";
@@ -65,7 +67,7 @@ export function UnifiedLoginPage() {
       return;
     }
     try {
-      const r = await api.resolveTenant(code);
+      const r = await authApi.resolveTenant(code);
       setTenantHint(r.tenant_name);
       setAvailableRoles(r.available_roles);
       if (!r.available_roles.includes(loginRole)) {
@@ -102,7 +104,7 @@ export function UnifiedLoginPage() {
         return;
       }
 
-      const res = await api.login({
+      const res = await authApi.login({
         company_code: code,
         email: email.trim(),
         password,

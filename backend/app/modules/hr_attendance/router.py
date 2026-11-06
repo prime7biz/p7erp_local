@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -640,10 +641,10 @@ def _ot_entry_out(row: OvertimeEntry) -> OvertimeEntryOut:
         tenant_id=row.tenant_id,
         employee_id=row.employee_id,
         work_date=row.work_date,
-        ot_hours=row.ot_hours,
+        ot_hours=str(row.ot_hours),
         ot_type=row.ot_type,
-        rate_multiplier=row.rate_multiplier,
-        amount=row.amount,
+        rate_multiplier=str(row.rate_multiplier),
+        amount=str(row.amount) if row.amount is not None else None,
         rule_id=row.rule_id,
         status=row.status,
         approved_by=row.approved_by,
@@ -762,13 +763,20 @@ async def create_overtime_entry(
 ):
     _ensure_tenant(user, tenant)
     await _employee_or_404(db, tenant.id, body.employee_id)
+    try:
+        ot_hours = Decimal(str(body.ot_hours).strip())
+        rate_multiplier = Decimal(str(body.rate_multiplier).strip())
+    except InvalidOperation:
+        raise HTTPException(status_code=400, detail="ot_hours and rate_multiplier must be numbers")
+    if not ot_hours.is_finite() or not rate_multiplier.is_finite() or ot_hours < 0 or rate_multiplier < 0:
+        raise HTTPException(status_code=400, detail="ot_hours and rate_multiplier must be non-negative numbers")
     row = OvertimeEntry(
         tenant_id=tenant.id,
         employee_id=body.employee_id,
         work_date=body.work_date,
-        ot_hours=body.ot_hours,
+        ot_hours=ot_hours,
         ot_type=body.ot_type,
-        rate_multiplier=body.rate_multiplier,
+        rate_multiplier=rate_multiplier,
         amount=None,
         rule_id=body.rule_id,
         status="PENDING",

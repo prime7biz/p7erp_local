@@ -433,7 +433,13 @@ async def financier_credit_lines(
     party_id = await fsel.financier_party_id_for_principal(db, principal)
     if not party_id:
         return {"items": [], "note": "Link financier_party_id on your financier access to see facilities."}
+    from app.external_access.financier_portal.visibility_service import load_rows_by_id
+
     facs = await fsel.list_facilities_for_financier(db, principal.tenant_id, party_id)
+    btbs_by_id = await load_rows_by_id(db, BtbLc, {int(f.linked_btb_lc_id) for f in facs if f.linked_btb_lc_id})
+    mcs_by_id = await load_rows_by_id(
+        db, MasterContract, {int(f.linked_master_contract_id) for f in facs if f.linked_master_contract_id}
+    )
     items = []
     for f in facs:
         san = float(f.sanctioned_amount or 0)
@@ -441,11 +447,11 @@ async def financier_credit_lines(
         btb_ref = None
         mc_ref = None
         if f.linked_btb_lc_id:
-            b = await db.get(BtbLc, int(f.linked_btb_lc_id))
+            b = btbs_by_id.get(int(f.linked_btb_lc_id))
             if b and b.tenant_id == principal.tenant_id:
                 btb_ref = b.reference
         if f.linked_master_contract_id:
-            mc = await db.get(MasterContract, int(f.linked_master_contract_id))
+            mc = mcs_by_id.get(int(f.linked_master_contract_id))
             if mc and mc.tenant_id == principal.tenant_id:
                 mc_ref = mc.reference
         items.append(

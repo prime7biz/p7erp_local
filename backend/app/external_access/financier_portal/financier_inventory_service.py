@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 from typing import Any
 
-from sqlalchemy import case, cast, desc, func, or_, select
+from sqlalchemy import and_, case, cast, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.types import Date as SQLDate, Numeric
 
@@ -15,6 +15,7 @@ from app.models import Item, StockGroup
 from app.models.finance import Voucher
 from app.models.finance import ChartOfAccount, CoAConfig
 from app.models.inventory import (
+    InventoryCostLayer,
     InventoryGlPosting,
     ProcessOrder,
     PurchaseOrderItem,
@@ -22,51 +23,63 @@ from app.models.inventory import (
     Warehouse,
 )
 from app.modules.finance.system_coa_seeding_service import resolve_system_ledger
+from app.modules.inventory import stock_report_queries
 from app.modules.inventory.router import (
     _fifo_layer_qty_value_map,
-    _inventory_line_from_summary,
-    _stock_summary_rows,
+    _inventory_line_from_balance,
     _to_float,
 )
 from app.services.fifo_inventory import fifo_on_hand_value
 
 
-async def _wip_total_value(db: AsyncSession, tenant_id: int) -> float:
-    pos = (
-        await db.execute(select(ProcessOrder).where(ProcessOrder.tenant_id == tenant_id, ProcessOrder.status == "ISSUED"))
-    ).scalars().all()
+async def _fifo_total_value(db: AsyncSession, tenant_id: int, as_of_date: date | None = None) -> float:
+    """Same total as ``fifo_on_hand_value``; exhausted layers (qty 0) add nothing, so SQL skips them."""
+    if as_of_date is not None:
+        return await fifo_on_hand_value(db, tenant_id, as_of_date=as_of_date)
+    layer = InventoryCostLayer
+    stmt = select(layer.qty_remaining, layer.unit_cost).where(layer.tenant_id == tenant_id, layer.qty_remaining != 0)
     total = 0.0
-    for po in pos:
-        mvs = (
-            await db.execute(
-                select(StockMovement).where(
-                    StockMovement.tenant_id == tenant_id,
-                    StockMovement.reference_type == "PROCESS_ORDER",
-                    StockMovement.reference_id == po.id,
-                    StockMovement.movement_type == "OUT",
-                    StockMovement.item_id == po.input_item_id,
-                )
-            )
-        ).scalars().all()
-        total += sum(_to_float(m.movement_value or "0") for m in mvs)
+    for qty_remaining, unit_cost in (await db.execute(stmt)).all():
+        total += _to_float(qty_remaining) * _to_float(unit_cost)
+    return round(total, 4)
+
+
+async def _wip_total_value(db: AsyncSession, tenant_id: int) -> float:
+    sm = StockMovement
+    rows = await db.execute(
+        select(ProcessOrder.id, sm.movement_value)
+        .join(
+            sm,
+            and_(
+                sm.tenant_id == tenant_id,
+                sm.reference_type == "PROCESS_ORDER",
+                sm.reference_id == ProcessOrder.id,
+                sm.movement_type == "OUT",
+                sm.item_id == ProcessOrder.input_item_id,
+            ),
+        )
+        .where(ProcessOrder.tenant_id == tenant_id, ProcessOrder.status == "ISSUED")
+        .order_by(ProcessOrder.id, sm.id)
+    )
+    values_by_po: dict[int, list[float]] = defaultdict(list)
+    for po_id, movement_value in rows.all():
+        values_by_po[po_id].append(_to_float(movement_value or "0"))
+    total = 0.0
+    for values in values_by_po.values():
+        total += sum(values)
     return round(total, 2)
 
 
 async def build_financier_inventory_overview(
     db: AsyncSession, *, tenant_id: int, as_of_date: date | None = None
 ) -> dict[str, Any]:
-    stock_v = await fifo_on_hand_value(db, tenant_id, as_of_date=as_of_date)
+    stock_v = await _fifo_total_value(db, tenant_id, as_of_date)
     wip = await _wip_total_value(db, tenant_id)
-    summary = await _stock_summary_rows(db, tenant_id)
-    pos_count = sum(1 for r in summary if r.on_hand_qty > 0)
-    items_r = await db.execute(select(Item).where(Item.tenant_id == tenant_id))
-    item_map = {r.id: r for r in items_r.scalars().all()}
-    gids: set[int | None] = set()
-    for s in summary:
-        if s.on_hand_qty <= 0:
-            continue
-        it = item_map.get(s.item_id)
-        gids.add(it.stock_group_id if it else None)
+    lines = await stock_report_queries.load_stock_balance_lines(
+        db, tenant_id, None, positive_only=True, as_of_date=as_of_date
+    )
+    pos_count = len(lines)
+    gids: set[int | None] = {s.stock_group_id for s in lines}
     return {
         "as_of_date": as_of_date.isoformat() if as_of_date else None,
         "total_inventory_value": round(stock_v, 2),
@@ -98,13 +111,6 @@ async def build_financier_inventory_by_group(
     as_of_date: date | None = None,
     btb_scope: bool = False,
 ) -> dict[str, Any]:
-    fifo_map = await _fifo_layer_qty_value_map(db, tenant_id, as_of_date)
-    summary = await _stock_summary_rows(db, tenant_id)
-    items_result = await db.execute(select(Item).where(Item.tenant_id == tenant_id))
-    item_map = {r.id: r for r in items_result.scalars().all()}
-    sg_result = await db.execute(select(StockGroup).where(StockGroup.tenant_id == tenant_id))
-    sg_map = {r.id: r for r in sg_result.scalars().all()}
-
     allowed: set[int] | None = None
     if btb_scope:
         if not party_id:
@@ -117,15 +123,27 @@ async def build_financier_inventory_by_group(
                 "note": "No PO lines under linked BTB LCs.",
             }
 
+    balances = await stock_report_queries.load_stock_balance_lines(
+        db, tenant_id, None, positive_only=True, as_of_date=as_of_date
+    )
+    if allowed is not None:
+        balances = [s for s in balances if s.item_id in allowed]
+        fifo_map = await _fifo_layer_qty_value_map(
+            db, tenant_id, as_of_date, pairs=[(s.item_id, s.warehouse_id) for s in balances]
+        )
+    else:
+        fifo_map = await _fifo_layer_qty_value_map(db, tenant_id, as_of_date)
+    group_ids = {s.stock_group_id for s in balances if s.stock_group_id is not None}
+    sg_map: dict[int, StockGroup] = {}
+    if group_ids:
+        sg_result = await db.execute(
+            select(StockGroup).where(StockGroup.tenant_id == tenant_id, StockGroup.id.in_(group_ids))
+        )
+        sg_map = {r.id: r for r in sg_result.scalars().all()}
+
     by_gid: dict[int | None, list[Any]] = defaultdict(list)
-    for s in summary:
-        if s.on_hand_qty <= 0:
-            continue
-        if allowed is not None and s.item_id not in allowed:
-            continue
-        it = item_map.get(s.item_id)
-        gid = it.stock_group_id if it else None
-        by_gid[gid].append(_inventory_line_from_summary(s, item_map, fifo_map))
+    for s in balances:
+        by_gid[s.stock_group_id].append(_inventory_line_from_balance(s, fifo_map))
 
     blocks: list[dict[str, Any]] = []
     for gid, lines in sorted(by_gid.items(), key=lambda x: (x[0] is None, x[0] or 0)):
@@ -158,12 +176,12 @@ async def build_financier_inventory_by_group(
     return {"as_of_date": as_of_date.isoformat() if as_of_date else None, "groups": blocks}
 
 
-def _gl_lookup_keys(m: StockMovement) -> list[tuple[str, str, int]]:
-    rt = (m.reference_type or "").upper()
-    rid = m.reference_id
+def _gl_lookup_keys(reference_type: str | None, reference_id: int | None, movement_type: str | None) -> list[tuple[str, str, int]]:
+    rt = (reference_type or "").upper()
+    rid = reference_id
     if rid is None:
         return []
-    mt = (m.movement_type or "").upper()
+    mt = (movement_type or "").upper()
     if rt == "GRN":
         return [("GRN", "RECEIPT", int(rid))]
     if rt == "DELIVERY_CHALLAN":
@@ -180,18 +198,22 @@ def _gl_lookup_keys(m: StockMovement) -> list[tuple[str, str, int]]:
     return []
 
 
-async def _sum_chart_balances(db: AsyncSession, tenant_id: int, account_ids: list[int]) -> float:
+async def _chart_balances_by_id(db: AsyncSession, tenant_id: int, account_ids: set[int]) -> dict[int, float]:
+    if not account_ids:
+        return {}
+    rows = await db.execute(
+        select(ChartOfAccount.id, ChartOfAccount.balance).where(
+            ChartOfAccount.tenant_id == tenant_id,
+            ChartOfAccount.id.in_(account_ids),
+        )
+    )
+    return {int(acc_id): _to_float(balance) for acc_id, balance in rows.all()}
+
+
+def _sum_balances(balances_by_acc: dict[int, float], account_ids: list[int]) -> float:
     if not account_ids:
         return 0.0
-    accs = (
-        await db.execute(
-            select(ChartOfAccount).where(
-                ChartOfAccount.tenant_id == tenant_id,
-                ChartOfAccount.id.in_(account_ids),
-            )
-        )
-    ).scalars().all()
-    return round(sum(_to_float(a.balance) for a in accs), 4)
+    return round(sum(balances_by_acc[i] for i in sorted(set(account_ids)) if i in balances_by_acc), 4)
 
 
 async def _maybe_resolve_system_ledger_id(db: AsyncSession, tenant_id: int, mapping_key: str) -> int | None:
@@ -199,6 +221,62 @@ async def _maybe_resolve_system_ledger_id(db: AsyncSession, tenant_id: int, mapp
         return await resolve_system_ledger(db, tenant_id, mapping_key)
     except ValueError:
         return None
+
+
+async def _item_balance_lines(
+    db: AsyncSession, tenant_id: int, item_id: int, warehouse_id: int | None
+) -> list[stock_report_queries.StockBalanceLine]:
+    """One item's balance per warehouse (zero and negative included), rounded like ``_stock_summary_rows``."""
+    sm = StockMovement
+    qty = cast(sm.quantity, Numeric)
+    in_agg = func.coalesce(func.sum(case((sm.movement_type == "IN", qty), else_=0)), 0)
+    out_agg = func.coalesce(func.sum(case((sm.movement_type != "IN", qty), else_=0)), 0)
+    bal_stmt = select(
+        sm.warehouse_id.label("warehouse_id"), in_agg.label("in_qty"), out_agg.label("out_qty")
+    ).where(sm.tenant_id == tenant_id, sm.item_id == item_id)
+    if warehouse_id is not None:
+        bal_stmt = bal_stmt.where(sm.warehouse_id == warehouse_id)
+    bal = bal_stmt.group_by(sm.warehouse_id).subquery()
+    stmt = (
+        select(
+            Item.item_code,
+            Item.name,
+            Item.default_cost,
+            Item.stock_group_id,
+            bal.c.warehouse_id,
+            Warehouse.warehouse_code,
+            Warehouse.name.label("warehouse_name"),
+            bal.c.in_qty,
+            bal.c.out_qty,
+        )
+        .select_from(
+            bal.join(Item, Item.id == item_id).outerjoin(
+                Warehouse, and_(Warehouse.id == bal.c.warehouse_id, Warehouse.tenant_id == tenant_id)
+            )
+        )
+        .where(Item.tenant_id == tenant_id)
+        .order_by(func.coalesce(Warehouse.name, "").collate("C"), bal.c.warehouse_id)
+    )
+    lines: list[stock_report_queries.StockBalanceLine] = []
+    for row in (await db.execute(stmt)).mappings():
+        in_qty = float(row["in_qty"] or 0)
+        out_qty = float(row["out_qty"] or 0)
+        lines.append(
+            stock_report_queries.StockBalanceLine(
+                item_id=item_id,
+                item_code=row["item_code"],
+                item_name=row["name"],
+                default_cost=row["default_cost"],
+                stock_group_id=row["stock_group_id"],
+                warehouse_id=row["warehouse_id"],
+                warehouse_code=row["warehouse_code"],
+                warehouse_name=row["warehouse_name"],
+                in_qty=round(in_qty, 3),
+                out_qty=round(out_qty, 3),
+                on_hand_qty=round(in_qty - out_qty, 3),
+            )
+        )
+    return lines
 
 
 async def build_financier_inventory_ledger(
@@ -258,19 +336,20 @@ async def build_financier_inventory_ledger(
     result = await db.execute(page_stmt)
     raw_rows = list(result.mappings())
 
-    items_result = await db.execute(select(Item).where(Item.tenant_id == tenant_id))
-    item_map = {r.id: r for r in items_result.scalars().all()}
-    wh_result = await db.execute(select(Warehouse).where(Warehouse.tenant_id == tenant_id))
-    wh_map = {r.id: r for r in wh_result.scalars().all()}
+    item_labels, wh_names = await stock_report_queries.label_maps(
+        db,
+        tenant_id,
+        {int(r["item_id"]) for r in raw_rows},
+        {int(r["warehouse_id"]) for r in raw_rows if r["warehouse_id"] is not None},
+    )
+
+    def _row_gl_keys(row: Any) -> list[tuple[str, str, int]]:
+        return _gl_lookup_keys(row["reference_type"], row["reference_id"], row["movement_type"])
 
     gl_keys: list[tuple[str, str, int]] = []
-    by_mid: dict[int, StockMovement] = {}
-    if include_gl and raw_rows:
-        mids = [int(r["id"]) for r in raw_rows]
-        mrows = (await db.execute(select(StockMovement).where(StockMovement.id.in_(mids)))).scalars().all()
-        by_mid = {m.id: m for m in mrows}
-        for m in mrows:
-            gl_keys.extend(_gl_lookup_keys(m))
+    if include_gl:
+        for r in raw_rows:
+            gl_keys.extend(_row_gl_keys(r))
 
     posting_map: dict[tuple[str, str, int], InventoryGlPosting] = {}
     if include_gl and gl_keys:
@@ -300,15 +379,15 @@ async def build_financier_inventory_ledger(
     current_stock = 0.0
     current_value = 0.0
     if item_id is not None:
-        fifo_map = await _fifo_layer_qty_value_map(db, tenant_id, None)
-        summary = await _stock_summary_rows(db, tenant_id)
-        for s in summary:
-            if s.item_id != item_id:
-                continue
-            if warehouse_id is not None and s.warehouse_id != warehouse_id:
-                continue
+        balances = await _item_balance_lines(db, tenant_id, item_id, warehouse_id)
+        fifo_map = (
+            await _fifo_layer_qty_value_map(db, tenant_id, None, pairs=[(s.item_id, s.warehouse_id) for s in balances])
+            if balances
+            else {}
+        )
+        for s in balances:
             current_stock += s.on_hand_qty
-            line = _inventory_line_from_summary(s, item_map, fifo_map)
+            line = _inventory_line_from_balance(s, fifo_map)
             current_value += line.line_value
 
     out_items: list[dict[str, Any]] = []
@@ -319,9 +398,8 @@ async def build_financier_inventory_ledger(
         gl_posted = False
         voucher_id = None
         voucher_code = None
-        m = by_mid.get(int(row["id"]))
-        if m and include_gl:
-            for key in _gl_lookup_keys(m):
+        if include_gl:
+            for key in _row_gl_keys(row):
                 pst = posting_map.get(key)
                 if pst:
                     gl_posted = True
@@ -336,10 +414,10 @@ async def build_financier_inventory_ledger(
                 "movement_date": str(row["movement_date"]) if row["movement_date"] else None,
                 "movement_type": row["movement_type"],
                 "item_id": iid,
-                "item_code": item_map[iid].item_code if iid in item_map else f"#{iid}",
-                "item_name": item_map[iid].name if iid in item_map else "Unknown",
+                "item_code": item_labels[iid][0] if iid in item_labels else f"#{iid}",
+                "item_name": item_labels[iid][1] if iid in item_labels else "Unknown",
                 "warehouse_id": wid,
-                "warehouse_name": wh_map[wid].name if wid is not None and wid in wh_map else None,
+                "warehouse_name": wh_names[wid] if wid is not None and wid in wh_names else None,
                 "quantity": str(row["quantity"]),
                 "reference_type": row["reference_type"],
                 "reference_id": row["reference_id"],
@@ -362,7 +440,7 @@ async def build_financier_inventory_ledger(
 async def build_financier_inventory_reconciliation(
     db: AsyncSession, *, tenant_id: int
 ) -> dict[str, Any]:
-    fifo_total = await fifo_on_hand_value(db, tenant_id, as_of_date=None)
+    fifo_total = await _fifo_total_value(db, tenant_id, None)
     cfg = (await db.execute(select(CoAConfig).where(CoAConfig.tenant_id == tenant_id))).scalars().first()
     global_ids: set[int] = set()
     if cfg and cfg.inventory_stock_account_id:
@@ -382,28 +460,25 @@ async def build_financier_inventory_reconciliation(
         lid = await _maybe_resolve_system_ledger_id(db, tenant_id, key)
         if lid:
             global_ids.add(lid)
-    gl_bal_total = await _sum_chart_balances(db, tenant_id, list(global_ids))
+    grni_ids: set[int] = {sg.grni_account_id for sg in sgs if sg.grni_account_id}
+    group_acc_ids = {sg.inventory_account_id for sg in sgs if sg.inventory_account_id}
+    balances_by_acc = await _chart_balances_by_id(db, tenant_id, global_ids | grni_ids | group_acc_ids)
+    gl_bal_total = _sum_balances(balances_by_acc, list(global_ids))
 
     fifo_map = await _fifo_layer_qty_value_map(db, tenant_id, None)
-    summary = await _stock_summary_rows(db, tenant_id)
-    items_result = await db.execute(select(Item).where(Item.tenant_id == tenant_id))
-    item_map = {r.id: r for r in items_result.scalars().all()}
+    balances = await stock_report_queries.load_stock_balance_lines(db, tenant_id, None, positive_only=True)
 
     by_gid: dict[int | None, float] = defaultdict(float)
-    for s in summary:
-        if s.on_hand_qty <= 0:
-            continue
-        line = _inventory_line_from_summary(s, item_map, fifo_map)
-        it = item_map.get(s.item_id)
-        gid = it.stock_group_id if it else None
-        by_gid[gid] += line.line_value
+    for s in balances:
+        line = _inventory_line_from_balance(s, fifo_map)
+        by_gid[s.stock_group_id] += line.line_value
 
     sg_map = {r.id: r for r in sgs}
     group_rows: list[dict[str, Any]] = []
     for gid, fifo_val in sorted(by_gid.items(), key=lambda x: (x[0] is None, x[0] or 0)):
         sg = sg_map.get(gid) if gid is not None else None
         acc_id = sg.inventory_account_id if sg else None
-        gl_part = await _sum_chart_balances(db, tenant_id, [acc_id] if acc_id else [])
+        gl_part = _sum_balances(balances_by_acc, [acc_id] if acc_id else [])
         group_rows.append(
             {
                 "stock_group_id": gid,
@@ -415,11 +490,7 @@ async def build_financier_inventory_reconciliation(
             }
         )
 
-    grni_ids: set[int] = set()
-    for sg in sgs:
-        if sg.grni_account_id:
-            grni_ids.add(sg.grni_account_id)
-    grni_bal = await _sum_chart_balances(db, tenant_id, list(grni_ids))
+    grni_bal = _sum_balances(balances_by_acc, list(grni_ids))
 
     return {
         "fifo_stock_value_total": round(fifo_total, 2),

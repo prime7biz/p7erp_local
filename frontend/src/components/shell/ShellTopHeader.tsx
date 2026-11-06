@@ -20,10 +20,10 @@ import type { MeResponse } from "@/api/client";
 import { useAiChatContext } from "@/context/AiChatContext";
 import { BellPanel } from "@/components/shell/BellPanel";
 import { CommandPalette } from "@/components/shell/CommandPalette";
+import { PageHelpButton } from "@/components/shell/PageHelpButton";
 import { ShortcutSheet } from "@/components/shell/ShortcutSheet";
 import { getCreateActions } from "@/components/shell/createActions";
 import type { FlatNavRoute } from "@/components/shell/flattenMenuRoutes";
-import { pushNavRecent, type NavShortcut } from "@/components/shell/navShortcuts";
 import { resolveTheme, setTheme, type ThemePreference } from "@/lib/theme";
 
 function getNameInitial(name?: string | null) {
@@ -154,10 +154,6 @@ export function ShellTopHeader({
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  const onPaletteNavigate = (entry: NavShortcut) => {
-    pushNavRecent(me.user_id, entry);
-  };
-
   return (
     <>
       <header className="flex h-12 items-center justify-between gap-3 border-b border-border bg-surface-raised px-3 md:px-4">
@@ -206,6 +202,7 @@ export function ShellTopHeader({
             )}
           </div>
           <StakeholderPortalsMenu />
+          <PageHelpButton />
           <button
             type="button"
             onClick={() => setWidgetOpen(true)}
@@ -310,7 +307,6 @@ export function ShellTopHeader({
         routes={paletteRoutes}
         createActions={createActions}
         userId={me.user_id}
-        onNavigate={onPaletteNavigate}
       />
       <ShortcutSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </>

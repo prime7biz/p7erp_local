@@ -1,4 +1,4 @@
-/** Persist recent + favorite app routes per user (localStorage only). */
+/** Persist favorite app routes per user (localStorage only). */
 
 export type NavShortcut = {
   href: string;
@@ -6,12 +6,7 @@ export type NavShortcut = {
   section?: string;
 };
 
-const RECENTS_MAX = 5;
 const FAVORITES_MAX = 8;
-
-function recentsKey(userId: number) {
-  return `p7_nav_recents_${userId}`;
-}
 
 function favoritesKey(userId: number) {
   return `p7_nav_favorites_${userId}`;
@@ -41,16 +36,6 @@ function writeList(key: string, rows: NavShortcut[]) {
   } catch {
     /* ignore quota / private mode */
   }
-}
-
-export function getNavRecents(userId: number): NavShortcut[] {
-  return readList(recentsKey(userId)).slice(0, RECENTS_MAX);
-}
-
-export function pushNavRecent(userId: number, entry: NavShortcut) {
-  if (!entry.href.startsWith("/app")) return;
-  const next = [entry, ...getNavRecents(userId).filter((r) => r.href !== entry.href)].slice(0, RECENTS_MAX);
-  writeList(recentsKey(userId), next);
 }
 
 export function getNavFavorites(userId: number): NavShortcut[] {

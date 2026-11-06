@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320" width="960" height="320" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect width="960" height="320" fill="#ffffff"/>
+  <text x="480" y="32" text-anchor="middle" font-size="18" font-weight="700" fill="#334155">Process order (knitting, dyeing, printing, washing&#8230;) &#8212; status steps</text>
+
+  <g font-size="14" font-weight="700">
+    <rect x="30" y="80" width="160" height="60" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="2"/>
+    <text x="110" y="116" text-anchor="middle" fill="#334155">DRAFT</text>
+    <rect x="280" y="80" width="160" height="60" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+    <text x="360" y="116" text-anchor="middle" fill="#c2410c">ISSUED</text>
+    <rect x="530" y="80" width="160" height="60" rx="12" fill="#f0fdfa" stroke="#0f766e" stroke-width="2"/>
+    <text x="610" y="116" text-anchor="middle" fill="#0f766e">RECEIVED</text>
+    <rect x="780" y="80" width="160" height="60" rx="12" fill="#0f766e" stroke="#0f766e" stroke-width="2"/>
+    <text x="860" y="116" text-anchor="middle" fill="#ffffff">APPROVED</text>
+  </g>
+  <g stroke="#334155" stroke-width="2" marker-end="url(#arr)">
+    <line x1="190" y1="110" x2="277" y2="110"/>
+    <line x1="440" y1="110" x2="527" y2="110"/>
+    <line x1="690" y1="110" x2="777" y2="110"/>
+  </g>
+  <g font-size="12" font-weight="700" fill="#334155" text-anchor="middle">
+    <text x="234" y="100">Issue input</text>
+    <text x="484" y="100">Receive output</text>
+    <text x="734" y="100">Approve</text>
+  </g>
+
+  <g font-size="12" fill="#475569" text-anchor="middle">
+    <text x="110" y="164">Create: process type,</text>
+    <text x="110" y="180">input item &#8594; output item,</text>
+    <text x="110" y="196">warehouses, vendor</text>
+
+    <text x="360" y="164">Input stock leaves the</text>
+    <text x="360" y="180">input warehouse and</text>
+    <text x="360" y="196">becomes WIP</text>
+
+    <text x="610" y="164">Output stock enters the</text>
+    <text x="610" y="180">output warehouse; loss =</text>
+    <text x="610" y="196">input &#8722; actual output</text>
+
+    <text x="860" y="164">Admin / manager or</text>
+    <text x="860" y="180" font-family="ui-monospace, Consolas, monospace">inventory.process_</text>
+    <text x="860" y="196" font-family="ui-monospace, Consolas, monospace">order_approve</text>
+  </g>
+
+  <rect x="20" y="226" width="920" height="70" rx="12" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="40" y="252" font-size="13" font-weight="700" fill="#334155">While ISSUED: Actions &#8594; Add cost line</text>
+  <text x="40" y="272" font-size="12" fill="#475569">Add the dyeing / printing bill or other charges before Receive output &#8212; they are added to the output item's cost.</text>
+  <text x="40" y="288" font-size="12" fill="#475569">Link stages with "Prior process order ID" (e.g. knitting &#8594; dyeing &#8594; finishing) to follow one lot through each step.</text>
+</svg>

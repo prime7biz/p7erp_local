@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 230" width="960" height="230" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <title>BTB utilization bands used on Master Contracts and BTB LCs</title>
+  <rect width="960" height="230" fill="#ffffff"/>
+  <text x="24" y="34" font-size="18" font-weight="700" fill="#0f766e">BTB utilization bands</text>
+  <text x="24" y="56" font-size="13" fill="#334155">Utilization = total of all BTB LCs under a master contract &#247; master contract amount &#215; 100.</text>
+
+  <g>
+    <rect x="24" y="80" width="456" height="44" rx="8" fill="#16a34a"/>
+    <rect x="470" y="80" width="10" height="44" fill="#16a34a"/>
+    <rect x="480" y="80" width="91" height="44" fill="#0f766e"/>
+    <rect x="571" y="80" width="46" height="44" fill="#f59e0b"/>
+    <rect x="617" y="80" width="46" height="44" fill="#ea580c"/>
+    <rect x="663" y="80" width="273" height="44" rx="8" fill="#dc2626"/>
+    <rect x="663" y="80" width="12" height="44" fill="#dc2626"/>
+  </g>
+  <g font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">
+    <text x="252" y="107">Very Good</text>
+    <text x="525" y="107">Good</text>
+    <text x="799" y="107">Red Flag</text>
+  </g>
+  <g font-size="12" fill="#334155" text-anchor="middle">
+    <text x="24" y="144" text-anchor="start">0%</text>
+    <text x="480" y="144">50%</text>
+    <text x="571" y="144">60%</text>
+    <text x="617" y="144">65%</text>
+    <text x="663" y="144">70%</text>
+    <text x="936" y="144" text-anchor="end">100%+</text>
+  </g>
+  <g font-size="12.5" fill="#334155">
+    <text x="24" y="176"><tspan font-weight="700" fill="#16a34a">Very Good</tspan> under 50% &#183; <tspan font-weight="700" fill="#0f766e">Good</tspan> 50&#8211;60% &#183; <tspan font-weight="700" fill="#b45309">Satisfactory</tspan> 60&#8211;65% &#183; <tspan font-weight="700" fill="#ea580c">No Credit Zone</tspan> 65&#8211;70% &#183; <tspan font-weight="700" fill="#dc2626">Red Flag</tspan> above 70%</text>
+    <text x="24" y="202">Above 70% the BTB LC form warns "Red flag: utilization is above 70% and should be blocked by bank policy."</text>
+  </g>
+</svg>

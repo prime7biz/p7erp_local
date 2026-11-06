@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="960" height="520" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="520" fill="#ffffff"/>
+  <text x="24" y="34" font-size="20" font-weight="700" fill="#334155">What decides the menus you see</text>
+  <text x="24" y="56" font-size="13" fill="#64748b">A menu link appears only when it passes all four filters, from left to right.</text>
+
+  <!-- 4 filters -->
+  <g>
+    <rect x="24" y="80" width="210" height="250" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="46" cy="102" r="13" fill="#0f766e"/><text x="46" y="107" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+    <text x="66" y="107" font-size="14" font-weight="700" fill="#334155">Company type</text>
+    <text x="38" y="132" font-size="12" fill="#334155">Settings &#8594; Tenant</text>
+    <text x="38" y="158" font-size="12" font-weight="700" fill="#334155">Manufacturer</text>
+    <text x="38" y="176" font-size="12" fill="#334155">Manufacturing shown;</text>
+    <text x="38" y="192" font-size="12" fill="#334155">Trade Cases hidden</text>
+    <text x="38" y="216" font-size="12" font-weight="700" fill="#334155">Buying House</text>
+    <text x="38" y="234" font-size="12" fill="#334155">Manufacturing hidden;</text>
+    <text x="38" y="250" font-size="12" fill="#334155">Trade &amp; Logistics shown</text>
+    <text x="38" y="274" font-size="12" font-weight="700" fill="#334155">Both</text>
+    <text x="38" y="292" font-size="12" fill="#334155">Everything for both kinds</text>
+    <text x="38" y="308" font-size="12" fill="#334155">of work is shown</text>
+  </g>
+  <line x1="234" y1="205" x2="256" y2="205" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="260" y="80" width="210" height="250" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="282" cy="102" r="13" fill="#0f766e"/><text x="282" y="107" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">2</text>
+    <text x="302" y="107" font-size="14" font-weight="700" fill="#334155">Feature switches</text>
+    <text x="274" y="132" font-size="12" fill="#334155">Settings &#8594; Configuration</text>
+    <text x="274" y="150" font-size="12" fill="#334155">(Essential / More / All)</text>
+    <text x="274" y="176" font-size="12" fill="#334155">Examples:</text>
+    <text x="274" y="196" font-size="12" fill="#334155">&#8226; Enable Trade module</text>
+    <text x="274" y="214" font-size="12" fill="#334155">&#8226; Operations Control Tower</text>
+    <text x="274" y="232" font-size="12" fill="#334155">&#8226; Commission, Bond &amp; VAT</text>
+    <text x="274" y="250" font-size="12" fill="#334155">&#8226; Post-dated vouchers, TDS</text>
+    <text x="274" y="268" font-size="12" fill="#334155">&#8226; Stock hierarchy, kitting</text>
+    <text x="274" y="296" font-size="12" fill="#0f766e" font-weight="600">Off = link is hidden</text>
+  </g>
+  <line x1="470" y1="205" x2="492" y2="205" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="496" y="80" width="210" height="250" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="518" cy="102" r="13" fill="#0f766e"/><text x="518" y="107" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">3</text>
+    <text x="538" y="107" font-size="14" font-weight="700" fill="#334155">Production units</text>
+    <text x="510" y="132" font-size="12" fill="#334155">Manufacturing &#8594;</text>
+    <text x="510" y="150" font-size="12" fill="#334155">Production setup</text>
+    <text x="510" y="176" font-size="12" fill="#334155">Optional units such as</text>
+    <text x="510" y="194" font-size="12" fill="#334155">Knitting, Dyeing, Printing,</text>
+    <text x="510" y="212" font-size="12" fill="#334155">AOP, Embroidery, Elastic,</text>
+    <text x="510" y="230" font-size="12" fill="#334155">Washing appear only when</text>
+    <text x="510" y="248" font-size="12" fill="#334155">your factory has them.</text>
+  </g>
+  <line x1="706" y1="205" x2="728" y2="205" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="732" y="80" width="204" height="250" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="754" cy="102" r="13" fill="#0f766e"/><text x="754" y="107" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">4</text>
+    <text x="774" y="107" font-size="14" font-weight="700" fill="#334155">Your role</text>
+    <text x="746" y="132" font-size="12" fill="#334155">Settings &#8594; Roles</text>
+    <text x="746" y="158" font-size="12" fill="#334155">When access control is</text>
+    <text x="746" y="176" font-size="12" fill="#334155">enforced, whole modules</text>
+    <text x="746" y="194" font-size="12" fill="#334155">(Inventory, HR, Finance&#8230;)</text>
+    <text x="746" y="212" font-size="12" fill="#334155">hide without access.</text>
+    <text x="746" y="238" font-size="12" fill="#334155">Buttons like Approve or</text>
+    <text x="746" y="256" font-size="12" fill="#334155">Post also depend on role.</text>
+  </g>
+
+  <!-- Result -->
+  <rect x="24" y="352" width="912" height="60" rx="12" fill="#ffffff" stroke="#ea580c" stroke-width="2"/>
+  <text x="40" y="378" font-size="14" font-weight="700" fill="#ea580c">Result</text>
+  <text x="40" y="398" font-size="12" fill="#334155">The sidebar, the mobile &#8220;More&#8221; menu and Ctrl+K search all show the same filtered list. Two colleagues can see different menus.</text>
+
+  <rect x="24" y="428" width="912" height="76" rx="12" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="40" y="452" font-size="13" font-weight="700" fill="#0f766e">Cannot find a screen?</text>
+  <text x="40" y="474" font-size="12" fill="#334155">1. Try Ctrl+K and type its name.  2. Ask your admin which filter hides it.  3. Admins: change the type or switch, click Save,</text>
+  <text x="40" y="492" font-size="12" fill="#334155">then refresh the browser (F5) so the menu reloads.</text>
+</svg>

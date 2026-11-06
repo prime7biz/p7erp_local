@@ -1,0 +1,263 @@
+{
+  "screenshots": [
+    { "name": "merch-customer-new-form", "route": "/app/customers/new", "waitMs": 2500 },
+    {
+      "name": "merch-customer-detail",
+      "route": "/app/customers",
+      "waitMs": 2500,
+      "actions": [{ "click": "main a:has-text(\"Pacific Apparel Incorporated\")", "waitMs": 2500 }]
+    },
+    { "name": "merch-inquiry-new-form", "route": "/app/inquiries/new", "waitMs": 2500 },
+    {
+      "name": "merch-inquiry-row-actions",
+      "route": "/app/inquiries",
+      "waitMs": 2500,
+      "actions": [{ "click": "table tbody tr:has-text(\"INQ-0014\") >> button:has-text(\"Actions\")", "waitMs": 700 }]
+    },
+    {
+      "name": "merch-inquiry-detail",
+      "route": "/app/inquiries",
+      "waitMs": 2500,
+      "actions": [{ "click": "main a:has-text(\"INQ-0014\")", "waitMs": 2500 }]
+    },
+    { "name": "merch-quotation-new-form", "route": "/app/quotations/new", "waitMs": 3000 },
+    {
+      "name": "merch-quotation-row-actions",
+      "route": "/app/quotations",
+      "waitMs": 2500,
+      "actions": [{ "click": "table tbody tr >> nth=0 >> button:has-text(\"Actions\")", "waitMs": 700 }]
+    },
+    {
+      "name": "merch-quotation-workspace",
+      "route": "/app/quotations",
+      "waitMs": 2500,
+      "actions": [{ "click": "main a:has-text(\"QT-0008\")", "waitMs": 3500 }]
+    },
+    {
+      "name": "merch-quotation-materials",
+      "route": "/app/quotations",
+      "waitMs": 2500,
+      "clipSelector": "section:has(> header button:has-text(\"Materials\"))",
+      "actions": [{ "click": "main a:has-text(\"QT-0008\")", "waitMs": 3500 }]
+    },
+    {
+      "name": "merch-quotation-breakdown",
+      "route": "/app/quotations",
+      "waitMs": 2500,
+      "clipSelector": "section:has(> header button:has-text(\"Final Commercial Breakdown\"))",
+      "actions": [{ "click": "main a:has-text(\"QT-0008\")", "waitMs": 3500 }]
+    },
+    { "name": "merch-order-new-form", "route": "/app/orders/new", "waitMs": 2500 },
+    {
+      "name": "merch-order-detail",
+      "route": "/app/orders",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "main a:has-text(\"ORD-0007\")", "waitMs": 2000 },
+        { "waitFor": "span:text-is(\"Order pipeline\")" },
+        { "waitMs": 2500 }
+      ]
+    },
+    {
+      "name": "merch-order-pipeline",
+      "route": "/app/orders",
+      "waitMs": 2500,
+      "clipSelector": "div.rounded-xl:has(> div > div > span:text-is(\"Order pipeline\"))",
+      "actions": [{ "click": "main a:has-text(\"ORD-0007\")", "waitMs": 3500 }]
+    },
+    {
+      "name": "merch-order-color-size",
+      "route": "/app/orders",
+      "waitMs": 2500,
+      "clipSelector": "section[aria-labelledby=\"csm-title\"]",
+      "actions": [{ "click": "main a:has-text(\"ORD-0007\")", "waitMs": 3500 }]
+    },
+    {
+      "name": "merch-order-related-records",
+      "route": "/app/orders",
+      "waitMs": 2500,
+      "clipSelector": "section:has(> h2:text-is(\"Related Records\"))",
+      "actions": [{ "click": "main a:has-text(\"ORD-0007\")", "waitMs": 3500 }]
+    },
+    {
+      "name": "merch-order-change-requests",
+      "route": "/app/orders",
+      "waitMs": 2500,
+      "clipSelector": "div.rounded-xl:has(> div > h2:text-is(\"Commercial change requests\"))",
+      "actions": [{ "click": "main a:has-text(\"ORD-0007\")", "waitMs": 3500 }]
+    },
+    {
+      "name": "merch-bom-order",
+      "route": "/app/orders",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "main a:has-text(\"ORD-0007\")", "waitMs": 3000 },
+        { "click": "main a:has-text(\"View BOM\")", "waitMs": 3500 }
+      ]
+    },
+    {
+      "name": "merch-bom-lines",
+      "route": "/app/orders",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "main a:has-text(\"ORD-0007\")", "waitMs": 3000 },
+        { "click": "main a:has-text(\"View BOM\")", "waitMs": 3500 },
+        { "scroll": 650, "waitMs": 900 }
+      ]
+    },
+    {
+      "name": "merch-followup-generate",
+      "route": "/app/followup",
+      "waitMs": 3000,
+      "actions": [{ "click": "main button:has-text(\"Generate TNA\")", "waitMs": 900 }]
+    },
+    {
+      "name": "merch-followup-row-actions",
+      "route": "/app/followup",
+      "waitMs": 3000,
+      "actions": [
+        { "click": "#followup-table-print-area tbody tr >> nth=0 >> button:has-text(\"Actions\")", "waitMs": 800 }
+      ]
+    },
+    {
+      "name": "merch-followup-edit",
+      "route": "/app/followup",
+      "waitMs": 3000,
+      "actions": [
+        { "click": "#followup-table-print-area tbody tr >> nth=0 >> button:has-text(\"Actions\")", "waitMs": 600 },
+        { "click": "#followup-table-print-area tbody tr >> nth=0 >> button:text-is(\"Edit\")", "waitMs": 1200 }
+      ]
+    },
+    {
+      "name": "merch-followup-calendar",
+      "route": "/app/followup",
+      "waitMs": 3000,
+      "actions": [{ "click": "main button:text-is(\"Calendar\")", "waitMs": 2500 }]
+    },
+    {
+      "name": "merch-followup-kanban",
+      "route": "/app/followup",
+      "waitMs": 3000,
+      "actions": [{ "click": "main button:text-is(\"Kanban\")", "waitMs": 2000 }]
+    },
+    {
+      "name": "merch-sample-new-form",
+      "route": "/app/merchandising/samples",
+      "waitMs": 2500,
+      "actions": [{ "click": "main button:has-text(\"New sample request\")", "waitMs": 1200 }]
+    },
+    {
+      "name": "merch-style-new-form",
+      "route": "/app/merchandising/styles",
+      "waitMs": 2500,
+      "actions": [{ "click": "main button:has-text(\"New style\")", "waitMs": 1000 }]
+    },
+    {
+      "name": "merch-style-detail",
+      "route": "/app/merchandising/styles",
+      "waitMs": 2500,
+      "actions": [{ "click": "main a:has-text(\"LKH-STY-07\")", "waitMs": 3000 }]
+    },
+    {
+      "name": "merch-style-production-tab",
+      "route": "/app/merchandising/styles",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "main a:has-text(\"LKH-STY-07\")", "waitMs": 3000 },
+        { "click": "main button:text-is(\"Production\")", "waitMs": 1500 },
+        { "scroll": 600, "waitMs": 800 }
+      ]
+    },
+    {
+      "name": "merch-style-bom-tab",
+      "route": "/app/merchandising/styles",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "main a:has-text(\"LKH-STY-07\")", "waitMs": 3000 },
+        { "click": "main button:text-is(\"BOM\")", "waitMs": 1500 },
+        { "scroll": 600, "waitMs": 800 }
+      ]
+    },
+    {
+      "name": "merch-alert-drawer",
+      "route": "/app/merchandising/alerts",
+      "waitMs": 3000,
+      "actions": [{ "click": "table tbody tr >> nth=0 >> button:has-text(\"Open\")", "waitMs": 2000 }]
+    },
+    {
+      "name": "merch-pipeline-list",
+      "route": "/app/merchandising/pipeline",
+      "waitMs": 3000,
+      "actions": [{ "click": "main button[title=\"List\"]", "waitMs": 1500 }]
+    }
+  ],
+  "videos": [
+    {
+      "name": "merch-inquiry-to-quotation",
+      "title": "From inquiry to quotation",
+      "steps": [
+        { "goto": "/app/inquiries", "waitMs": 3000 },
+        { "caption": "Goal: turn a buyer inquiry into a priced quotation", "ms": 3000 },
+        { "caption": "Merchandising > Inquiries lists every buyer request. Colour shows the status.", "ms": 3000 },
+        { "click": "main a:has-text(\"INQ-0014\")", "waitMs": 2500 },
+        { "caption": "This inquiry is Submitted, so the page offers Convert to quotation", "ms": 3200 },
+        { "hover": "main button:has-text(\"Convert to quotation\")", "waitMs": 600 },
+        { "caption": "Convert to quotation copies customer, style, quantity and price into a new Draft quotation", "ms": 3600 },
+        { "caption": "We will not click it in this demo. You can also start a quotation from scratch.", "ms": 3000 },
+        { "goto": "/app/quotations", "waitMs": 3000 },
+        { "caption": "Merchandising > Quotations. Click New quotation.", "ms": 2600 },
+        { "click": "main button:has-text(\"New quotation\")", "waitMs": 3000 },
+        { "caption": "Pick the Customer first (fields marked ** are required)", "ms": 2800 },
+        { "select": ["main select >> nth=0", { "label": "Pacific Apparel Incorporated (LKH-CUST-02)" }], "waitMs": 1500 },
+        { "hover": "main select >> nth=1", "waitMs": 600 },
+        { "caption": "Link to inquiry (optional) lets you pick an open inquiry for the same buyer", "ms": 3200 },
+        { "scroll": 900, "waitMs": 1000 },
+        { "caption": "Below, add Materials, Labor / CM and Other costs. Totals and FOB update as you type.", "ms": 3600 },
+        { "caption": "Click Save draft to finish, then Submit for review. Nothing is saved in this demo.", "ms": 3600 }
+      ]
+    },
+    {
+      "name": "merch-order-bom",
+      "title": "Open an order and its BOM",
+      "steps": [
+        { "goto": "/app/orders", "waitMs": 3000 },
+        { "caption": "Goal: check an order and open its order BOM (bill of materials)", "ms": 3000 },
+        { "click": "main a:has-text(\"ORD-0007\")", "waitMs": 3500 },
+        { "hover": "div.rounded-xl:has(> div > div > span:text-is(\"Order pipeline\"))", "waitMs": 500 },
+        { "caption": "Order pipeline shows the current stage. Next required action tells you what to do now.", "ms": 3800 },
+        { "hover": "section[aria-labelledby=\"csm-title\"]", "waitMs": 500 },
+        { "caption": "Colour / size breakdown holds pieces per colour and size", "ms": 3000 },
+        { "hover": "section:has(> h2:text-is(\"Related Records\"))", "waitMs": 500 },
+        { "caption": "Related Records links every document of this order: BOM, POs, TNA, challans, invoices", "ms": 3600 },
+        { "click": "main a:has-text(\"View BOM\")", "waitMs": 3500 },
+        { "caption": "BOM Builder opens for this order. The badge on the right shows the BOM status.", "ms": 3400 },
+        { "caption": "Buttons follow the status: Submit, then Approve or Reject, then Freeze", "ms": 3400 },
+        { "scroll": 650, "waitMs": 1000 },
+        { "caption": "Each line shows consumption, wastage %, required quantity, price and PO status", "ms": 3600 },
+        { "caption": "Use Actions on a line to edit it (Draft only) or create a PO (after approval). Nothing is changed in this demo.", "ms": 4000 }
+      ]
+    },
+    {
+      "name": "merch-tna-followup",
+      "title": "Follow up TNA tasks",
+      "steps": [
+        { "goto": "/app/followup", "waitMs": 3500 },
+        { "caption": "Goal: see which TNA (time and action) tasks are due or late", "ms": 3000 },
+        { "hover": "main div.grid >> nth=0", "waitMs": 500 },
+        { "caption": "The cards count Open, Overdue, Due this week and Rejected tasks", "ms": 3200 },
+        { "click": "main button:has-text(\"Generate TNA\")", "waitMs": 1000 },
+        { "caption": "Generate TNA builds the task list for an order from templates. The order needs a delivery date.", "ms": 3800 },
+        { "click": "div.fixed button:has-text(\"Cancel\")", "waitMs": 800 },
+        { "select": ["main select >> nth=0", { "label": "ORD-0007" }], "waitMs": 1800 },
+        { "caption": "Filter by order, buyer, person, status or phase to focus your list", "ms": 3200 },
+        { "click": "#followup-table-print-area tbody tr >> nth=0 >> button:has-text(\"Actions\")", "waitMs": 900 },
+        { "caption": "Actions: Mark submitted, Mark rejected, Edit dates, Complete or Reopen", "ms": 3600 },
+        { "click": "#followup-table-print-area tbody tr >> nth=0 >> button:has-text(\"Actions\")", "waitMs": 600 },
+        { "click": "main button:text-is(\"Calendar\")", "waitMs": 2500 },
+        { "caption": "Calendar shows tasks on their planned dates", "ms": 3000 },
+        { "click": "main button:text-is(\"Kanban\")", "waitMs": 2000 },
+        { "caption": "Kanban groups tasks by phase. Click a card to edit it.", "ms": 3200 }
+      ]
+    }
+  ]
+}

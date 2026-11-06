@@ -18,11 +18,7 @@ import { api, type GlobalSearchResponse } from "@/api/client";
 import { useDebouncedValue, useLatestRequest } from "@/hooks/useDebouncedValue";
 import type { CreateAction } from "@/components/shell/createActions";
 import type { FlatNavRoute } from "@/components/shell/flattenMenuRoutes";
-import {
-  isNavFavorite,
-  toggleNavFavorite,
-  type NavShortcut,
-} from "@/components/shell/navShortcuts";
+import { isNavFavorite, toggleNavFavorite } from "@/components/shell/navShortcuts";
 import { logApiError } from "@/utils/logApiError";
 
 type CommandPaletteProps = {
@@ -32,7 +28,6 @@ type CommandPaletteProps = {
   /** Same role-aware list as the top-bar New menu. */
   createActions: CreateAction[];
   userId: number;
-  onNavigate?: (entry: NavShortcut) => void;
 };
 
 type Entry = {
@@ -55,7 +50,7 @@ const RECORD_ICONS: Record<string, LucideIcon> = {
   employee: User,
 };
 
-export function CommandPalette({ open, onClose, routes, createActions, userId, onNavigate }: CommandPaletteProps) {
+export function CommandPalette({ open, onClose, routes, createActions, userId }: CommandPaletteProps) {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
@@ -130,11 +125,10 @@ export function CommandPalette({ open, onClose, routes, createActions, userId, o
 
   const go = useCallback(
     (entry: Entry) => {
-      if (entry.route) onNavigate?.({ href: entry.route.href, label: entry.route.label, section: entry.route.section });
       navigate(entry.href);
       onClose();
     },
-    [navigate, onClose, onNavigate],
+    [navigate, onClose],
   );
 
   useEffect(() => {

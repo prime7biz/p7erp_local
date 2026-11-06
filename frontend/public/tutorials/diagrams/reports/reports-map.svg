@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img" aria-labelledby="t d">
+  <title id="t">Map of P7 ERP reports</title>
+  <desc id="d">The Reports hub (Reports, Analytics) groups report families: Merchandising, Orders and purchasing, Commercial and LC, Manufacturing, HR, Inventory and outbound, and Cross-check. Finance statements and MIS live under Finance, Reports.</desc>
+  <style>
+    text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #334155; }
+    .h { font-size: 14px; font-weight: 700; }
+    .b { font-size: 12px; }
+    .s { font-size: 11px; fill: #64748b; }
+    .w { fill: #ffffff; }
+  </style>
+  <rect x="0" y="0" width="960" height="540" fill="#ffffff"/>
+  <text x="480" y="30" text-anchor="middle" class="h" style="font-size:18px">Where to find each report</text>
+
+  <g stroke="#94a3b8" stroke-width="1.5">
+    <line x1="370" y1="240" x2="250" y2="130"/>
+    <line x1="480" y1="220" x2="480" y2="150"/>
+    <line x1="590" y1="240" x2="710" y2="130"/>
+    <line x1="370" y1="286" x2="250" y2="330"/>
+    <line x1="590" y1="286" x2="710" y2="330"/>
+    <line x1="420" y1="306" x2="330" y2="420"/>
+    <line x1="540" y1="306" x2="630" y2="420"/>
+  </g>
+
+  <rect x="370" y="220" width="220" height="86" rx="14" fill="#0f766e"/>
+  <text x="480" y="252" text-anchor="middle" class="h w" style="font-size:16px">Reports hub</text>
+  <text x="480" y="274" text-anchor="middle" class="b w">Sidebar &#8594; Reports &#8594; Analytics</text>
+  <text x="480" y="292" text-anchor="middle" class="b w">/app/reports</text>
+
+  <rect x="30" y="56" width="280" height="96" rx="12" fill="#f1f5f9" stroke="#334155"/>
+  <text x="44" y="80" class="h">Merchandising</text>
+  <text x="44" y="100" class="b">Merchandising overview &#183; Style 360</text>
+  <text x="44" y="118" class="b">Control tower &#183; Pipeline analytics</text>
+  <text x="44" y="136" class="b">Wastage &#183; Consumption reconciliation</text>
+
+  <rect x="340" y="56" width="280" height="96" rx="12" fill="#f1f5f9" stroke="#334155"/>
+  <text x="354" y="80" class="h">Orders &amp; purchasing</text>
+  <text x="354" y="100" class="b">Sales Orders &#183; Purchase Orders</text>
+  <text x="354" y="118" class="b">GRN Summary</text>
+  <text x="354" y="136" class="s">Operations group on the hub</text>
+
+  <rect x="650" y="56" width="280" height="96" rx="12" fill="#f1f5f9" stroke="#334155"/>
+  <text x="664" y="80" class="h">Commercial &amp; LC</text>
+  <text x="664" y="100" class="b">LC Outstanding &#183; BTB LC Maturity</text>
+  <text x="664" y="118" class="b">Shipment Tracking &#183; Trade overview</text>
+  <text x="664" y="136" class="s">Trade overview: buying house / both only</text>
+
+  <rect x="30" y="300" width="300" height="80" rx="12" fill="#f1f5f9" stroke="#334155"/>
+  <text x="44" y="324" class="h">Manufacturing</text>
+  <text x="44" y="344" class="b">Production Efficiency &#183; QC Summary</text>
+  <text x="44" y="362" class="s">Live floor data: Manufacturing menu</text>
+
+  <rect x="630" y="300" width="300" height="80" rx="12" fill="#f1f5f9" stroke="#334155"/>
+  <text x="644" y="324" class="h">HR</text>
+  <text x="644" y="344" class="b">Employee Summary &#183; Payroll Summary</text>
+  <text x="644" y="362" class="s">More: HR &#8594; HR Reports</text>
+
+  <rect x="150" y="410" width="320" height="110" rx="12" fill="#f1f5f9" stroke="#334155"/>
+  <text x="164" y="434" class="h">Inventory &amp; outbound</text>
+  <text x="164" y="454" class="b">Gate Pass Register (Export CSV)</text>
+  <text x="164" y="472" class="b">Delivery Challans</text>
+  <text x="164" y="490" class="s">Stock Summary, Ledger, Valuation:</text>
+  <text x="164" y="506" class="s">Inventory &#8594; Reports and analytics</text>
+
+  <rect x="490" y="410" width="320" height="110" rx="12" fill="#fff7ed" stroke="#ea580c"/>
+  <text x="504" y="434" class="h">Cross-check &amp; exceptions</text>
+  <text x="504" y="454" class="b">Data Reconciliation (GL, stock, bank)</text>
+  <text x="504" y="472" class="b">Exceptions (open alerts + trade cases)</text>
+  <text x="504" y="490" class="s">Finance statements + MIS:</text>
+  <text x="504" y="506" class="s">Finance &#8594; Reports (separate guides)</text>
+</svg>

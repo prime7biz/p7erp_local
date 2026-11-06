@@ -1,0 +1,235 @@
+{
+  "screenshots": [
+    {
+      "name": "mfg-planning-details",
+      "route": "/app/production/planning",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "role=button[name=\"Details\"] >> nth=0", "waitMs": 1200 },
+        { "click": "role=button[name=\"Materials\"] >> nth=0", "waitMs": 1500 },
+        { "scroll": 380, "waitMs": 800 }
+      ]
+    },
+    {
+      "name": "mfg-planning-whatif",
+      "route": "/app/production/planning",
+      "waitMs": 2200,
+      "fullPage": true,
+      "actions": [{ "click": "role=button[name=\"What-if / MRP\"]", "waitMs": 2500 }]
+    },
+    {
+      "name": "mfg-planning-history",
+      "route": "/app/production/planning",
+      "waitMs": 2200,
+      "fullPage": true,
+      "actions": [{ "click": "role=button[name=\"Plan history\"]", "waitMs": 2500 }]
+    },
+    {
+      "name": "mfg-line-plan-full",
+      "route": "/app/production/line-plan",
+      "waitMs": 2800,
+      "actions": [
+        { "hover": "text=Timeline by line", "waitMs": 400 },
+        { "scroll": 650, "waitMs": 900 }
+      ]
+    },
+    {
+      "name": "mfg-setup-line-form",
+      "route": "/app/production/setup",
+      "waitMs": 2200,
+      "clipSelector": "form >> nth=0",
+      "actions": [
+        { "click": "role=button[name=\"Add line\"]", "waitMs": 800 },
+        { "fill": ["label:has-text(\"Line code\") input", "LKH-L03"] },
+        { "fill": ["form label:has-text(\"Name *\") input", "Sewing line 3"] },
+        { "fill": ["input[placeholder=\"e.g. Unit 2 — Gazipur (blank = main factory)\"]", "Unit 1 - Gazipur"] }
+      ]
+    },
+    {
+      "name": "mfg-setup-shifts",
+      "route": "/app/production/setup",
+      "waitMs": 2200,
+      "clipSelector": "section:has-text(\"Add shift\")"
+    },
+    {
+      "name": "mfg-sewing-queue",
+      "route": "/app/production/sewing",
+      "waitMs": 2500,
+      "actions": [{ "hover": "text=Open Downtime Events", "waitMs": 900 }]
+    },
+    {
+      "name": "ops-control-tower-orders",
+      "route": "/app/operations/control-tower",
+      "waitMs": 2200,
+      "fullPage": true,
+      "actions": [
+        { "fill": ["input[type=\"date\"] >> nth=0", "2026-01-01"] },
+        { "fill": ["input[type=\"date\"] >> nth=1", "2026-06-29"] },
+        { "click": "role=button[name=\"Refresh\"]", "waitMs": 3000 }
+      ]
+    },
+    {
+      "name": "mfg-scan-station-setup",
+      "route": "/app/production/scan-station",
+      "waitMs": 2200,
+      "viewport": { "width": 1180, "height": 820 },
+      "actions": [
+        { "select": ["#st-line", { "index": 1 }], "waitMs": 600 },
+        { "select": ["#st-order", { "index": 1 }], "waitMs": 1800 },
+        { "fill": ["#st-operator", "EMP-0142"] }
+      ]
+    },
+    {
+      "name": "mfg-hourly-sewing-filled",
+      "route": "/app/production/hourly/sewing",
+      "waitMs": 2200,
+      "actions": [
+        { "select": ["label:has-text(\"Sewing line\") select", { "index": 1 }], "waitMs": 1800 },
+        { "fill": ["input[aria-label=\"H1 Good\"]", "120"] },
+        { "fill": ["input[aria-label=\"H1 Reject\"]", "3"] },
+        { "fill": ["input[aria-label=\"H2 Good\"]", "135"] },
+        { "fill": ["input[aria-label=\"H2 Reject\"]", "2"] }
+      ]
+    },
+    {
+      "name": "qc-inspection-form",
+      "route": "/app/quality/inspections",
+      "waitMs": 2000,
+      "clipSelector": "div.rounded-xl >> nth=0",
+      "actions": [
+        { "fill": ["input[placeholder=\"Work Order ID\"]", "1"] },
+        { "select": ["form select >> nth=0", "final"] },
+        { "select": ["form select >> nth=1", "fail"] },
+        { "fill": ["input[placeholder=\"Defect code (optional)\"]", "OPEN-SEAM"] },
+        { "fill": ["input[placeholder=\"Remarks\"]", "6 pcs open seam at side seam"] }
+      ]
+    },
+    {
+      "name": "qc-ncr-capa-forms",
+      "route": "/app/quality/capa",
+      "waitMs": 2000,
+      "clipSelector": "div.grid",
+      "actions": [
+        { "fill": ["input[placeholder=\"Work Order ID\"]", "1"] },
+        { "fill": ["input[placeholder=\"Defect Code\"]", "OPEN-SEAM"] },
+        { "select": ["form select >> nth=0", "major"] },
+        { "fill": ["input[placeholder=\"Description\"]", "6 pcs open seam found at final inspection"] },
+        { "fill": ["input[placeholder=\"NCR ID\"]", "1"] },
+        { "fill": ["input[placeholder=\"Corrective Action\"]", "Re-stitch affected pieces; check machine thread tension"] },
+        { "fill": ["input[placeholder=\"Preventive Action\"]", "Add hourly seam check on this operation"] }
+      ]
+    },
+    {
+      "name": "qc-shopfloor-inline-form",
+      "route": "/app/production/quality",
+      "waitMs": 2200,
+      "clipSelector": "section >> nth=0",
+      "actions": [
+        { "fill": ["label:has-text(\"Total checked\") input", "50"] },
+        { "fill": ["label:has-text(\"Pass qty\") input", "47"] },
+        { "fill": ["label:has-text(\"Fail qty\") input", "3"] }
+      ]
+    },
+    {
+      "name": "mfg-scan-station-bn",
+      "route": "/app/production/scan-station",
+      "waitMs": 2200,
+      "viewport": { "width": 1180, "height": 820 },
+      "actions": [
+        { "select": ["select[aria-label=\"Language\"]", "bn"], "waitMs": 1200 },
+        { "select": ["#st-line", { "index": 1 }], "waitMs": 600 }
+      ]
+    },
+    {
+      "name": "mfg-hourly-sewing-bn",
+      "route": "/app/production/hourly/sewing",
+      "waitMs": 2200,
+      "actions": [
+        { "select": ["select:has(option[value=\"bn\"])", "bn"], "waitMs": 1500 },
+        { "select": ["label:has-text(\"সেলাই লাইন\") select", { "index": 1 }], "waitMs": 1800 },
+        { "fill": ["input[aria-label=\"H1 ভালো\"]", "120"] },
+        { "fill": ["input[aria-label=\"H1 বাতিল\"]", "3"] }
+      ]
+    }
+  ],
+  "videos": [
+    {
+      "name": "mfg-planning-tour",
+      "title": "Production planning: check readiness, then book lines",
+      "steps": [
+        { "goto": "/app/production/planning", "waitMs": 2500 },
+        { "caption": "Goal: see which orders are ready to sew. Open Manufacturing → Planning.", "ms": 3500 },
+        { "hover": "role=button[name=\"By order\"]", "waitMs": 600 },
+        { "caption": "Pipeline tab: one row per order with style, quantity and delivery date.", "ms": 3200 },
+        { "hover": "role=button[name=\"Materials\"] >> nth=0", "waitMs": 600 },
+        { "caption": "Chain pills: Style, OB, Approval, Materials, Line. Green = ready, amber = warning, red = blocked, grey = not started.", "ms": 4600 },
+        { "click": "role=button[name=\"Details\"] >> nth=0", "waitMs": 1400 },
+        { "click": "role=button[name=\"Materials\"] >> nth=0", "waitMs": 1600 },
+        { "caption": "Details opens the readiness panel. Click a pill to see exactly what is missing for that step.", "ms": 4000 },
+        { "hover": "role=button[name=\"AI allocate\"] >> nth=0", "waitMs": 600 },
+        { "caption": "AI allocate asks Gemini for a line and start date. It only advises — you still book on the Line plan board.", "ms": 4200 },
+        { "click": "role=button[name=\"What-if / MRP\"]", "waitMs": 2200 },
+        { "caption": "What-if / MRP: predict a move, read the capacity heatmap, and run MRP for a date range.", "ms": 3800 },
+        { "scroll": 500, "waitMs": 900 },
+        { "hover": "role=button[name=\"Run MRP\"]", "waitMs": 600 },
+        { "caption": "Run MRP only lists suggestions (buy / make, quantity, due date). It does not create a PO.", "ms": 3800 },
+        { "click": "role=button[name=\"Plan history\"]", "waitMs": 2200 },
+        { "caption": "Plan history: item-based plans. Generate WOs, then Release to Shop Floor — it always asks you to confirm.", "ms": 4300 },
+        { "goto": "/app/production/line-plan", "waitMs": 2800 },
+        { "caption": "Next: open the Line plan board to see bookings per line and fix any red Planning conflicts.", "ms": 4000 }
+      ]
+    },
+    {
+      "name": "mfg-hourly-entry",
+      "title": "Enter hourly sewing output (good and reject)",
+      "steps": [
+        { "goto": "/app/production/hourly/sewing", "waitMs": 2400 },
+        { "caption": "Goal: record one line's output for each hour. Open Manufacturing → Hourly — Sewing.", "ms": 3600 },
+        { "hover": "input[type=\"date\"]", "waitMs": 600 },
+        { "caption": "Check the Date and the Shift first — every hour is saved against them.", "ms": 3200 },
+        { "select": ["label:has-text(\"Sewing line\") select", { "index": 1 }], "waitMs": 1800 },
+        { "caption": "Pick your Sewing line. Hours already saved for this line and date load automatically.", "ms": 3600 },
+        { "fill": ["input[aria-label=\"H1 Good\"]", "120"] },
+        { "fill": ["input[aria-label=\"H1 Reject\"]", "3"] },
+        { "caption": "H1 is the first working hour of the shift. Type Good pieces and Reject pieces.", "ms": 3400 },
+        { "fill": ["input[aria-label=\"H2 Good\"]", "135"] },
+        { "fill": ["input[aria-label=\"H2 Reject\"]", "2"] },
+        { "hover": "role=button[name=\"Save\"] >> nth=1", "waitMs": 700 },
+        { "caption": "Click Save on that hour's row to finish. Each hour saves on its own — we stop here, nothing is saved.", "ms": 4400 },
+        { "select": ["select[aria-label=\"Language\"]", "bn"], "waitMs": 1400 },
+        { "caption": "Operators can switch the screen to বাংলা (Bangla). The numbers you typed stay in place.", "ms": 3800 },
+        { "select": ["select[aria-label=\"ভাষা\"]", "en"], "waitMs": 1000 },
+        { "caption": "Supervisors then compare each line's output and efficiency on Production overview.", "ms": 3400 }
+      ]
+    },
+    {
+      "name": "qc-inspection-tour",
+      "title": "Record a failed inspection and start NCR / CAPA",
+      "steps": [
+        { "goto": "/app/quality/dashboard", "waitMs": 2600 },
+        { "caption": "Goal: record a failed check and start a corrective action. Start at Quality → QC Dashboard.", "ms": 3800 },
+        { "hover": "text=Pass Rate", "waitMs": 600 },
+        { "caption": "The dashboard counts inspections, pass rate, pending CAPA and open NCR for the dates you choose.", "ms": 3800 },
+        { "goto": "/app/quality/inspections", "waitMs": 2200 },
+        { "caption": "Inspections: one row per check against a manufacturing work order (WO).", "ms": 3200 },
+        { "fill": ["input[placeholder=\"Work Order ID\"]", "1"] },
+        { "select": ["form select >> nth=0", "final"], "waitMs": 600 },
+        { "select": ["form select >> nth=1", "fail"], "waitMs": 600 },
+        { "fill": ["input[placeholder=\"Defect code (optional)\"]", "OPEN-SEAM"] },
+        { "fill": ["input[placeholder=\"Remarks\"]", "6 pcs open seam at side seam"] },
+        { "caption": "Fill Work Order ID, In Process or Final, the Result and a defect code. Click Create to finish — we stop here.", "ms": 4400 },
+        { "goto": "/app/quality/capa", "waitMs": 2200 },
+        { "caption": "A failed check becomes an NCR (non-conformance report). Open Quality → CAPA.", "ms": 3600 },
+        { "fill": ["input[placeholder=\"Work Order ID\"]", "1"] },
+        { "fill": ["input[placeholder=\"Defect Code\"]", "OPEN-SEAM"] },
+        { "select": ["form select >> nth=0", "major"], "waitMs": 600 },
+        { "fill": ["input[placeholder=\"Description\"]", "Open seam found at final inspection"] },
+        { "hover": "role=button[name=\"Create NCR\"]", "waitMs": 600 },
+        { "caption": "Create NCR needs the work order, defect code and severity. You would click Create NCR here.", "ms": 3800 },
+        { "fill": ["input[placeholder=\"Corrective Action\"]", "Re-stitch pieces; check thread tension"] },
+        { "caption": "Then add a CAPA: the NCR ID, corrective action, preventive action and a due date.", "ms": 3800 },
+        { "caption": "Close a CAPA only when the fix is checked. An open CAPA can block the delivery challan if your admin turned that on.", "ms": 4400 }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" width="960" height="300" role="img" aria-labelledby="t d">
+  <title id="t">Data import: dry-run first, then commit</title>
+  <desc id="d">Choose the entity type, download the sample CSV, fill it in Excel, upload it, run Dry-run preview, fix rows with errors and repeat, then click Commit import once the preview shows no errors.</desc>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #334155; }
+    .h { font-size: 13px; font-weight: 700; }
+    .b { font-size: 12px; }
+    .s { font-size: 11px; fill: #64748b; }
+    .w { fill: #ffffff; }
+  </style>
+  <rect x="0" y="0" width="960" height="300" fill="#ffffff"/>
+  <text x="480" y="30" text-anchor="middle" class="h" style="font-size:18px">Settings &#8594; Data import: always preview before you commit</text>
+
+  <rect x="20" y="70" width="160" height="96" rx="12" fill="#f1f5f9" stroke="#334155"/>
+  <text x="100" y="98" text-anchor="middle" class="h">1. Entity type</text>
+  <text x="100" y="120" text-anchor="middle" class="b">customers, vendors,</text>
+  <text x="100" y="138" text-anchor="middle" class="b">items, accounts &#8230;</text>
+
+  <rect x="210" y="70" width="160" height="96" rx="12" fill="#f1f5f9" stroke="#334155"/>
+  <text x="290" y="98" text-anchor="middle" class="h">2. Sample CSV</text>
+  <text x="290" y="120" text-anchor="middle" class="b">Download sample CSV,</text>
+  <text x="290" y="138" text-anchor="middle" class="b">fill rows in Excel</text>
+
+  <rect x="400" y="70" width="160" height="96" rx="12" fill="#f0fdfa" stroke="#0f766e" stroke-width="2"/>
+  <text x="480" y="98" text-anchor="middle" class="h" style="fill:#0f766e">3. Dry-run preview</text>
+  <text x="480" y="120" text-anchor="middle" class="b">Nothing is saved.</text>
+  <text x="480" y="138" text-anchor="middle" class="b">Rows: ok / skip / error</text>
+
+  <rect x="590" y="70" width="160" height="96" rx="12" fill="#f1f5f9" stroke="#334155"/>
+  <text x="670" y="98" text-anchor="middle" class="h">4. Fix errors</text>
+  <text x="670" y="120" text-anchor="middle" class="b">Edit the file, upload</text>
+  <text x="670" y="138" text-anchor="middle" class="b">again, preview again</text>
+
+  <rect x="780" y="70" width="160" height="96" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+  <text x="860" y="98" text-anchor="middle" class="h" style="fill:#ea580c">5. Commit import</text>
+  <text x="860" y="120" text-anchor="middle" class="b">Creates records.</text>
+  <text x="860" y="138" text-anchor="middle" class="b">Confirm the warning</text>
+
+  <line x1="182" y1="118" x2="206" y2="118" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="372" y1="118" x2="396" y2="118" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="562" y1="118" x2="586" y2="118" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="752" y1="118" x2="776" y2="118" stroke="#ea580c" stroke-width="2" marker-end="url(#arr)"/>
+  <path d="M670,168 L670,200 L480,200 L480,172" fill="none" stroke="#64748b" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+  <text x="575" y="218" text-anchor="middle" class="s">repeat until Errors: 0</text>
+
+  <rect x="20" y="240" width="920" height="44" rx="10" fill="#f1f5f9"/>
+  <text x="480" y="267" text-anchor="middle" class="b">Files: CSV or Excel .xlsx (first sheet only). Request a backup first if you are importing a large master list.</text>
+</svg>

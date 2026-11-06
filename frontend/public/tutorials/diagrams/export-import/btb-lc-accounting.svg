@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" width="960" height="360" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <title>BTB LC life cycle and the three accounting entries</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect width="960" height="360" fill="#ffffff"/>
+  <text x="24" y="34" font-size="18" font-weight="700" fill="#0f766e">BTB LC &#8212; status and the 3 accounting steps</text>
+  <text x="24" y="56" font-size="13" fill="#334155">Status is set from the row Actions menu. Accounting steps are recorded in the Accounting drawer and each creates a voucher.</text>
+
+  <text x="24" y="92" font-size="14" font-weight="700" fill="#334155">Status (Actions &#8594; Set ...)</text>
+  <g font-size="13" font-weight="700" text-anchor="middle">
+    <rect x="24" y="104" width="110" height="44" rx="10" fill="#f1f5f9" stroke="#334155"/>
+    <text x="79" y="131" fill="#334155">DRAFT</text>
+    <rect x="170" y="104" width="110" height="44" rx="10" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <text x="225" y="131" fill="#0f766e">OPEN</text>
+    <rect x="316" y="104" width="110" height="44" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+    <text x="371" y="131" fill="#ea580c">AMENDED</text>
+    <rect x="462" y="104" width="110" height="44" rx="10" fill="#0f766e" stroke="#0f766e"/>
+    <text x="517" y="131" fill="#ffffff">CLOSED</text>
+  </g>
+  <g stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <line x1="134" y1="126" x2="168" y2="126"/>
+    <line x1="280" y1="126" x2="314" y2="126"/>
+    <line x1="426" y1="126" x2="460" y2="126"/>
+  </g>
+  <text x="600" y="122" font-size="12" fill="#334155">AMENDED = the bank changed amount, date or terms.</text>
+  <text x="600" y="140" font-size="12" fill="#334155">CLOSED = paid off and finished.</text>
+
+  <text x="24" y="190" font-size="14" font-weight="700" fill="#334155">Accounting drawer (Actions &#8594; Accounting)</text>
+  <g font-size="12.5">
+    <rect x="24" y="202" width="284" height="132" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <text x="40" y="226" font-weight="700" fill="#0f766e">1) Record Opening</text>
+    <text x="40" y="248" fill="#334155">When the bank opens the LC.</text>
+    <text x="40" y="270" fill="#334155">Dr BTB_NON_ACCEPTED_LC_LIABILITY</text>
+    <text x="40" y="290" fill="#334155">Cr BTB_CREDIT_LINE_UTILIZATION_CONTROL</text>
+    <text x="40" y="318" fill="#334155" font-size="11.5">Fields: voucher date, amount</text>
+
+    <rect x="338" y="202" width="284" height="132" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <text x="354" y="226" font-weight="700" fill="#0f766e">2) Record Documents Acceptance</text>
+    <text x="354" y="248" fill="#334155">Supplier's documents arrive; bank accepts.</text>
+    <text x="354" y="270" fill="#334155">Dr BTB_NON_ACCEPTED_LC_LIABILITY</text>
+    <text x="354" y="290" fill="#334155">Cr BTB_ACCEPTED_LC_LIABILITY</text>
+    <text x="354" y="318" fill="#334155" font-size="11.5">Fields: maturity date, voucher date, amount</text>
+
+    <rect x="652" y="202" width="284" height="132" rx="12" fill="#0f766e" stroke="#0f766e" stroke-width="2"/>
+    <text x="668" y="226" font-weight="700" fill="#ffffff">3) Record Realization</text>
+    <text x="668" y="248" fill="#ffffff">On maturity the bank pays the supplier.</text>
+    <text x="668" y="270" fill="#ffffff">Dr BTB_ACCEPTED_LC_LIABILITY</text>
+    <text x="668" y="290" fill="#ffffff">Cr your bank / cash GL</text>
+    <text x="668" y="318" fill="#ffffff" font-size="11.5">Fields: payment GL, voucher date, amount</text>
+  </g>
+  <g stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <line x1="308" y1="268" x2="336" y2="268"/>
+    <line x1="622" y1="268" x2="650" y2="268"/>
+  </g>
+</svg>

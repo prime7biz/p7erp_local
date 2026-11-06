@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 480" width="960" height="480" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <title>Manufacturing module map: set up, plan, execute, check, measure</title>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="480" fill="#ffffff"/>
+  <text x="24" y="34" font-size="18" font-weight="700" fill="#334155">Manufacturing module map</text>
+  <text x="24" y="56" font-size="12" fill="#64748b">Work left to right. Each box lists the sidebar links that belong to that job.</text>
+
+  <g font-size="12.5">
+    <rect x="24" y="78" width="168" height="300" rx="14" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
+    <text x="108" y="104" text-anchor="middle" font-size="14" font-weight="700" fill="#334155">1. Set up (once)</text>
+    <g fill="#334155">
+      <text x="40" y="134">&#8226; Production setup</text>
+      <text x="52" y="150" font-size="11" fill="#64748b">lines, shifts, units, crew</text>
+      <text x="40" y="176">&#8226; Factory calendar</text>
+      <text x="52" y="192" font-size="11" fill="#64748b">weekends, holidays</text>
+      <text x="40" y="218">&#8226; Operations library</text>
+      <text x="40" y="242">&#8226; Operation bulletins</text>
+      <text x="52" y="258" font-size="11" fill="#64748b">OB + SMV per style</text>
+      <text x="40" y="284">&#8226; Line balancing</text>
+      <text x="40" y="308">&#8226; IE &amp; Efficiency</text>
+    </g>
+
+    <rect x="212" y="78" width="168" height="300" rx="14" fill="#ccfbf1" stroke="#0f766e" stroke-width="1.5"/>
+    <text x="296" y="104" text-anchor="middle" font-size="14" font-weight="700" fill="#0f766e">2. Plan</text>
+    <g fill="#134e4a">
+      <text x="228" y="134">&#8226; Planning</text>
+      <text x="240" y="150" font-size="11" fill="#115e59">Pipeline &#183; What-if &#183; History</text>
+      <text x="228" y="176">&#8226; Line plan board</text>
+      <text x="240" y="192" font-size="11" fill="#115e59">bookings, conflicts</text>
+      <text x="228" y="218">&#8226; Manufacturing Orders</text>
+      <text x="228" y="242">&#8226; Control Tower</text>
+      <text x="240" y="258" font-size="11" fill="#115e59">Operations section</text>
+    </g>
+
+    <rect x="400" y="78" width="168" height="300" rx="14" fill="#ffedd5" stroke="#ea580c" stroke-width="1.5"/>
+    <text x="484" y="104" text-anchor="middle" font-size="14" font-weight="700" fill="#c2410c">3. Execute (daily)</text>
+    <g fill="#7c2d12">
+      <text x="416" y="134">&#8226; Cutting pipeline</text>
+      <text x="416" y="158">&#8226; Cutting / Sewing /</text>
+      <text x="428" y="174">Finishing (shop floor)</text>
+      <text x="416" y="200">&#8226; Scan station</text>
+      <text x="416" y="224">&#8226; Hourly &#8212; Cutting,</text>
+      <text x="428" y="240">Sewing, Iron, Finishing</text>
+      <text x="416" y="266">&#8226; Daily crew sheet</text>
+      <text x="416" y="290">&#8226; Weekly crew roster</text>
+      <text x="416" y="314">&#8226; Units (optional)</text>
+      <text x="428" y="330" font-size="11" fill="#9a3412">knitting, dyeing, printing&#8230;</text>
+    </g>
+
+    <rect x="588" y="78" width="168" height="300" rx="14" fill="#ccfbf1" stroke="#0f766e" stroke-width="1.5"/>
+    <text x="672" y="104" text-anchor="middle" font-size="14" font-weight="700" fill="#0f766e">4. Check quality</text>
+    <g fill="#134e4a">
+      <text x="604" y="134">&#8226; Shop-floor QC</text>
+      <text x="616" y="150" font-size="11" fill="#115e59">hourly inline checks</text>
+      <text x="604" y="176">&#8226; Quality &#8594; Inspections</text>
+      <text x="604" y="200">&#8226; Lab Tests</text>
+      <text x="604" y="224">&#8226; CAPA (NCR + CAPA)</text>
+      <text x="604" y="248">&#8226; Returns</text>
+      <text x="604" y="272">&#8226; QC Dashboard</text>
+    </g>
+
+    <rect x="776" y="78" width="160" height="300" rx="14" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
+    <text x="856" y="104" text-anchor="middle" font-size="14" font-weight="700" fill="#334155">5. Measure</text>
+    <g fill="#334155">
+      <text x="790" y="134">&#8226; Production Overview</text>
+      <text x="802" y="150" font-size="11" fill="#64748b">output, efficiency</text>
+      <text x="790" y="176">&#8226; Production</text>
+      <text x="802" y="192">Efficiency report</text>
+      <text x="790" y="218">&#8226; Cost &amp; CM</text>
+      <text x="790" y="242">&#8226; WIP journals</text>
+      <text x="802" y="258" font-size="11" fill="#64748b">on Production Overview</text>
+    </g>
+  </g>
+
+  <line x1="192" y1="228" x2="208" y2="228" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="380" y1="228" x2="396" y2="228" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="568" y1="228" x2="584" y2="228" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="756" y1="228" x2="772" y2="228" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="24" y="396" width="912" height="68" rx="10" fill="#fff7ed" stroke="#fdba74"/>
+  <text x="40" y="418" font-size="12.5" font-weight="700" fill="#9a3412">Why a link may be missing from your sidebar</text>
+  <text x="40" y="438" font-size="12" fill="#7c2d12">Manufacturing shows for manufacturer / both companies. Control Tower and Scan station need a switch in Settings &#8594; Configuration.</text>
+  <text x="40" y="454" font-size="12" fill="#7c2d12">Units (optional) appear only after you tick them in Production setup &#8594; Optional units (Knitting also needs knitting_enabled).</text>
+</svg>

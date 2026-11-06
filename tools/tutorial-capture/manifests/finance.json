@@ -1,0 +1,249 @@
+{
+  "screenshots": [
+    {
+      "name": "fin-voucher-new-journal",
+      "route": "/app/accounts/vouchers?new=JOURNAL",
+      "waitMs": 2500,
+      "actions": [
+        { "fill": ["role=combobox[name=\"Ledger account for line 1\"]", "Office Expense"], "waitMs": 1500 },
+        { "click": "[role=option]:has-text(\"Office Expense\")" },
+        { "fill": ["input[aria-label=\"Debit amount for line 1\"]", "2500"] },
+        { "click": "role=button[name=\"+ Credit line\"]" },
+        { "fill": ["role=combobox[name=\"Ledger account for line 2\"]", "Cash In Hand"], "waitMs": 1500 },
+        { "click": "[role=option]:has-text(\"Cash In Hand\")" },
+        { "fill": ["input[aria-label=\"Credit amount for line 2\"]", "2500"] },
+        { "fill": ["textarea[placeholder=\"Enter narration (required for audit)\"]", "Paid office tea and snacks for November in cash"] },
+        { "waitMs": 2500 }
+      ]
+    },
+    {
+      "name": "fin-voucher-entry-assistant",
+      "route": "/app/accounts/vouchers?new=JOURNAL",
+      "waitMs": 2500,
+      "clipSelector": "aside:has-text(\"Entry assistant\")",
+      "actions": [
+        { "fill": ["role=combobox[name=\"Ledger account for line 1\"]", "Office Expense"], "waitMs": 1500 },
+        { "click": "[role=option]:has-text(\"Office Expense\")" },
+        { "fill": ["input[aria-label=\"Debit amount for line 1\"]", "2500"] },
+        { "click": "role=button[name=\"+ Credit line\"]" },
+        { "fill": ["role=combobox[name=\"Ledger account for line 2\"]", "Cash In Hand"], "waitMs": 1500 },
+        { "click": "[role=option]:has-text(\"Cash In Hand\")" },
+        { "fill": ["input[aria-label=\"Credit amount for line 2\"]", "2500"] },
+        { "waitMs": 3000 }
+      ]
+    },
+    {
+      "name": "fin-voucher-narration-ai",
+      "route": "/app/accounts/vouchers?new=JOURNAL",
+      "waitMs": 2500,
+      "actions": [
+        { "fill": ["role=combobox[name=\"Ledger account for line 1\"]", "Office Expense"], "waitMs": 1500 },
+        { "click": "[role=option]:has-text(\"Office Expense\")" },
+        { "fill": ["input[aria-label=\"Debit amount for line 1\"]", "2500"] },
+        { "click": "role=button[name=\"+ Credit line\"]" },
+        { "fill": ["role=combobox[name=\"Ledger account for line 2\"]", "Cash In Hand"], "waitMs": 1500 },
+        { "click": "[role=option]:has-text(\"Cash In Hand\")" },
+        { "fill": ["input[aria-label=\"Credit amount for line 2\"]", "2500"] },
+        { "click": "role=button[name=\"Suggest with AI\"]", "waitMs": 6000 }
+      ]
+    },
+    {
+      "name": "fin-voucher-ledger-quick-create",
+      "route": "/app/accounts/vouchers?new=PAYMENT",
+      "waitMs": 2500,
+      "actions": [
+        { "fill": ["role=combobox[name=\"Ledger account for line 1\"]", "Generator Fuel"], "waitMs": 1500 },
+        { "press": "Alt+c", "waitMs": 1200 }
+      ]
+    },
+    {
+      "name": "fin-voucher-row-actions",
+      "route": "/app/accounts/vouchers",
+      "actions": [{ "click": "table tbody tr >> nth=0 >> role=button[name=\"Actions\"]", "waitMs": 1500 }]
+    },
+    {
+      "name": "fin-voucher-detail",
+      "route": "/app/accounts/vouchers",
+      "actions": [{ "click": "table tbody tr >> nth=0", "waitMs": 2500 }]
+    },
+    {
+      "name": "fin-voucher-print-preview",
+      "route": "/app/accounts/vouchers",
+      "actions": [
+        { "click": "table tbody tr >> nth=0 >> role=button[name=\"Actions\"]" },
+        { "click": "role=button[name=\"Print / PDF\"]", "waitMs": 2500 }
+      ]
+    },
+    {
+      "name": "fin-cheque-print",
+      "route": "/app/accounts/vouchers",
+      "actions": [
+        { "click": "table tbody tr >> nth=0", "waitMs": 2500 },
+        { "click": "role=button[name=\"Print cheque\"]", "waitMs": 2000 }
+      ]
+    },
+    {
+      "name": "fin-coa-new-ledger",
+      "route": "/app/accounts",
+      "actions": [
+        { "fill": ["input[placeholder=\"Ledger Name\"]", "Generator Fuel"] },
+        { "click": "role=button[name=\"Show advanced\"]" }
+      ]
+    },
+    {
+      "name": "fin-groups-hierarchy",
+      "route": "/app/accounts/groups",
+      "waitMs": 3000,
+      "actions": [{ "click": "button:has-text(\"hierarchy\") >> nth=0", "waitMs": 1500 }]
+    },
+    {
+      "name": "fin-bank-recon-csv",
+      "route": "/app/banking/reconciliation",
+      "fullPage": true,
+      "actions": [
+        { "fill": ["input[placeholder=\"Statement balance\"]", "185000"] },
+        {
+          "fill": [
+            "textarea[placeholder^=\"transaction_date\"]",
+            "transaction_date,description,reference,debit_amount,credit_amount,running_balance\n2026-11-02,Cheque 004512 Sakura Trims,PR-9001,22000,0,163000\n2026-11-03,Bank charges,SC-1103,350,0,162650"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "fin-payment-run-select",
+      "route": "/app/banking/payment-runs",
+      "actions": [
+        { "select": ["select:has(option:text-is(\"Select bank account *\"))", { "index": 1 }] },
+        { "click": "table >> nth=0 >> tbody tr >> nth=0 >> input[type=\"checkbox\"]" },
+        { "click": "table >> nth=0 >> tbody tr >> nth=1 >> input[type=\"checkbox\"]" },
+        { "fill": ["input[placeholder=\"Remarks (optional)\"]", "Trims suppliers - weekly payment"] }
+      ]
+    },
+    {
+      "name": "fin-purchase-ap-actions",
+      "route": "/app/accounts/purchase-workflow",
+      "actions": [{ "click": "table >> nth=1 >> tbody tr >> nth=0 >> role=button[name=\"Actions\"]" }]
+    },
+    {
+      "name": "fin-outstanding-payable",
+      "route": "/app/accounts/outstanding-bills",
+      "actions": [{ "select": ["select:has(option[value=\"PAYABLE\"]) >> nth=0", "PAYABLE"], "waitMs": 1500 }]
+    },
+    {
+      "name": "fin-facility-new",
+      "route": "/app/finance/facilities/new",
+      "actions": [
+        { "fill": ["label:has-text(\"Financier display name\") input", "Prime Bank PLC"] },
+        { "fill": ["label:has-text(\"Sanctioned amount\") input", "50000000"] },
+        { "fill": ["label:has-text(\"Interest % (annual)\") input", "11.5"] }
+      ]
+    },
+    {
+      "name": "fin-statutory-tax-rates",
+      "route": "/app/settings/statutory-compliance"
+    },
+    {
+      "name": "fin-pi-receipt-panel",
+      "route": "/app/commercial/proforma-invoices",
+      "clipSelector": "section:has(h2:text-is(\"Payments\"))",
+      "actions": [
+        { "click": "table tbody tr:has-text(\"PIWF-EXP-009\") >> role=button[name=\"Actions\"]" },
+        { "click": "role=link[name=\"Edit\"]", "waitMs": 3000 }
+      ]
+    },
+    {
+      "name": "fin-voucher-print-sheet",
+      "route": "/app/accounts/vouchers",
+      "clipSelector": "article.vp-sheet >> nth=0",
+      "actions": [
+        { "click": "table tbody tr >> nth=0 >> role=button[name=\"Actions\"]" },
+        { "click": "role=button[name=\"Print / PDF\"]", "waitMs": 2500 }
+      ]
+    }
+  ],
+  "videos": [
+    {
+      "name": "fin-voucher-entry",
+      "title": "Enter a two-line journal voucher",
+      "steps": [
+        { "goto": "/app/accounts/vouchers" },
+        { "caption": "Goal: record a simple journal — office expense paid in cash. Open Finance → Transactions → Vouchers.", "ms": 3600 },
+        { "click": "role=button[name=\"+ New Voucher\"]" },
+        { "caption": "Pick the voucher type with the quick buttons. F4 Contra, F5 Payment, F6 Receipt, F7 Journal also work from the keyboard.", "ms": 3800 },
+        { "click": "role=group[name=\"Voucher type\"] >> role=button[name=/Journal/]" },
+        { "hover": "label:text-is(\"Financial year\") + select" },
+        { "caption": "Financial year is already set to the current year. The date picker stays inside that year.", "ms": 3400 },
+        { "fill": ["role=combobox[name=\"Ledger account for line 1\"]", "Office Expense"], "waitMs": 1500 },
+        { "click": "[role=option]:has-text(\"Office Expense\")" },
+        { "fill": ["input[aria-label=\"Debit amount for line 1\"]", "2500"] },
+        { "caption": "Line 1: search the ledger, pick it, and type the Debit amount. You see its balance now and after this voucher.", "ms": 3800 },
+        { "click": "role=button[name=\"+ Credit line\"]" },
+        { "fill": ["role=combobox[name=\"Ledger account for line 2\"]", "Cash In Hand"], "waitMs": 1500 },
+        { "click": "[role=option]:has-text(\"Cash In Hand\")" },
+        { "fill": ["input[aria-label=\"Credit amount for line 2\"]", "2500"] },
+        { "caption": "Line 2: the Credit side. When debit equals credit, the totals bar turns green and says Balanced.", "ms": 3600 },
+        { "hover": "aside:has-text(\"Entry assistant\")" },
+        { "caption": "Entry assistant (right): read-only hints from your posted vouchers — warnings, balances, ledgers usually used together.", "ms": 4200 },
+        { "fill": ["textarea[placeholder=\"Enter narration (required for audit)\"]", "Paid office tea and snacks for November in cash"] },
+        { "caption": "Narration is required. You can also click Suggest with AI and then Use.", "ms": 3200 },
+        { "hover": "role=button[name=\"Save Draft\"]" },
+        { "caption": "Click Save Draft (or Save & Submit) to finish. This demo cancels instead, so nothing is saved.", "ms": 3800 },
+        { "click": "form >> role=button[name=\"Cancel\"] >> nth=0" },
+        { "caption": "Your saved voucher appears in the Voucher List. Click a row to open it, print it, or follow its approval.", "ms": 3400 }
+      ]
+    },
+    {
+      "name": "fin-approval-queue-tour",
+      "title": "Tour of the voucher approval queue",
+      "steps": [
+        { "goto": "/app/accounts/vouchers/approval-queue" },
+        { "caption": "Goal: find vouchers waiting for you. Open Finance → Transactions → Voucher Approvals.", "ms": 3600 },
+        { "hover": "select:has(option[value=\"SUBMITTED\"])" },
+        { "caption": "The queue shows Submitted, Checked, Recommended and Approved vouchers. Pick one status to narrow it.", "ms": 3800 },
+        { "select": ["select:has(option[value=\"SUBMITTED\"])", "SUBMITTED"] },
+        { "fill": ["input[type=\"date\"] >> nth=0", "2026-01-01"], "waitMs": 1200 },
+        { "caption": "Dates start at the last 3 months. Move the From date back if an older voucher seems missing.", "ms": 3600 },
+        { "hover": "role=button[name=\"Export CSV\"]" },
+        { "caption": "Print Queue and Export CSV give you a list for the approver. Refresh reloads it.", "ms": 3200 },
+        { "caption": "On each row, Actions shows only the next allowed step: Check → Recommend → Approve → Post, or Reject.", "ms": 4200 },
+        { "goto": "/app/accounts/vouchers" },
+        { "click": "table tbody tr >> nth=0", "waitMs": 2500 },
+        { "caption": "Open a voucher to see its Approval Progress: Draft, Submitted, Checked, Recommended, Approved, Posted.", "ms": 4000 },
+        { "scroll": 1400 },
+        { "caption": "The buttons at the bottom are the same workflow steps. Reject, Reverse and Cancel posting ask for a reason.", "ms": 4000 },
+        { "scroll": 1400 },
+        { "caption": "History lists who created, edited, approved or posted the voucher, and why. Nothing was changed in this demo.", "ms": 4000 }
+      ]
+    },
+    {
+      "name": "fin-bank-reconciliation-tour",
+      "title": "Tour of bank reconciliation",
+      "steps": [
+        { "goto": "/app/banking/reconciliation" },
+        { "caption": "Goal: check that the bank statement agrees with your books. Open Finance → Banking → Bank Reconciliation.", "ms": 3800 },
+        { "hover": "select:has(option:text-is(\"Select bank account\"))" },
+        { "caption": "Step 1: choose the bank account. Book balance comes from Bank Accounts → Current balance.", "ms": 3600 },
+        { "fill": ["input[placeholder=\"Statement balance\"]", "185000"] },
+        { "hover": "role=button[name=\"Add Statement\"]" },
+        { "caption": "Step 2: set the statement date and closing balance from the bank, then click Add Statement (not saved in this demo).", "ms": 4200 },
+        { "hover": "h2:text-is(\"Statement Lines\")" },
+        { "caption": "Step 3: open the statement row, then add its lines one by one or paste CSV from the bank.", "ms": 3600 },
+        {
+          "fill": [
+            "textarea[placeholder^=\"transaction_date\"]",
+            "transaction_date,description,reference,debit_amount,credit_amount,running_balance\n2026-11-02,Cheque 004512 Sakura Trims,PR-9001,22000,0,163000"
+          ]
+        },
+        { "hover": "role=button[name=\"Import CSV\"]" },
+        { "caption": "Click Import CSV to load the lines. The first row must be the column names shown in the box.", "ms": 3600 },
+        { "hover": "role=button[name=\"Auto Match\"]" },
+        { "caption": "Step 4: Auto Match pairs lines with executed Payment Runs. Match the rest with Select run → Match.", "ms": 4000 },
+        { "hover": "role=button[name=\"Finalize\"]" },
+        { "caption": "Step 5: when the Difference is zero, a manager types a reason and clicks Finalize. Finalized statements are locked.", "ms": 4200 },
+        { "scroll": 900 },
+        { "caption": "Match Audit Trail records every match and unmatch. Export CSV keeps a copy for the auditor.", "ms": 3600 }
+      ]
+    }
+  ]
+}

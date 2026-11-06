@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 380" width="960" height="380" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#334155"/>
+    </marker>
+    <marker id="arrO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#ea580c"/>
+    </marker>
+  </defs>
+  <rect width="960" height="380" fill="#ffffff"/>
+  <text x="480" y="32" text-anchor="middle" font-size="18" font-weight="700" fill="#334155">Purchase order status &#8212; what each step means</text>
+
+  <!-- Pre-close path -->
+  <path d="M285 120 V78 H890 V117" fill="none" stroke="#0f766e" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+  <line x1="495" y1="120" x2="495" y2="78" stroke="#0f766e" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="600" y="70" text-anchor="middle" font-size="12" fill="#0f766e">Actions &#8594; Close (pre-close) + reason &#8212; supplier will not ship the rest</text>
+
+  <!-- Main row -->
+  <g font-size="14" font-weight="700">
+    <rect x="20" y="120" width="140" height="60" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="2"/>
+    <text x="90" y="156" text-anchor="middle" fill="#334155">DRAFT</text>
+
+    <rect x="210" y="120" width="150" height="60" rx="12" fill="#f0fdfa" stroke="#0f766e" stroke-width="2"/>
+    <text x="285" y="156" text-anchor="middle" fill="#0f766e">APPROVED</text>
+
+    <rect x="410" y="120" width="170" height="60" rx="12" fill="#f0fdfa" stroke="#0f766e" stroke-width="2"/>
+    <text x="495" y="146" text-anchor="middle" fill="#0f766e">PARTIALLY</text>
+    <text x="495" y="166" text-anchor="middle" fill="#0f766e">RECEIVED</text>
+
+    <rect x="630" y="120" width="160" height="60" rx="12" fill="#f0fdfa" stroke="#0f766e" stroke-width="2"/>
+    <text x="710" y="146" text-anchor="middle" fill="#0f766e">FULLY</text>
+    <text x="710" y="166" text-anchor="middle" fill="#0f766e">RECEIVED</text>
+
+    <rect x="830" y="120" width="120" height="60" rx="12" fill="#0f766e" stroke="#0f766e" stroke-width="2"/>
+    <text x="890" y="156" text-anchor="middle" fill="#ffffff">CLOSED</text>
+  </g>
+  <g stroke="#334155" stroke-width="2" marker-end="url(#arr)">
+    <line x1="160" y1="150" x2="207" y2="150"/>
+    <line x1="360" y1="150" x2="407" y2="150"/>
+    <line x1="580" y1="150" x2="627" y2="150"/>
+    <line x1="790" y1="150" x2="827" y2="150"/>
+  </g>
+
+  <!-- Explanations under each box -->
+  <g font-size="12" fill="#475569">
+    <text x="90" y="202" text-anchor="middle">Create Purchase Order</text>
+    <text x="90" y="218" text-anchor="middle">(can still be changed)</text>
+    <text x="285" y="202" text-anchor="middle">Actions &#8594; Approve</text>
+    <text x="285" y="218" text-anchor="middle">(or bulk Approve)</text>
+    <text x="495" y="202" text-anchor="middle">A GRN received</text>
+    <text x="495" y="218" text-anchor="middle">some of the quantity</text>
+    <text x="710" y="202" text-anchor="middle">GRNs received every</text>
+    <text x="710" y="218" text-anchor="middle">line in full</text>
+    <text x="890" y="202" text-anchor="middle">Finished &#8212;</text>
+    <text x="890" y="218" text-anchor="middle">no more receiving</text>
+  </g>
+
+  <!-- Cancel branch -->
+  <rect x="330" y="270" width="200" height="56" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+  <text x="430" y="304" text-anchor="middle" font-size="14" font-weight="700" fill="#c2410c">CANCELLED</text>
+  <g stroke="#ea580c" stroke-width="2" stroke-dasharray="5 4" fill="none" marker-end="url(#arrO)">
+    <path d="M90 228 V298 H327"/>
+    <path d="M285 228 V266"/>
+    <path d="M495 228 V250 H470 V266"/>
+  </g>
+  <text x="560" y="294" font-size="12" fill="#c2410c">Actions &#8594; Cancel + reason</text>
+  <text x="560" y="311" font-size="12" fill="#475569">Allowed from Draft, Approved or Partially received.</text>
+  <text x="560" y="328" font-size="12" fill="#475569">Cancelled and closed POs cannot be received.</text>
+  <text x="480" y="364" text-anchor="middle" font-size="12" fill="#64748b">Every status change, reason and the pending quantity at close is kept in Actions &#8594; Receipt progress &amp; vendor bill &#8594; History.</text>
+</svg>

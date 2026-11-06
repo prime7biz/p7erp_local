@@ -1,0 +1,297 @@
+{
+  "screenshots": [
+    {
+      "name": "ai-drawer-open",
+      "route": "/app",
+      "waitMs": 2500,
+      "actions": [{ "click": "button[title=\"Prime7 AI\"]", "waitMs": 2500 }]
+    },
+    {
+      "name": "ai-drawer-order-context",
+      "route": "/app/orders",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "table tbody tr >> nth=0 >> a[href^=\"/app/orders/\"]", "waitMs": 2500 },
+        { "click": "button[title=\"Prime7 AI\"]", "waitMs": 2500 }
+      ]
+    },
+    {
+      "name": "ai-dashboard-ask-figure",
+      "route": "/app",
+      "waitMs": 2500,
+      "actions": [
+        { "hover": "#ask-metric-title" },
+        { "fill": ["input[aria-label=\"Ask a question about your figures\"]", "How many orders are late?"] },
+        { "click": "section[aria-labelledby=\"ask-metric-title\"] >> role=button[name=\"Ask\"]", "waitMs": 2500 }
+      ]
+    },
+    {
+      "name": "ai-dashboard-daily-brief",
+      "route": "/app",
+      "waitMs": 2500,
+      "actions": [{ "hover": "text=AI daily brief", "waitMs": 800 }]
+    },
+    {
+      "name": "ai-agents-row-actions",
+      "route": "/app/ai/agents",
+      "waitMs": 3500,
+      "actions": [{ "click": "role=button[name=\"Actions\"] >> nth=0" }]
+    },
+    {
+      "name": "ai-agents-notify-dialog",
+      "route": "/app/ai/agents",
+      "waitMs": 3500,
+      "actions": [
+        { "click": "role=button[name=\"Actions\"] >> nth=0" },
+        { "click": "role=menuitem[name=/Notify/]" },
+        { "fill": ["role=dialog >> textarea", "Please confirm the LC extension date by Friday."] }
+      ]
+    },
+    {
+      "name": "ai-automation-draft-actions",
+      "route": "/app/ai/automation",
+      "waitMs": 4000
+    },
+    {
+      "name": "ai-automation-data-quality",
+      "route": "/app/ai/automation?tab=quality",
+      "waitMs": 4000
+    },
+    {
+      "name": "ai-predictions-hub",
+      "route": "/app/ai/predictions",
+      "waitMs": 5000
+    },
+    {
+      "name": "ai-weekly-reports-hub",
+      "route": "/app/ai/weekly-reports",
+      "waitMs": 5000
+    },
+    {
+      "name": "ai-extract-customer-card",
+      "route": "/app/customers/new",
+      "waitMs": 2500,
+      "actions": [{ "hover": "text=Import Customer Info" }]
+    },
+    {
+      "name": "ai-extract-inquiry-card",
+      "route": "/app/inquiries/new",
+      "waitMs": 2500,
+      "actions": [{ "hover": "text=Import Inquiry Info" }]
+    },
+    {
+      "name": "settings-config-more-features",
+      "route": "/app/settings/config",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "role=radio[name=\"More features\"]" },
+        { "hover": "text=Show company features" }
+      ]
+    },
+    {
+      "name": "settings-config-ai-switches",
+      "route": "/app/settings/config",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "role=radio[name=\"More features\"]" },
+        { "hover": "text=AI exception agents", "waitMs": 800 }
+      ]
+    },
+    {
+      "name": "settings-config-essential",
+      "route": "/app/settings/config",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "role=radio[name=\"Essential\"]" },
+        { "hover": "text=Finance & costing", "waitMs": 800 }
+      ]
+    },
+    {
+      "name": "settings-users-invite-modal",
+      "route": "/app/settings/users",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "role=button[name=\"Invite staff\"]" },
+        { "fill": ["role=dialog >> input[type=\"email\"]", "store.keeper@lakhsma-demo.com"] },
+        { "fill": ["role=dialog >> input[placeholder=\"First name\"]", "Rahim"] },
+        { "fill": ["role=dialog >> input[placeholder=\"Last name\"]", "Uddin"] }
+      ]
+    },
+    {
+      "name": "settings-users-row-actions",
+      "route": "/app/settings/users",
+      "waitMs": 2500,
+      "actions": [{ "click": "table tbody tr >> nth=0 >> role=button[name=\"Actions\"]" }]
+    },
+    {
+      "name": "settings-roles-new-role",
+      "route": "/app/settings/roles",
+      "waitMs": 3000,
+      "actions": [
+        { "fill": ["input[placeholder=\"System name (e.g. merch_manager) **\"]", "store_keeper"] },
+        { "fill": ["input[placeholder=\"Display name **\"]", "Store keeper"] },
+        { "select": ["select:has(option[value=\"data_entry\"])", "data_entry"] }
+      ]
+    },
+    {
+      "name": "settings-roles-governance",
+      "route": "/app/settings/roles",
+      "waitMs": 3000,
+      "actions": [{ "hover": "text=Material control & finance governance", "waitMs": 800 }]
+    },
+    {
+      "name": "settings-roles-list-actions",
+      "route": "/app/settings/roles",
+      "waitMs": 3000,
+      "actions": [
+        { "scroll": 20000 },
+        { "click": "table >> nth=-1 >> tbody tr >> nth=1 >> role=button[name=\"Actions\"]" }
+      ]
+    },
+    {
+      "name": "settings-statutory-tax-calc",
+      "route": "/app/settings/statutory-compliance",
+      "waitMs": 2500,
+      "actions": [{ "click": "role=button[name=\"Calculate\"]", "waitMs": 1500 }]
+    },
+    {
+      "name": "settings-statutory-bonded",
+      "route": "/app/settings/statutory-compliance",
+      "waitMs": 2500,
+      "actions": [{ "click": "role=button[name=\"Bonded warehouse\"]" }]
+    },
+    {
+      "name": "settings-statutory-payroll",
+      "route": "/app/settings/statutory-compliance",
+      "waitMs": 2500,
+      "actions": [{ "click": "role=button[name=\"Payroll statutory\"]" }]
+    },
+    {
+      "name": "settings-currency-add-form",
+      "route": "/app/settings/currency",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "role=button[name=\"Add exchange rate\"]" },
+        { "fill": ["input[type=\"number\"]", "121.50"] }
+      ]
+    },
+    {
+      "name": "settings-ext-customer-invite",
+      "route": "/app/settings/external-access/customers",
+      "waitMs": 3000,
+      "actions": [
+        { "click": "role=button[name=\"Invite customer\"]", "waitMs": 2000 },
+        { "select": ["role=dialog >> select >> nth=0", { "index": 1 }] }
+      ]
+    },
+    {
+      "name": "settings-ext-financier-invite",
+      "route": "/app/settings/external-access/financiers",
+      "waitMs": 3000,
+      "actions": [
+        { "click": "role=button[name=\"Invite financier\"]", "waitMs": 2500 },
+        { "fill": ["role=dialog >> input[type=\"email\"]", "credit.officer@demo-bank.com"] },
+        { "fill": ["role=dialog >> input >> nth=1", "Credit Officer (Demo Bank)"] }
+      ]
+    },
+    {
+      "name": "settings-ext-audit",
+      "route": "/app/settings/external-access/audit",
+      "waitMs": 2500
+    },
+    {
+      "name": "settings-ext-suppliers",
+      "route": "/app/settings/external-access/suppliers",
+      "waitMs": 2500
+    },
+    {
+      "name": "reports-style-360-filters",
+      "route": "/app/reports/style-360",
+      "waitMs": 3000,
+      "actions": [{ "select": ["select:has(option[value=\"critical_styles\"])", "critical_styles"], "waitMs": 2000 }]
+    },
+    {
+      "name": "reports-hr-dashboard",
+      "route": "/app/hr/reports",
+      "waitMs": 3000
+    },
+    {
+      "name": "reports-inventory-stock-summary",
+      "route": "/app/inventory/stock-summary",
+      "waitMs": 3000
+    },
+    {
+      "name": "reports-finance-mis",
+      "route": "/app/finance/mis",
+      "waitMs": 3500
+    }
+  ],
+  "videos": [
+    {
+      "name": "settings-invite-user",
+      "title": "Invite a new staff user",
+      "steps": [
+        { "goto": "/app/settings/users" },
+        { "caption": "Goal: give a new colleague their own login. Open Settings → User Mgmt.", "ms": 3200 },
+        { "hover": "table thead" },
+        { "caption": "The table lists every user, their role and whether they are active.", "ms": 2800 },
+        { "click": "role=button[name=\"Invite staff\"]" },
+        { "caption": "Invite staff emails a secure link. The person sets their own password.", "ms": 3000 },
+        { "fill": ["role=dialog >> input[type=\"email\"]", "store.keeper@lakhsma-demo.com"] },
+        { "fill": ["role=dialog >> input[placeholder=\"First name\"]", "Rahim"] },
+        { "fill": ["role=dialog >> input[placeholder=\"Last name\"]", "Uddin"] },
+        { "hover": "role=dialog >> select" },
+        { "caption": "Pick the Role. The role decides which menus and buttons this person can use.", "ms": 3400 },
+        { "hover": "role=dialog >> role=button[name=\"Send invite\"]" },
+        { "caption": "Click Send invite to finish. (This demo closes without sending.)", "ms": 3200 },
+        { "click": "role=dialog >> role=button[name=\"Close\"]" },
+        { "scroll": 1200 },
+        { "caption": "Sent invites wait under Pending invitations. Use Resend or Cancel there.", "ms": 3400 }
+      ]
+    },
+    {
+      "name": "settings-roles-tour",
+      "title": "Create a role and choose permissions",
+      "steps": [
+        { "goto": "/app/settings/roles" },
+        { "caption": "Goal: make a role for store keepers. Open Settings → Roles.", "ms": 3000 },
+        { "fill": ["input[placeholder=\"System name (e.g. merch_manager) **\"]", "store_keeper"] },
+        { "fill": ["input[placeholder=\"Display name **\"]", "Store keeper"] },
+        { "caption": "System name is a short code (no spaces). Display name is what people see.", "ms": 3200 },
+        { "select": ["select:has(option[value=\"data_entry\"])", "data_entry"] },
+        { "caption": "A template ticks many boxes at once. Data entry = read + write everywhere.", "ms": 3400 },
+        { "hover": "table thead" },
+        { "caption": "Access turns a whole module on or off. Read, Write, Edit, Approve and Export are finer levels.", "ms": 3800 },
+        { "scroll": 700 },
+        { "caption": "Untick modules this person must not see, for example Finance or HR.", "ms": 3000 },
+        { "hover": "text=Material control & finance governance" },
+        { "caption": "Governance switches give extra powers (e.g. over-receipt approval). Admin and manager roles always have them.", "ms": 4200 },
+        { "hover": "role=button[name=\"Create role\"]" },
+        { "caption": "Click Create role to finish. Then assign it to users in User Mgmt. (Not saved in this demo.)", "ms": 3600 }
+      ]
+    },
+    {
+      "name": "ai-assistant-drawer-tour",
+      "title": "Open the AI assistant and see what it knows",
+      "steps": [
+        { "goto": "/app/orders", "waitMs": 3000 },
+        { "caption": "Goal: ask the AI about the record you are looking at. First open an order.", "ms": 3200 },
+        { "click": "table tbody tr >> nth=0 >> a[href^=\"/app/orders/\"]", "timeout": 45000, "waitMs": 2500 },
+        { "caption": "Now click the ✦ sparkle button in the top bar.", "ms": 2600 },
+        { "click": "button[title=\"Prime7 AI\"]", "waitMs": 2500 },
+        { "caption": "The chip 'Asking about …' means your question will use this order.", "ms": 3600 },
+        { "hover": "input[placeholder^=\"Ask about dashboard\"]" },
+        { "caption": "Type a question such as 'When is this order due?' and press Send.", "ms": 3200 },
+        { "caption": "The AI only reads records your role can open. It never saves or approves anything by itself.", "ms": 4000 },
+        { "caption": "If it needs paid cloud processing, it asks first: Approve Paid Processing or Cancel.", "ms": 3800 },
+        { "click": "button[title=\"New AI session\"] + button[title=\"Close\"]" },
+        { "goto": "/app/ai/agents" },
+        { "caption": "AI Tools → Exception agents lists problems found by rules: late TNA, expiring LCs, BOM gaps.", "ms": 3800 },
+        { "click": "role=button[name=\"Actions\"] >> nth=0" },
+        { "caption": "Actions → Notify… prepares a message. A manager must click Confirm & send.", "ms": 3600 },
+        { "press": "Escape" },
+        { "caption": "Nothing is sent until a person confirms. Every decision is written to the audit log.", "ms": 3400 }
+      ]
+    }
+  ]
+}

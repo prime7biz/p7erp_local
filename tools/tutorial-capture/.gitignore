@@ -1,0 +1,8 @@
+node_modules/
+.video-tmp/
+.capture.lock
+.capture-queue/
+capture-report.json
+redact.local.json
+referenced-assets.json
+*.log

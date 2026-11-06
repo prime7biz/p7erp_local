@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 340" width="960" height="340" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <rect width="960" height="340" fill="#ffffff"/>
+  <text x="480" y="32" text-anchor="middle" font-size="18" font-weight="700" fill="#334155">Material control gates &#8212; when the system asks for a manager</text>
+  <text x="480" y="54" text-anchor="middle" font-size="13" fill="#64748b">Admin and manager roles always pass. Other roles need the permission switched on in Settings &#8594; Roles.</text>
+
+  <g font-size="12.5">
+    <rect x="20" y="74" width="450" height="110" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+    <text x="40" y="100" font-size="14" font-weight="700" fill="#c2410c">1. Receipt without a PO (non-PO GRN)</text>
+    <text x="40" y="122" fill="#334155">When: Receive to stock on a GRN with source "Non-PO receipt".</text>
+    <text x="40" y="140" fill="#334155">Also needs a written Non-PO reason.</text>
+    <text x="40" y="166" fill="#0f766e" font-family="ui-monospace, Consolas, monospace">inventory.non_po_receipt_approve</text>
+
+    <rect x="490" y="74" width="450" height="110" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+    <text x="510" y="100" font-size="14" font-weight="700" fill="#c2410c">2. Receiving more than ordered (over-receipt)</text>
+    <text x="510" y="122" fill="#334155">When: all GRNs together go above the PO line quantity.</text>
+    <text x="510" y="140" fill="#334155">Ask the buyer to amend the PO, or get approval.</text>
+    <text x="510" y="166" fill="#0f766e" font-family="ui-monospace, Consolas, monospace">inventory.over_receipt_approve</text>
+
+    <rect x="20" y="200" width="450" height="110" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+    <text x="40" y="226" font-size="14" font-weight="700" fill="#c2410c">3. Issuing more than the BOM (over-issue)</text>
+    <text x="40" y="248" fill="#334155">When: a production material issue is above the BOM</text>
+    <text x="40" y="266" fill="#334155">quantity plus the allowed tolerance.</text>
+    <text x="40" y="292" fill="#0f766e" font-family="ui-monospace, Consolas, monospace">inventory.over_issue_approve</text>
+
+    <rect x="490" y="200" width="450" height="110" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+    <text x="510" y="226" font-size="14" font-weight="700" fill="#c2410c">4. Approving a process order</text>
+    <text x="510" y="248" fill="#334155">When: Actions &#8594; Approve on a RECEIVED process order</text>
+    <text x="510" y="266" fill="#334155">(dyeing, printing, washing and similar).</text>
+    <text x="510" y="292" fill="#0f766e" font-family="ui-monospace, Consolas, monospace">inventory.process_order_approve</text>
+  </g>
+</svg>

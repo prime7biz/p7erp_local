@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" width="960" height="560" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <title>Month-end close checklist in P7 ERP</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="560" fill="#ffffff"/>
+  <text x="480" y="32" text-anchor="middle" font-size="18" font-weight="700" fill="#0f766e">Month-end close checklist</text>
+  <text x="480" y="54" text-anchor="middle" font-size="13" fill="#334155">Work left to right, top row first. Only close the period when every step is green.</text>
+
+  <!-- Row 1: Clean up -->
+  <text x="20" y="92" font-size="13" font-weight="700" fill="#ea580c">A. CLEAN UP</text>
+  <g>
+    <rect x="20" y="104" width="210" height="110" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="44" cy="128" r="14" fill="#0f766e"/><text x="44" y="133" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">1</text>
+    <text x="66" y="133" font-size="13" font-weight="700" fill="#0f766e">Clear approvals</text>
+    <text x="34" y="162" font-size="12" fill="#334155">Voucher Approvals: approve</text>
+    <text x="34" y="180" font-size="12" fill="#334155">or reject; post everything</text>
+    <text x="34" y="198" font-size="12" fill="#334155">dated in this month</text>
+  </g>
+  <g>
+    <rect x="260" y="104" width="210" height="110" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="284" cy="128" r="14" fill="#0f766e"/><text x="284" y="133" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">2</text>
+    <text x="306" y="133" font-size="13" font-weight="700" fill="#0f766e">Bank reconciliation</text>
+    <text x="274" y="162" font-size="12" fill="#334155">Match statement lines for</text>
+    <text x="274" y="180" font-size="12" fill="#334155">every bank and finalize</text>
+    <text x="274" y="198" font-size="12" fill="#334155">(manager / admin)</text>
+  </g>
+  <g>
+    <rect x="500" y="104" width="210" height="110" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="524" cy="128" r="14" fill="#0f766e"/><text x="524" y="133" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">3</text>
+    <text x="546" y="133" font-size="13" font-weight="700" fill="#0f766e">Exception Reports</text>
+    <text x="514" y="162" font-size="12" fill="#334155">GRN not billed, challan not</text>
+    <text x="514" y="180" font-size="12" fill="#334155">invoiced, negative cash /</text>
+    <text x="514" y="198" font-size="12" fill="#334155">stock &#8594; bring all to 0</text>
+  </g>
+  <g>
+    <rect x="740" y="104" width="200" height="110" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="764" cy="128" r="14" fill="#0f766e"/><text x="764" y="133" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">4</text>
+    <text x="786" y="133" font-size="13" font-weight="700" fill="#0f766e">AR/AP Aging</text>
+    <text x="754" y="162" font-size="12" fill="#334155">Review 61-90 and 90+</text>
+    <text x="754" y="180" font-size="12" fill="#334155">buckets; follow up</text>
+    <text x="754" y="198" font-size="12" fill="#334155">collections / payments</text>
+  </g>
+  <line x1="232" y1="159" x2="256" y2="159" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="472" y1="159" x2="496" y2="159" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="712" y1="159" x2="736" y2="159" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+
+  <!-- connector to row 2 -->
+  <path d="M840 216 L840 240 L125 240 L125 262" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+
+  <!-- Row 2: Review -->
+  <text x="20" y="258" font-size="13" font-weight="700" fill="#ea580c">B. REVIEW</text>
+  <g>
+    <rect x="20" y="270" width="210" height="110" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="2"/>
+    <circle cx="44" cy="294" r="14" fill="#334155"/><text x="44" y="299" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">5</text>
+    <text x="66" y="299" font-size="13" font-weight="700" fill="#334155">Trial Balance</text>
+    <text x="34" y="328" font-size="12" fill="#334155">As of month-end date.</text>
+    <text x="34" y="346" font-size="12" fill="#334155">Total Debit = Total Credit;</text>
+    <text x="34" y="364" font-size="12" fill="#334155">no odd balances</text>
+  </g>
+  <g>
+    <rect x="260" y="270" width="210" height="110" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="2"/>
+    <circle cx="284" cy="294" r="14" fill="#334155"/><text x="284" y="299" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">6</text>
+    <text x="306" y="299" font-size="13" font-weight="700" fill="#334155">Financial Statements</text>
+    <text x="274" y="328" font-size="12" fill="#334155">P&amp;L and Balance Sheet</text>
+    <text x="274" y="346" font-size="12" fill="#334155">look reasonable vs last</text>
+    <text x="274" y="364" font-size="12" fill="#334155">month (drill into surprises)</text>
+  </g>
+  <g>
+    <rect x="500" y="270" width="210" height="110" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="2"/>
+    <circle cx="524" cy="294" r="14" fill="#334155"/><text x="524" y="299" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">7</text>
+    <text x="546" y="299" font-size="13" font-weight="700" fill="#334155">Budgets &amp; cost centres</text>
+    <text x="514" y="328" font-size="12" fill="#334155">Budget vs Actual for the</text>
+    <text x="514" y="346" font-size="12" fill="#334155">month; explain red bars</text>
+    <text x="514" y="364" font-size="12" fill="#334155">(over 100%)</text>
+  </g>
+  <g>
+    <rect x="740" y="270" width="200" height="110" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="2"/>
+    <circle cx="764" cy="294" r="14" fill="#334155"/><text x="764" y="299" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">8</text>
+    <text x="786" y="299" font-size="13" font-weight="700" fill="#334155">Export the pack</text>
+    <text x="754" y="328" font-size="12" fill="#334155">Day Book, TB, Statements</text>
+    <text x="754" y="346" font-size="12" fill="#334155">&#8594; Export Excel / Print;</text>
+    <text x="754" y="364" font-size="12" fill="#334155">save with month in name</text>
+  </g>
+  <line x1="232" y1="325" x2="256" y2="325" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="472" y1="325" x2="496" y2="325" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="712" y1="325" x2="736" y2="325" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+
+  <path d="M840 382 L840 406 L125 406 L125 428" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+
+  <!-- Row 3: Close -->
+  <text x="20" y="424" font-size="13" font-weight="700" fill="#ea580c">C. CLOSE</text>
+  <g>
+    <rect x="20" y="436" width="210" height="100" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+    <circle cx="44" cy="460" r="14" fill="#ea580c"/><text x="44" y="465" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">9</text>
+    <text x="66" y="465" font-size="13" font-weight="700" fill="#ea580c">Sign-off</text>
+    <text x="34" y="494" font-size="12" fill="#334155">Finance lead approves</text>
+    <text x="34" y="512" font-size="12" fill="#334155">the month's numbers</text>
+  </g>
+  <g>
+    <rect x="260" y="436" width="210" height="100" rx="12" fill="#0f766e"/>
+    <circle cx="284" cy="460" r="14" fill="#ffffff"/><text x="284" y="465" text-anchor="middle" font-size="13" font-weight="700" fill="#0f766e">10</text>
+    <text x="306" y="465" font-size="13" font-weight="700" fill="#ffffff">Close the period</text>
+    <text x="274" y="494" font-size="12" fill="#ffffff">Accounting Periods &#8594;</text>
+    <text x="274" y="512" font-size="12" fill="#ffffff">Actions &#8594; Close</text>
+  </g>
+  <g>
+    <rect x="500" y="436" width="210" height="100" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="524" cy="460" r="14" fill="#0f766e"/><text x="524" y="465" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">11</text>
+    <text x="546" y="465" font-size="13" font-weight="700" fill="#0f766e">Check Date Lock</text>
+    <text x="514" y="494" font-size="12" fill="#334155">A date in the month now</text>
+    <text x="514" y="512" font-size="12" fill="#334155">shows "Locked"</text>
+  </g>
+  <g>
+    <rect x="740" y="436" width="200" height="100" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="764" cy="460" r="14" fill="#0f766e"/><text x="764" y="465" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">12</text>
+    <text x="786" y="465" font-size="13" font-weight="700" fill="#0f766e">Open next month</text>
+    <text x="754" y="494" font-size="12" fill="#334155">Create Period for the</text>
+    <text x="754" y="512" font-size="12" fill="#334155">next month if missing</text>
+  </g>
+  <line x1="232" y1="486" x2="256" y2="486" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="472" y1="486" x2="496" y2="486" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="712" y1="486" x2="736" y2="486" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+</svg>

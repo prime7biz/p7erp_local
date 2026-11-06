@@ -1,0 +1,245 @@
+{
+  "screenshots": [
+    {
+      "name": "hr-emp-add-form",
+      "route": "/app/hr/employees",
+      "actions": [
+        { "click": "role=button[name=\"Add employee\"]" },
+        { "fill": ["input[placeholder=\"Employee code\"]", "EMP-0201"] },
+        { "fill": ["input[placeholder=\"First name\"]", "Rahima"] },
+        { "fill": ["input[placeholder=\"Last name\"]", "Akter"] },
+        { "fill": ["input[placeholder=\"Phone\"]", "01711000201"] },
+        { "select": ["form select >> nth=0", { "label": "D-PROD - Production" }] },
+        { "fill": ["form input[type=\"date\"]", "2026-11-01"] }
+      ]
+    },
+    {
+      "name": "hr-emp-row-actions",
+      "route": "/app/hr/employees",
+      "actions": [{ "click": "table tbody tr >> nth=0 >> role=button[name=\"Actions\"]" }]
+    },
+    {
+      "name": "hr-emp-detail-personal",
+      "route": "/app/hr/employees",
+      "actions": [
+        { "click": "table tbody tr >> nth=0 >> role=button[name=\"Actions\"]" },
+        { "click": "role=link[name=\"View\"]", "waitMs": 1800 }
+      ]
+    },
+    {
+      "name": "hr-emp-detail-job",
+      "route": "/app/hr/employees",
+      "actions": [
+        { "click": "table tbody tr >> nth=0 >> role=button[name=\"Actions\"]" },
+        { "click": "role=link[name=\"View\"]", "waitMs": 1800 },
+        { "click": "role=button[name=\"Job\"]" }
+      ]
+    },
+    {
+      "name": "hr-emp-detail-documents",
+      "route": "/app/hr/employees",
+      "actions": [
+        { "click": "table tbody tr >> nth=0 >> role=button[name=\"Actions\"]" },
+        { "click": "role=link[name=\"View\"]", "waitMs": 1800 },
+        { "click": "role=button[name=\"Documents\"]" }
+      ]
+    },
+    {
+      "name": "hr-emp-detail-history",
+      "route": "/app/hr/employees",
+      "actions": [
+        { "click": "table tbody tr >> nth=0 >> role=button[name=\"Actions\"]" },
+        { "click": "role=link[name=\"View\"]", "waitMs": 1800 },
+        { "click": "role=button[name=\"Status history\"]" }
+      ]
+    },
+    {
+      "name": "hr-emp-generate-doc",
+      "route": "/app/hr/employees",
+      "actions": [
+        { "click": "table tbody tr >> nth=0 >> role=button[name=\"Actions\"]" },
+        { "click": "role=link[name=\"View\"]", "waitMs": 1800 },
+        { "click": "role=button[name=\"Generate document\"]" }
+      ]
+    },
+    {
+      "name": "hr-dept-add-form",
+      "route": "/app/hr/departments",
+      "actions": [
+        { "click": "role=button[name=\"Add department\"]" },
+        { "fill": ["input[placeholder=\"Department code\"]", "D-QC"] },
+        { "fill": ["input[placeholder=\"Department name\"]", "Quality Control"] }
+      ]
+    },
+    {
+      "name": "hr-desig-add-form",
+      "route": "/app/hr/designations",
+      "actions": [
+        { "click": "role=button[name=\"Add designation\"]" },
+        { "fill": ["input[placeholder=\"Designation code **\"]", "SMO"] },
+        { "fill": ["input[placeholder=\"Designation name **\"]", "Sewing Machine Operator"] },
+        { "select": ["form select >> nth=0", { "label": "D-PROD - Production" }] }
+      ]
+    },
+    {
+      "name": "hr-section-add-form",
+      "route": "/app/hr/sections",
+      "actions": [
+        { "click": "role=button[name=\"Add section\"]" },
+        { "fill": ["form input >> nth=0", "Sewing Line 05"] },
+        { "select": ["form select >> nth=0", "LINE"] }
+      ]
+    },
+    {
+      "name": "hr-shift-add-form",
+      "route": "/app/hr/attendance/shifts",
+      "actions": [
+        { "click": "role=button[name=\"Add shift\"]" },
+        { "fill": ["input[placeholder=\"Code\"]", "GEN"] },
+        { "fill": ["input[placeholder=\"Name\"]", "General shift"] },
+        { "fill": ["input[placeholder=\"Start time (HH:MM)\"]", "08:00"] },
+        { "fill": ["input[placeholder=\"End time (HH:MM)\"]", "17:00"] }
+      ]
+    },
+    {
+      "name": "hr-att-entry-form",
+      "route": "/app/hr/attendance/entries",
+      "actions": [
+        { "fill": ["input[placeholder=\"Employee ID\"]", "1"] },
+        { "fill": ["form input[type=\"date\"]", "2026-11-05"] },
+        { "fill": ["input[placeholder=\"In time (HH:MM:SS)\"]", "08:02:00"] },
+        { "fill": ["input[placeholder=\"Out time (HH:MM:SS)\"]", "17:05:00"] },
+        { "fill": ["input[placeholder=\"Remarks\"]", "Punch machine was down - entered by HR"] }
+      ]
+    },
+    {
+      "name": "hr-roster-form",
+      "route": "/app/hr/attendance/roster",
+      "actions": [
+        { "fill": ["input[placeholder=\"Employee ID\"]", "1"] },
+        { "fill": ["form input[type=\"date\"]", "2026-11-08"] },
+        { "fill": ["input[placeholder=\"Shift ID\"]", "1"] },
+        { "fill": ["input[placeholder=\"Note\"]", "Night line support"] }
+      ]
+    },
+    {
+      "name": "hr-leave-type-add-form",
+      "route": "/app/hr/leave/types",
+      "actions": [
+        { "click": "role=button[name=\"Add leave type\"]" },
+        { "fill": ["form input[placeholder=\"Code\"]", "ML"] },
+        { "fill": ["form input[placeholder=\"Name\"]", "Maternity leave"] }
+      ]
+    },
+    {
+      "name": "hr-leave-request-form",
+      "route": "/app/hr/leave/requests",
+      "fullPage": true,
+      "actions": [
+        { "fill": ["label:has-text(\"Employee ID\") input", "1"] },
+        { "fill": ["label:has-text(\"Leave Type ID\") input", "1"] },
+        { "fill": ["label:has-text(\"From Date\") input", "2026-11-20"] },
+        { "fill": ["label:has-text(\"To Date\") input", "2026-11-21"] },
+        { "fill": ["label:has-text(\"Days requested\") input", "2"] },
+        { "fill": ["label:has-text(\"Reason\") input", "Family wedding"] }
+      ]
+    },
+    {
+      "name": "hr-candidate-form",
+      "route": "/app/hr/recruitment/candidates",
+      "fullPage": true,
+      "actions": [
+        { "fill": ["label:has-text(\"Candidate Code\") input", "CAN-0012"] },
+        { "fill": ["label:has-text(\"Full Name\") input", "Nasima Begum"] },
+        { "fill": ["label:has-text(\"Phone\") input", "01811000012"] }
+      ]
+    },
+    {
+      "name": "hr-ess-leave-form",
+      "route": "/app/hr/ess/leave",
+      "fullPage": true,
+      "actions": [
+        { "fill": ["label:has-text(\"Leave Type ID\") input", "1"] },
+        { "fill": ["label:has-text(\"From Date\") input", "2026-11-20"] },
+        { "fill": ["label:has-text(\"To Date\") input", "2026-11-20"] },
+        { "fill": ["label:has-text(\"Reason\") input", "Doctor appointment"] }
+      ]
+    },
+    {
+      "name": "hr-ess-leave-bangla",
+      "route": "/app/hr/ess/leave",
+      "fullPage": true,
+      "actions": [{ "select": ["select:has(option[value=\"bn\"])", "bn"], "waitMs": 1200 }]
+    }
+  ],
+  "videos": [
+    {
+      "name": "hr-add-employee",
+      "title": "Add a new employee",
+      "steps": [
+        { "goto": "/app/hr/employees" },
+        { "caption": "Goal: add a new worker to the employee master. Open HR → Core HR → Employees.", "ms": 3200 },
+        { "hover": "input[placeholder=\"Search by code/name\"]" },
+        { "caption": "Search first by code or name, so you do not create the same person twice.", "ms": 2800 },
+        { "click": "role=button[name=\"Add employee\"]" },
+        { "caption": "Employee code and First name are required. Use your factory ID card number as the code.", "ms": 3200 },
+        { "fill": ["input[placeholder=\"Employee code\"]", "EMP-0201"] },
+        { "fill": ["input[placeholder=\"First name\"]", "Rahima"] },
+        { "fill": ["input[placeholder=\"Last name\"]", "Akter"] },
+        { "fill": ["input[placeholder=\"Phone\"]", "01711000201"] },
+        { "select": ["form select >> nth=0", { "label": "D-PROD - Production" }] },
+        { "caption": "Pick the Department, then the Designation. Set the joining date at the bottom.", "ms": 3000 },
+        { "hover": "form label:has-text(\"Linked app user\") select" },
+        { "caption": "Linked app user: choose the person's login so they can use My Leave, My Attendance and My Payslips.", "ms": 3600 },
+        { "hover": "form button[type=\"submit\"]" },
+        { "caption": "Check everything, then click Save to finish. (This demo cancels instead.)", "ms": 3000 },
+        { "click": "form >> role=button[name=\"Cancel\"]" },
+        { "caption": "After saving, open Actions → View to fill Personal, Job and Documents tabs.", "ms": 3200 }
+      ]
+    },
+    {
+      "name": "hr-leave-application",
+      "title": "Enter a leave application and find it for approval",
+      "steps": [
+        { "goto": "/app/hr/leave/requests" },
+        { "caption": "Goal: record a leave application for a worker. Open HR → Leave → Requests.", "ms": 3200 },
+        { "scroll": 900 },
+        { "caption": "The Add leave request form is below the list. Fields marked ** are mandatory.", "ms": 3000 },
+        { "fill": ["label:has-text(\"Employee ID\") input", "1"] },
+        { "fill": ["label:has-text(\"Leave Type ID\") input", "1"] },
+        { "hover": "label:has-text(\"From Date\") input" },
+        { "caption": "Pick the From Date and To Date from the calendar.", "ms": 2600 },
+        { "fill": ["label:has-text(\"Days requested\") input", "2"] },
+        { "fill": ["label:has-text(\"Reason\") input", "Family wedding"] },
+        { "hover": "form button[type=\"submit\"]" },
+        { "caption": "Click Save to send the request. Days are reserved from the balance straight away. (Not saved in this demo.)", "ms": 3800 },
+        { "goto": "/app/hr/leave/approvals" },
+        { "caption": "A manager opens HR → Leave → Approvals. Pending requests appear here.", "ms": 3200 },
+        { "caption": "Use Actions → Approve or Reject on each row. Approval moves the days from Pending to Used.", "ms": 3800 }
+      ]
+    },
+    {
+      "name": "hr-attendance-tour",
+      "title": "Tour of time & attendance screens",
+      "steps": [
+        { "goto": "/app/hr/attendance/shifts" },
+        { "caption": "Goal: see how attendance is set up and entered. Step 1: Shifts hold start and end times.", "ms": 3400 },
+        { "goto": "/app/hr/attendance/holidays" },
+        { "caption": "Step 2: Holidays — add plant-wide holidays once a year.", "ms": 3000 },
+        { "goto": "/app/hr/attendance/roster" },
+        { "caption": "Step 3: Roster — put a worker on a shift for a day, or mark a week off.", "ms": 3200 },
+        { "goto": "/app/hr/attendance/entries" },
+        { "caption": "Step 4: Daily Entry — type a missed punch, or upload a biometric batch below.", "ms": 3400 },
+        { "fill": ["input[placeholder=\"Employee ID\"]", "1"] },
+        { "fill": ["input[placeholder=\"In time (HH:MM:SS)\"]", "08:02:00"] },
+        { "fill": ["input[placeholder=\"Out time (HH:MM:SS)\"]", "17:05:00"] },
+        { "hover": "role=button[name=\"Save entry\"]" },
+        { "caption": "Pick the date, check the Status, then click Save entry to finish. (Not saved in this demo.)", "ms": 3600 },
+        { "goto": "/app/hr/attendance/regularizations" },
+        { "caption": "Step 5: Regularizations — managers approve or reject punch-time corrections.", "ms": 3200 },
+        { "goto": "/app/hr/attendance/summary" },
+        { "caption": "Step 6: Summary — present, absent, late and leave days per employee. Payroll uses these numbers.", "ms": 3800 }
+      ]
+    }
+  ]
+}

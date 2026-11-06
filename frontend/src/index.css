@@ -291,6 +291,20 @@ body {
     top: 0;
     width: 100%;
   }
+
+  body.print-tutorial * {
+    visibility: hidden;
+  }
+  body.print-tutorial #tutorial-print-area,
+  body.print-tutorial #tutorial-print-area * {
+    visibility: visible;
+  }
+  body.print-tutorial #tutorial-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
 }
 
 .sidebar-scroll::-webkit-scrollbar {

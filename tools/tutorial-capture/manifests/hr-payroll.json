@@ -1,0 +1,93 @@
+{
+  "screenshots": [
+    {
+      "name": "hr-pay-run-new-form",
+      "route": "/app/hr/payroll/runs",
+      "waitMs": 2200,
+      "clipSelector": "form"
+    },
+    {
+      "name": "hr-pay-component-form",
+      "route": "/app/hr/payroll/components",
+      "waitMs": 2000,
+      "actions": [
+        { "click": "role=button[name=\"Add component\"]", "waitMs": 800 },
+        { "fill": ["input[placeholder=\"Code\"]", "OT"] },
+        { "fill": ["input[placeholder=\"Name\"]", "Overtime"] },
+        { "select": [".fixed select", "PER_HOUR_OT"] },
+        { "fill": ["input[placeholder=\"Default amount\"]", "120"] }
+      ]
+    },
+    {
+      "name": "hr-pay-assign-form",
+      "route": "/app/hr/payroll/assignments",
+      "waitMs": 2200,
+      "clipSelector": "form"
+    },
+    {
+      "name": "hr-pay-period-finalize",
+      "route": "/app/hr/payroll/periods",
+      "waitMs": 2200,
+      "fullPage": true
+    },
+    {
+      "name": "hr-pay-settings-statutory-tab",
+      "route": "/app/settings/statutory-compliance",
+      "waitMs": 2200,
+      "actions": [
+        { "click": "role=button[name=\"Payroll statutory\"]", "waitMs": 1000 }
+      ]
+    },
+    {
+      "name": "hr-pay-ot-rules",
+      "route": "/app/hr/attendance/overtime-rules",
+      "waitMs": 2000
+    }
+  ],
+  "videos": [
+    {
+      "name": "hr-pay-run-walkthrough",
+      "title": "Monthly payroll run: period, run and approval screens",
+      "steps": [
+        { "goto": "/app/hr/payroll/periods", "waitMs": 2000 },
+        { "caption": "Goal: get this month's payroll ready. Start at HR → Payroll → Periods.", "ms": 3400 },
+        { "fill": ["label:has-text(\"Period code\") input", "PR-2026-11"] },
+        { "caption": "Add payroll period: a code, then Start date, End date and Payment date for the month.", "ms": 3600 },
+        { "hover": "role=button[name=\"Save\"]", "waitMs": 600 },
+        { "caption": "You would click Save. We do not save in this video, so nothing changes.", "ms": 3200 },
+        { "goto": "/app/hr/payroll/runs", "waitMs": 2000 },
+        { "caption": "Next, HR → Payroll → Runs. Choose the open Payroll period and a Run date inside it.", "ms": 3600 },
+        { "hover": "form select", "waitMs": 600 },
+        { "hover": "role=button[name=\"Create run\"]", "waitMs": 600 },
+        { "caption": "Create run makes a DRAFT run. Only one active run is allowed per period.", "ms": 3400 },
+        { "caption": "On the run's row: Auto-calculate shows a read-only preview — check Warnings, then Apply.", "ms": 3800 },
+        { "caption": "Then Finalize. The run waits for a manager with status FINALIZED.", "ms": 3200 },
+        { "goto": "/app/hr/payroll/approvals", "waitMs": 2000 },
+        { "caption": "The manager opens Payroll Approvals and uses Actions → Approve or Reject (with a reason).", "ms": 3800 },
+        { "caption": "After approval: Post GL, Payslips and Bank CSV on Runs, then lock the period on Periods.", "ms": 3800 }
+      ]
+    },
+    {
+      "name": "hr-pay-setup-tour",
+      "title": "Payroll setup: components and structure assignments",
+      "steps": [
+        { "goto": "/app/hr/payroll/components", "waitMs": 2000 },
+        { "caption": "Goal: see how pay items are set up. Open HR → Payroll → Components.", "ms": 3200 },
+        { "click": "role=button[name=\"Add component\"]", "waitMs": 900 },
+        { "fill": ["input[placeholder=\"Code\"]", "OT"] },
+        { "fill": ["input[placeholder=\"Name\"]", "Overtime"] },
+        { "caption": "Component type: EARNING (adds to gross) or DEDUCTION (reduces net).", "ms": 3000 },
+        { "select": [".fixed select", "PER_HOUR_OT"], "waitMs": 900 },
+        { "caption": "Calculation type decides the maths — here: rate × approved overtime hours.", "ms": 3200 },
+        { "fill": ["input[placeholder=\"Default amount\"]", "120"] },
+        { "caption": "You would click Save to finish. We click Cancel so nothing changes.", "ms": 3000 },
+        { "click": "role=button[name=\"Cancel\"]", "waitMs": 900 },
+        { "goto": "/app/hr/payroll/assignments", "waitMs": 2000 },
+        { "caption": "Structure Assignments: link each employee to a salary structure from a start date.", "ms": 3400 },
+        { "hover": "form select >> nth=0", "waitMs": 600 },
+        { "caption": "Optional: Base salary override (gross / minimum wage base) and component overrides.", "ms": 3400 },
+        { "caption": "Workers without an assignment are skipped by Auto-calculate.", "ms": 3000 }
+      ]
+    }
+  ]
+}

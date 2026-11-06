@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" width="960" height="300" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <title>Cutting pipeline: marker plan to bundle barcodes to scan station</title>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="300" fill="#ffffff"/>
+  <text x="24" y="34" font-size="18" font-weight="700" fill="#334155">Cutting pipeline &#8594; bundle barcodes &#8594; scan station</text>
+  <text x="24" y="56" font-size="12" fill="#64748b">Each step on the Cutting pipeline page gives you an ID. Type that ID into the next step.</text>
+
+  <g font-size="13" text-anchor="middle">
+    <rect x="24" y="84" width="150" height="80" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
+    <text x="99" y="114" font-weight="700" fill="#334155">Marker plan</text>
+    <text x="99" y="134" font-size="11.5" fill="#475569">Marker code + Order ID</text>
+    <text x="99" y="152" font-size="11.5" fill="#475569">&#8594; listed with (id N)</text>
+
+    <rect x="208" y="84" width="150" height="80" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
+    <text x="283" y="114" font-weight="700" fill="#334155">Lay plan</text>
+    <text x="283" y="134" font-size="11.5" fill="#475569">Marker plan ID + Lay code</text>
+    <text x="283" y="152" font-size="11.5" fill="#475569">&#8594; "Last lay plan id"</text>
+
+    <rect x="392" y="84" width="150" height="80" rx="12" fill="#ffedd5" stroke="#ea580c" stroke-width="1.5"/>
+    <text x="467" y="114" font-weight="700" fill="#c2410c">Cut ticket</text>
+    <text x="467" y="134" font-size="11.5" fill="#9a3412">Lay plan ID + Ticket code</text>
+    <text x="467" y="152" font-size="11.5" fill="#9a3412">&#8594; fills Cut ticket ID</text>
+
+    <rect x="576" y="84" width="160" height="80" rx="12" fill="#ffedd5" stroke="#ea580c" stroke-width="1.5"/>
+    <text x="656" y="114" font-weight="700" fill="#c2410c">Bundles + PDF</text>
+    <text x="656" y="134" font-size="11.5" fill="#9a3412">Generate bundles</text>
+    <text x="656" y="152" font-size="11.5" fill="#9a3412">Download barcode PDF</text>
+
+    <rect x="770" y="84" width="166" height="80" rx="12" fill="#ccfbf1" stroke="#0f766e" stroke-width="2"/>
+    <text x="853" y="114" font-weight="700" fill="#0f766e">Scan station</text>
+    <text x="853" y="134" font-size="11.5" fill="#115e59">scan each bundle once</text>
+    <text x="853" y="152" font-size="11.5" fill="#115e59">per sewing operation</text>
+  </g>
+  <line x1="174" y1="124" x2="204" y2="124" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="358" y1="124" x2="388" y2="124" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="542" y1="124" x2="572" y2="124" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="736" y1="124" x2="766" y2="124" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="24" y="190" width="440" height="90" rx="12" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="40" y="214" font-size="13" font-weight="700" fill="#334155">Bundle = a tied pack of cut pieces</text>
+  <text x="40" y="236" font-size="12" fill="#475569">Each bundle has one size and a fixed piece count. Its barcode</text>
+  <text x="40" y="254" font-size="12" fill="#475569">label travels with the pack to the sewing line. Use Bundle scan</text>
+  <text x="40" y="272" font-size="12" fill="#475569">&#8594; Lookup on the same page to check a label.</text>
+
+  <rect x="484" y="190" width="452" height="90" rx="12" fill="#fff7ed" stroke="#fdba74"/>
+  <text x="500" y="214" font-size="13" font-weight="700" fill="#9a3412">Before sewing can scan</text>
+  <text x="500" y="236" font-size="12" fill="#7c2d12">The order's style needs an Operation bulletin (IE) so each</text>
+  <text x="500" y="254" font-size="12" fill="#7c2d12">operation and its SMV are known. Earned minutes = pieces &#215; SMV.</text>
+  <text x="500" y="272" font-size="12" fill="#7c2d12">Cutting bundles Pending / Issued show on Production Overview.</text>
+</svg>

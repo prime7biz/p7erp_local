@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" width="960" height="600" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="600" fill="#ffffff"/>
+  <text x="24" y="34" font-size="20" font-weight="700" fill="#334155">Monthly payroll cycle in P7 ERP</text>
+  <text x="24" y="56" font-size="13" fill="#64748b">HR &#8594; Payroll. Run status is shown in orange. Only one active run is allowed per period.</text>
+
+  <!-- Inputs band -->
+  <rect x="24" y="72" width="912" height="62" rx="12" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="40" y="94" font-size="13" font-weight="700" fill="#334155">Inputs for the period (read automatically)</text>
+  <text x="40" y="118" font-size="12" fill="#334155">Attendance (present, late, half day)  &#8226;  Approved leave (paid / unpaid)  &#8226;  Approved overtime hours  &#8226;  Scan station pieces (piece rate)</text>
+  <line x1="600" y1="134" x2="600" y2="176" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Row 1 -->
+  <g>
+    <rect x="24" y="180" width="204" height="112" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="46" cy="202" r="13" fill="#0f766e"/><text x="46" y="207" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+    <text x="66" y="207" font-size="14" font-weight="700" fill="#334155">Payroll period</text>
+    <text x="38" y="232" font-size="12" fill="#334155">Periods &#8594; Add payroll period</text>
+    <text x="38" y="250" font-size="12" fill="#334155">Code, start, end, payment date</text>
+    <rect x="38" y="262" width="58" height="20" rx="10" fill="#ffedd5"/><text x="67" y="276" font-size="12" font-weight="700" fill="#ea580c" text-anchor="middle">OPEN</text>
+  </g>
+  <line x1="228" y1="236" x2="256" y2="236" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="260" y="180" width="204" height="112" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="282" cy="202" r="13" fill="#0f766e"/><text x="282" y="207" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">2</text>
+    <text x="302" y="207" font-size="14" font-weight="700" fill="#334155">Create run</text>
+    <text x="274" y="232" font-size="12" fill="#334155">Runs &#8594; New payroll run</text>
+    <text x="274" y="250" font-size="12" fill="#334155">Period + run date &#8594; Create run</text>
+    <rect x="274" y="262" width="66" height="20" rx="10" fill="#ffedd5"/><text x="307" y="276" font-size="12" font-weight="700" fill="#ea580c" text-anchor="middle">DRAFT</text>
+  </g>
+  <line x1="464" y1="236" x2="492" y2="236" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="496" y="180" width="208" height="112" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="518" cy="202" r="13" fill="#0f766e"/><text x="518" y="207" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">3</text>
+    <text x="538" y="207" font-size="14" font-weight="700" fill="#334155">Auto-calculate</text>
+    <text x="510" y="232" font-size="12" fill="#334155">Preview (read-only): check</text>
+    <text x="510" y="250" font-size="12" fill="#334155">warnings, then tick workers</text>
+    <text x="510" y="268" font-size="12" fill="#334155">and click Apply (saves lines)</text>
+  </g>
+  <line x1="704" y1="236" x2="732" y2="236" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="736" y="180" width="200" height="112" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="758" cy="202" r="13" fill="#0f766e"/><text x="758" y="207" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">4</text>
+    <text x="778" y="207" font-size="14" font-weight="700" fill="#334155">Finalize run</text>
+    <text x="750" y="232" font-size="12" fill="#334155">Runs &#8594; Finalize</text>
+    <text x="750" y="250" font-size="12" fill="#334155">Totals are fixed; run waits</text>
+    <rect x="750" y="262" width="92" height="20" rx="10" fill="#ffedd5"/><text x="796" y="276" font-size="12" font-weight="700" fill="#ea580c" text-anchor="middle">FINALIZED</text>
+  </g>
+
+  <!-- Down connector -->
+  <line x1="880" y1="292" x2="880" y2="364" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Reject loop -->
+  <path d="M 760 368 L 760 330 L 600 330 L 600 296" fill="none" stroke="#ea580c" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arrowOrange)"/>
+  <rect x="612" y="316" width="140" height="30" rx="8" fill="#ffffff"/>
+  <text x="618" y="328" font-size="12" font-weight="700" fill="#ea580c">Reject (with reason)</text>
+  <text x="618" y="343" font-size="12" fill="#ea580c">&#8594; REJECTED &#8594; fix, redo</text>
+
+  <!-- Row 2 (right to left) -->
+  <g>
+    <rect x="736" y="368" width="200" height="112" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="758" cy="390" r="13" fill="#0f766e"/><text x="758" y="395" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">5</text>
+    <text x="778" y="395" font-size="14" font-weight="700" fill="#334155">Approve</text>
+    <text x="750" y="420" font-size="12" fill="#334155">Payroll Approvals &#8594;</text>
+    <text x="750" y="438" font-size="12" fill="#334155">Actions &#8594; Approve</text>
+    <rect x="750" y="450" width="92" height="20" rx="10" fill="#ffedd5"/><text x="796" y="464" font-size="12" font-weight="700" fill="#ea580c" text-anchor="middle">APPROVED</text>
+  </g>
+  <line x1="736" y1="424" x2="708" y2="424" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="496" y="368" width="208" height="112" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="518" cy="390" r="13" fill="#0f766e"/><text x="518" y="395" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">6</text>
+    <text x="538" y="395" font-size="14" font-weight="700" fill="#334155">Post GL</text>
+    <text x="510" y="420" font-size="12" fill="#334155">Journal voucher PR#####:</text>
+    <text x="510" y="438" font-size="12" fill="#334155">Dr Salary expense, Cr Payable</text>
+    <rect x="510" y="450" width="74" height="20" rx="10" fill="#ffedd5"/><text x="547" y="464" font-size="12" font-weight="700" fill="#ea580c" text-anchor="middle">POSTED</text>
+  </g>
+  <line x1="496" y1="424" x2="468" y2="424" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="260" y="368" width="204" height="112" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="282" cy="390" r="13" fill="#0f766e"/><text x="282" y="395" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">7</text>
+    <text x="302" y="395" font-size="14" font-weight="700" fill="#334155">Payslips &amp; bank</text>
+    <text x="274" y="420" font-size="12" fill="#334155">Runs &#8594; Payslips (generate)</text>
+    <text x="274" y="438" font-size="12" fill="#334155">Runs &#8594; Bank CSV (net pay</text>
+    <text x="274" y="456" font-size="12" fill="#334155">per employee code, BDT)</text>
+  </g>
+  <line x1="260" y1="424" x2="232" y2="424" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="24" y="368" width="204" height="112" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="46" cy="390" r="13" fill="#0f766e"/><text x="46" y="395" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">8</text>
+    <text x="66" y="395" font-size="14" font-weight="700" fill="#334155">Lock the period</text>
+    <text x="38" y="420" font-size="12" fill="#334155">Periods &#8594; Finalize</text>
+    <text x="38" y="438" font-size="12" fill="#334155">No new runs for this month</text>
+    <rect x="38" y="450" width="140" height="20" rx="10" fill="#ffedd5"/><text x="108" y="464" font-size="12" font-weight="700" fill="#ea580c" text-anchor="middle">FINALIZED &#183; Locked</text>
+  </g>
+
+  <!-- Who does what -->
+  <rect x="24" y="504" width="912" height="76" rx="12" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="40" y="528" font-size="13" font-weight="700" fill="#0f766e">Who does what</text>
+  <text x="40" y="550" font-size="12" fill="#334155">Steps 1&#8211;3: HR / payroll officer with payroll permission (hr.payroll.manage) or HR manager.</text>
+  <text x="40" y="569" font-size="12" fill="#334155">Steps 4&#8211;8 (Finalize, Approve, Reject, Post GL, Payslips, Bank CSV, lock period): users with the admin or manager role.</text>
+</svg>

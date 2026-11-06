@@ -1,0 +1,7 @@
+{
+  "jane.doe@yourcompany.com": "admin.user@example.com",
+  "yourcompany.com": "example.com",
+  "Jane Doe": "Admin User",
+  "Jane": "Admin",
+  "jane.doe": "admin.user"
+}

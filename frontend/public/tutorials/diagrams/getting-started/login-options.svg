@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 470" width="960" height="470" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="470" fill="#ffffff"/>
+  <text x="24" y="34" font-size="20" font-weight="700" fill="#334155">One sign-in page, five ways in</text>
+  <text x="24" y="56" font-size="13" fill="#64748b">At /login, the &#8220;Login as&#8221; choice decides where you land. Only the options your company has switched on are listed.</text>
+
+  <!-- Login form -->
+  <rect x="24" y="80" width="260" height="300" rx="14" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+  <text x="44" y="110" font-size="15" font-weight="700" fill="#334155">Welcome Back</text>
+  <text x="44" y="136" font-size="11" fill="#64748b">Company Code **</text>
+  <rect x="44" y="142" width="220" height="26" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="54" y="160" font-size="12" font-family="ui-monospace, Consolas, monospace" fill="#334155">LAKH806201</text>
+  <text x="44" y="182" font-size="10" fill="#0f766e">Organization: your company name</text>
+  <text x="44" y="204" font-size="11" fill="#64748b">Login as **</text>
+  <rect x="44" y="210" width="220" height="26" rx="6" fill="#fff" stroke="#ea580c" stroke-width="2"/>
+  <text x="54" y="228" font-size="12" fill="#334155">Staff &#9662;</text>
+  <text x="44" y="256" font-size="11" fill="#64748b">Email **</text>
+  <rect x="44" y="262" width="220" height="26" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="54" y="280" font-size="12" fill="#94a3b8">you@company.com</text>
+  <text x="44" y="306" font-size="11" fill="#64748b">Password **</text>
+  <text x="190" y="306" font-size="10" fill="#ea580c">Forgot password?</text>
+  <rect x="44" y="312" width="220" height="26" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="54" y="330" font-size="12" fill="#94a3b8">&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;</text>
+  <rect x="44" y="346" width="220" height="24" rx="6" fill="#ea580c"/>
+  <text x="154" y="363" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">Sign In</text>
+
+  <!-- Branches -->
+  <g stroke="#334155" stroke-width="2" fill="none">
+    <path d="M 284 223 C 330 223, 330 104, 372 104" marker-end="url(#arrow)"/>
+    <path d="M 284 223 C 330 223, 330 168, 372 168" marker-end="url(#arrow)"/>
+    <path d="M 284 223 L 372 232" marker-end="url(#arrow)"/>
+    <path d="M 284 223 C 330 223, 330 296, 372 296" marker-end="url(#arrow)"/>
+    <path d="M 284 223 C 330 223, 330 360, 372 360" marker-end="url(#arrow)"/>
+  </g>
+
+  <g>
+    <rect x="376" y="80" width="560" height="48" rx="10" fill="#ffffff" stroke="#0f766e" stroke-width="2"/>
+    <text x="392" y="100" font-size="13" font-weight="700" fill="#0f766e">Staff</text>
+    <text x="392" y="118" font-size="12" fill="#334155">Normal employees (merchandiser, store, accounts, HR&#8230;) &#8594; Dashboard /app</text>
+  </g>
+  <g>
+    <rect x="376" y="144" width="560" height="48" rx="10" fill="#ffffff" stroke="#0f766e" stroke-width="2"/>
+    <text x="392" y="164" font-size="13" font-weight="700" fill="#0f766e">Tenant admin</text>
+    <text x="392" y="182" font-size="12" fill="#334155">Accounts with the admin role MUST use this option &#8594; Dashboard /app with Settings</text>
+  </g>
+  <g>
+    <rect x="376" y="208" width="560" height="48" rx="10" fill="#ffffff" stroke="#ea580c" stroke-width="2"/>
+    <text x="392" y="228" font-size="13" font-weight="700" fill="#ea580c">Customer portal</text>
+    <text x="392" y="246" font-size="12" fill="#334155">Your buyers: orders, approvals, shipments, notes &#8594; /portal/customer</text>
+  </g>
+  <g>
+    <rect x="376" y="272" width="560" height="48" rx="10" fill="#ffffff" stroke="#ea580c" stroke-width="2"/>
+    <text x="392" y="292" font-size="13" font-weight="700" fill="#ea580c">Financier portal</text>
+    <text x="392" y="310" font-size="12" fill="#334155">Your bank / lender: order book, pipeline, financial summary &#8594; /portal/financier</text>
+  </g>
+  <g>
+    <rect x="376" y="336" width="560" height="48" rx="10" fill="#ffffff" stroke="#ea580c" stroke-width="2"/>
+    <text x="392" y="356" font-size="13" font-weight="700" fill="#ea580c">Supplier portal</text>
+    <text x="392" y="374" font-size="12" fill="#334155">Your suppliers: purchase orders sent to them &#8594; /portal/supplier</text>
+  </g>
+
+  <!-- Messages -->
+  <rect x="24" y="400" width="912" height="56" rx="10" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="40" y="422" font-size="12" font-weight="700" fill="#334155">Common messages:</text>
+  <text x="160" y="422" font-size="12" fill="#334155">&#8220;Invalid credentials&#8221; = wrong code, email or password &#183; &#8220;Admin accounts must use the Tenant admin login option&#8221;</text>
+  <text x="160" y="442" font-size="12" fill="#334155">&#8220;This account does not have admin privileges&#8221; = choose Staff &#183; &#8220;Account temporarily locked due to failed login attempts&#8221;</text>
+</svg>

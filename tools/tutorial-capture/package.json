@@ -1,0 +1,15 @@
+{
+  "name": "p7-tutorial-capture",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Captures Help & Tutorials screenshots and walkthrough videos from a locally running P7 ERP (dev tool only, not part of any build).",
+  "type": "module",
+  "scripts": {
+    "routes": "node ../../frontend/node_modules/tsx/dist/cli.mjs dump-sidebar-routes.ts",
+    "capture": "node capture.mjs",
+    "check": "node ../../frontend/node_modules/tsx/dist/cli.mjs check-assets.ts"
+  },
+  "dependencies": {
+    "playwright-core": "^1.48.0"
+  }
+}

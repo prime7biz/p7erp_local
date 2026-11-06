@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.common.auth import get_current_user
+from app.common.business_date import today_local
 from app.common.ownership import ensure_owned
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.tenant import require_tenant
@@ -32,6 +33,7 @@ from app.modules.hr_ess.schemas import (
     MyProfileUpdate,
     PayslipResponse,
 )
+from app.modules.hr_leave.leave_days import validate_leave_request
 
 router = APIRouter(prefix="/hr/ess", tags=["hr-ess"])
 
@@ -215,15 +217,22 @@ async def create_my_leave_request(
     _ensure_user_tenant(user, tenant)
     employee = await _get_my_employee_or_404(db, tenant.id, user.id)
     await ensure_owned(db, LeaveType, body.leave_type_id, tenant.id, "Leave type")
-    if body.to_date < body.from_date:
-        raise HTTPException(status_code=400, detail="to_date must be on or after from_date")
+    # Same rules as HR leave: server-counted days (weekends / holidays skipped), no overlap, one year.
+    days_requested = await validate_leave_request(
+        db,
+        tenant=tenant,
+        employee_id=employee.id,
+        from_date=body.from_date,
+        to_date=body.to_date,
+        requested_days=body.days_requested,
+    )
     row = LeaveRequest(
         tenant_id=tenant.id,
         employee_id=employee.id,
         leave_type_id=body.leave_type_id,
         from_date=body.from_date,
         to_date=body.to_date,
-        days_requested=body.days_requested,
+        days_requested=days_requested,
         reason=body.reason.strip() if body.reason else None,
         status="DRAFT",
         requested_by=user.id,
@@ -286,7 +295,7 @@ async def my_attendance_summary(
         item.overtime_hours += (row.overtime_minutes or 0) / 60.0
     if summary_map:
         return sorted(summary_map.values(), key=lambda x: (x.year, x.month), reverse=True)
-    now = datetime.utcnow()
+    now = today_local(tenant)
     return [
         AttendanceSummaryResponse(
             year=year or now.year,

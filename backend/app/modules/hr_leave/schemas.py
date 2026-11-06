@@ -93,14 +93,16 @@ class LeaveRequestCreate(BaseModel):
     leave_type_id: int
     from_date: date
     to_date: date
-    days_requested: str
+    # Ignored: the server counts the days (weekends / holidays skipped). Only "0.5" on a single
+    # working day is kept, as a half day.
+    days_requested: str | None = None
     reason: str | None = None
 
 
 class LeaveRequestUpdate(BaseModel):
     from_date: date | None = None
     to_date: date | None = None
-    days_requested: str | None = None
+    days_requested: str | None = None  # same rule as LeaveRequestCreate (server recalculates)
     reason: str | None = None
 
 

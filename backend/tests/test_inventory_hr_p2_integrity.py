@@ -7,7 +7,7 @@ docker compose exec backend pytest tests/test_inventory_hr_p2_integrity.py -q
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -109,18 +109,31 @@ async def test_pending_leave_reserves_days_and_respects_allocation(db_session_in
     try:
         async with _client() as ac:
             h = {"X-Tenant-Id": str(tenant.id)}
-            year = date.today().year
+            # The server counts leave days (Friday weekend skipped): start on a Monday in March.
+            monday = date(date.today().year, 3, 2)
+            while monday.weekday() != 0:
+                monday += timedelta(days=1)
             body = {
                 "employee_id": emp.id,
                 "leave_type_id": leave_type.id,
-                "from_date": f"{year}-03-01",
-                "to_date": f"{year}-03-03",
+                "from_date": monday.isoformat(),
+                "to_date": (monday + timedelta(days=2)).isoformat(),  # Mon-Wed = 3 days
                 "days_requested": "3",
             }
             ok = await ac.post("/api/v1/hr/leave/requests", headers=h, json=body)
             assert ok.status_code == 201, ok.text
-            too_many = await ac.post("/api/v1/hr/leave/requests", headers=h, json={**body, "days_requested": "8"})
+            # Next Monday .. Tuesday a week later = 9 days minus one Friday = 8 days > 7 left.
+            too_many = await ac.post(
+                "/api/v1/hr/leave/requests",
+                headers=h,
+                json={
+                    **body,
+                    "from_date": (monday + timedelta(days=7)).isoformat(),
+                    "to_date": (monday + timedelta(days=15)).isoformat(),
+                },
+            )
             assert too_many.status_code == 400, too_many.text
+            assert "Insufficient leave balance" in too_many.json()["detail"]
         bal = (
             await db.execute(
                 select(LeaveBalance).where(LeaveBalance.employee_id == emp.id, LeaveBalance.leave_type_id == leave_type.id)

@@ -139,7 +139,7 @@ async def test_leave_for_others_requires_grant_self_service_allowed(db_session_i
     lt = LeaveType(tenant_id=tenant.id, code=f"L{uuid.uuid4().hex[:5]}", name="Casual")
     db.add(lt)
     await db.commit()
-    today = date.today()
+    today = date(2026, 10, 6)  # a Tuesday: a weekend-only request would be refused as 0 leave days
     base = {"leave_type_id": lt.id, "from_date": today.isoformat(), "to_date": today.isoformat(), "days_requested": "1"}
     async with _client(db, tenant, clerk) as c:
         r = await c.post("/api/v1/hr/leave/requests", json={**base, "employee_id": colleague.id})

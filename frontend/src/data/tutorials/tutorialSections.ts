@@ -1602,12 +1602,21 @@ For piece rate, the **operator code** typed or scanned at the Scan station must 
 - **Payroll Approvals** — \`/app/hr/payroll/approvals\` lists **FINALIZED** runs waiting for a manager; use **Actions → Approve** or **Reject** (with a reason). Posted runs cannot be approved or rejected again.
 - **Payslips** — managers see everyone's payslips; other staff see only their own (their user must be linked to an employee record). Downloads are PDF files.
 - **Late** attendance counts as a worked day for salary; late penalties are calculated separately.
+- **Loss of pay** (flag \`payroll_lop_enabled\`, on unless set to false): auto-calculate pays **Fixed amount** and **% of base salary** components only for **payable days** — the days the person was employed in the period (joining / exit date) minus **Absent** days not covered by approved leave and minus approved **unpaid** leave days. People who left during the period are included for the days they worked. The preview shows LOP days and the amount deducted. A run that was already auto-calculated before this switched on keeps its old numbers.
+- **Manual run lines** — gross, deductions and net must be valid amounts, not negative, and **net = gross − deductions** (0.01 rounding allowed). Leave net empty and it is calculated for you.
 
 **Leave balances** — submitting a request reserves the days immediately (pending); approval moves them to used, rejection releases them. When an allocation is set for the leave type, requests beyond the remaining balance are blocked.
 
+**Leave days are counted for you** (HR leave and **My Leave** in ESS):
+
+- Every date from **From** to **To** counts, except **weekend** days and **holidays** from **Time & Attendance → Holidays** (optional holidays still count). The weekend is the factory weekend shown on **Production → Factory calendar**; if the factory calendar was never set up, Friday is the weekend.
+- A single working day can be a **half day** (0.5). The number typed in "days" is otherwise ignored.
+- Refused with a message: **To** before **From**; dates that are all weekends / holidays; dates that **overlap** your own pending or approved leave; leave that **crosses the year end** — apply separately for each year.
+- **Carry forward** to the next year can be run more than once safely: each balance is carried only once, and never more than the leave policy's **max carry forward days**.
+
 **Sprint H1 compliance** (flags default off): enable \`compliance_tracking_enabled\`, \`age_verification_required\`, and \`medical_certificate_tracking_enabled\` on the tenant, then activate BSCI/WRAP/SEDEX templates on the Compliance page. See \`docs/HR_COMPLIANCE_H1.md\`.`,
         tags: ["HR", "payroll", "attendance", "leave", "compliance", "Bangla", "বাংলা", "language"],
-        lastUpdated: "2026-11-05",
+        lastUpdated: "2026-11-06",
         coverImage: "/images/hero-bg.svg",
         infographics: [
           {

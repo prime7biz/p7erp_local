@@ -8,6 +8,9 @@ import { ConfirmProvider } from "./components/app/ConfirmDialog";
 import "@fontsource-variable/inter";
 import "./index.css";
 import "@/lib/theme";
+import { installChunkErrorRecovery } from "@/lib/chunkReload";
+
+installChunkErrorRecovery();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>

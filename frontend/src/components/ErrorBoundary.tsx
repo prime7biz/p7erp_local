@@ -1,4 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { NewVersionNotice } from "@/components/NewVersionNotice";
+import { isChunkLoadError, reloadOnceForNewVersion } from "@/lib/chunkReload";
 
 interface Props {
   children: ReactNode;
@@ -25,9 +27,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error("ErrorBoundary caught:", error, info.componentStack);
+    if (isChunkLoadError(error)) reloadOnceForNewVersion();
   }
 
   override render(): ReactNode {
+    if (this.state.hasError && isChunkLoadError(this.state.error)) return <NewVersionNotice />;
     if (this.state.hasError && this.state.error) {
       return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4">

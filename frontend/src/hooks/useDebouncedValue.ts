@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 /** Returns `value` after it has stopped changing for `delayMs` (search boxes: one request, not one per key). */
 export function useDebouncedValue<T>(value: T, delayMs = 300): T {
@@ -10,15 +10,5 @@ export function useDebouncedValue<T>(value: T, delayMs = 300): T {
   return debounced;
 }
 
-/**
- * Stale-response guard for list loaders: call `begin()` at the start of a request and
- * `isCurrent(token)` before applying its result, so a slow older response cannot
- * overwrite a newer one.
- */
-export function useLatestRequest() {
-  const seq = useRef(0);
-  return {
-    begin: () => ++seq.current,
-    isCurrent: (token: number) => token === seq.current,
-  };
-}
+/** Re-exported so older imports from this file keep working; the hook lives in `useLatestRequest.ts`. */
+export { useLatestRequest } from "./useLatestRequest";

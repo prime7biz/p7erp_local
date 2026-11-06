@@ -4359,32 +4359,61 @@ async def update_delivery_challan_status(
             db.add(dc_mv)
             await db.flush()
             await finalize_movement_fifo(db, tenant.id, dc_mv)
-            # Sprint 2: FIFO physical batch allocate on challan post
-            try:
-                from decimal import Decimal as _Dec
+            # Sprint 2: FIFO physical batch allocate on challan post.
+            # Only batch-tracked items (tenant flag + item flag) take stock from batches.
+            # If that fails, the whole posting fails: stock must not leave without batches.
+            from app.common.tenant_feature_keys import is_batch_tracking_enabled
+
+            it_dc = await db.get(Item, line.item_id)
+            if (
+                it_dc
+                and it_dc.tenant_id == tenant.id
+                and getattr(it_dc, "batch_tracking", False)
+                and is_batch_tracking_enabled(tenant.feature_flags)
+            ):
+                import logging
+
                 from app.modules.inventory.stock_batch_service import issue_batch_fifo
 
-                it_dc = await db.get(Item, line.item_id)
-                if it_dc and it_dc.tenant_id == tenant.id and getattr(it_dc, "batch_tracking", False):
+                # Read these now: after a rollback the ORM rows can no longer be read.
+                challan_code = row.challan_code
+                item_code = it_dc.item_code
+                warehouse_id = line.warehouse_id
+                try:
                     allocs = await issue_batch_fifo(
                         db,
                         tenant.id,
                         line.item_id,
                         line.warehouse_id,
-                        _Dec(str(line.quantity)),
+                        Decimal(str(line.quantity)),
                         method="FIFO",
                         feature_flags=tenant.feature_flags,
                     )
-                    if allocs:
-                        dc_mv.batch_id = allocs[0]["batch_id"]
-                        dc_mv.lot_number = allocs[0].get("batch_number")
-                        await db.flush()
-            except Exception:
-                import logging
-
-                logging.getLogger(__name__).exception(
-                    "issue_batch_fifo failed challan=%s line=%s", row.id, line.id
-                )
+                except HTTPException as exc:
+                    await safe_async_session_rollback(db)
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            f"Cannot post {challan_code}: not enough batch stock for item {item_code} "
+                            f"in warehouse #{warehouse_id}. {exc.detail}"
+                        ),
+                    ) from exc
+                except Exception as exc:
+                    logging.getLogger(__name__).exception(
+                        "issue_batch_fifo failed challan=%s line=%s", challan_id, line.id
+                    )
+                    await safe_async_session_rollback(db)
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            f"Cannot post {challan_code}: batch allocation failed for item {item_code} "
+                            f"in warehouse #{warehouse_id}. Nothing was posted; please try again."
+                        ),
+                    ) from exc
+                if allocs:
+                    dc_mv.batch_id = allocs[0]["batch_id"]
+                    dc_mv.lot_number = allocs[0].get("batch_number")
+                    await db.flush()
         await post_delivery_challan_gl(db, tenant.id, user.id, row.id, row.delivery_date, row.challan_code, lines)
         oids_for_sign = list(
             dict.fromkeys(

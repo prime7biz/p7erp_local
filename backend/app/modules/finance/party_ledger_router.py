@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
 from typing import Any, Literal
@@ -34,7 +35,6 @@ from app.modules.finance.party_ledger_bill_service import (
     allocation_out,
     auto_allocate_payment,
     bill_out,
-    bill_summary_counts,
     calculate_bill_interest,
     mark_overdue_bills,
 )
@@ -42,10 +42,12 @@ from app.modules.finance.party_ledger_hooks import daily_party_ledger_maintenanc
 from app.modules.finance.party_ledger_service import (
     _d,
     _money,
+    get_bill_summaries,
     get_or_create_party_ledger,
+    get_overdue_amounts,
     get_party_aging_report,
     get_party_ledger_statement,
-    get_party_name,
+    get_party_names,
     list_party_ledgers,
 )
 
@@ -109,18 +111,45 @@ class CalculateInterestBody(BaseModel):
     as_of_date: date | None = None
 
 
-async def _party_ledger_out(db: AsyncSession, pl: PartyLedger) -> dict[str, Any]:
-    acct = await db.get(ChartOfAccount, pl.ledger_account_id)
-    overdue_amt = (
-        await db.execute(
-            select(PartyLedgerBill).where(
-                PartyLedgerBill.party_ledger_id == pl.id,
-                PartyLedgerBill.status == "OVERDUE",
-                PartyLedgerBill.pending_amount > 0,
-            )
+async def _party_ledgers_out(db: AsyncSession, ledgers: Sequence[PartyLedger]) -> list[dict[str, Any]]:
+    """Serialize party ledgers with a fixed number of queries, however many rows there are."""
+    if not ledgers:
+        return []
+    ledger_ids = [pl.id for pl in ledgers]
+    account_rows = await db.execute(
+        select(ChartOfAccount.id, ChartOfAccount.name, ChartOfAccount.account_number).where(
+            ChartOfAccount.id.in_({pl.ledger_account_id for pl in ledgers})
         )
-    ).scalars().all()
-    overdue_total = _money(sum((_d(b.pending_amount) for b in overdue_amt), Decimal("0")))
+    )
+    accounts = {row.id: row for row in account_rows}
+    party_names = await get_party_names(db, ledgers)
+    overdue_amounts = await get_overdue_amounts(db, ledger_ids)
+    bill_summaries = await get_bill_summaries(db, ledger_ids)
+    return [
+        _party_ledger_row(
+            pl,
+            account=accounts.get(pl.ledger_account_id),
+            party_name=party_names[pl.id],
+            overdue_amount=overdue_amounts.get(pl.id, Decimal("0")),
+            bill_summary=bill_summaries[pl.id],
+        )
+        for pl in ledgers
+    ]
+
+
+async def _party_ledger_out(db: AsyncSession, pl: PartyLedger) -> dict[str, Any]:
+    return (await _party_ledgers_out(db, [pl]))[0]
+
+
+def _party_ledger_row(
+    pl: PartyLedger,
+    *,
+    account: Any,
+    party_name: str,
+    overdue_amount: Decimal,
+    bill_summary: dict[str, int],
+) -> dict[str, Any]:
+    overdue_total = _money(overdue_amount)
     credit_limit = _d(pl.credit_limit) if pl.credit_limit is not None else None
     bal = _d(pl.current_balance)
     available = None
@@ -133,10 +162,10 @@ async def _party_ledger_out(db: AsyncSession, pl: PartyLedger) -> dict[str, Any]
         "party_type": pl.party_type,
         "customer_id": pl.customer_id,
         "vendor_id": pl.vendor_id,
-        "party_name": await get_party_name(db, pl),
+        "party_name": party_name,
         "ledger_account_id": pl.ledger_account_id,
-        "ledger_account_name": acct.name if acct else None,
-        "ledger_account_number": acct.account_number if acct else None,
+        "ledger_account_name": account.name if account else None,
+        "ledger_account_number": account.account_number if account else None,
         "credit_limit": str(credit_limit) if credit_limit is not None else None,
         "credit_days": pl.credit_days,
         "interest_rate_monthly": str(pl.interest_rate_monthly)
@@ -154,7 +183,7 @@ async def _party_ledger_out(db: AsyncSession, pl: PartyLedger) -> dict[str, Any]
         "bill_wise_tracking": pl.bill_wise_tracking,
         "tds_section_id": getattr(pl, "tds_section_id", None),
         "is_active": pl.is_active,
-        "bill_summary": await bill_summary_counts(db, pl.id),
+        "bill_summary": bill_summary,
         "created_at": pl.created_at.isoformat() if pl.created_at else None,
         "updated_at": pl.updated_at.isoformat() if pl.updated_at else None,
     }
@@ -315,7 +344,7 @@ async def list_ledgers(
         page=page,
         page_size=page_size,
     )
-    items = [await _party_ledger_out(db, r) for r in rows]
+    items = await _party_ledgers_out(db, rows)
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 

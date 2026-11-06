@@ -92,7 +92,7 @@ class PartyLedger(Base):
     )
 
     bills: Mapped[list["PartyLedgerBill"]] = relationship(
-        "PartyLedgerBill", back_populates="party_ledger", lazy="selectin"
+        "PartyLedgerBill", back_populates="party_ledger", lazy="raise"
     )
 
 
@@ -164,7 +164,7 @@ class PartyLedgerBill(Base):
 
     party_ledger: Mapped["PartyLedger"] = relationship("PartyLedger", back_populates="bills")
     allocations: Mapped[list["PartyLedgerBillAllocation"]] = relationship(
-        "PartyLedgerBillAllocation", back_populates="bill", lazy="selectin"
+        "PartyLedgerBillAllocation", back_populates="bill", lazy="raise"
     )
 
 

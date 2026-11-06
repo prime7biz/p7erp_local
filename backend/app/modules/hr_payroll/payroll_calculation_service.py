@@ -26,10 +26,14 @@ from app.models import (
     PayrollPeriod,
     PayrollStructureLine,
 )
+from app.models.tenant import Tenant
+from app.modules.hr_leave.leave_days import each_date, non_working_dates
 from app.modules.hr_payroll.formula_engine import (
     OUTPUT_BASED_TYPES,
+    PERIOD_SALARY_TYPES,
     assert_valid_calculation_type,
     calculate_component_amount,
+    prorate_amount,
     quantize_money,
 )
 
@@ -77,6 +81,15 @@ class EmployeeCalcPreview:
     pieces: str = "0.0000"
     earned_minutes: str = "0.0000"
     pay_basis: str = "SALARY"  # SALARY | DAILY | PIECE (derived from the structure's components)
+    # Loss of pay (flag payroll_lop_enabled). All zero when lop_applied is False.
+    lop_applied: bool = False
+    period_days: str = "0.0000"
+    employed_days: str = "0.0000"  # days in the period between joining and exit date
+    payable_days: str = "0.0000"  # employed days minus loss-of-pay days
+    lop_days: str = "0.0000"  # unpaid absences + unpaid leave days
+    lop_absent_days: str = "0.0000"
+    lop_unpaid_leave_days: str = "0.0000"
+    lop_amount: str = "0.0000"  # salary not paid because of LOP / partial employment
 
 
 def _employee_display_name(employee: Employee) -> str:
@@ -234,6 +247,84 @@ async def leave_days_in_period(
     return paid, unpaid
 
 
+@dataclass
+class LopDays:
+    """Loss-of-pay day counts for one employee in one pay period."""
+
+    period_days: Decimal
+    employed_from: date | None  # None = not employed at all during the period
+    employed_to: date | None
+    employed_days: Decimal
+    absent_days: Decimal  # ABSENT attendance not covered by approved leave
+    unpaid_leave_days: Decimal  # approved unpaid leave on working days (weekends / holidays skipped)
+    payable_days: Decimal
+
+    @property
+    def lop_days(self) -> Decimal:
+        return self.absent_days + self.unpaid_leave_days
+
+
+async def compute_lop_days(
+    db: AsyncSession, *, tenant: Tenant, employee: Employee, start: date, end: date
+) -> LopDays:
+    """Payable days = employed days in the period - unpaid absences - unpaid leave days."""
+    zero = Decimal("0")
+    period_days = Decimal((end - start).days + 1)
+    employed_from = max(start, employee.joining_date) if employee.joining_date else start
+    employed_to = min(end, employee.exit_date) if employee.exit_date else end
+    if employed_to < employed_from:
+        return LopDays(period_days, None, None, zero, zero, zero, zero)
+    employed_days = Decimal((employed_to - employed_from).days + 1)
+
+    leave_rows = (
+        await db.execute(
+            select(LeaveRequest.from_date, LeaveRequest.to_date, LeaveType.is_paid)
+            .join(LeaveType, LeaveType.id == LeaveRequest.leave_type_id)
+            .where(
+                LeaveRequest.tenant_id == tenant.id,
+                LeaveRequest.employee_id == employee.id,
+                LeaveRequest.status == "APPROVED",
+                LeaveRequest.from_date <= employed_to,
+                LeaveRequest.to_date >= employed_from,
+            )
+        )
+    ).all()
+    off_days = await non_working_dates(db, tenant, employed_from, employed_to)
+    on_leave: set[date] = set()
+    unpaid_leave: set[date] = set()
+    for from_d, to_d, is_paid in leave_rows:
+        for d in each_date(max(from_d, employed_from), min(to_d, employed_to)):
+            on_leave.add(d)
+            if not is_paid and d not in off_days:
+                unpaid_leave.add(d)
+
+    absent_dates = set(
+        (
+            await db.execute(
+                select(AttendanceEntry.attendance_date).where(
+                    AttendanceEntry.tenant_id == tenant.id,
+                    AttendanceEntry.employee_id == employee.id,
+                    AttendanceEntry.attendance_date >= employed_from,
+                    AttendanceEntry.attendance_date <= employed_to,
+                    AttendanceEntry.status == "ABSENT",
+                )
+            )
+        ).scalars().all()
+    )
+    # An absence on a leave day is already handled by that leave (paid: no LOP, unpaid: counted once).
+    unpaid_absent = absent_dates - on_leave
+    lop = Decimal(len(unpaid_absent) + len(unpaid_leave))
+    return LopDays(
+        period_days=period_days,
+        employed_from=employed_from,
+        employed_to=employed_to,
+        employed_days=employed_days,
+        absent_days=Decimal(len(unpaid_absent)),
+        unpaid_leave_days=Decimal(len(unpaid_leave)),
+        payable_days=max(employed_days - lop, zero),
+    )
+
+
 async def resolve_assignment(
     db: AsyncSession, *, tenant_id: int, employee_id: int, as_of: date
 ) -> PayrollEmployeeStructureAssignment | None:
@@ -263,10 +354,51 @@ async def calculate_employee_payroll(
     period: PayrollPeriod,
     as_of: date | None = None,
     has_manual_override: bool = False,
+    apply_lop: bool = False,
 ) -> EmployeeCalcPreview:
-    """Build a read-only payroll preview for one employee in a pay period."""
+    """Build a read-only payroll preview for one employee in a pay period.
+
+    ``apply_lop`` prorates period-salary earnings (FIXED / PERCENT_OF_BASE) by payable days.
+    """
     as_of_date = as_of or period.end_date
     name = _employee_display_name(employee)
+    lop: LopDays | None = None
+    if apply_lop:
+        tenant_row = await db.get(Tenant, tenant_id)
+        lop = await compute_lop_days(
+            db, tenant=tenant_row, employee=employee, start=period.start_date, end=period.end_date
+        )
+        if lop.employed_to is None:
+            return EmployeeCalcPreview(
+                employee_id=employee.id,
+                employee_code=employee.employee_code,
+                employee_name=name,
+                structure_id=None,
+                assignment_id=None,
+                base_salary="0.0000",
+                days_present="0.0000",
+                absent_days="0.0000",
+                late_days="0.0000",
+                ot_hours="0.0000",
+                paid_leave_days="0.0000",
+                unpaid_leave_days="0.0000",
+                gross_pay="0.0000",
+                deductions="0.0000",
+                net_pay="0.0000",
+                overtime_amount="0.0000",
+                warnings=["Not employed during this pay period (joining / exit date)"],
+                skipped=True,
+                skip_reason="not_employed_in_period",
+                status="Not Employed",
+                has_manual_override=has_manual_override,
+                calculation_source="AUTO",
+                trace={"as_of": as_of_date.isoformat(), "not_employed_in_period": True},
+                lop_applied=True,
+                period_days=decimal_to_money_response(lop.period_days),
+            )
+        # Look up the structure on a day the person was employed: a leaver's assignment usually ends
+        # on the exit date, and a joiner's starts on the joining date.
+        as_of_date = min(max(as_of_date, lop.employed_from), lop.employed_to)
     asgn = await resolve_assignment(db, tenant_id=tenant_id, employee_id=employee.id, as_of=as_of_date)
     if asgn is None:
         return EmployeeCalcPreview(
@@ -353,6 +485,7 @@ async def calculate_employee_payroll(
     gross = Decimal("0")
     deductions = Decimal("0")
     overtime_amount = Decimal("0")
+    lop_amount = Decimal("0")
     component_out: list[ComponentCalcLine] = []
     component_trace: list[dict[str, Any]] = []
 
@@ -380,6 +513,10 @@ async def calculate_employee_payroll(
             strict=True,
         )
         ctype = (component.component_type or "EARNING").strip().upper()
+        full_amount = amount
+        if lop is not None and ctype != "DEDUCTION" and calc_type in PERIOD_SALARY_TYPES:
+            amount = prorate_amount(amount, lop.payable_days, lop.period_days)
+            lop_amount += full_amount - amount
         if ctype == "DEDUCTION":
             deductions += amount
         else:
@@ -407,25 +544,37 @@ async def calculate_employee_payroll(
                 "calculation_type": calc_type,
                 "source_amount": decimal_to_money_response(source_amount),
                 "amount": decimal_to_money_response(amount),
+                "full_amount": decimal_to_money_response(full_amount),
                 "component_type": ctype,
             }
         )
 
     if unpaid_leave > 0:
         warnings.append(f"Unpaid leave days in period: {unpaid_leave}")
+    # Salary base for this period: reduced by loss of pay when it applies.
+    earned_base = prorate_amount(base, lop.payable_days, lop.period_days) if lop is not None else base
+    if lop is not None:
+        if lop.employed_days < lop.period_days:
+            warnings.append(
+                f"Employed {lop.employed_days} of {lop.period_days} day(s) in this period (joined or left mid-period)"
+            )
+        if lop.lop_days > 0:
+            warnings.append(
+                f"Loss of pay: {lop.lop_days} day(s) (absent {lop.absent_days}, unpaid leave "
+                f"{lop.unpaid_leave_days}); salary paid for {lop.payable_days} of {lop.period_days} day(s)"
+            )
     # Bangladesh Labour Act: piece-rated workers must still receive at least the minimum wage.
     # Mixed structures (FIXED basic + piece bonus) count every regular earning; overtime does not count.
     regular_earnings = gross - overtime_amount
-    if pay_basis == "PIECE" and base > 0 and regular_earnings < base:
+    if pay_basis == "PIECE" and earned_base > 0 and regular_earnings < earned_base:
         warnings.append(
             f"Earnings {quantize_money(regular_earnings)} (piece {quantize_money(piece_earnings)}) are below the "
-            f"base salary / minimum wage {quantize_money(base)} — add a top-up before paying"
+            f"base salary / minimum wage {quantize_money(earned_base)} — add a top-up before paying"
         )
 
     statutory_trace: dict[str, Any] = {}
     from app.common.tenant_feature_keys import is_statutory_payroll_enabled
     from app.models.payroll_statutory import PayrollStatutoryConfig
-    from app.models.tenant import Tenant
     from app.modules.hr_payroll.statutory_calculation_service import calculate_all_statutory
 
     tenant_row = await db.get(Tenant, tenant_id)
@@ -443,7 +592,7 @@ async def calculate_employee_payroll(
         has_esi = any(getattr(sl, "is_esi_component", False) for sl, _ in lines)
         has_pt = any(getattr(sl, "is_pt_component", False) for sl, _ in lines)
         statutory = calculate_all_statutory(
-            basic_salary=base,
+            basic_salary=earned_base,
             gross_salary=quantize_money(gross),
             config=cfg,
         )
@@ -512,7 +661,20 @@ async def calculate_employee_payroll(
             )
 
     net = quantize_money(gross - deductions)
+    if net < 0:
+        warnings.append("Deductions are more than earnings for this period; net pay is negative")
     status = "Manual Override Exists" if has_manual_override else "Ready"
+    lop_fields: dict[str, Any] = {"lop_applied": lop is not None}
+    if lop is not None:
+        lop_fields.update(
+            period_days=decimal_to_money_response(lop.period_days),
+            employed_days=decimal_to_money_response(lop.employed_days),
+            payable_days=decimal_to_money_response(lop.payable_days),
+            lop_days=decimal_to_money_response(lop.lop_days),
+            lop_absent_days=decimal_to_money_response(lop.absent_days),
+            lop_unpaid_leave_days=decimal_to_money_response(lop.unpaid_leave_days),
+            lop_amount=decimal_to_money_response(quantize_money(lop_amount)),
+        )
     trace = {
         "as_of": as_of_date.isoformat(),
         "period_start": period.start_date.isoformat(),
@@ -537,6 +699,8 @@ async def calculate_employee_payroll(
         "deductions": decimal_to_money_response(quantize_money(deductions)),
         "net_pay": decimal_to_money_response(net),
         "calculation_source": "AUTO",
+        # "lop_applied" also marks which calculation mode the run uses (see service.run_applies_lop).
+        **lop_fields,
     }
     return EmployeeCalcPreview(
         employee_id=employee.id,
@@ -565,6 +729,7 @@ async def calculate_employee_payroll(
         pieces=decimal_to_money_response(pieces),
         earned_minutes=decimal_to_money_response(earned_minutes),
         pay_basis=pay_basis,
+        **lop_fields,
     )
 
 

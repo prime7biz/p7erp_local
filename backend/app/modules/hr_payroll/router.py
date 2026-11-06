@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.business_date import today_local
 from app.common.orm_numeric import api_money_to_decimal, decimal_to_money_response
 from app.common.ownership import ensure_owned
 from app.common.authz import get_user_role_scoped_to_tenant
@@ -1476,7 +1477,7 @@ async def create_advance(
     row = EmployeeAdvance(
         tenant_id=tenant.id,
         employee_id=emp_id,
-        advance_date=datetime.utcnow().date(),
+        advance_date=today_local(tenant),
         amount=amt,
         monthly_deduction=monthly,
         total_recovered="0",
@@ -1696,6 +1697,7 @@ async def auto_calculate_preview(
         requires_overwrite_confirm=preview.requires_overwrite_confirm,
         missing_assignment_employee_ids=preview.missing_assignment_employee_ids,
         warnings=preview.warnings,
+        lop_applied=preview.lop_applied,
         employees=[
             PayrollEmployeeCalcPreviewOut(
                 employee_id=e.employee_id,
@@ -1723,6 +1725,14 @@ async def auto_calculate_preview(
                 pay_basis=e.pay_basis,
                 pieces=e.pieces,
                 earned_minutes=e.earned_minutes,
+                lop_applied=e.lop_applied,
+                period_days=e.period_days,
+                employed_days=e.employed_days,
+                payable_days=e.payable_days,
+                lop_days=e.lop_days,
+                lop_absent_days=e.lop_absent_days,
+                lop_unpaid_leave_days=e.lop_unpaid_leave_days,
+                lop_amount=e.lop_amount,
                 components=[
                     PayrollComponentCalcOut(
                         component_id=c.component_id,

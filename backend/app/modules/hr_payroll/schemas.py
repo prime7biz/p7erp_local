@@ -269,6 +269,14 @@ class PayrollEmployeeCalcPreviewOut(BaseModel):
     pay_basis: str = "SALARY"
     pieces: str = "0.0000"
     earned_minutes: str = "0.0000"
+    lop_applied: bool = False
+    period_days: str = "0.0000"
+    employed_days: str = "0.0000"
+    payable_days: str = "0.0000"
+    lop_days: str = "0.0000"
+    lop_absent_days: str = "0.0000"
+    lop_unpaid_leave_days: str = "0.0000"
+    lop_amount: str = "0.0000"
 
 
 class PayrollAutoCalculatePreviewOut(BaseModel):
@@ -280,6 +288,7 @@ class PayrollAutoCalculatePreviewOut(BaseModel):
     employees: list[PayrollEmployeeCalcPreviewOut]
     missing_assignment_employee_ids: list[int]
     warnings: list[str] = []
+    lop_applied: bool = False
 
 
 class PayrollAutoCalculateApplyOut(BaseModel):

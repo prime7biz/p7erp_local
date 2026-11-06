@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.models.facility import Facility, FacilityUtilization, RepaymentScheduleLine
 from app.models.finance import BankAccount
 from app.modules.facility.account_resolver import resolve_facility_accounts
@@ -67,7 +68,7 @@ async def create_repayment_draft_for_line(
         liability_account_id=liability_id,
         interest_payable_account_id=payable_id,
         bank_account_id=bank_gl,
-        voucher_date=voucher_date or date.today(),
+        voucher_date=voucher_date or today_local(),
         base_currency=base_ccy,
     )
     line.draft_voucher_id = v.id
@@ -82,7 +83,7 @@ async def generate_due_vouchers(
     user_id: int | None,
     horizon_days: int = 7,
 ) -> int:
-    today = date.today()
+    today = today_local()
     until = today + timedelta(days=horizon_days)
     r = await db.execute(
         select(RepaymentScheduleLine)
@@ -108,7 +109,7 @@ async def generate_due_vouchers(
 
 
 async def mark_overdue_lines(db: AsyncSession, *, tenant_id: int) -> int:
-    today = date.today()
+    today = today_local()
     r = await db.execute(
         select(RepaymentScheduleLine).where(
             RepaymentScheduleLine.tenant_id == tenant_id,

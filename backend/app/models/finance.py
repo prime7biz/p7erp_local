@@ -3,7 +3,19 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -13,6 +25,7 @@ class AccountGroup(Base):
     __tablename__ = "account_groups"
     __table_args__ = (
         UniqueConstraint("tenant_id", "system_code", name="uq_account_groups_tenant_system_code"),
+        UniqueConstraint("tenant_id", "code", name="uq_account_groups_tenant_code"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -60,10 +73,10 @@ class CoAConfig(Base):
     max_account_depth: Mapped[int | None] = mapped_column(Integer, nullable=True)
     validate_normal_balance: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     inventory_stock_account_id: Mapped[int | None] = mapped_column(
-        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True
     )
     inventory_clearing_account_id: Mapped[int | None] = mapped_column(
-        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -75,6 +88,8 @@ class ChartOfAccount(Base):
     __tablename__ = "chart_of_accounts"
     __table_args__ = (
         UniqueConstraint("tenant_id", "system_code", name="uq_chart_of_accounts_tenant_system_code"),
+        Index("ix_chart_of_accounts_tenant_cost_nature", "tenant_id", "cost_nature"),
+        UniqueConstraint("tenant_id", "account_number", name="uq_chart_of_accounts_tenant_account_number"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -91,13 +106,13 @@ class ChartOfAccount(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_bank_account: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # Advanced CoA fields (docs/COA_ADVANCED_DESIGN.md)
-    account_type: Mapped[str] = mapped_column(String(32), nullable=False, default="posting", index=True)
+    account_type: Mapped[str] = mapped_column(String(32), nullable=False, default="posting")
     reporting_code: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     statistical_unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
     statistical_formula: Mapped[str | None] = mapped_column(Text, nullable=True)
     parent_account_id: Mapped[int | None] = mapped_column(
-        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True
     )
     last_reviewed_at: Mapped[date | None] = mapped_column(Date, nullable=True)
     enable_bill_wise: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -132,7 +147,7 @@ class AccountingSystemMapping(Base):
         ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
     )
     group_id: Mapped[int | None] = mapped_column(
-        ForeignKey("account_groups.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("account_groups.id", ondelete="SET NULL"), nullable=True
     )
     module: Mapped[str | None] = mapped_column(String(64), nullable=True)
     is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -149,7 +164,7 @@ class VoucherType(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # Sprint 4 kind flags
     is_credit_note: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -169,6 +184,18 @@ class VoucherType(Base):
 
 class Voucher(Base):
     __tablename__ = "vouchers"
+    __table_args__ = (
+        Index("ix_vouchers_tenant_date_id", "tenant_id", text("voucher_date DESC"), text("id DESC")),
+        Index("ix_vouchers_tenant_duplicate_risk_hash", "tenant_id", "duplicate_risk_hash"),
+        Index("ix_vouchers_tenant_status_date_id", "tenant_id", "status", "voucher_date", "id"),
+        Index(
+            "ix_vouchers_voucher_number_trgm",
+            "voucher_number",
+            postgresql_using="gin",
+            postgresql_ops={"voucher_number": "gin_trgm_ops"},
+        ),
+        UniqueConstraint("tenant_id", "voucher_number", name="uq_vouchers_tenant_voucher_number"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -203,12 +230,12 @@ class Voucher(Base):
         ForeignKey("facility_utilizations.id", ondelete="SET NULL"), nullable=True, index=True
     )
     # Series / control (branch + fiscal year + type; calendar FY until tenant FY config exists)
-    branch_code: Mapped[str] = mapped_column(String(32), nullable=False, default="MAIN", index=True)
-    fiscal_year: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    branch_code: Mapped[str] = mapped_column(String(32), nullable=False, default="MAIN")
+    fiscal_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
     series_sequence: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    number_series_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    number_series_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # Source: MANUAL, INVENTORY_GL, PAYROLL, WIP, LC_COMMERCIAL, PAYMENT_RUN, REVERSAL, etc.
-    source_module: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    source_module: Mapped[str | None] = mapped_column(String(32), nullable=True)
     source_module_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
     allow_manual_edit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     reverses_voucher_id: Mapped[int | None] = mapped_column(
@@ -220,11 +247,11 @@ class Voucher(Base):
     reversal_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     reversal_recorded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     reversal_recorded_by_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     posted_snapshot_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     instrument_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    duplicate_risk_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    duplicate_risk_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     bank_reconciliation_id: Mapped[int | None] = mapped_column(
         ForeignKey("bank_reconciliations.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -249,6 +276,16 @@ class Voucher(Base):
 
 class VoucherLine(Base):
     __tablename__ = "voucher_lines"
+    __table_args__ = (
+        Index(
+            "ix_voucher_lines_tenant_account_cover",
+            "tenant_id",
+            "account_id",
+            "voucher_id",
+            postgresql_include=["entry_type", "amount", "base_amount", "exchange_rate"],
+        ),
+        Index("ix_voucher_lines_tenant_cost_center", "tenant_id", "cost_center_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -301,6 +338,9 @@ class CashForecastLine(Base):
 
 class FxReceipt(Base):
     __tablename__ = "fx_receipts"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "receipt_no", name="uq_fx_receipts_tenant_receipt_no"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -321,12 +361,15 @@ class VendorBill(Base):
     """Finance-owned purchase invoice / vendor bill (AP), matched to GRN/PO."""
 
     __tablename__ = "vendor_bills"
-    __table_args__ = (UniqueConstraint("tenant_id", "bill_code", name="uq_vendor_bills_tenant_bill_code"),)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "bill_code", name="uq_vendor_bills_tenant_bill_code"),
+        Index("ix_vendor_bills_tenant_vendor", "tenant_id", "vendor_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    bill_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    vendor_id: Mapped[int] = mapped_column(ForeignKey("vendors.id", ondelete="RESTRICT"), nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    bill_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    vendor_id: Mapped[int] = mapped_column(ForeignKey("vendors.id", ondelete="RESTRICT"), nullable=False)
     vendor_invoice_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
     vendor_invoice_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     bill_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -336,7 +379,7 @@ class VendorBill(Base):
     subtotal_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     tax_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     total_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
-    status: Mapped[str] = mapped_column(String(24), nullable=False, default="DRAFT", index=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="DRAFT")
     goods_receiving_id: Mapped[int | None] = mapped_column(
         ForeignKey("goods_receiving.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -352,10 +395,10 @@ class VendorBill(Base):
         ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True, index=True
     )
     created_by_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     approved_by_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     posted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
@@ -366,19 +409,22 @@ class VendorBill(Base):
 
 class VendorBillLine(Base):
     __tablename__ = "vendor_bill_lines"
+    __table_args__ = (
+        Index("ix_vbl_bill", "vendor_bill_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     vendor_bill_id: Mapped[int] = mapped_column(
-        ForeignKey("vendor_bills.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("vendor_bills.id", ondelete="CASCADE"), nullable=False
     )
     goods_receiving_item_id: Mapped[int | None] = mapped_column(
         ForeignKey("goods_receiving_items.id", ondelete="SET NULL"), nullable=True, index=True
     )
     purchase_order_line_id: Mapped[int | None] = mapped_column(
-        ForeignKey("purchase_order_items.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("purchase_order_items.id", ondelete="SET NULL"), nullable=True
     )
-    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False)
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     unit_price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
@@ -389,6 +435,9 @@ class VendorBillLine(Base):
 
 class OutstandingBill(Base):
     __tablename__ = "outstanding_bills"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "bill_no", name="uq_outstanding_bills_tenant_bill_no"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -410,6 +459,9 @@ class OutstandingBill(Base):
 
 class CostCenter(Base):
     __tablename__ = "cost_centers"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "center_code", name="uq_cost_centers_tenant_center_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -431,7 +483,7 @@ class Budget(Base):
     budget_name: Mapped[str] = mapped_column(String(255), nullable=False)
     fiscal_year: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="DRAFT", index=True)
-    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -540,6 +592,9 @@ class BankStatementMatchLog(Base):
 
 class PaymentRun(Base):
     __tablename__ = "payment_runs"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "run_code", name="uq_payment_runs_tenant_run_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)

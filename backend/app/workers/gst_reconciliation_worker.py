@@ -6,6 +6,7 @@ import logging
 from calendar import monthrange
 from datetime import date
 
+from app.common.business_date import today_local
 from app.common.celery_app import celery_app
 from app.workers.async_runner import run_async
 from app.common.tenant_feature_keys import is_gst_system_enabled
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def _previous_month_bounds(today: date | None = None) -> tuple[date, date]:
-    today = today or date.today()
+    today = today or today_local()
     if today.month == 1:
         y, m = today.year - 1, 12
     else:

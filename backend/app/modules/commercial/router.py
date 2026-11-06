@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.common.business_date import today_local
 from app.common.auth import get_current_user
 from app.common.master_contract_workflow import (
     LC_RECEIVED_OPERATIONAL_STATUSES,
@@ -1437,7 +1438,7 @@ async def create_proforma_receipt(
     if not recv or recv.tenant_id != tenant.id:
         raise HTTPException(status_code=400, detail="receivable_ledger_id not found for tenant")
 
-    receipt_date = body.receipt_date or date.today()
+    receipt_date = body.receipt_date or today_local()
     allocation, voucher, outstanding, was_created = await create_receipt_from_proforma(
         db,
         tenant_id=tenant.id,
@@ -1867,7 +1868,7 @@ async def create_commercial_invoice_receipt(
         user_id=user.id,
         invoice=inv,
         amount=Decimal(str(body.amount)),
-        receipt_date=body.receipt_date or date.today(),
+        receipt_date=body.receipt_date or today_local(),
         bank_ledger_id=body.bank_ledger_id,
         receivable_ledger_id=body.receivable_ledger_id,
         currency=body.currency,
@@ -2270,7 +2271,7 @@ async def record_btb_lc_opening(
         tenant_id=tenant.id,
         user_id=user.id,
         voucher_type="LCJ",
-        voucher_date=body.voucher_date or lc.open_date or lc.lc_date or date.today(),
+        voucher_date=body.voucher_date or lc.open_date or lc.lc_date or today_local(),
         amount=amount,
         debit_system_code=SYSTEM_BTB_OPENING_DEBIT if body.upcoming_lc_liability_account_id is None else None,
         credit_system_code=SYSTEM_BTB_OPENING_CREDIT if body.blocked_credit_facility_account_id is None else None,
@@ -2335,7 +2336,7 @@ async def record_btb_lc_documents_acceptance(
         tenant_id=tenant.id,
         user_id=user.id,
         voucher_type="LCJ",
-        voucher_date=body.voucher_date or date.today(),
+        voucher_date=body.voucher_date or today_local(),
         amount=amount,
         debit_system_code=SYSTEM_BTB_DOCS_DEBIT if body.lc_liability_account_id is None else None,
         credit_system_code=SYSTEM_BTB_DOCS_CREDIT if body.import_bill_liability_account_id is None else None,
@@ -2406,7 +2407,7 @@ async def record_btb_lc_realization(
         tenant_id=tenant.id,
         user_id=user.id,
         voucher_type="LCJ",
-        voucher_date=body.voucher_date or acc.maturity_date or lc.maturity_date or date.today(),
+        voucher_date=body.voucher_date or acc.maturity_date or lc.maturity_date or today_local(),
         amount=amount,
         debit_system_code=SYSTEM_BTB_REALIZE_DEBIT if body.import_bill_liability_account_id is None else None,
         credit_system_code=None,

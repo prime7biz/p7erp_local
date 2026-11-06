@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, date
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -13,12 +13,15 @@ from app.database import Base
 class WastageReason(Base):
     """Master list of wastage reason codes (fabric, trim, process, store, commercial)."""
     __tablename__ = "wastage_reasons"
+    __table_args__ = (
+        Index("ix_wastage_reasons_tenant_id_code", "tenant_id", "code", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    code: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(64), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     category: Mapped[str] = mapped_column(String(32), nullable=False)  # fabric | trim | process | store | commercial
     recoverable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -29,6 +32,11 @@ class WastageReason(Base):
 class WastageTransaction(Base):
     """Recorded wastage event by order/item, process stage, and reason."""
     __tablename__ = "wastage_transactions"
+    __table_args__ = (
+        Index("ix_wastage_transactions_tenant_created", "tenant_id", "created_at"),
+        Index("ix_wastage_transactions_tenant_order", "tenant_id", "order_id"),
+        Index("ix_wastage_transactions_tenant_reason", "tenant_id", "reason_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -52,13 +60,16 @@ class WastageTransaction(Base):
     reference_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     created_by_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
 
 class WastageThresholdRule(Base):
     """Configurable wastage threshold by tenant, buyer, order_type, or material_type."""
     __tablename__ = "wastage_threshold_rules"
+    __table_args__ = (
+        Index("ix_wastage_threshold_rules_tenant_scope", "tenant_id", "scope_type", "scope_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -77,6 +88,9 @@ class WastageThresholdRule(Base):
 class WastageOrderSummary(Base):
     """Materialized order-level wastage summary for performance and management view."""
     __tablename__ = "wastage_order_summaries"
+    __table_args__ = (
+        Index("ix_wastage_order_summaries_tenant_snapshot", "tenant_id", "snapshot_at"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(

@@ -282,8 +282,8 @@ async def test_ess_leave_request_rejects_foreign_leave_type(db_session_integrati
     emp_b = Employee(tenant_id=t_b.id, employee_code=f"E{uuid.uuid4().hex[:6]}", first_name="Ess", user_id=u_b.id)
     db.add_all([lt_a, lt_b, emp_b])
     await db.commit()
-    today = date.today().isoformat()
-    body = {"from_date": today, "to_date": today}
+    workday = "2026-10-06"  # a Tuesday: a weekend-only request would be refused as 0 leave days
+    body = {"from_date": workday, "to_date": workday}
     async with _client(db, t_b, u_b) as c:
         r = await c.post("/api/v1/hr/ess/my-leave-requests", json={**body, "leave_type_id": lt_a.id})
         assert r.status_code == 400, r.text

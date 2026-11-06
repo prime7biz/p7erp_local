@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Literal
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import Numeric, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.models.finance import Voucher, VoucherLine
 from app.models.party_ledger import PartyLedger, PartyLedgerBill, PartyLedgerBillAllocation
 from app.modules.finance.party_ledger_service import (
@@ -53,7 +55,7 @@ def _refresh_bill_status(bill: PartyLedgerBill, *, as_of: date | None = None) ->
         bill.pending_amount = ZERO
         bill.status = "SETTLED"
         return
-    as_of = as_of or date.today()
+    as_of = as_of or today_local()
     if bill.due_date and bill.due_date < as_of and bill.status != "CANCELLED":
         bill.status = "OVERDUE"
     elif _d(bill.settled_amount) > ZERO:
@@ -63,22 +65,17 @@ def _refresh_bill_status(bill: PartyLedgerBill, *, as_of: date | None = None) ->
 
 
 async def _next_bill_number(db: AsyncSession, tenant_id: int, prefix: str) -> str:
-    like = f"{prefix}%"
-    last = (
+    # Numeric max of the digits after the prefix: a text sort would put "BL-9999" after "BL-10000".
+    only_digits_after_prefix = "^" + re.escape(prefix) + "[0-9]+$"
+    last_seq = (
         await db.execute(
-            select(PartyLedgerBill.bill_number)
-            .where(
+            select(func.max(cast(func.substr(PartyLedgerBill.bill_number, len(prefix) + 1), Numeric))).where(
                 PartyLedgerBill.tenant_id == tenant_id,
-                PartyLedgerBill.bill_number.ilike(like),
+                PartyLedgerBill.bill_number.op("~*")(only_digits_after_prefix),
             )
-            .order_by(PartyLedgerBill.bill_number.desc())
-            .limit(1)
         )
     ).scalar_one_or_none()
-    if not last:
-        return f"{prefix}0001"
-    digits = "".join(ch for ch in str(last)[len(prefix) :] if ch.isdigit()) or "0"
-    return f"{prefix}{int(digits) + 1:04d}"
+    return f"{prefix}{int(last_seq or 0) + 1:04d}"
 
 
 async def create_bill_from_voucher_line(
@@ -124,7 +121,7 @@ async def create_bill_from_voucher_line(
         return existing
 
     credit_days = int(pl.credit_days or 30)
-    bill_date = voucher.voucher_date or date.today()
+    bill_date = voucher.voucher_date or today_local()
     if due_date is None and bill_type in {"SALE", "PURCHASE", "JOURNAL", "DEBIT_NOTE", "CREDIT_NOTE"}:
         due_date = bill_date + timedelta(days=credit_days)
 
@@ -288,7 +285,7 @@ async def allocate_to_bill(
         voucher_id=voucher_id,
         voucher_line_id=voucher_line_id,
         allocated_amount=amt,
-        allocated_date=allocated_date or voucher.voucher_date or date.today(),
+        allocated_date=allocated_date or voucher.voucher_date or today_local(),
         bill_balance_after=bill.pending_amount,
         notes=notes,
         created_by=created_by,
@@ -392,7 +389,7 @@ async def calculate_bill_interest(
     if bill.status in {"SETTLED", "CANCELLED"}:
         return _d(bill.interest_accrued)
 
-    as_of = as_of_date or date.today()
+    as_of = as_of_date or today_local()
     rate = bill.interest_rate_monthly
     if rate is None:
         pl = await db.get(PartyLedger, bill.party_ledger_id)
@@ -416,7 +413,7 @@ async def mark_overdue_bills(
     tenant_id: int,
     as_of_date: date | None = None,
 ) -> int:
-    as_of = as_of_date or date.today()
+    as_of = as_of_date or today_local()
     bills = (
         await db.execute(
             select(PartyLedgerBill).where(
@@ -442,7 +439,7 @@ async def calculate_all_interest(
     tenant_id: int,
     as_of_date: date | None = None,
 ) -> tuple[int, Decimal]:
-    as_of = as_of_date or date.today()
+    as_of = as_of_date or today_local()
     bills = (
         await db.execute(
             select(PartyLedgerBill).where(
@@ -526,7 +523,7 @@ async def bill_summary_counts(db: AsyncSession, party_ledger_id: int) -> dict[st
 def bill_out(bill: PartyLedgerBill) -> dict[str, Any]:
     days = None
     if bill.due_date:
-        days = (date.today() - bill.due_date).days
+        days = (today_local() - bill.due_date).days
     return {
         "id": bill.id,
         "party_ledger_id": bill.party_ledger_id,

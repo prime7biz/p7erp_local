@@ -36,6 +36,7 @@ class PartyLedger(Base):
         ),
         UniqueConstraint("tenant_id", "customer_id", name="uq_party_ledgers_tenant_customer"),
         UniqueConstraint("tenant_id", "vendor_id", name="uq_party_ledgers_tenant_vendor"),
+        Index("idx_party_ledgers_tenant_active_type", "tenant_id", "is_active", "party_type"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -129,7 +130,7 @@ class PartyLedgerBill(Base):
     )
     voucher_line_id: Mapped[int | None] = mapped_column(
         ForeignKey("voucher_lines.id", ondelete="SET NULL"), nullable=True
-    )
+    , index=True)
 
     commercial_invoice_id: Mapped[int | None] = mapped_column(
         ForeignKey("commercial_invoices.id", ondelete="SET NULL"), nullable=True, index=True
@@ -194,7 +195,7 @@ class PartyLedgerBillAllocation(Base):
     )
     voucher_line_id: Mapped[int | None] = mapped_column(
         ForeignKey("voucher_lines.id", ondelete="SET NULL"), nullable=True
-    )
+    , index=True)
 
     allocated_amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
     allocated_date: Mapped[date] = mapped_column(Date, nullable=False)

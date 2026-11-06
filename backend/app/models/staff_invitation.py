@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import DateTime, ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -12,6 +12,9 @@ from app.database import Base
 
 class StaffInvitation(Base):
     __tablename__ = "staff_invitations"
+    __table_args__ = (
+        Index("ix_staff_invitations_tenant_email", "tenant_id", "email"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -23,7 +26,7 @@ class StaffInvitation(Base):
     # Public lookup half of a "selector.verifier" token; NULL for invitations created before revision 251.
     token_selector: Mapped[str | None] = mapped_column(String(32), nullable=True, unique=True)
     invited_by_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)

@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import tenant_today, today_local
 from app.common.codegen import next_tenant_code
 from app.models.advanced_vouchers import RecurringVoucherTemplate, VoucherClass
 from app.models.finance import ChartOfAccount, Voucher, VoucherLine
@@ -46,7 +47,7 @@ async def assert_voucher_line_refs(db: AsyncSession, tenant_id: int, lines: list
 
 def voucher_should_affect_books(voucher: Voucher, *, as_of: date | None = None) -> bool:
     """Memorandum / optional(not included) / future post-dated / stock transfer do not hit CoA."""
-    as_of = as_of or date.today()
+    as_of = as_of or today_local()
     vtype = (voucher.voucher_type or "").upper()
     if vtype == "STOCK_TRANSFER" or getattr(voucher, "is_stock_transfer", False):
         return False
@@ -87,7 +88,7 @@ def voucher_in_books_clause():
 
 def voucher_visible_in_day_book(voucher: Voucher, *, as_of: date | None = None) -> bool:
     """Active books vouchers (and posted CN/DN etc.) appear in day book; memo/held registers do not."""
-    as_of = as_of or date.today()
+    as_of = as_of or today_local()
     if getattr(voucher, "is_memorandum", False) or (voucher.voucher_type or "").upper() == "MEMORANDUM":
         return False
     if (voucher.voucher_type or "").upper() == "STOCK_TRANSFER":
@@ -101,7 +102,7 @@ def voucher_visible_in_day_book(voucher: Voucher, *, as_of: date | None = None) 
 
 def voucher_visible_in_day_book_clause(*, as_of: date | None = None):
     """SQL twin of ``voucher_visible_in_day_book`` (keep the two in sync)."""
-    as_of = as_of or date.today()
+    as_of = as_of or today_local()
     vtype = func.upper(func.coalesce(Voucher.voucher_type, ""))
     is_memorandum = func.coalesce(Voucher.is_memorandum, False)
     is_optional = func.coalesce(Voucher.is_optional, False)
@@ -145,6 +146,45 @@ def _d(v: Any) -> Decimal:
 
 def _money(v: Decimal) -> Decimal:
     return v.quantize(Decimal("0.0001"))
+
+
+_MONTHS_PER_PERIOD = {"MONTHLY": 1, "QUARTERLY": 3, "YEARLY": 12}
+
+
+def _add_months(d: date, months: int) -> date:
+    """Same day-of-month `months` later; short months use their last day (31 Jan + 1 -> 28/29 Feb)."""
+    total = d.month - 1 + months
+    y, m = d.year + total // 12, total % 12 + 1
+    return date(y, m, min(d.day, monthrange(y, m)[1]))
+
+
+def recurring_occurrence(start: date, frequency: str, n: int) -> date:
+    """The n-th due date of a schedule (n=0 is the start date).
+
+    Always counted from the start date, so a 31st-of-month schedule returns to the 31st after February.
+    """
+    freq = (frequency or "MONTHLY").upper()
+    if freq == "DAILY":
+        return start + timedelta(days=n)
+    if freq == "WEEKLY":
+        return start + timedelta(days=7 * n)
+    return _add_months(start, _MONTHS_PER_PERIOD.get(freq, 1) * n)
+
+
+def next_recurring_occurrence(start: date, frequency: str, after: date) -> date:
+    """First due date of the schedule that falls strictly after `after`."""
+    if after < start:
+        return start
+    freq = (frequency or "MONTHLY").upper()
+    if freq == "DAILY":
+        return recurring_occurrence(start, freq, (after - start).days + 1)
+    if freq == "WEEKLY":
+        return recurring_occurrence(start, freq, (after - start).days // 7 + 1)
+    step = _MONTHS_PER_PERIOD.get(freq, 1)
+    n = ((after.year - start.year) * 12 + (after.month - start.month)) // step
+    while recurring_occurrence(start, freq, n) <= after:
+        n += 1
+    return recurring_occurrence(start, freq, n)
 
 
 def next_frequency_date(d: date, frequency: str) -> date:
@@ -523,6 +563,7 @@ async def create_stock_transfer_voucher(
         raise HTTPException(status_code=404, detail="Source godown not found")
     if not to_wh or to_wh.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="Destination godown not found")
+    business_day = await tenant_today(db, tenant_id)
     from app.common.ownership import ensure_all_owned
     from app.models.costing import Item
 
@@ -599,7 +640,7 @@ async def create_stock_transfer_voucher(
                 quantity=qty,
                 reference_type="STOCK_TRANSFER",
                 reference_id=transfer.id,
-                movement_date=date.today(),
+                movement_date=business_day,
                 notes=f"Transfer {code}",
                 created_by_user_id=created_by,
                 movement_kind="WAREHOUSE_TRANSFER_OUT",
@@ -614,7 +655,7 @@ async def create_stock_transfer_voucher(
                 quantity=qty,
                 reference_type="STOCK_TRANSFER",
                 reference_id=transfer.id,
-                movement_date=date.today(),
+                movement_date=business_day,
                 notes=f"Transfer {code}",
                 created_by_user_id=created_by,
                 movement_kind="WAREHOUSE_TRANSFER_IN",
@@ -625,7 +666,7 @@ async def create_stock_transfer_voucher(
     voucher_number, series_seq, series_key, fy = await allocate_series_voucher_number(
         db,
         tenant_id=tenant_id,
-        voucher_date=date.today(),
+        voucher_date=business_day,
         voucher_type="STOCK_TRANSFER",
         branch_code="MAIN",
     )
@@ -633,7 +674,7 @@ async def create_stock_transfer_voucher(
         tenant_id=tenant_id,
         voucher_number=voucher_number,
         voucher_type="STOCK_TRANSFER",
-        voucher_date=date.today(),
+        voucher_date=business_day,
         status="POSTED",
         description=notes or f"Stock transfer {code}",
         reference=code,
@@ -783,7 +824,7 @@ async def activate_due_post_dated(
     Each voucher is locked and handled in its own savepoint. A voucher that cannot be booked
     (closed period, duplicate, unbalanced) stays post-dated and is logged, the rest continue.
     """
-    as_of = as_of or date.today()
+    as_of = as_of or await tenant_today(db, tenant_id)
     ids = list(
         (
             await db.execute(
@@ -826,15 +867,55 @@ async def generate_from_recurring_template(
     *,
     created_by: int | None = None,
     as_of: date | None = None,
+    allow_early: bool = False,
 ) -> Voucher | None:
-    as_of = as_of or date.today()
+    """Create the voucher for the template's next due period (dated on that period date).
+
+    `allow_early=True` (manual "generate now") creates the next period even if it is not due yet;
+    the schedule itself never moves. A period that already has a voucher from this template is skipped.
+    """
+    # Row lock: the daily job and a manual "generate now" cannot both create the same period.
+    locked = (
+        await db.execute(
+            select(RecurringVoucherTemplate)
+            .where(RecurringVoucherTemplate.id == template.id, RecurringVoucherTemplate.tenant_id == tenant_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if locked is None:
+        return None
+    template = locked
+    as_of = as_of or await tenant_today(db, tenant_id)
     if not template.is_active:
         return None
-    if template.next_due_date > as_of:
-        return None
-    if template.end_date and template.next_due_date > template.end_date:
-        template.is_active = False
-        return None
+
+    async def _period_already_generated(period: date) -> bool:
+        found = (
+            await db.execute(
+                select(Voucher.id).where(
+                    Voucher.tenant_id == tenant_id,
+                    Voucher.source_module == "RECURRING",
+                    Voucher.source_module_ref == str(template.id),
+                    Voucher.voucher_date == period,
+                ).limit(1)
+            )
+        ).scalar_one_or_none()
+        return found is not None
+
+    while True:
+        if template.end_date and template.next_due_date > template.end_date:
+            template.is_active = False
+            await db.flush()
+            return None
+        if template.next_due_date > as_of and not allow_early:
+            return None
+        if not await _period_already_generated(template.next_due_date):
+            break
+        template.last_generated_date = template.next_due_date
+        template.next_due_date = next_recurring_occurrence(
+            template.start_date, template.frequency, template.next_due_date
+        )
 
     tpl = template.voucher_template or {}
     lines_in = tpl.get("lines") or []
@@ -899,7 +980,7 @@ async def generate_from_recurring_template(
             )
         )
     template.last_generated_date = template.next_due_date
-    template.next_due_date = next_frequency_date(template.next_due_date, template.frequency)
+    template.next_due_date = next_recurring_occurrence(template.start_date, template.frequency, template.next_due_date)
     await db.flush()
     return voucher
 

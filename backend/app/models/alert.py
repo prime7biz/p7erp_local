@@ -7,6 +7,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     JSON,
     String,
@@ -25,6 +26,9 @@ def _now_utc() -> datetime:
 class AlertDefinition(Base):
     """Rule metadata: what kind of alert, default severity, entity type, config."""
     __tablename__ = "alert_definition"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "rule_key", name="uq_alert_definition_tenant_rule"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -49,6 +53,9 @@ class AlertInstance(Base):
     __tablename__ = "alert_instance"
     __table_args__ = (
         UniqueConstraint("tenant_id", "natural_key", name="uq_alert_instance_tenant_natural_key"),
+        Index("ix_alert_instance_tenant_assigned_to", "tenant_id", "assigned_to_id"),
+        Index("ix_alert_instance_tenant_created_at", "tenant_id", "created_at"),
+        Index("ix_alert_instance_tenant_status_severity", "tenant_id", "status", "severity"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -86,6 +93,9 @@ class AlertInstance(Base):
 class AlertHistory(Base):
     """Audit trail: status/assignment changes per alert."""
     __tablename__ = "alert_history"
+    __table_args__ = (
+        Index("ix_alert_history_alert_id", "alert_id", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -105,6 +115,9 @@ class AlertHistory(Base):
 class AlertComment(Base):
     """Comments on an alert."""
     __tablename__ = "alert_comment"
+    __table_args__ = (
+        Index("ix_alert_comment_alert_id", "alert_id", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -125,6 +138,10 @@ class AlertComment(Base):
 class AlertRelatedEntity(Base):
     """Polymorphic link: alert -> order, quotation, followup, style, etc."""
     __tablename__ = "alert_related_entity"
+    __table_args__ = (
+        Index("ix_alert_related_entity_entity", "entity_type", "entity_id"),
+        Index("ix_alert_related_entity_tenant_entity", "tenant_id", "entity_id", "entity_type"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -132,7 +149,7 @@ class AlertRelatedEntity(Base):
     )
     alert_id: Mapped[int] = mapped_column(
         ForeignKey("alert_instance.id", ondelete="CASCADE"), nullable=False
-    )
+    , index=True)
     entity_type: Mapped[str] = mapped_column(String(32), nullable=False)
     entity_id: Mapped[int] = mapped_column(Integer, nullable=False)
     role: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -142,6 +159,9 @@ class AlertRelatedEntity(Base):
 class AlertScanLog(Base):
     """Log of each rule/scan run."""
     __tablename__ = "alert_scan_log"
+    __table_args__ = (
+        Index("ix_alert_scan_log_tenant_started", "tenant_id", "started_at"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -167,7 +187,7 @@ class AlertEscalationLog(Base):
     )
     alert_id: Mapped[int] = mapped_column(
         ForeignKey("alert_instance.id", ondelete="CASCADE"), nullable=False
-    )
+    , index=True)
     from_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
     to_level: Mapped[int] = mapped_column(Integer, nullable=False)
     assigned_to_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -184,7 +204,7 @@ class AlertSavedView(Base):
     tenant_id: Mapped[int] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
     )
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     filter_json: Mapped[dict] = mapped_column(JSON, nullable=False)

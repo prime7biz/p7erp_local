@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.auth import get_current_user
 from app.common.codegen import next_tenant_code
 from app.common.ownership import ensure_owned
@@ -317,7 +318,7 @@ async def create_utilization(
     )
     db.add(util)
     await db.flush()
-    update_utilization_classification(util, date.today())
+    update_utilization_classification(util, today_local())
     await replace_schedule_for_utilization(
         db, facility=fac, util=util, grace_days=body.grace_days
     )
@@ -368,7 +369,7 @@ async def patch_utilization(
         raise HTTPException(status_code=400, detail="Only draft utilizations can be patched this way")
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(util, k, v)
-    update_utilization_classification(util, date.today())
+    update_utilization_classification(util, today_local())
     await db.commit()
     await db.refresh(util)
     return util
@@ -460,7 +461,7 @@ async def activate_utilization(
         principal=float(util.principal_amount or 0),
         bank_or_cash_account_id=bank_gl,
         liability_account_id=liability_id,
-        voucher_date=util.disbursement_date or date.today(),
+        voucher_date=util.disbursement_date or today_local(),
         base_currency=base_ccy,
     )
     util.disbursement_voucher_id = v.id
@@ -604,7 +605,7 @@ async def facility_summary(
             )
         )
     ).scalar_one()
-    today = date.today()
+    today = today_local()
     next_month = accrual_month_key(today)
     emi_next = (
         await db.execute(

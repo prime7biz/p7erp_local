@@ -8,11 +8,12 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.orm_numeric import api_money_to_decimal, decimal_to_money_response
-from app.common.tenant_feature_keys import is_payroll_auto_calculate_enabled
+from app.common.tenant_feature_keys import is_payroll_auto_calculate_enabled, is_payroll_lop_enabled
 from app.models import (
     Employee,
     PayrollCalculationSnapshot,
@@ -190,7 +191,7 @@ async def end_structure_assignment(
     row = await db.get(PayrollEmployeeStructureAssignment, assignment_id)
     if not row or row.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="Assignment not found")
-    end = effective_to or date.today()
+    end = effective_to or today_local(await db.get(Tenant, tenant_id))
     if end < row.effective_from:
         raise HTTPException(status_code=400, detail="effective_to must be on/after effective_from")
     row.effective_to = end
@@ -210,6 +211,33 @@ class AutoCalculatePreview:
     employees: list[EmployeeCalcPreview]
     missing_assignment_employee_ids: list[int]
     warnings: list[str] = field(default_factory=list)
+    lop_applied: bool = False
+
+
+async def run_applies_lop(db: AsyncSession, *, tenant: Tenant, run: PayrollRun) -> bool:
+    """Should loss of pay be applied when this run is (re)calculated?
+
+    The mode is fixed by the run's FIRST auto-calculation, so numbers of a run calculated before
+    loss of pay existed never change on a recalculation. Runs never auto-calculated use the flag.
+    """
+    if not is_payroll_lop_enabled(tenant.feature_flags):
+        return False
+    first_trace = (
+        await db.execute(
+            select(PayrollCalculationSnapshot.trace_json)
+            .join(PayrollRunLine, PayrollRunLine.id == PayrollCalculationSnapshot.payroll_run_line_id)
+            .where(
+                PayrollCalculationSnapshot.tenant_id == tenant.id,
+                PayrollRunLine.run_id == run.id,
+            )
+            .order_by(PayrollCalculationSnapshot.id.asc())
+            .limit(1)
+        )
+    ).first()
+    if first_trace is None:
+        return True
+    trace = first_trace[0] if isinstance(first_trace[0], dict) else {}
+    return trace.get("lop_applied") is True
 
 
 def _line_is_manual(line: PayrollRunLine) -> bool:
@@ -271,15 +299,36 @@ async def preview_auto_calculate(
     existing_count = len(existing)
     manual_count = sum(1 for ln in existing if _line_is_manual(ln))
 
-    employees = (
-        await db.execute(
-            select(Employee).where(Employee.tenant_id == tenant.id, Employee.is_active.is_(True))
+    apply_lop = await run_applies_lop(db, tenant=tenant, run=run)
+    emp_stmt = select(Employee).where(Employee.tenant_id == tenant.id)
+    if apply_lop:
+        # Everyone employed for at least one day of the period, including people who left during it.
+        emp_stmt = emp_stmt.where(
+            or_(Employee.joining_date.is_(None), Employee.joining_date <= period.end_date),
+            or_(
+                and_(
+                    Employee.is_active.is_(True),
+                    or_(Employee.exit_date.is_(None), Employee.exit_date >= period.start_date),
+                ),
+                and_(
+                    Employee.exit_date.is_not(None),
+                    Employee.exit_date >= period.start_date,
+                    Employee.exit_date <= period.end_date,
+                ),
+            ),
         )
-    ).scalars().all()
+    else:
+        emp_stmt = emp_stmt.where(Employee.is_active.is_(True))
+    employees = (await db.execute(emp_stmt.order_by(Employee.id))).scalars().all()
 
     previews: list[EmployeeCalcPreview] = []
     missing: list[int] = []
     global_warnings: list[str] = []
+    if not apply_lop and is_payroll_lop_enabled(tenant.feature_flags):
+        global_warnings.append(
+            "This run was first calculated before loss of pay was switched on, so it keeps the old "
+            "calculation (absences and mid-period joiners / leavers are not prorated)"
+        )
 
     for emp in employees:
         existing_line = existing_by_emp.get(emp.id)
@@ -291,6 +340,7 @@ async def preview_auto_calculate(
             period=period,
             as_of=as_of,
             has_manual_override=has_manual,
+            apply_lop=apply_lop,
         )
         previews.append(row)
         if row.skipped and row.skip_reason == "missing_assignment":
@@ -312,6 +362,7 @@ async def preview_auto_calculate(
         employees=previews,
         missing_assignment_employee_ids=missing,
         warnings=global_warnings,
+        lop_applied=apply_lop,
     )
 
 

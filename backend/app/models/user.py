@@ -39,7 +39,7 @@ class User(Base):
     locked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     password_reset_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    password_reset_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    password_reset_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     invited_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )

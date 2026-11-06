@@ -15,6 +15,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -23,6 +24,9 @@ from app.database import Base
 
 class Inquiry(Base):
     __tablename__ = "inquiries"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "inquiry_code", name="uq_inquiries_tenant_inquiry_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -106,6 +110,7 @@ class Quotation(Base):
             unique=True,
             postgresql_where=text("inquiry_id IS NOT NULL AND superseded_at IS NULL"),
         ),
+        UniqueConstraint("tenant_id", "quotation_code", name="uq_quotations_tenant_quotation_code"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -181,6 +186,32 @@ class Quotation(Base):
 
 class Order(Base):
     __tablename__ = "orders"
+    __table_args__ = (
+        Index(
+            "ix_orders_order_code_trgm",
+            "order_code",
+            postgresql_using="gin",
+            postgresql_ops={"order_code": "gin_trgm_ops"},
+        ),
+        Index(
+            "ix_orders_style_ref_trgm",
+            "style_ref",
+            postgresql_using="gin",
+            postgresql_ops={"style_ref": "gin_trgm_ops"},
+        ),
+        Index("ix_orders_tenant_delivery_pipeline", "tenant_id", "delivery_date", "pipeline_status"),
+        Index("ix_orders_tenant_master_contract", "tenant_id", "master_contract_id"),
+        Index("ix_orders_tenant_status", "tenant_id", "status"),
+        Index("ix_orders_tenant_style_id", "tenant_id", "style_id"),
+        UniqueConstraint("tenant_id", "order_code", name="uq_orders_tenant_order_code"),
+        Index(
+            "uq_orders_tenant_quotation_id",
+            "tenant_id",
+            "quotation_id",
+            unique=True,
+            postgresql_where=text("quotation_id IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -190,10 +221,10 @@ class Order(Base):
         ForeignKey("customers.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     quotation_id: Mapped[int | None] = mapped_column(
-        ForeignKey("quotations.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("quotations.id", ondelete="SET NULL"), nullable=True
     )
     style_id: Mapped[int | None] = mapped_column(
-        ForeignKey("garment_styles.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("garment_styles.id", ondelete="SET NULL"), nullable=True
     )
     customer_intermediary_id: Mapped[int | None] = mapped_column(
         ForeignKey("customer_intermediaries.id", ondelete="SET NULL"),
@@ -247,6 +278,9 @@ class Order(Base):
 
 class GarmentStyle(Base):
     __tablename__ = "garment_styles"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "style_code", name="uq_garment_styles_tenant_style_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -294,6 +328,15 @@ class GarmentStyle(Base):
 
 class Bom(Base):
     __tablename__ = "boms"
+    __table_args__ = (
+        Index(
+            "uq_boms_tenant_order_active",
+            "tenant_id",
+            "order_id",
+            unique=True,
+            postgresql_where=text("(is_active = true) AND (order_id IS NOT NULL)"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -337,10 +380,10 @@ class Bom(Base):
     )
     version_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="DRAFT", index=True
+        String(32), nullable=False, default="DRAFT"
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    bom_code: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    bom_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     customer_id: Mapped[int | None] = mapped_column(
         ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -420,7 +463,7 @@ class ConsumptionPlan(Base):
         ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
     )
     status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="PLANNED", index=True
+        String(32), nullable=False, default="PLANNED"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
@@ -557,7 +600,7 @@ class OrderFollowupAction(Base):
     remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_by_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     milestone_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     external_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -609,7 +652,7 @@ class FollowupActionRejectionLog(Base):
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     resubmission_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_by_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
@@ -635,7 +678,7 @@ class MerchSampleTask(Base):
     actual_start: Mapped[date | None] = mapped_column(Date, nullable=True)
     actual_end: Mapped[date | None] = mapped_column(Date, nullable=True)
     assigned_to_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     pct_complete: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=Decimal("0"))
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -720,13 +763,13 @@ class MerchSampleAiProposal(Base):
         ForeignKey("merch_sample_requests.id", ondelete="CASCADE"), nullable=False, index=True
     )
     created_by_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     proposal_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
     applied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     applied_by_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
@@ -855,6 +898,9 @@ class MerchSampleRequest(Base):
     """Merchandising sample / tech-pack lifecycle (Phase 6); not manufacturing mfg_sample_requests."""
 
     __tablename__ = "merch_sample_requests"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "sample_code", name="uq_merch_sample_requests_tenant_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -869,14 +915,14 @@ class MerchSampleRequest(Base):
     order_id: Mapped[int | None] = mapped_column(
         ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    sample_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    sample_code: Mapped[str] = mapped_column(String(32), nullable=False)
     sample_type: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="requested", index=True)
     revision_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     actual_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     assigned_to_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
     sample_subtype: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -904,7 +950,7 @@ class MerchSampleComment(Base):
     comment: Mapped[str] = mapped_column(Text, nullable=False)
     attachment_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_by_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False

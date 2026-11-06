@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -12,10 +12,13 @@ class HrSection(Base):
     """Floor / line / section / unit hierarchy for garments factories."""
 
     __tablename__ = "hr_sections"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_hr_sections_tenant_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(32), nullable=False)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     section_type: Mapped[str] = mapped_column(String(24), nullable=False, default="SECTION")
     parent_section_id: Mapped[int | None] = mapped_column(
@@ -36,13 +39,17 @@ class HrSection(Base):
 
 class Department(Base):
     __tablename__ = "hr_departments"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_hr_departments_tenant_code"),
+        UniqueConstraint("tenant_id", "name", name="uq_hr_departments_tenant_name"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -54,6 +61,10 @@ class Department(Base):
 
 class Designation(Base):
     __tablename__ = "hr_designations"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_hr_designations_tenant_code"),
+        UniqueConstraint("tenant_id", "title", name="uq_hr_designations_tenant_title"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -63,7 +74,7 @@ class Designation(Base):
     code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -75,6 +86,28 @@ class Designation(Base):
 
 class Employee(Base):
     __tablename__ = "hr_employees"
+    __table_args__ = (
+        Index(
+            "ix_hr_employees_employee_code_trgm",
+            "employee_code",
+            postgresql_using="gin",
+            postgresql_ops={"employee_code": "gin_trgm_ops"},
+        ),
+        Index(
+            "ix_hr_employees_first_name_trgm",
+            "first_name",
+            postgresql_using="gin",
+            postgresql_ops={"first_name": "gin_trgm_ops"},
+        ),
+        Index(
+            "ix_hr_employees_last_name_trgm",
+            "last_name",
+            postgresql_using="gin",
+            postgresql_ops={"last_name": "gin_trgm_ops"},
+        ),
+        UniqueConstraint("tenant_id", "employee_code", name="uq_hr_employees_tenant_employee_code"),
+        Index("uq_hr_employees_user_id", "user_id", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -93,8 +126,8 @@ class Employee(Base):
     address_line: Mapped[str | None] = mapped_column(String(255), nullable=True)
     city: Mapped[str | None] = mapped_column(String(128), nullable=True)
     country: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    national_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    employment_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    national_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    employment_type: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     confirmation_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     exit_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     department_id: Mapped[int | None] = mapped_column(
@@ -111,7 +144,7 @@ class Employee(Base):
     section_id: Mapped[int | None] = mapped_column(
         ForeignKey("hr_sections.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow

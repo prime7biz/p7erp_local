@@ -7,6 +7,7 @@ from datetime import date
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.models import (
     BankAccount,
     CashForecastLine,
@@ -132,7 +133,7 @@ async def build_business_overview(db: AsyncSession, *, tenant_id: int) -> dict:
 
     return {
         "base_currency": base_ccy,
-        "data_as_of": date.today().isoformat(),
+        "data_as_of": today_local().isoformat(),
         "liquid_funds_bank_balances": round(liquid, 2),
         "receivables_open": round(rec, 2),
         "payables_open": round(pay, 2),

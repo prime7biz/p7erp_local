@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from datetime import date
 
+from app.common.business_date import today_local
+
 
 def calculate_age(dob: date, as_of: date | None = None) -> int:
-    today = as_of or date.today()
+    today = as_of or today_local()
     years = today.year - dob.year
     if (today.month, today.day) < (dob.month, dob.day):
         years -= 1

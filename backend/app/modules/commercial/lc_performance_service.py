@@ -17,6 +17,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.models.commercial import (
     BtbLc,
     CommercialInvoice,
@@ -42,7 +43,7 @@ def _pct(part: Decimal, whole: Decimal) -> float | None:
 
 
 async def lc_performance(db: AsyncSession, tenant_id: int, *, today: date | None = None, limit: int = 200) -> dict[str, Any]:
-    today = today or date.today()
+    today = today or today_local()
     mcs = list(
         (
             await db.execute(

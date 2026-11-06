@@ -39,6 +39,14 @@ def _to_out(user: User) -> MySignatureOut:
     )
 
 
+def _delete_signature_file(tenant_id: int, name: str) -> None:
+    """Best-effort file removal: a storage error must not hide the real response."""
+    try:
+        FileStorageService.delete_file(tenant_id, SIGNATURE_MODULE, name)
+    except Exception:  # noqa: BLE001
+        logger.warning("my_signature_file_delete_failed tenant=%s name=%s", tenant_id, name)
+
+
 async def _load_self(db: AsyncSession, user: User) -> User:
     row = await db.get(User, user.id)
     if row is None or row.tenant_id != user.tenant_id:
@@ -61,12 +69,14 @@ async def update_my_signature(
     db: AsyncSession = Depends(get_db),
 ):
     row = await _load_self(db, user)
+    # Plain values: after a rollback the ORM objects are expired and reading them would hit the DB.
+    user_id = row.id
     row.designation = (body.designation or "").strip() or None
     try:
         await db.commit()
     except Exception:
         await safe_async_session_rollback(db)
-        logger.exception("my_signature_update_failed user=%s", user.id)
+        logger.exception("my_signature_update_failed user=%s", user_id)
         raise HTTPException(status_code=500, detail="Could not save designation")
     await db.refresh(row)
     return _to_out(row)
@@ -79,18 +89,20 @@ async def upload_my_signature_image(
     db: AsyncSession = Depends(get_db),
 ):
     row = await _load_self(db, user)
-    safe_name, _url, _path = await FileStorageService.save_file(file, row.tenant_id, SIGNATURE_MODULE)
+    # Plain values: after a rollback the ORM objects are expired and reading them would hit the DB.
+    user_id, tenant_id = row.id, row.tenant_id
+    safe_name, _url, _path = await FileStorageService.save_file(file, tenant_id, SIGNATURE_MODULE)
     old_name = row.signature_image_name
     row.signature_image_name = safe_name
     try:
         await db.commit()
     except Exception:
         await safe_async_session_rollback(db)
-        FileStorageService.delete_file(row.tenant_id, SIGNATURE_MODULE, safe_name)
-        logger.exception("my_signature_image_save_failed user=%s", user.id)
+        logger.exception("my_signature_image_save_failed user=%s", user_id)
+        _delete_signature_file(tenant_id, safe_name)
         raise HTTPException(status_code=500, detail="Could not save signature image")
     if old_name and old_name != safe_name:
-        FileStorageService.delete_file(row.tenant_id, SIGNATURE_MODULE, old_name)
+        _delete_signature_file(tenant_id, old_name)
     await db.refresh(row)
     return _to_out(row)
 
@@ -101,6 +113,7 @@ async def delete_my_signature_image(
     db: AsyncSession = Depends(get_db),
 ):
     row = await _load_self(db, user)
+    user_id, tenant_id = row.id, row.tenant_id
     old_name = row.signature_image_name
     if old_name:
         row.signature_image_name = None
@@ -108,8 +121,8 @@ async def delete_my_signature_image(
             await db.commit()
         except Exception:
             await safe_async_session_rollback(db)
-            logger.exception("my_signature_image_delete_failed user=%s", user.id)
+            logger.exception("my_signature_image_delete_failed user=%s", user_id)
             raise HTTPException(status_code=500, detail="Could not remove signature image")
-        FileStorageService.delete_file(row.tenant_id, SIGNATURE_MODULE, old_name)
+        _delete_signature_file(tenant_id, old_name)
         await db.refresh(row)
     return _to_out(row)

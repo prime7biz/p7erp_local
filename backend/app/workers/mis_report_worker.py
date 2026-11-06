@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 
+from app.common.business_date import today_local
 from app.common.celery_app import celery_app
 from app.workers.async_runner import run_async
 from app.common.tenant_feature_keys import is_mis_reports_enabled
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 async def _run_all_tenants() -> dict:
     results: list[dict] = []
-    today = date.today()
+    today = today_local()
     async with AsyncSessionLocal() as db:
         tenant_rows = await active_tenant_rows(db)
         for tenant_id, flags in tenant_rows:

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
@@ -285,9 +286,9 @@ async def update_requisition_status(
     next_status = body.status.strip().lower()
     row.status = next_status
     if next_status == "open" and row.opened_at is None:
-        row.opened_at = date.today()
+        row.opened_at = today_local()
     if next_status in {"closed", "filled", "cancelled"}:
-        row.closed_at = date.today()
+        row.closed_at = today_local()
     await db.commit()
     await db.refresh(row)
     return _requisition_to_response(row)

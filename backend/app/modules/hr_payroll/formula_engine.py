@@ -18,6 +18,9 @@ ALLOWED_CALCULATION_TYPES = frozenset(
     {"FIXED", "PERCENT_OF_BASE", "PER_DAY", "PER_HOUR_OT", "PER_PIECE", "PER_SAM_MINUTE"}
 )
 OUTPUT_BASED_TYPES = frozenset({"PER_PIECE", "PER_SAM_MINUTE"})
+# Earnings paid for the whole period (monthly salary style). Loss of pay prorates only these:
+# PER_DAY already pays per paid day, and OT / piece pay follow the actual hours / output.
+PERIOD_SALARY_TYPES = frozenset({"FIXED", "PERCENT_OF_BASE"})
 
 _MONEY_QUANT = Decimal("0.0001")
 
@@ -35,6 +38,14 @@ def _to_decimal(value: Any, default: Decimal = Decimal("0")) -> Decimal:
 
 def quantize_money(value: Decimal) -> Decimal:
     return value.quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+
+
+def prorate_amount(amount: Decimal, payable_days: Decimal, period_days: Decimal) -> Decimal:
+    """amount × payable_days / period_days, kept between 0 and the full amount."""
+    if period_days <= 0:
+        return quantize_money(amount)
+    days = min(max(payable_days, Decimal("0")), period_days)
+    return quantize_money(amount * days / period_days)
 
 
 def normalize_calculation_type(calculation_type: str | None) -> str:

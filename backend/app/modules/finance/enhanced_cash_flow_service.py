@@ -8,13 +8,14 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.models.finance import Voucher, VoucherLine
 from app.modules.finance.advanced_voucher_service import voucher_in_books_clause
 from app.modules.finance.mis_coa_helpers import account_balances_as_of, financial_snapshot, _d, _money
 
 
 async def _avg_monthly_cashflow(db: AsyncSession, tenant_id: int, *, days: int = 90) -> dict[str, float]:
-    end = date.today()
+    end = today_local()
     start = end - timedelta(days=days)
     # Rough proxy: DEBIT lines on RECEIPT vouchers = inflow, CREDIT lines on PAYMENT vouchers = outflow.
     vtype = func.upper(func.coalesce(Voucher.voucher_type, ""))
@@ -49,7 +50,7 @@ async def scenario_analysis(
     db: AsyncSession,
     tenant_id: int,
 ) -> dict[str, Any]:
-    snap = financial_snapshot(await account_balances_as_of(db, tenant_id, date.today()))
+    snap = financial_snapshot(await account_balances_as_of(db, tenant_id, today_local()))
     flow = await _avg_monthly_cashflow(db, tenant_id)
     cash = float(snap["cash"])
     base_in = float(flow["avg_monthly_inflow"])
@@ -95,7 +96,7 @@ async def scenario_analysis(
         narrative += "Cash position is stable or improving under the expected scenario."
 
     return {
-        "as_of": date.today().isoformat(),
+        "as_of": today_local().isoformat(),
         "current_cash": cash,
         "baseline": flow,
         "scenarios": scenarios,
@@ -144,7 +145,7 @@ async def sensitivity_analysis(
 
 
 async def break_even_analysis(db: AsyncSession, tenant_id: int) -> dict[str, Any]:
-    snap = financial_snapshot(await account_balances_as_of(db, tenant_id, date.today()))
+    snap = financial_snapshot(await account_balances_as_of(db, tenant_id, today_local()))
     flow = await _avg_monthly_cashflow(db, tenant_id)
     # Treat average outflow as fixed+variable proxy; contribution margin ~ 40%
     monthly_fixed = float(flow["avg_monthly_outflow"]) * 0.6

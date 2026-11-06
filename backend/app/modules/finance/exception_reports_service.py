@@ -21,6 +21,7 @@ from typing import Any
 from sqlalchemy import Numeric, and_, case, cast, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.models.commercial import CommercialInvoice, CommercialInvoiceLine
 from app.models.costing import Item
 from app.models.finance import AccountGroup, BillReference, ChartOfAccount, OutstandingBill, VendorBill
@@ -70,7 +71,7 @@ async def grn_not_billed(db: AsyncSession, tenant_id: int, *, limit: int, offset
             base.order_by(GoodsReceiving.received_date.asc().nulls_last(), GoodsReceiving.id).limit(limit).offset(offset)
         )
     ).all()
-    today = date.today()
+    today = today_local()
     out = [
         {
             "grn_id": g.id,
@@ -113,7 +114,7 @@ async def challan_not_invoiced(db: AsyncSession, tenant_id: int, *, limit: int, 
             base.order_by(DeliveryChallan.delivery_date.asc().nulls_last(), DeliveryChallan.id).limit(limit).offset(offset)
         )
     ).scalars().all()
-    today = date.today()
+    today = today_local()
     out = [
         {
             "challan_id": c.id,

@@ -48,10 +48,10 @@ class Tenant(Base):
     )
     allow_negative_stock: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     default_rm_warehouse_id: Mapped[int | None] = mapped_column(
-        ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True
     )
     default_fg_warehouse_id: Mapped[int | None] = mapped_column(
-        ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True
     )
     # ISO 3166-1 alpha-2 (e.g. BD, US) for public holiday import and locale.
     country_code: Mapped[str | None] = mapped_column(String(4), nullable=True)

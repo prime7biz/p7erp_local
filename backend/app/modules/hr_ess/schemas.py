@@ -57,6 +57,7 @@ class LeaveRequestCreate(BaseModel):
     from_date: date
     to_date: date
     reason: str | None = None
+    # Ignored: the server counts the days. Only "0.5" on a single working day is kept (half day).
     days_requested: str = "1"
 
 

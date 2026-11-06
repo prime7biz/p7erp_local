@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.business_date import today_local
 from app.common.permissions import (
     PERMISSION_CREDIT_NOTE_CREATE,
     PERMISSION_DEBIT_NOTE_CREATE,
@@ -545,9 +546,11 @@ async def generate_recurring_now(
     row = await db.get(RecurringVoucherTemplate, template_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Template not found")
-    # Force due today for manual generate
-    row.next_due_date = min(row.next_due_date, date.today())
-    voucher = await generate_from_recurring_template(db, tenant.id, row, created_by=user.id, as_of=date.today())
+    # Manual generate creates the next scheduled period now (even if not due yet), dated on its
+    # period date, so the schedule does not move.
+    voucher = await generate_from_recurring_template(
+        db, tenant.id, row, created_by=user.id, as_of=today_local(tenant), allow_early=True
+    )
     if not voucher:
         raise HTTPException(status_code=400, detail="Nothing generated (inactive or past end date)")
     await db.commit()
@@ -747,7 +750,7 @@ async def create_special_voucher(
         voucher_type=vtype,
         branch_code="MAIN",
     )
-    is_pd = bool(body.is_post_dated or body.voucher_date > date.today())
+    is_pd = bool(body.is_post_dated or body.voucher_date > today_local(tenant))
     voucher = Voucher(
         tenant_id=tenant.id,
         voucher_number=voucher_number,
@@ -810,7 +813,7 @@ async def post_dated_register(
 ):
     _ensure_tenant(user, tenant)
     _require_flag(is_post_dated_voucher_enabled(tenant.feature_flags), "post_dated_voucher_enabled")
-    today = date.today()
+    today = today_local(tenant)
     rows = list(
         (
             await db.execute(

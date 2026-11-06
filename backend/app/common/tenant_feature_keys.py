@@ -85,6 +85,10 @@ TDS_SPLIT_IN_PAYMENT = "tds_split_in_payment"
 # When true (default off), payroll posting books gross salary: Dr Salary expense (gross + employer
 # contributions) / Cr PF, ESI, PT and other deduction liabilities / Cr Salary payable (net).
 PAYROLL_GROSS_POSTING = "payroll_gross_posting"
+# Loss of pay in payroll auto-calculate (default ON — explicit False switches off): fixed salary is
+# prorated by payable days (unpaid absences / unpaid leave / joining or leaving mid-period).
+# Runs that were already auto-calculated without it keep their old numbers.
+PAYROLL_LOP_ENABLED = "payroll_lop_enabled"
 
 # Sprint H1 compliance / OCR / AI / documents (all default off).
 COMPLIANCE_TRACKING_ENABLED = "compliance_tracking_enabled"
@@ -427,6 +431,11 @@ def is_tds_split_in_payment_enabled(feature_flags: Any) -> bool:
 
 def is_payroll_gross_posting_enabled(feature_flags: Any) -> bool:
     return _flag_true(feature_flags, PAYROLL_GROSS_POSTING)
+
+
+def is_payroll_lop_enabled(feature_flags: Any) -> bool:
+    """Loss of pay is on unless the tenant explicitly sets ``payroll_lop_enabled`` to False."""
+    return _flag_default_true(feature_flags, PAYROLL_LOP_ENABLED)
 
 
 def is_statutory_payroll_enabled(feature_flags: Any) -> bool:

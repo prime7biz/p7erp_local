@@ -34,7 +34,7 @@ from app.modules.finance.advanced_voucher_service import (
     convert_optional_to_books,
     create_note_voucher,
     generate_from_recurring_template,
-    next_frequency_date,
+    next_recurring_occurrence,
     voucher_should_affect_books,
     voucher_visible_in_day_book,
 )
@@ -433,7 +433,9 @@ async def test_recurring_and_voucher_class(db_session_integration):
     assert voucher is not None
     assert voucher.source_module == "RECURRING"
     assert tpl.last_generated_date == date.today()
-    assert tpl.next_due_date == next_frequency_date(date.today(), "MONTHLY")
+    # The schedule is counted from start_date (no drift), so the next due date is the next
+    # start-date anniversary after today.
+    assert tpl.next_due_date == next_recurring_occurrence(tpl.start_date, "MONTHLY", date.today())
 
     nxt = await generate_from_recurring_template(db, t.id, tpl, as_of=date.today())
     assert nxt is None

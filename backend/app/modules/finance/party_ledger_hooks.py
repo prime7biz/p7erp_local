@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.tenant_feature_keys import (
     is_party_ledger_auto_allocate,
     is_party_ledger_enabled,
@@ -255,7 +256,7 @@ async def daily_party_ledger_maintenance(
     if not is_party_ledger_enabled(feature_flags):
         return {"skipped": True, "reason": "party_ledger_enabled is false"}
 
-    as_of = as_of_date or date.today()
+    as_of = as_of_date or today_local()
     overdue_count = await mark_overdue_bills(db, tenant_id, as_of)
     interest_n = 0
     interest_total = "0.00"

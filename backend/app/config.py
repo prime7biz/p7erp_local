@@ -243,6 +243,10 @@ class Settings(BaseSettings):
     # Minimum length for JWT_SECRET / AI_CONFIRMATION_TOKEN_PEPPER outside development.
     secret_min_length: int = 32
 
+    # Business calendar: "today" for default voucher / payroll / leave dates when the tenant has no
+    # timezone of its own (tenants.timezone). Storage timestamps stay UTC.
+    app_timezone: str = "Asia/Dhaka"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

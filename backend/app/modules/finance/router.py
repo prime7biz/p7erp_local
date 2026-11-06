@@ -30,6 +30,7 @@ from sqlalchemy import case, cast, func, Numeric, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.business_date import today_local
 from app.common.cache import (
     ACCOUNT_GROUP_HIERARCHY_CACHE_TTL_SECONDS,
     account_group_hierarchy_cache_key,
@@ -1384,6 +1385,36 @@ async def _lock_voucher(db: AsyncSession, tenant_id: int, voucher_id: int) -> Vo
     return row
 
 
+async def _refresh_voucher_fiscal_year(db: AsyncSession, tenant: Tenant, row: Voucher) -> str | None:
+    """After a draft's date changes, keep fiscal_year (and the number series) in step with the date.
+
+    Same financial year: number is kept. Different financial year on a series-numbered voucher:
+    a new number is taken from the new year's series. Returns the old number when renumbered.
+    """
+    from app.modules.finance.fiscal_year import fiscal_year_of, fy_start_month
+
+    new_fy = fiscal_year_of(row.voucher_date, fy_start_month(tenant.feature_flags))
+    if row.fiscal_year == new_fy:
+        return None
+    if row.fiscal_year is None or not row.number_series_key:
+        # Legacy / unnumbered-series voucher: record the year, keep the existing number.
+        row.fiscal_year = new_fy
+        return None
+    old_number = row.voucher_number
+    voucher_number, series_seq, series_key, fy = await allocate_series_voucher_number(
+        db,
+        tenant_id=tenant.id,
+        voucher_date=row.voucher_date,
+        voucher_type=row.voucher_type,
+        branch_code=row.branch_code,
+    )
+    row.voucher_number = voucher_number
+    row.series_sequence = series_seq
+    row.number_series_key = series_key
+    row.fiscal_year = fy
+    return old_number
+
+
 async def _assert_open_period(db: AsyncSession, tenant_id: int, on_date: date, *, what: str = "this voucher date") -> None:
     open_period = (
         await db.execute(
@@ -2652,9 +2683,9 @@ async def update_voucher(
     _ensure_tenant(user, tenant)
     if not (body.description or "").strip():
         raise HTTPException(status_code=400, detail="Narration / description is required for audit purposes")
-    row = await db.get(Voucher, voucher_id)
-    if not row or row.tenant_id != tenant.id:
-        raise HTTPException(status_code=404, detail="Voucher not found")
+    # Row lock: a concurrent approve/post waits for this edit (and vice versa), and the status
+    # check below sees the latest committed status instead of a stale copy.
+    row = await _lock_voucher(db, tenant.id, voucher_id)
     _require_manual_voucher_edit(row)
     if row.status not in {"DRAFT", "REJECTED"}:
         raise HTTPException(status_code=400, detail="Only DRAFT or REJECTED vouchers can be edited")
@@ -2693,8 +2724,7 @@ async def update_voucher(
         row.instrument_reference = (body.instrument_reference.strip()[:128] or None)
     if body.bank_reconciliation_id is not None:
         row.bank_reconciliation_id = body.bank_reconciliation_id
-    if getattr(row, "fiscal_year", None) is None:
-        row.fiscal_year = fiscal_year_calendar(row.voucher_date)
+    renumbered_from = await _refresh_voucher_fiscal_year(db, tenant, row)
     row.currency = txn_currency
     row.base_currency = base_currency
     row.exchange_rate = str(round(exchange_rate_value, 8))
@@ -2772,6 +2802,8 @@ async def update_voucher(
     except Exception:
         pass
     changes = diff_voucher(before_header, before_lines, header_snapshot(row), lines_snapshot(updated_lines))
+    if renumbered_from is not None:
+        changes["voucher_number"] = {"from": renumbered_from, "to": row.voucher_number}
     changed_names = [k for k in changes if k != "lines"] + (["lines"] if "lines" in changes else [])
     await record_voucher_event(
         db,
@@ -3112,9 +3144,9 @@ async def day_book_report(
     from app.modules.finance.advanced_voucher_service import voucher_visible_in_day_book_clause
 
     if from_date is None:
-        from_date = date.today().replace(day=1)
+        from_date = today_local(tenant).replace(day=1)
     if to_date is None:
-        to_date = date.today()
+        to_date = today_local(tenant)
     filters = [
         Voucher.tenant_id == tenant.id,
         Voucher.voucher_date >= from_date,
@@ -3289,7 +3321,7 @@ async def trial_balance_report(
 ):
     _ensure_tenant(user, tenant)
     if as_of_date is None:
-        as_of_date = date.today()
+        as_of_date = today_local(tenant)
     accounts_stmt = (
         select(ChartOfAccount, AccountGroup)
         .join(AccountGroup, ChartOfAccount.group_id == AccountGroup.id)
@@ -3370,7 +3402,7 @@ async def financial_statements(
 ):
     _ensure_tenant(user, tenant)
     if as_of_date is None:
-        as_of_date = date.today()
+        as_of_date = today_local(tenant)
     accounts_stmt = (
         select(ChartOfAccount, AccountGroup)
         .join(AccountGroup, ChartOfAccount.group_id == AccountGroup.id)
@@ -3420,9 +3452,9 @@ async def cash_flow_statement(
 ):
     _ensure_tenant(user, tenant)
     if from_date is None:
-        from_date = date.today().replace(day=1)
+        from_date = today_local(tenant).replace(day=1)
     if to_date is None:
-        to_date = date.today()
+        to_date = today_local(tenant)
 
     vouchers = list(
         (
@@ -4175,7 +4207,7 @@ async def create_payable_from_purchase_order(
         prefix="AP-",
         width=4,
     )
-    due = date.today() + timedelta(days=max(body.due_in_days, 0))
+    due = today_local(tenant) + timedelta(days=max(body.due_in_days, 0))
     combined_notes = f"{body.notes or ''} | PO:{po.po_code} | GRN_COUNT:{grn_count}".strip(" |")
 
     row = OutstandingBill(
@@ -4183,7 +4215,7 @@ async def create_payable_from_purchase_order(
         bill_no=code,
         party_name=po.supplier_name,
         bill_type="PAYABLE",
-        bill_date=date.today(),
+        bill_date=today_local(tenant),
         due_date=due,
         amount=str(total_amount),
         paid_amount="0",
@@ -4260,7 +4292,7 @@ async def create_payable_from_goods_receiving(
         prefix="AP-",
         width=4,
     )
-    due = date.today() + timedelta(days=max(body.due_in_days, 0))
+    due = today_local(tenant) + timedelta(days=max(body.due_in_days, 0))
     combined_notes = f"{body.notes or ''} | PO:{po.po_code} | GRN:{grn.grn_code}".strip(" |")
 
     row = OutstandingBill(
@@ -4268,7 +4300,7 @@ async def create_payable_from_goods_receiving(
         bill_no=code,
         party_name=po.supplier_name,
         bill_type="PAYABLE",
-        bill_date=date.today(),
+        bill_date=today_local(tenant),
         due_date=due,
         amount=str(total_amount),
         paid_amount="0",
@@ -4325,7 +4357,7 @@ async def bills_aging(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    as_of = as_of_date or date.today()
+    as_of = as_of_date or today_local(tenant)
     stmt = select(OutstandingBill).where(
         OutstandingBill.tenant_id == tenant.id,
         OutstandingBill.bill_type == bill_type.strip().upper(),
@@ -4656,14 +4688,20 @@ async def budget_vs_actual(
         raise HTTPException(status_code=404, detail="Budget not found")
     lines = list((await db.execute(select(BudgetLine).where(BudgetLine.budget_id == budget.id))).scalars().all())
 
-    # Posted, in-books voucher line amounts summed per (account, cost centre) in SQL.
-    # A budget line with no account matches every account, so only filter when all lines name one.
+    from app.modules.finance.fiscal_year import fiscal_year_bounds_from_label, fy_start_month
+
+    # Posted, in-books voucher line amounts (in base currency) summed per (account, cost centre) in SQL,
+    # limited to the budget's financial year. A budget line with no account matches every account,
+    # so only filter by account when all lines name one.
+    fy_bounds = fiscal_year_bounds_from_label(budget.fiscal_year, fy_start_month(tenant.feature_flags))
     actual_query = (
-        select(VoucherLine.account_id, VoucherLine.cost_center_id, func.sum(VoucherLine.amount))
+        select(VoucherLine.account_id, VoucherLine.cost_center_id, func.sum(line_base_amount_sql()))
         .join(Voucher, VoucherLine.voucher_id == Voucher.id)
         .where(VoucherLine.tenant_id == tenant.id, Voucher.status == "POSTED", voucher_in_books_clause())
         .group_by(VoucherLine.account_id, VoucherLine.cost_center_id)
     )
+    if fy_bounds is not None:
+        actual_query = actual_query.where(Voucher.voucher_date >= fy_bounds[0], Voucher.voucher_date <= fy_bounds[1])
     if lines and all(line.account_id is not None for line in lines):
         actual_query = actual_query.where(VoucherLine.account_id.in_({line.account_id for line in lines}))
     actual_by_account_cc = (await db.execute(actual_query)).all() if lines else []
@@ -4699,6 +4737,8 @@ async def budget_vs_actual(
         "budget_id": budget.id,
         "budget_name": budget.budget_name,
         "fiscal_year": budget.fiscal_year,
+        "period_start": fy_bounds[0].isoformat() if fy_bounds else None,
+        "period_end": fy_bounds[1].isoformat() if fy_bounds else None,
         "rows": rows,
         "total_budget": round(total_budget, 2),
         "total_actual": round(total_actual, 2),
@@ -4775,6 +4815,40 @@ async def list_bank_reconciliations(
     return [_bank_reconciliation_to_out(row) for row in rows]
 
 
+async def _bank_book_balance(db: AsyncSession, tenant_id: int, bank: BankAccount, as_of: date) -> Decimal:
+    """Bank balance as per our books on `as_of`: the bank's ledger (GL) account opening balance plus
+    posted, in-books voucher lines up to that date, in base currency.
+
+    Bank accounts without a GL link have no ledger to read, so the stored current_balance is used.
+    """
+    account = await db.get(ChartOfAccount, bank.gl_account_id) if bank.gl_account_id else None
+    if account is None or account.tenant_id != tenant_id:
+        return Decimal(str(bank.current_balance or 0)).quantize(Decimal("0.01"))
+    base = line_base_amount_sql()
+    debit, credit = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(case((VoucherLine.entry_type == "DEBIT", base), else_=0)), 0),
+                func.coalesce(func.sum(case((VoucherLine.entry_type == "CREDIT", base), else_=0)), 0),
+            )
+            .join(Voucher, VoucherLine.voucher_id == Voucher.id)
+            .where(
+                VoucherLine.tenant_id == tenant_id,
+                Voucher.tenant_id == tenant_id,
+                VoucherLine.account_id == account.id,
+                Voucher.status == "POSTED",
+                voucher_in_books_clause(),
+                Voucher.voucher_date <= as_of,
+            )
+        )
+    ).one()
+    opening = Decimal(str(account.opening_balance or 0))
+    debit = Decimal(str(debit))
+    credit = Decimal(str(credit))
+    balance = opening + debit - credit if account.normal_balance == "debit" else opening + credit - debit
+    return balance.quantize(Decimal("0.01"))
+
+
 @router.post("/banking/reconciliation", response_model=BankReconciliationOut)
 async def create_bank_reconciliation(
     body: BankReconciliationBody,
@@ -4786,7 +4860,7 @@ async def create_bank_reconciliation(
     bank = await db.get(BankAccount, body.bank_account_id)
     if not bank or bank.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Bank account not found")
-    book_balance = _to_float(bank.current_balance)
+    book_balance = float(await _bank_book_balance(db, tenant.id, bank, body.statement_date))
     statement_balance = _to_float(body.statement_balance)
     diff = round(statement_balance - book_balance, 2)
     row = BankReconciliation(
@@ -5413,9 +5487,23 @@ async def execute_payment_run(
         bank = await db.get(BankAccount, run.bank_account_id)
         if not bank or bank.tenant_id != tenant.id:
             raise HTTPException(status_code=404, detail="Linked bank account not found")
+    # Bills may only be marked paid together with a posted payment voucher.
+    if bank is None or not bank.gl_account_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Link this payment run to a bank account that has a ledger (GL) account before executing; "
+            "bills are only marked paid when a posted payment voucher is created.",
+        )
+    if run.executed_voucher_id is not None:
+        existing_voucher = await db.get(Voucher, run.executed_voucher_id)
+        if not existing_voucher or existing_voucher.tenant_id != tenant.id or existing_voucher.status != "POSTED":
+            raise HTTPException(
+                status_code=400,
+                detail="The payment voucher for this run is missing or not posted; bills were not marked paid.",
+            )
 
     # Auto-voucher posting for payment run (debit AP clearing, credit bank GL).
-    if bank and bank.gl_account_id and run.executed_voucher_id is None:
+    if run.executed_voucher_id is None:
         open_period = (
             await db.execute(
                 select(AccountingPeriod).where(
@@ -5445,6 +5533,8 @@ async def execute_payment_run(
                 continue
             supplier_ap = await _find_or_create_supplier_ap_account(db, tenant.id, party_name)
             supplier_party_lines.append((party_name, rounded_amount, supplier_ap))
+        if not supplier_party_lines:
+            raise HTTPException(status_code=400, detail="Payment run has no positive amounts to pay")
 
         lock_ids = [bank_gl_probe.id] + [ap.id for _, _, ap in supplier_party_lines]
         locked_gl = await _lock_chart_accounts_for_subset(db, tenant.id, lock_ids)
@@ -5497,6 +5587,7 @@ async def execute_payment_run(
                     cost_center_id=None,
                     entry_type="DEBIT",
                     amount=str(rounded_amount),
+                    base_amount=str(rounded_amount),
                     notes=f"Payment run {run.run_code} - {party_name} ({run.base_currency})",
                 )
             )
@@ -5508,6 +5599,7 @@ async def execute_payment_run(
             cost_center_id=None,
             entry_type="CREDIT",
             amount=str(total_amount),
+            base_amount=str(total_amount),
             notes=f"Payment run {run.run_code} ({run.base_currency})",
         )
         db.add(credit_line)
@@ -5530,9 +5622,9 @@ async def execute_payment_run(
             bill = await db.get(OutstandingBill, item.bill_id)
             if not bill or bill.tenant_id != tenant.id:
                 raise HTTPException(status_code=404, detail=f"Bill not found: {item.bill_id}")
-            paid = _to_float(bill.paid_amount) + _to_float(item.amount)
-            total = _to_float(bill.amount)
-            bill.paid_amount = str(round(min(paid, total), 2))
+            paid = Decimal(str(bill.paid_amount or 0)) + Decimal(str(item.amount or 0))
+            total = Decimal(str(bill.amount or 0))
+            bill.paid_amount = str(min(paid, total).quantize(Decimal("0.01")))
             bill.status = "PAID" if paid >= total else "PARTIAL"
     if bank and bank.tenant_id == tenant.id:
         bank.current_balance = str(round(_to_float(bank.current_balance) - _to_float(run.total_amount), 2))
@@ -5875,7 +5967,7 @@ async def purchase_ap_overview(
     due_next_7_days = sum(
         max(_to_float(p.amount) - _to_float(p.paid_amount), 0)
         for p in open_payables
-        if 0 <= (p.due_date - date.today()).days <= 7
+        if 0 <= (p.due_date - today_local(tenant)).days <= 7
     )
     return {
         "payable_bills_count": len(payables),
@@ -6564,7 +6656,7 @@ async def reverse_voucher(
             detail="This voucher never affected the books (memorandum/optional/post-dated); use cancel-posting instead",
         )
     await _assert_no_facility_link(db, tenant.id, src.id)
-    await _assert_open_period(db, tenant.id, date.today(), what="today's date (reversal date)")
+    await _assert_open_period(db, tenant.id, today_local(tenant), what="today's date (reversal date)")
     from app.modules.finance.tds_service import on_payment_voucher_cancelled
 
     await on_payment_voucher_cancelled(db, tenant.id, src)
@@ -6577,7 +6669,7 @@ async def reverse_voucher(
     vnum, series_seq, series_key, fy = await allocate_series_voucher_number(
         db,
         tenant_id=tenant.id,
-        voucher_date=date.today(),
+        voucher_date=today_local(tenant),
         voucher_type=src.voucher_type,
         branch_code=branch,
     )
@@ -6587,7 +6679,7 @@ async def reverse_voucher(
         tenant_id=tenant.id,
         voucher_number=vnum,
         voucher_type=src.voucher_type,
-        voucher_date=date.today(),
+        voucher_date=today_local(tenant),
         status="POSTED",
         description=f"Reversal of {src.voucher_number}",
         reference=src.voucher_number,
@@ -6748,13 +6840,13 @@ async def auto_create_bill_from_voucher(
         prefix=prefix,
         width=4,
     )
-    due = date.today() + timedelta(days=max(body.due_in_days, 0))
+    due = today_local(tenant) + timedelta(days=max(body.due_in_days, 0))
     row = OutstandingBill(
         tenant_id=tenant.id,
         bill_no=code,
         party_name=body.party_name,
         bill_type=body.bill_type,
-        bill_date=date.today(),
+        bill_date=today_local(tenant),
         due_date=due,
         amount=str(round(total, 2)),
         paid_amount="0",
@@ -6940,9 +7032,9 @@ async def ledger_activity_report(
     if not account or account.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Account not found")
     if from_date is None:
-        from_date = date.today().replace(day=1)
+        from_date = today_local(tenant).replace(day=1)
     if to_date is None:
-        to_date = date.today()
+        to_date = today_local(tenant)
 
     q = (
         select(VoucherLine, Voucher)
@@ -7204,7 +7296,7 @@ async def create_bill_reference(
         source_doc_number=body.source_doc_number,
         status="OPEN",
         credit_period_days=body.credit_period_days,
-        is_overdue=body.due_date < date.today() if body.due_date else False,
+        is_overdue=body.due_date < today_local(tenant) if body.due_date else False,
         notes=body.notes,
         created_by=user.id,
     )
@@ -7295,7 +7387,7 @@ async def allocate_bill_wise(
     await ensure_owned(db, VoucherLine, body.voucher_line_id, tenant.id, "Voucher line")
     if body.allocation_type == "ON_ACCOUNT":
         await ensure_owned(db, BillReference, body.bill_reference_id, tenant.id, "Bill reference")
-    today = date.today()
+    today = today_local(tenant)
 
     if body.allocation_type == "AGAINST_REF":
         if not body.bill_reference_id:
@@ -7426,7 +7518,7 @@ async def bill_wise_outstanding_report(
         else:
             payable_total += pending
             payable_count += 1
-        if r.is_overdue or (r.due_date and r.due_date < date.today()):
+        if r.is_overdue or (r.due_date and r.due_date < today_local(tenant)):
             overdue_total += pending
     return {
         "receivable": {"total": round(receivable_total, 2), "count": receivable_count},
@@ -7452,7 +7544,7 @@ async def bill_wise_aging_report(
             ).order_by(BillReference.bill_date.asc())
         )).scalars().all()
     )
-    today = date.today()
+    today = today_local(tenant)
     buckets: dict[str, float] = {"0_30": 0, "31_60": 0, "61_90": 0, "91_120": 0, "120_plus": 0}
     party_rows: list[dict] = []
     for r in rows:
@@ -7606,8 +7698,8 @@ async def create_vendor_bill_draft_from_grn(
         bill_code=bill_code,
         vendor_id=vid,
         vendor_invoice_ref=None,
-        vendor_invoice_date=date.today(),
-        bill_date=grn.received_date or date.today(),
+        vendor_invoice_date=today_local(tenant),
+        bill_date=grn.received_date or today_local(tenant),
         status="DRAFT",
         goods_receiving_id=grn.id,
         purchase_order_id=grn.purchase_order_id,
@@ -7784,7 +7876,7 @@ async def post_vendor_bill(
         tenant_id=tenant.id,
         user_id=user.id,
         voucher_type="JOURNAL",
-        voucher_date=b.bill_date or date.today(),
+        voucher_date=b.bill_date or today_local(tenant),
         lines=[
             AutoPostingLine(
                 entry_type="DEBIT",

@@ -55,7 +55,7 @@ class TdsDeduction(Base):
     net_payment: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
     tds_liability_voucher_id: Mapped[int | None] = mapped_column(
         ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True
-    )
+    , index=True)
     certificate_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
     certificate_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="PENDING", index=True)

@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import func, select
+from sqlalchemy import Numeric, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.database import get_db
 from app.models import (
     BillingInvoice,
@@ -185,15 +187,35 @@ async def cancel_sub(
     return {"ok": True}
 
 
-def _next_invoice_number(db: AsyncSession) -> str:
-    return f"INV-{datetime.utcnow().strftime('%Y%m%d')}-{secrets_rand(6)}"
+async def _next_invoice_number(db: AsyncSession, on: date) -> str:
+    """Sequential per calendar year: INV-2026-00001, INV-2026-00002, ...
+
+    A transaction-level advisory lock makes two admins creating invoices at once wait for each other,
+    so they cannot both read the same "last" number.
+    """
+    await db.execute(select(func.pg_advisory_xact_lock(func.hashtext("billing_invoice_number"))))
+    prefix = f"INV-{on.year}-"
+    last_seq = (
+        await db.execute(
+            select(func.max(cast(func.substr(BillingInvoice.invoice_number, len(prefix) + 1), Numeric))).where(
+                BillingInvoice.invoice_number.op("~")("^" + re.escape(prefix) + "[0-9]+$")
+            )
+        )
+    ).scalar_one_or_none()
+    return f"{prefix}{int(last_seq or 0) + 1:05d}"
 
 
-def secrets_rand(n: int) -> str:
-    import random
-    import string
-
-    return "".join(random.choices(string.digits, k=n))
+def _optional_date(body: dict, key: str) -> date | None:
+    """Parse an optional YYYY-MM-DD field; 400 with the field name when it is not a real date."""
+    raw = body.get(key)
+    if raw in (None, ""):
+        return None
+    if isinstance(raw, date):
+        return raw
+    try:
+        return date.fromisoformat(str(raw).strip()[:10])
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"{key} must be a date in YYYY-MM-DD format")
 
 
 @router.get("/invoices")
@@ -225,18 +247,23 @@ async def create_invoice(
     ctx: AdminContext = Depends(super_or_billing),
 ):
     tid = int(body["tenant_id"])
+    period_start = _optional_date(body, "period_start")
+    period_end = _optional_date(body, "period_end")
+    due_date = _optional_date(body, "due_date")
+    if period_start and period_end and period_end < period_start:
+        raise HTTPException(status_code=400, detail="period_end cannot be before period_start")
     inv = BillingInvoice(
         tenant_id=tid,
         subscription_id=body.get("subscription_id"),
-        invoice_number=_next_invoice_number(db),
-        period_start=body.get("period_start"),
-        period_end=body.get("period_end"),
+        invoice_number=await _next_invoice_number(db, today_local()),
+        period_start=period_start,
+        period_end=period_end,
         subtotal=Decimal(str(body.get("subtotal") or 0)),
         tax=Decimal(str(body.get("tax") or 0)),
         total=Decimal(str(body.get("total") or 0)),
         currency=str(body.get("currency") or "USD"),
         status="draft",
-        due_date=body.get("due_date"),
+        due_date=due_date,
         line_items=body.get("line_items"),
         notes=body.get("notes"),
     )

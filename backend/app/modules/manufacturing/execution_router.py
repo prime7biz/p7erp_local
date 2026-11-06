@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -571,6 +571,13 @@ async def assign_operation(
     )
 
 
+def _utc_naive(value: datetime | None) -> datetime | None:
+    """Downtime times are stored as naive UTC; convert a client time that carries a timezone offset."""
+    if value is None or value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 @router.post("/operations/downtime", response_model=DowntimeResponse, status_code=status.HTTP_201_CREATED)
 async def log_downtime(
     body: DowntimeCreate,
@@ -599,8 +606,8 @@ async def log_downtime(
     ).first()
     if existing_open:
         raise HTTPException(status_code=400, detail="An open downtime event already exists for this operation")
-    started_at = body.started_at or datetime.utcnow()
-    ended_at = body.ended_at
+    started_at = _utc_naive(body.started_at) or datetime.utcnow()
+    ended_at = _utc_naive(body.ended_at)
     if ended_at is not None and ended_at < started_at:
         raise HTTPException(status_code=400, detail="ended_at cannot be earlier than started_at")
     duration = None
@@ -686,7 +693,7 @@ async def end_downtime(
         raise HTTPException(status_code=404, detail="Downtime event not found")
     if row.ended_at is not None:
         raise HTTPException(status_code=400, detail="Downtime event already closed")
-    ended_at = body.ended_at or datetime.utcnow()
+    ended_at = _utc_naive(body.ended_at) or datetime.utcnow()
     if ended_at < row.started_at:
         raise HTTPException(status_code=400, detail="ended_at cannot be earlier than started_at")
     row.ended_at = ended_at

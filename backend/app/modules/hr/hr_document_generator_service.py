@@ -9,6 +9,7 @@ from datetime import date, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.models.hr import Department, Designation, Employee
 from app.models.hr_compliance_framework import EmployeeAgeVerification
 from app.models.hr_payroll import PayrollPayslip, PayrollRun, PayrollRunLine
@@ -53,7 +54,7 @@ def generate_id_card_pdf(
     c.drawString(8 * mm, h - 10 * mm, f"Emergency: {emp.emergency_contact_name or '-'}")
     c.drawString(8 * mm, h - 15 * mm, f"Phone: {emp.emergency_contact_phone or '-'}")
     c.drawString(8 * mm, h - 20 * mm, f"Address: {(emp.address_line or '-')[:40]}")
-    c.drawString(8 * mm, h - 25 * mm, f"Issue: {date.today().isoformat()}")
+    c.drawString(8 * mm, h - 25 * mm, f"Issue: {today_local().isoformat()}")
     c.drawString(8 * mm, h - 30 * mm, f"NID: {emp.national_id or '-'}")
     c.setFont("Helvetica", 6)
     c.drawString(8 * mm, 6 * mm, f"*{emp.employee_code}*")
@@ -83,7 +84,7 @@ def generate_appointment_letter_pdf(
     c.drawString(50, y, "APPOINTMENT LETTER")
     y -= 24
     c.setFont("Helvetica", 10)
-    c.drawString(50, y, f"Date: {date.today().isoformat()}")
+    c.drawString(50, y, f"Date: {today_local().isoformat()}")
     y -= 20
     c.drawString(50, y, f"To: {_emp_name(emp)}")
     y -= 16

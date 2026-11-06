@@ -18,6 +18,7 @@ from sqlalchemy import (
     ForeignKey,
     UniqueConstraint,
     Numeric,
+    Index,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -106,7 +107,17 @@ class ItemUnit(Base):
 class Item(Base):
     """Inventory item for material costing (linked to categories/units)."""
     __tablename__ = "items"
-    __table_args__ = (UniqueConstraint("tenant_id", "item_code", name="uq_items_tenant_item_code"),)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "item_code", name="uq_items_tenant_item_code"),
+        Index(
+            "ix_items_item_code_trgm",
+            "item_code",
+            postgresql_using="gin",
+            postgresql_ops={"item_code": "gin_trgm_ops"},
+        ),
+        Index("ix_items_name_trgm", "name", postgresql_using="gin", postgresql_ops={"name": "gin_trgm_ops"}),
+        Index("ix_items_tenant_id_item_code", "tenant_id", "item_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -116,13 +127,13 @@ class Item(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     category_id: Mapped[int] = mapped_column(
-        ForeignKey("item_categories.id", ondelete="RESTRICT"), nullable=False, index=True
+        ForeignKey("item_categories.id", ondelete="RESTRICT"), nullable=False
     )
     subcategory_id: Mapped[int | None] = mapped_column(
         ForeignKey("item_subcategories.id", ondelete="SET NULL"), nullable=True, index=True
     )
     unit_id: Mapped[int] = mapped_column(
-        ForeignKey("item_units.id", ondelete="RESTRICT"), nullable=False, index=True
+        ForeignKey("item_units.id", ondelete="RESTRICT"), nullable=False
     )
     default_warehouse_id: Mapped[int | None] = mapped_column(
         ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True
@@ -147,7 +158,7 @@ class Item(Base):
     default_valuation_method: Mapped[str | None] = mapped_column(String(8), nullable=True)
     reorder_level: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     # Sprint I1 planning fields (nullable / defaulted — additive)
-    auto_reorder_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    auto_reorder_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
     reorder_qty: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     safety_stock: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     lead_time_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -176,7 +187,7 @@ class Currency(Base):
     __tablename__ = "currencies"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    code: Mapped[str] = mapped_column(String(10), nullable=False, unique=True)
+    code: Mapped[str] = mapped_column(String(10), nullable=False, unique=True, index=True)
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -196,6 +207,9 @@ class CurrencyExchangeRate(Base):
     PrimeX parity: currency_exchange_rates table for multi-currency and settings.
     """
     __tablename__ = "currency_exchange_rates"
+    __table_args__ = (
+        Index("ix_currency_exchange_rates_from_to", "tenant_id", "from_currency", "to_currency"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -231,10 +245,10 @@ class QuotationMaterial(Base):
     )
     serial_no: Mapped[int] = mapped_column(Integer, nullable=False)
     category_id: Mapped[int | None] = mapped_column(
-        ForeignKey("item_categories.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("item_categories.id", ondelete="SET NULL"), nullable=True
     )
     item_id: Mapped[int | None] = mapped_column(
-        ForeignKey("items.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("items.id", ondelete="SET NULL"), nullable=True
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     unit: Mapped[str | None] = mapped_column(String(20), nullable=True)

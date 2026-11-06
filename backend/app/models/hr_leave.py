@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -11,6 +11,9 @@ from app.database import Base
 
 class LeaveType(Base):
     __tablename__ = "hr_leave_types"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_hr_leave_types_tenant_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -47,6 +50,15 @@ class LeavePolicy(Base):
 
 class LeaveBalance(Base):
     __tablename__ = "hr_leave_balances"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "employee_id",
+            "leave_type_id",
+            "balance_year",
+            name="uq_hr_leave_balances_emp_type_year",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -79,8 +91,8 @@ class LeaveRequest(Base):
     days_requested: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="DRAFT", index=True)
-    requested_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
-    approved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    requested_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    approved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     approval_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
@@ -98,6 +110,6 @@ class LeaveApproval(Base):
         ForeignKey("hr_leave_requests.id", ondelete="CASCADE"), nullable=False, index=True
     )
     action: Mapped[str] = mapped_column(String(24), nullable=False, index=True)
-    action_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
+    action_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)

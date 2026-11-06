@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -43,13 +43,16 @@ class TaxLedger(Base):
 
 class VoucherTaxLine(Base):
     __tablename__ = "voucher_tax_lines"
+    __table_args__ = (
+        Index("ix_voucher_tax_lines_tenant_voucher", "tenant_id", "voucher_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     voucher_id: Mapped[int] = mapped_column(ForeignKey("vouchers.id", ondelete="CASCADE"), nullable=False, index=True)
     voucher_line_id: Mapped[int | None] = mapped_column(
         ForeignKey("voucher_lines.id", ondelete="SET NULL"), nullable=True
-    )
+    , index=True)
     tax_ledger_id: Mapped[int] = mapped_column(
         ForeignKey("tax_ledgers.id", ondelete="RESTRICT"), nullable=False, index=True
     )

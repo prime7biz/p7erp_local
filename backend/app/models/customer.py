@@ -1,11 +1,21 @@
 from datetime import datetime
-from sqlalchemy import String, Text, DateTime, ForeignKey
+from sqlalchemy import String, Text, DateTime, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 
 class Customer(Base):
     __tablename__ = "customers"
+    __table_args__ = (
+        Index(
+            "ix_customers_customer_code_trgm",
+            "customer_code",
+            postgresql_using="gin",
+            postgresql_ops={"customer_code": "gin_trgm_ops"},
+        ),
+        Index("ix_customers_name_trgm", "name", postgresql_using="gin", postgresql_ops={"name": "gin_trgm_ops"}),
+        UniqueConstraint("tenant_id", "customer_code", name="uq_customers_tenant_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(

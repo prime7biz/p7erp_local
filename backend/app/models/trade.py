@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
@@ -11,6 +12,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     Text,
 )
@@ -52,11 +54,11 @@ class TradeCase(Base):
 
     etd: Mapped[date | None] = mapped_column(Date, nullable=True)
     eta: Mapped[date | None] = mapped_column(Date, nullable=True)
-    amount: Mapped[float | None] = mapped_column(nullable=True)
+    amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
     currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    cost_amount: Mapped[float | None] = mapped_column(nullable=True)
-    margin_amount: Mapped[float | None] = mapped_column(nullable=True)
-    margin_pct: Mapped[float | None] = mapped_column(nullable=True)
+    cost_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    margin_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    margin_pct: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     base_currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
     base_currency_margin: Mapped[float | None] = mapped_column(nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

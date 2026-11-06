@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 from datetime import date, datetime
+from decimal import Decimal
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -8,6 +11,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.business_date import today_local
+from app.common.money import safe_decimal
 from app.common.orm_numeric import decimal_to_money_response
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
@@ -19,6 +24,7 @@ from app.common.permissions import (
 from app.common.tenant import require_tenant
 from app.database import get_db, safe_async_session_rollback
 from app.models import (
+    AuditLog,
     Employee,
     LeaveApproval,
     LeaveBalance,
@@ -42,6 +48,7 @@ from app.modules.hr_leave.schemas import (
     LeaveTypeOut,
     LeaveTypeUpdate,
 )
+from app.modules.hr_leave.leave_days import validate_leave_request
 
 router = APIRouter(prefix="/hr/leave", tags=["hr-leave"])
 
@@ -72,11 +79,6 @@ async def _require_self_or_leave_manage(db: AsyncSession, user: User, tenant_id:
     await assert_hr_manager_or_permission(db, user, tenant_id, permission_key=PERMISSION_HR_ATTENDANCE_MANAGE)
 
 
-def _validate_leave_dates(from_date: date, to_date: date) -> None:
-    if to_date < from_date:
-        raise HTTPException(status_code=400, detail="to_date must be on or after from_date")
-
-
 async def _leave_type_or_404(db: AsyncSession, tenant_id: int, leave_type_id: int) -> LeaveType:
     row = await db.get(LeaveType, leave_type_id)
     if not row or row.tenant_id != tenant_id:
@@ -93,6 +95,44 @@ def _to_float(value: str | None) -> float:
 
 def _fmt(value: float) -> str:
     return f"{value:.2f}"
+
+
+def _days(value: Any) -> Decimal:
+    return safe_decimal(value, default=Decimal("0"))
+
+
+# audit_logs.action for carry-forward; resource "leave_balance:<target balance id>" marks it as done.
+CARRY_FORWARD_AUDIT_ACTION = "LEAVE_CARRY_FORWARD"
+
+
+def _carry_forward_cap(
+    policies: list[LeavePolicy],
+    *,
+    leave_type_id: int,
+    employment_type: str | None,
+    year_end: date,
+) -> Decimal | None:
+    """``max_carry_forward_days`` from the best matching leave policy; None when the type has no policy.
+
+    Prefers a policy for the employee's employment type over a general one, and a policy in force
+    on the last day of the year being closed over other dates.
+    """
+    emp_type = (employment_type or "").strip().lower()
+    matching = [
+        p
+        for p in policies
+        if p.leave_type_id == leave_type_id
+        and (not p.employment_type or p.employment_type.strip().lower() == emp_type)
+    ]
+    if not matching:
+        return None
+
+    def rank(p: LeavePolicy) -> tuple[int, int, date]:
+        in_force = p.effective_from <= year_end and (p.effective_to is None or p.effective_to >= year_end)
+        return (1 if in_force else 0, 1 if p.employment_type else 0, p.effective_from)
+
+    best = max(matching, key=rank)
+    return max(_days(best.max_carry_forward_days), Decimal("0"))
 
 
 async def _get_or_create_balance(
@@ -463,8 +503,15 @@ async def create_leave_request(
     _ensure_tenant(user, tenant)
     employee = await _employee_or_404(db, tenant.id, body.employee_id)
     await _require_self_or_leave_manage(db, user, tenant.id, employee)
-    _validate_leave_dates(body.from_date, body.to_date)
     leave_type = await _leave_type_or_404(db, tenant.id, body.leave_type_id)
+    days_requested = await validate_leave_request(
+        db,
+        tenant=tenant,
+        employee_id=employee.id,
+        from_date=body.from_date,
+        to_date=body.to_date,
+        requested_days=body.days_requested,
+    )
     initial_status = "PENDING" if leave_type.requires_approval else "APPROVED"
     row = LeaveRequest(
         tenant_id=tenant.id,
@@ -472,7 +519,7 @@ async def create_leave_request(
         leave_type_id=body.leave_type_id,
         from_date=body.from_date,
         to_date=body.to_date,
-        days_requested=body.days_requested,
+        days_requested=days_requested,
         reason=body.reason.strip() if body.reason else None,
         status=initial_status,
         requested_by=user.id,
@@ -519,7 +566,15 @@ async def update_leave_request(
     for key in ("from_date", "to_date"):
         if key in payload and payload[key] is None:
             raise HTTPException(status_code=400, detail=f"{key} cannot be empty")
-    _validate_leave_dates(payload.get("from_date", row.from_date), payload.get("to_date", row.to_date))
+    payload["days_requested"] = await validate_leave_request(
+        db,
+        tenant=tenant,
+        employee_id=row.employee_id,
+        from_date=payload.get("from_date", row.from_date),
+        to_date=payload.get("to_date", row.to_date),
+        requested_days=payload.get("days_requested", row.days_requested),
+        exclude_request_id=row.id,
+    )
     old_days = _to_float(row.days_requested)
     for key, value in payload.items():
         setattr(row, key, value)
@@ -546,6 +601,16 @@ async def submit_leave_request(
     if row.status not in {"DRAFT", "PENDING"}:
         raise HTTPException(status_code=400, detail="Only draft/pending requests can be submitted")
     if row.status == "DRAFT":
+        # Drafts do not block each other, so check the dates again before reserving the days.
+        row.days_requested = await validate_leave_request(
+            db,
+            tenant=tenant,
+            employee_id=row.employee_id,
+            from_date=row.from_date,
+            to_date=row.to_date,
+            requested_days=row.days_requested,
+            exclude_request_id=row.id,
+        )
         lt = await _leave_type_or_404(db, tenant.id, row.leave_type_id)
         await _adjust_leave_balance(
             db, row, pending_delta=_to_float(row.days_requested), validate=True, is_paid=lt.is_paid
@@ -628,52 +693,126 @@ async def carry_forward_balances(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Roll prior-year closing balances into the next year (simplified)."""
+    """Roll prior-year closing balances into the next year.
+
+    Safe to run more than once: each (employee, leave type, target year) is carried only once
+    (an audit-log row marks it). Carried days are capped by the leave policy's
+    ``max_carry_forward_days``; leave types without any policy keep the old uncapped behaviour.
+    """
     _ensure_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
-    from_year = int(body.get("from_year", datetime.utcnow().year - 1))
-    to_year = int(body.get("to_year", datetime.utcnow().year))
+    this_year = today_local(tenant).year
+    try:
+        from_year = int(body.get("from_year", this_year - 1))
+        to_year = int(body.get("to_year", this_year))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="from_year and to_year must be whole years")
+    if to_year <= from_year:
+        raise HTTPException(status_code=400, detail="to_year must be after from_year")
+
     rows = (
         await db.execute(
-            select(LeaveBalance).where(LeaveBalance.tenant_id == tenant.id, LeaveBalance.balance_year == from_year)
+            select(LeaveBalance)
+            .where(LeaveBalance.tenant_id == tenant.id, LeaveBalance.balance_year == from_year)
+            .order_by(LeaveBalance.id)
         )
     ).scalars().all()
-    n = 0
-    for bal in rows:
-        existing = (
-            await db.execute(
-                select(LeaveBalance).where(
-                    LeaveBalance.tenant_id == tenant.id,
-                    LeaveBalance.employee_id == bal.employee_id,
-                    LeaveBalance.leave_type_id == bal.leave_type_id,
-                    LeaveBalance.balance_year == to_year,
+    policies = (
+        await db.execute(
+            select(LeavePolicy).where(LeavePolicy.tenant_id == tenant.id, LeavePolicy.is_active.is_(True))
+        )
+    ).scalars().all()
+    employee_ids = {bal.employee_id for bal in rows}
+    employment_types: dict[int, str | None] = {}
+    if employee_ids:
+        employment_types = dict(
+            (
+                await db.execute(
+                    select(Employee.id, Employee.employment_type).where(
+                        Employee.tenant_id == tenant.id, Employee.id.in_(employee_ids)
+                    )
                 )
+            ).all()
+        )
+
+    processed = carried = skipped = capped = 0
+    total_carried = Decimal("0")
+    try:
+        for bal in rows:
+            processed += 1
+            target = await _get_or_create_balance(db, tenant.id, bal.employee_id, bal.leave_type_id, to_year)
+            # Row lock: a second carry-forward started at the same time waits here, then sees the marker.
+            target = (
+                await db.execute(
+                    select(LeaveBalance)
+                    .where(LeaveBalance.id == target.id)
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
+                )
+            ).scalar_one()
+            marker = f"leave_balance:{target.id}"
+            already = (
+                await db.execute(
+                    select(AuditLog.id)
+                    .where(
+                        AuditLog.tenant_id == tenant.id,
+                        AuditLog.action == CARRY_FORWARD_AUDIT_ACTION,
+                        AuditLog.resource == marker,
+                    )
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if already is not None:
+                skipped += 1
+                continue
+
+            carry = max(_days(bal.closing_balance_days), Decimal("0"))
+            cap = _carry_forward_cap(
+                policies,
+                leave_type_id=bal.leave_type_id,
+                employment_type=employment_types.get(bal.employee_id),
+                year_end=date(from_year, 12, 31),
             )
-        ).scalar_one_or_none()
-        carry = max(_to_float(bal.closing_balance_days), 0.0)
-        if existing:
-            existing.allocated_days = _fmt(_to_float(existing.allocated_days) + carry)
-            existing.closing_balance_days = _fmt(
-                _to_float(existing.allocated_days)
-                - _to_float(existing.used_days)
-                - _to_float(existing.pending_days)
-            )
-        else:
+            if cap is not None and carry > cap:
+                carry = cap
+                capped += 1
+            allocated = _days(target.allocated_days) + carry
+            target.allocated_days = allocated
+            target.closing_balance_days = allocated - _days(target.used_days) - _days(target.pending_days)
             db.add(
-                LeaveBalance(
+                AuditLog(
                     tenant_id=tenant.id,
-                    employee_id=bal.employee_id,
-                    leave_type_id=bal.leave_type_id,
-                    balance_year=to_year,
-                    allocated_days=_fmt(carry),
-                    used_days="0",
-                    pending_days="0",
-                    closing_balance_days=_fmt(carry),
+                    user_id=user.id,
+                    action=CARRY_FORWARD_AUDIT_ACTION,
+                    resource=marker,
+                    details=json.dumps(
+                        {
+                            "employee_id": bal.employee_id,
+                            "leave_type_id": bal.leave_type_id,
+                            "from_year": from_year,
+                            "to_year": to_year,
+                            "carried_days": str(carry),
+                            "cap_days": str(cap) if cap is not None else None,
+                        }
+                    ),
                 )
             )
-        n += 1
-    await db.commit()
-    return {"ok": True, "rows_processed": n, "from_year": from_year, "to_year": to_year}
+            carried += 1
+            total_carried += carry
+        await db.commit()
+    except IntegrityError:
+        await safe_async_session_rollback(db)
+        raise HTTPException(status_code=409, detail="Carry-forward is already running; please try again")
+    return {
+        "ok": True,
+        "rows_processed": processed,
+        "from_year": from_year,
+        "to_year": to_year,
+        "carried": carried,
+        "skipped_already_carried": skipped,
+        "capped": capped,
+        "total_days_carried": decimal_to_money_response(total_carried),
+    }
 
 
 @router.post("/encashment")

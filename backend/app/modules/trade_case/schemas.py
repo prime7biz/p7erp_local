@@ -123,6 +123,11 @@ class TradeCaseMarginResponse(BaseModel):
     currency: str | None = None
     base_currency: str | None = None
     base_currency_margin: float | None = None
+    # `amount` is in the case currency; cost and margin are in `margin_currency` (base currency).
+    amount_base: float | None = None
+    fx_rate_to_base: float | None = None
+    margin_currency: str | None = None
+    margin_note: str | None = None
 
 
 class TradeCaseDashboardResponse(BaseModel):

@@ -16,6 +16,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.business_date import today_local
 from app.common.auth import get_current_user
 from app.common.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from app.common.tenant import require_tenant
@@ -42,7 +43,7 @@ async def exceptions_summary(
 ):
     """Counts per check. A failing check reports `null` instead of breaking the whole summary."""
     _ensure_tenant(user, tenant)
-    as_of = as_of_date or date.today()
+    as_of = as_of_date or today_local()
     counts: dict[str, int | None] = {}
 
     async def run(key: str, coro):
@@ -109,7 +110,7 @@ async def negative_cash_bank(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    as_of = as_of_date or date.today()
+    as_of = as_of_date or today_local()
     rows = await svc.negative_cash_bank(db, tenant.id, as_of=as_of)
     return {"as_of_date": as_of.isoformat(), "rows": rows, "total": len(rows)}
 
@@ -135,6 +136,6 @@ async def overdue_bills(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    as_of = as_of_date or date.today()
+    as_of = as_of_date or today_local()
     rows = await svc.overdue_bills(db, tenant.id, as_of=as_of, limit=limit)
     return {"as_of_date": as_of.isoformat(), "rows": rows, "total": len(rows)}

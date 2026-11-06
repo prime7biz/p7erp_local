@@ -10,6 +10,9 @@ from app.database import Base
 
 class ManufacturingWorkCenter(Base):
     __tablename__ = "mfg_work_centers"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_mfg_work_centers_tenant_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -23,6 +26,9 @@ class ManufacturingWorkCenter(Base):
 
 class ManufacturingOperation(Base):
     __tablename__ = "mfg_operations"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_mfg_operations_tenant_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -43,6 +49,9 @@ class ManufacturingOperation(Base):
 
 class ManufacturingRoutingTemplate(Base):
     __tablename__ = "mfg_routing_templates"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "routing_code", "version_no", name="uq_mfg_routing_tenant_code_version"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -57,6 +66,9 @@ class ManufacturingRoutingTemplate(Base):
 
 class ManufacturingRoutingStep(Base):
     __tablename__ = "mfg_routing_steps"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "routing_id", "step_no", name="uq_mfg_routing_steps_tenant_routing_step"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -72,6 +84,9 @@ class ManufacturingRoutingStep(Base):
 
 class ManufacturingProductionPlan(Base):
     __tablename__ = "mfg_production_plans"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "plan_code", name="uq_mfg_plans_tenant_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -106,7 +121,10 @@ class ManufacturingProductionPlanLine(Base):
 
 class ManufacturingWorkOrder(Base):
     __tablename__ = "mfg_work_orders"
-    __table_args__ = (UniqueConstraint("tenant_id", "mo_number", name="uq_mfg_work_orders_tenant_mo_number"),)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "mo_number", name="uq_mfg_work_orders_tenant_mo_number"),
+        UniqueConstraint("tenant_id", "mo_number", name="uq_mfg_work_orders_tenant_mo"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -133,6 +151,9 @@ class ManufacturingWorkOrder(Base):
 
 class ManufacturingWorkOrderOperation(Base):
     __tablename__ = "mfg_work_order_operations"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "work_order_id", "step_no", name="uq_mfg_wo_ops_tenant_wo_step"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -230,6 +251,9 @@ class ManufacturingCostSnapshot(Base):
 
 class ManufacturingMrpRun(Base):
     __tablename__ = "mfg_mrp_runs"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "run_code", name="uq_mfg_mrp_runs_tenant_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -253,7 +277,7 @@ class ManufacturingMrpRecommendation(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     run_id: Mapped[int] = mapped_column(ForeignKey("mfg_mrp_runs.id", ondelete="CASCADE"), nullable=False, index=True)
     item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
-    recommendation_type: Mapped[str] = mapped_column(String(32), nullable=False, default="manufacture")
+    recommendation_type: Mapped[str] = mapped_column(String(32), nullable=False, default="manufacture", index=True)
     suggested_qty: Mapped[float] = mapped_column(Numeric(18, 3), nullable=False, default=0)
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -289,7 +313,7 @@ class ManufacturingDowntimeEvent(Base):
         index=True,
     )
     order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
-    reason_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     reason_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -300,6 +324,9 @@ class ManufacturingDowntimeEvent(Base):
 
 class ManufacturingNcr(Base):
     __tablename__ = "mfg_ncrs"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "ncr_code", name="uq_mfg_ncrs_tenant_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -315,7 +342,7 @@ class ManufacturingNcr(Base):
     severity: Mapped[str] = mapped_column(String(16), nullable=False, default="minor")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="open", index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -340,6 +367,9 @@ class ManufacturingCapa(Base):
 
 class ManufacturingSampleRequest(Base):
     __tablename__ = "mfg_sample_requests"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "sample_no", name="uq_mfg_sample_requests_tenant_sample_no"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -351,15 +381,18 @@ class ManufacturingSampleRequest(Base):
     requested_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     target_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft", index=True)
-    assigned_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    assigned_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class ManufacturingTnaTemplate(Base):
     __tablename__ = "mfg_tna_templates"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "template_code", "version_no", name="uq_mfg_tna_templates_tenant_code_ver"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -375,6 +408,9 @@ class ManufacturingTnaTemplate(Base):
 
 class ManufacturingTnaTemplateTask(Base):
     __tablename__ = "mfg_tna_template_tasks"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "template_id", "seq_no", name="uq_mfg_tna_template_tasks_tenant_tpl_seq"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -394,6 +430,9 @@ class ManufacturingTnaTemplateTask(Base):
 
 class ManufacturingTnaPlan(Base):
     __tablename__ = "mfg_tna_plans"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "plan_code", name="uq_mfg_tna_plans_tenant_plan_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -404,13 +443,16 @@ class ManufacturingTnaPlan(Base):
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     target_end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active", index=True)
-    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class ManufacturingTnaPlanTask(Base):
     __tablename__ = "mfg_tna_plan_tasks"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "plan_id", "seq_no", name="uq_mfg_tna_plan_tasks_tenant_plan_seq"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)

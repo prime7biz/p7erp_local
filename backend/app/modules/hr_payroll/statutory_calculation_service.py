@@ -79,17 +79,25 @@ def calculate_esi(
 
 
 def calculate_pt(gross_salary: Decimal, slabs: list[dict[str, Any]] | None = None) -> Decimal:
+    """Professional tax for one month's gross.
+
+    Slabs are read as contiguous by their upper limits: a slab covers everything above the previous
+    slab's "to" up to its own "to", so whole-number configs like 0-7500 / 7501-10000 put 7500.50 in
+    the 7501-10000 slab. Above the last slab's "to" there is no PT.
+    """
     gross = _money(_d(gross_salary))
     use_slabs = slabs if isinstance(slabs, list) and slabs else DEFAULT_MH_PT_SLABS
+    parsed: list[tuple[Decimal, Decimal | None, Decimal]] = []
     for slab in use_slabs:
         low = _d(slab.get("from") or slab.get("min") or 0)
         high_raw = slab.get("to") if "to" in slab else slab.get("max")
         high = _d(high_raw) if high_raw is not None else None
-        amt = _money(_d(slab.get("amount") or 0))
-        if high is None:
-            if gross >= low:
-                return amt
-        elif low <= gross <= high:
+        parsed.append((low, high, _money(_d(slab.get("amount") or 0))))
+    parsed.sort(key=lambda s: s[0])
+    if not parsed or gross < parsed[0][0]:
+        return ZERO
+    for _low, high, amt in parsed:
+        if high is None or gross <= high:
             return amt
     return ZERO
 

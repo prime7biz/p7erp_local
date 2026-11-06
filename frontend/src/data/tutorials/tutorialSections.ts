@@ -1602,12 +1602,21 @@ For piece rate, the **operator code** typed or scanned at the Scan station must 
 - **Payroll Approvals** — \`/app/hr/payroll/approvals\` lists **FINALIZED** runs waiting for a manager; use **Actions → Approve** or **Reject** (with a reason). Posted runs cannot be approved or rejected again.
 - **Payslips** — managers see everyone's payslips; other staff see only their own (their user must be linked to an employee record). Downloads are PDF files.
 - **Late** attendance counts as a worked day for salary; late penalties are calculated separately.
+- **Loss of pay** (flag \`payroll_lop_enabled\`, on unless set to false): auto-calculate pays **Fixed amount** and **% of base salary** components only for **payable days** — the days the person was employed in the period (joining / exit date) minus **Absent** days not covered by approved leave and minus approved **unpaid** leave days. People who left during the period are included for the days they worked. The preview shows LOP days and the amount deducted. A run that was already auto-calculated before this switched on keeps its old numbers.
+- **Manual run lines** — gross, deductions and net must be valid amounts, not negative, and **net = gross − deductions** (0.01 rounding allowed). Leave net empty and it is calculated for you.
 
 **Leave balances** — submitting a request reserves the days immediately (pending); approval moves them to used, rejection releases them. When an allocation is set for the leave type, requests beyond the remaining balance are blocked.
 
+**Leave days are counted for you** (HR leave and **My Leave** in ESS):
+
+- Every date from **From** to **To** counts, except **weekend** days and **holidays** from **Time & Attendance → Holidays** (optional holidays still count). The weekend is **Friday** unless your administrator has set a different HR weekend for the company (the production planning calendar does not change leave days).
+- A single working day can be a **half day** (0.5). The number typed in "days" is otherwise ignored.
+- Refused with a message: **To** before **From**; dates that are all weekends / holidays; dates that **overlap** your own pending or approved leave; leave that **crosses the year end** — apply separately for each year.
+- **Carry forward** to the next year can be run more than once safely: each balance is carried only once, and never more than the leave policy's **max carry forward days**.
+
 **Sprint H1 compliance** (flags default off): enable \`compliance_tracking_enabled\`, \`age_verification_required\`, and \`medical_certificate_tracking_enabled\` on the tenant, then activate BSCI/WRAP/SEDEX templates on the Compliance page. See \`docs/HR_COMPLIANCE_H1.md\`.`,
         tags: ["HR", "payroll", "attendance", "leave", "compliance", "Bangla", "বাংলা", "language"],
-        lastUpdated: "2026-11-05",
+        lastUpdated: "2026-11-06",
         coverImage: "/images/hero-bg.svg",
         infographics: [
           {
@@ -1671,6 +1680,14 @@ Every figure can be traced to its source voucher:
 
 **Financial year (no year-end closing):** set **Settings → Configuration → Finance & costing → Financial year starts in** (e.g. **July** for the Bangladesh July–June year). Trial Balance and Financial Statements then show income and expense for **this financial year** only, and earlier years' profit appears as **Profit & Loss brought forward** — you do not post a closing entry. Use the **This financial year / Since start** switch on those reports to see all years together. New voucher numbers use the financial year (e.g. \`VCH-2026-…\` from 1 July 2026). Change the start month only at a year boundary.
 
+**Editing a draft voucher's date:** if the new date falls in a different financial year, the voucher gets a new number from that year's series (the voucher's history shows the old and new number). Moving the date inside the same year keeps the number.
+
+**Budget vs actual** (\`/app/accounts/budgets\`): the actual column only counts posted vouchers dated inside the budget's financial year (for example 1 July 2025 – 30 June 2026 for a "2025-26" budget), in your base currency, so foreign-currency vouchers are converted at their voucher rate.
+
+**Bank reconciliation** (\`/app/banking/reconciliation\`): the book balance is the bank ledger's balance on the statement date (opening balance plus posted vouchers up to that date). **Payment runs** can only be executed for a bank account linked to a ledger account, because bills are marked paid only together with the posted payment voucher.
+
+**Recurring vouchers** (\`/app/finance/recurring-vouchers\`): due dates always count from the start date (a schedule starting 31 January runs 28 February, 31 March, 30 April …). **Generate now** creates the next scheduled voucher early, dated on its scheduled date, and does not move the schedule; a period that already has a voucher is skipped.
+
 **Excel:** these four reports have **Export Excel** (numbers stay numbers) next to **Export CSV**. **Chart of Accounts → Import** and **Settings → Data import** accept **.xlsx** files as well as CSV (the first sheet is read, with the same column headings as the CSV sample).
 
 ## Exception reports (fix before month-end)
@@ -1685,7 +1702,7 @@ Every figure can be traced to its source voucher:
 
 Click a card to see its list. A count of **0** everywhere means your books are clean.`,
         tags: ["finance", "vouchers", "accounts", "banking", "drill-down"],
-        lastUpdated: "2026-11-04",
+        lastUpdated: "2026-11-06",
         infographics: [
           {
             type: "flow",
@@ -1697,7 +1714,15 @@ Click a card to see its list. A count of **0** everywhere means your books are c
             ],
           },
         ],
-        relatedAppRoutes: ["/app/accounts", "/app/accounts/vouchers", "/app/accounts/vendor-bills", "/app/banking/accounts"],
+        relatedAppRoutes: [
+          "/app/accounts",
+          "/app/accounts/vouchers",
+          "/app/accounts/vendor-bills",
+          "/app/banking/accounts",
+          "/app/accounts/budgets",
+          "/app/banking/reconciliation",
+          "/app/finance/recurring-vouchers",
+        ],
         relatedArticleIds: [
           "wf-approvals",
           "fin-voucher-entry",

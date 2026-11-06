@@ -2,7 +2,22 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Computed,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 from pgvector.sqlalchemy import Vector
 
@@ -25,7 +40,7 @@ class AiSession(Base):
     model_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     context_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
@@ -33,12 +48,14 @@ class AiMessage(Base):
     __tablename__ = "ai_messages"
     __table_args__ = (
         UniqueConstraint("tenant_id", "session_id", "message_index", name="uq_ai_messages_tenant_session_index"),
+        Index("ix_ai_messages_session_created_at", "session_id", "created_at"),
+        Index("ix_ai_messages_tenant_created_at", "tenant_id", "created_at"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     session_id: Mapped[int] = mapped_column(ForeignKey("ai_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
-    sender_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    sender_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     message_index: Mapped[int] = mapped_column(Integer, nullable=False)
     role: Mapped[str] = mapped_column(String(24), nullable=False, index=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -53,6 +70,7 @@ class AiToolInvocation(Base):
     __tablename__ = "ai_tool_invocations"
     __table_args__ = (
         UniqueConstraint("tenant_id", "invocation_code", name="uq_ai_tool_invocations_tenant_invocation_code"),
+        Index("ix_ai_tool_invocations_tenant_started_at", "tenant_id", "started_at"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -73,14 +91,17 @@ class AiToolInvocation(Base):
 
 class AiAuditLog(Base):
     __tablename__ = "ai_audit_logs"
+    __table_args__ = (
+        Index("ix_ai_audit_logs_tenant_created_at", "tenant_id", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     session_id: Mapped[int | None] = mapped_column(ForeignKey("ai_sessions.id", ondelete="SET NULL"), nullable=True, index=True)
-    message_id: Mapped[int | None] = mapped_column(ForeignKey("ai_messages.id", ondelete="SET NULL"), nullable=True, index=True)
+    message_id: Mapped[int | None] = mapped_column(ForeignKey("ai_messages.id", ondelete="SET NULL"), nullable=True)
     tool_invocation_id: Mapped[int | None] = mapped_column(
-        ForeignKey("ai_tool_invocations.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("ai_tool_invocations.id", ondelete="SET NULL"), nullable=True
     )
     request_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     action: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
@@ -114,7 +135,7 @@ class AiSavedPrompt(Base):
     key: Mapped[str] = mapped_column(String(64), nullable=False)
     label: Mapped[str] = mapped_column(String(128), nullable=False)
     prompt_text: Mapped[str] = mapped_column(Text, nullable=False)
-    is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
+    is_active: Mapped[bool] = mapped_column(default=True, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -246,6 +267,20 @@ class AiEmbeddingChunk(Base):
             "chunk_index",
             name="uq_ai_embedding_chunks_tenant_source_chunk",
         ),
+        Index(
+            "ix_ai_embedding_chunks_embedding",
+            "embedding",
+            postgresql_using="ivfflat",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+            postgresql_with={"lists": 100},
+        ),
+        Index("ix_ai_embedding_chunks_search_tsv", "search_tsv", postgresql_using="gin"),
+        Index(
+            "ix_ai_embedding_chunks_tenant_module_active",
+            "tenant_id",
+            "source_module",
+            postgresql_where=text("is_stale = false"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -255,6 +290,13 @@ class AiEmbeddingChunk(Base):
     source_module: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     content_text: Mapped[str] = mapped_column(Text, nullable=False)
+    # Filled by PostgreSQL (GENERATED ALWAYS ... STORED); never set it from Python.
+    search_tsv: Mapped[str | None] = mapped_column(
+        TSVECTOR,
+        Computed("to_tsvector('english'::regconfig, COALESCE(content_text, ''::text))", persisted=True),
+        nullable=True,
+        deferred=True,
+    )
     heading: Mapped[str | None] = mapped_column(String(255), nullable=True)
     embedding: Mapped[list] = mapped_column(Vector(384), nullable=False)
     document_type: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
@@ -299,6 +341,7 @@ class AiActionRun(Base):
     __tablename__ = "ai_action_runs"
     __table_args__ = (
         UniqueConstraint("tenant_id", "request_id", name="uq_ai_action_runs_tenant_request_id"),
+        Index("ix_ai_action_runs_tenant_created_at", "tenant_id", "created_at"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -334,11 +377,11 @@ class AiSystemTask(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     session_id: Mapped[int | None] = mapped_column(ForeignKey("ai_sessions.id", ondelete="SET NULL"), nullable=True)
-    task_code: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    task_code: Mapped[str] = mapped_column(String(64), nullable=False)
     task_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    task_category: Mapped[str] = mapped_column(String(24), nullable=False, default="informational", index=True)
+    task_category: Mapped[str] = mapped_column(String(24), nullable=False, default="informational")
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="created", index=True)
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
     execution_conditions: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -385,12 +428,12 @@ class AiApprovalArtifact(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     session_id: Mapped[int | None] = mapped_column(ForeignKey("ai_sessions.id", ondelete="SET NULL"), nullable=True)
-    artifact_code: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    artifact_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    artifact_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    artifact_type: Mapped[str] = mapped_column(String(64), nullable=False)
     source_tool: Mapped[str] = mapped_column(String(128), nullable=False)
-    source_module: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    source_module: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="created", index=True)
     original_input_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     generated_payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -401,7 +444,7 @@ class AiApprovalArtifact(Base):
     reviewer_comments: Mapped[str | None] = mapped_column(Text, nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     committed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     rollback_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     rolled_back_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     rolled_back_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -413,12 +456,16 @@ class AiPermissionPolicy(Base):
     """Fine-grained AI tool access per tenant / role (Phase-2)."""
 
     __tablename__ = "ai_permission_policies"
+    __table_args__ = (
+        Index("ix_ai_permission_policies_module_tool", "tenant_id", "module", "tool_name"),
+        Index("ix_ai_permission_policies_tenant_role", "tenant_id", "role_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    role_id: Mapped[int | None] = mapped_column(ForeignKey("roles.id", ondelete="CASCADE"), nullable=True, index=True)
-    module: Mapped[str] = mapped_column(String(64), nullable=False, default="*", index=True)
-    tool_name: Mapped[str] = mapped_column(String(128), nullable=False, default="*", index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    role_id: Mapped[int | None] = mapped_column(ForeignKey("roles.id", ondelete="CASCADE"), nullable=True)
+    module: Mapped[str] = mapped_column(String(64), nullable=False, default="*")
+    tool_name: Mapped[str] = mapped_column(String(128), nullable=False, default="*")
     safety_class_allowed: Mapped[str] = mapped_column(String(24), nullable=False, default="*")
     action: Mapped[str] = mapped_column(String(16), nullable=False, default="allow")
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -431,10 +478,13 @@ class AiTaskPolicy(Base):
     """Whitelist, cooldowns, and limits for system task types (Phase-2)."""
 
     __tablename__ = "ai_task_policies"
+    __table_args__ = (
+        Index("ix_ai_task_policies_tenant_type", "tenant_id", "task_type"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int | None] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True)
-    task_type: Mapped[str] = mapped_column(String(64), nullable=False, default="*", index=True)
+    tenant_id: Mapped[int | None] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True)
+    task_type: Mapped[str] = mapped_column(String(64), nullable=False, default="*")
     is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     max_frequency_per_hour: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cooldown_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -450,11 +500,14 @@ class AiIngestionJob(Base):
     """Embedding / reindex job tracking (Phase-2)."""
 
     __tablename__ = "ai_ingestion_jobs"
+    __table_args__ = (
+        Index("ix_ai_ingestion_jobs_tenant_source_status", "tenant_id", "source_type", "status"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    source_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    status: Mapped[str] = mapped_column(String(24), nullable=False, default="queued", index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="queued")
     trigger: Mapped[str] = mapped_column(String(32), nullable=False, default="manual")
     source_checksum: Mapped[str | None] = mapped_column(String(64), nullable=True)
     previous_checksum: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -466,24 +519,28 @@ class AiIngestionJob(Base):
     max_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
 class AiFeedback(Base):
     """User ratings and corrections for AI quality (Phase-2)."""
 
     __tablename__ = "ai_feedback"
+    __table_args__ = (
+        Index("ix_ai_feedback_flagged", "flagged_for_review"),
+        Index("ix_ai_feedback_tenant_message", "tenant_id", "message_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     session_id: Mapped[int | None] = mapped_column(ForeignKey("ai_sessions.id", ondelete="SET NULL"), nullable=True)
-    message_id: Mapped[int | None] = mapped_column(ForeignKey("ai_messages.id", ondelete="SET NULL"), nullable=True, index=True)
-    trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    message_id: Mapped[int | None] = mapped_column(ForeignKey("ai_messages.id", ondelete="SET NULL"), nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     rating: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     correction_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    feedback_category: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    flagged_for_review: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    feedback_category: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    flagged_for_review: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     detected_intent: Mapped[str | None] = mapped_column(String(64), nullable=True)
     route_used: Mapped[str | None] = mapped_column(String(64), nullable=True)
     tools_used: Mapped[list | None] = mapped_column(JSON, nullable=True)
@@ -495,7 +552,7 @@ class AiFeedback(Base):
     )
     admin_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
 class AiWeeklyReport(Base):

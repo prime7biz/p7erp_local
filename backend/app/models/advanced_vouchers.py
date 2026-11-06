@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -42,6 +42,8 @@ class RecurringVoucherTemplate(Base):
     __tablename__ = "recurring_voucher_templates"
     __table_args__ = (
         UniqueConstraint("tenant_id", "name", name="uq_recurring_voucher_templates_tenant_name"),
+        Index("ix_recurring_voucher_templates_active", "is_active"),
+        Index("ix_recurring_voucher_templates_next_due", "next_due_date"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -54,11 +56,11 @@ class RecurringVoucherTemplate(Base):
     frequency: Mapped[str] = mapped_column(String(16), nullable=False)  # DAILY|WEEKLY|...
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    next_due_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    next_due_date: Mapped[date] = mapped_column(Date, nullable=False)
     last_generated_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     voucher_template: Mapped[Any] = mapped_column(JSONB, nullable=False)
     generate_as_status: Mapped[str] = mapped_column(String(16), nullable=False, default="DRAFT")
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

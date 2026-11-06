@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,11 +15,11 @@ class AiControlledActionProposal(Base):
     __tablename__ = "ai_controlled_action_proposals"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     rule_code: Mapped[str] = mapped_column(String(64), nullable=False)
     payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    status: Mapped[str] = mapped_column(String(24), nullable=False, default="proposed", index=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="proposed")
     approved_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     rejected_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -34,4 +34,6 @@ class AiControlledActionProposal(Base):
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "idempotency_key", name="uq_ai_cap_tenant_idempotency"),
+        Index("ix_ai_cap_status", "status"),
+        Index("ix_ai_cap_tenant_id", "tenant_id"),
     )

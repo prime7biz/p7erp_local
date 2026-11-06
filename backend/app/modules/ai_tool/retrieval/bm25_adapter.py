@@ -9,7 +9,8 @@ from datetime import date, datetime
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.ai_tool.retrieval.adapters import _parse_date
+from app.models import User
+from app.modules.ai_tool.retrieval.adapters import _parse_date, filter_chunk_rows_for_user
 from app.modules.ai_tool.retrieval.base import BaseRetrievalAdapter, RetrievalHit
 
 
@@ -37,10 +38,11 @@ class BM25EmbeddingChunksAdapter(BaseRetrievalAdapter):
     db: AsyncSession
     tenant_id: int
     domain: str
+    user: User | None
     filters: dict | None = None
 
     async def search(self, query: str, *, top_k: int = 5) -> list[RetrievalHit]:
-        if not (query or "").strip():
+        if self.user is None or not (query or "").strip():
             return []
         top_k = max(1, min(20, top_k))
         filt = self.filters or {}
@@ -52,7 +54,8 @@ class BM25EmbeddingChunksAdapter(BaseRetrievalAdapter):
         params: dict[str, object] = {
             "tid": self.tenant_id,
             "domain": (self.domain or "").strip(),
-            "lim": top_k * 10,
+            # Over-fetch so permission filtering below still leaves enough hits.
+            "lim": top_k * 25,
             "qplain": (query or "").strip()[:2000],
         }
         if filt.get("document_type"):
@@ -93,7 +96,7 @@ class BM25EmbeddingChunksAdapter(BaseRetrievalAdapter):
         sql = text(
             f"""
             SELECT c.id, c.source_type, c.source_ref, c.source_module, c.heading, c.content_text,
-                   c.indexed_at,
+                   c.indexed_at, c.permission_key, c.visibility,
                    ({rank_expr}) AS rnk
             FROM ai_embedding_chunks c
             WHERE {where_sql}
@@ -102,11 +105,14 @@ class BM25EmbeddingChunksAdapter(BaseRetrievalAdapter):
             LIMIT :lim
             """
         )
+        # The savepoint rolls back only this query on failure, keeping the caller's transaction usable.
         try:
-            result = await self.db.execute(sql, params)
-            raw_rows = result.mappings().all()
+            async with self.db.begin_nested():
+                result = await self.db.execute(sql, params)
+                raw_rows = result.mappings().all()
         except Exception:
             return []
+        raw_rows = await filter_chunk_rows_for_user(self.db, self.user, raw_rows)
 
         best_by_ref: dict[str, tuple[float, dict]] = {}
         for row in raw_rows:

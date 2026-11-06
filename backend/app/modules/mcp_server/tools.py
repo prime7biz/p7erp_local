@@ -262,6 +262,7 @@ async def execute_tool_call(
                     parameters=params,
                     include_semantic_context=bool(data.get("include_semantic_context")),
                     semantic_query=sem_q,
+                    user=user,
                 )
                 return {"status": "SUCCESS", "metric_type": mt, **out}
             except Exception as exc:

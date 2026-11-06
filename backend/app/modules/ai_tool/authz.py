@@ -4,12 +4,16 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.authz import get_user_role_scoped_to_tenant
+from app.common.permissions import HR_SETUP_BYPASS_ROLES
 from app.models import Tenant, User
 
 # AI permission matrix: use `app.modules.ai_tool.policy_eval.evaluate_ai_policy` /
 # `evaluate_ai_safety_for_user` (kept out of this module to avoid import cycles).
 
 _AI_ALLOWED_ROLES = {"admin", "manager", "owner", "super_admin", "superadmin", "analyst", "operator", "supervisor"}
+
+# Tool keys under these prefixes need an explicit grant (no fallback to ai.read / ai.chat).
+FAIL_CLOSED_TOOL_PREFIXES: tuple[str, ...] = ("ai.tools.finance.", "ai.tools.hr.", "ai.tools.payroll.")
 
 
 def ensure_tenant_access(user: User, tenant: Tenant) -> None:
@@ -48,14 +52,30 @@ async def can_use_ai_module(db: AsyncSession, user: User) -> bool:
     return _permission_truthy(permissions.get("ai.read")) or _permission_truthy(permissions.get("ai.chat"))
 
 
+def is_fail_closed_tool_key(permission_key: str) -> bool:
+    return any(permission_key.startswith(prefix) for prefix in FAIL_CLOSED_TOOL_PREFIXES)
+
+
+def _fail_closed_granted(permissions: dict, permission_key: str) -> bool:
+    if _permission_truthy(permissions.get(permission_key)):
+        return True
+    prefix = next(p for p in FAIL_CLOSED_TOOL_PREFIXES if permission_key.startswith(p))
+    for wildcard in (f"{prefix}*", "ai.*", "*"):
+        if permissions.get(wildcard) is True:
+            return True
+    return False
+
+
 async def has_tool_permission(db: AsyncSession, user: User, permission_key: str) -> bool:
     role = await get_user_role_scoped_to_tenant(db, user, user.tenant_id)
     if not role:
         return False
     role_name = (role.name or "").strip().lower()
-    if role_name in {"admin", "manager", "owner", "super_admin", "superadmin"}:
+    if role_name in HR_SETUP_BYPASS_ROLES:
         return True
-    permissions = role.permissions or {}
+    permissions = role.permissions if isinstance(role.permissions, dict) else {}
+    if is_fail_closed_tool_key(permission_key):
+        return _fail_closed_granted(permissions, permission_key)
     value = permissions.get(permission_key)
     if value is not None:
         return _permission_truthy(value)

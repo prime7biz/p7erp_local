@@ -1501,9 +1501,13 @@ async def process_prompt(
         start = perf_counter()
         try:
             settings = get_settings()
+            if tool.passes_user:
+                handler_call = tool.handler(db, tenant.id, prompt, user=user)
+            else:
+                handler_call = tool.handler(db, tenant.id, prompt)
             raw = await call_with_timeout(
                 settings.ai_timeout_chat_seconds,
-                tool.handler(db, tenant.id, prompt),
+                handler_call,
                 error_message=f"Tool {tool.name} timed out. Please retry.",
             )
             elapsed_ms = int((perf_counter() - start) * 1000)

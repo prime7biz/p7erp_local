@@ -673,18 +673,18 @@ async def _fifo_layer_qty_value_map(
     """Map (item_id, warehouse_id) -> (qty_remaining, value). Exhausted layers are skipped in SQL.
 
     ``pairs`` limits the scan to those (item_id, warehouse_id) keys (e.g. one report page).
+    With ``as_of_date`` the qty/value is what FIFO held on that date (not today's remaining qty).
     """
+    if as_of_date is not None:
+        return await stock_report_queries.fifo_qty_value_map_as_of(
+            db, tenant_id, as_of_date, list(pairs) if pairs is not None else None
+        )
     layer = InventoryCostLayer
     stmt = (
         select(layer.item_id, layer.warehouse_id, layer.qty_remaining, layer.unit_cost)
         .where(layer.tenant_id == tenant_id, layer.qty_remaining > 0)
         .order_by(layer.id)
     )
-    if as_of_date is not None:
-        stmt = stmt.where(
-            layer.layer_date.is_not(None),
-            layer.layer_date <= as_of_date,
-        )
     if pairs is not None:
         wanted = sorted({(int(i), int(w) if w is not None else -1) for i, w in pairs})
         if not wanted:
@@ -766,7 +766,7 @@ async def _positive_stock_lines_grouped(
     ``limit`` / ``offset`` page over the groups (all groups when ``limit`` is None).
     """
     balances = await stock_report_queries.load_stock_balance_lines(
-        db, tenant.id, tenant.feature_flags, positive_only=True
+        db, tenant.id, tenant.feature_flags, positive_only=True, as_of_date=as_of_date
     )
     by_key: dict[int | None, list[stock_report_queries.StockBalanceLine]] = defaultdict(list)
     for s in balances:
@@ -1575,11 +1575,17 @@ class StockValuationRow(BaseModel):
 
 
 class StockValuationOut(BaseModel):
-    """Valuation using FIFO layers (qty_remaining × unit_cost); falls back to default_cost if no layers."""
+    """Valuation using FIFO layers (qty_remaining × unit_cost); falls back to default_cost if no layers.
+
+    ``total_value`` covers every line (all pages); ``page_total_value`` only the returned ``rows``.
+    """
 
     method: str = "fifo"
     total_value: float
     rows: list[StockValuationRow]
+    page_total_value: float = 0.0
+    total_count: int = 0
+    as_of_date: date | None = None
 
 
 class StockDashboardOut(BaseModel):
@@ -3763,19 +3769,29 @@ async def stock_valuation(
 ):
     _ensure_tenant(user, tenant)
     page = await stock_report_queries.load_stock_balance_lines(
-        db, tenant.id, tenant.feature_flags, limit=limit, offset=offset
+        db, tenant.id, tenant.feature_flags, limit=limit, offset=offset, as_of_date=as_of_date
     )
     fifo_map = await _fifo_layer_qty_value_map(
         db, tenant.id, as_of_date, pairs=[(s.item_id, s.warehouse_id) for s in page]
     )
     out_rows: list[StockValuationRow] = []
-    total = 0.0
+    page_total = 0.0
     for s in page:
         line = _inventory_line_from_balance(s, fifo_map)
-        total += line.line_value
+        page_total += line.line_value
         out_rows.append(StockValuationRow(**line.model_dump()))
     out_rows.sort(key=lambda r: (r.item_code, r.warehouse_name or ""))
-    return StockValuationOut(method="fifo", total_value=round(total, 2), rows=out_rows)
+    total_value, total_count = await stock_report_queries.stock_valuation_totals(
+        db, tenant.id, tenant.feature_flags, as_of_date=as_of_date
+    )
+    return StockValuationOut(
+        method="fifo",
+        total_value=total_value,
+        rows=out_rows,
+        page_total_value=round(page_total, 2),
+        total_count=total_count,
+        as_of_date=as_of_date,
+    )
 
 
 @router.post("/fifo-rebuild")

@@ -21,7 +21,7 @@ from sqlalchemy.types import Numeric
 
 from app.common.tenant_feature_keys import is_stock_snapshot_reads_enabled
 from app.models.costing import Item
-from app.models.inventory import StockBalanceSnapshot, StockMovement, Warehouse
+from app.models.inventory import InventoryCostLayer, StockBalanceSnapshot, StockMovement, Warehouse
 from app.modules.inventory import stock_snapshot_service
 
 # Python sorts strings by code point; the "C" collation makes PostgreSQL sort the same way.
@@ -51,9 +51,17 @@ async def use_snapshot_balances(db: AsyncSession, tenant_id: int, feature_flags:
     return await stock_snapshot_service.snapshot_row_count(db, tenant_id) > 0
 
 
-def _balance_subquery(tenant_id: int, from_snapshot: bool) -> Subquery:
-    """Columns: item_id, warehouse_id, in_qty, out_qty, on_hand (all Numeric)."""
-    if from_snapshot:
+def _movement_effective_date():
+    """A movement's date for "as of" reports: movement_date, else the day it was created (same as the ledger)."""
+    return func.coalesce(StockMovement.movement_date, cast(StockMovement.created_at, SQLDate))
+
+
+def _balance_subquery(tenant_id: int, from_snapshot: bool, as_of_date: date | None = None) -> Subquery:
+    """Columns: item_id, warehouse_id, in_qty, out_qty, on_hand (all Numeric).
+
+    With ``as_of_date`` only movements on or before that date count (always from live movements).
+    """
+    if from_snapshot and as_of_date is None:
         snap = StockBalanceSnapshot
         return (
             select(
@@ -69,18 +77,131 @@ def _balance_subquery(tenant_id: int, from_snapshot: bool) -> Subquery:
     qty = cast(StockMovement.quantity, Numeric)
     in_qty = func.coalesce(func.sum(case((StockMovement.movement_type == "IN", qty), else_=0)), 0)
     out_qty = func.coalesce(func.sum(case((StockMovement.movement_type != "IN", qty), else_=0)), 0)
+    stmt = select(
+        StockMovement.item_id.label("item_id"),
+        StockMovement.warehouse_id.label("warehouse_id"),
+        in_qty.label("in_qty"),
+        out_qty.label("out_qty"),
+        (in_qty - out_qty).label("on_hand"),
+    ).where(StockMovement.tenant_id == tenant_id)
+    if as_of_date is not None:
+        stmt = stmt.where(_movement_effective_date() <= as_of_date)
+    return stmt.group_by(StockMovement.item_id, StockMovement.warehouse_id).subquery("stock_balance")
+
+
+def fifo_subquery(tenant_id: int, as_of_date: date | None) -> Subquery:
+    """FIFO quantity and value per (item, warehouse). Columns: item_id, wh_key (warehouse_id or -1),
+    fifo_qty, fifo_value.
+
+    Today (no date): what is left in the cost layers (``qty_remaining``).
+    As of a date: FIFO issues the oldest layers first, so the stock held on that date is the newest
+    layers received up to that date. Walk those layers newest-first and take quantity until the
+    as-of on-hand quantity is covered.
+    """
+    layer = InventoryCostLayer
+    wh_key = func.coalesce(layer.warehouse_id, -1)
+    if as_of_date is None:
+        return (
+            select(
+                layer.item_id.label("item_id"),
+                wh_key.label("wh_key"),
+                func.sum(layer.qty_remaining).label("fifo_qty"),
+                func.sum(layer.qty_remaining * layer.unit_cost).label("fifo_value"),
+            )
+            .where(layer.tenant_id == tenant_id, layer.qty_remaining > 0)
+            .group_by(layer.item_id, wh_key)
+            .subquery("fifo")
+        )
+    layer_date = func.coalesce(layer.layer_date, cast(layer.created_at, SQLDate))
+    newer_or_same = func.sum(layer.qty_original).over(partition_by=(layer.item_id, wh_key), order_by=layer.id.desc())
+    ranked = (
+        select(
+            layer.item_id.label("item_id"),
+            wh_key.label("wh_key"),
+            layer.qty_original.label("qty"),
+            layer.unit_cost.label("unit_cost"),
+            newer_or_same.label("cum_qty"),
+        )
+        .where(layer.tenant_id == tenant_id, layer.qty_original > 0, layer_date <= as_of_date)
+        .subquery("ranked_layers")
+    )
+    bal = _balance_subquery(tenant_id, False, as_of_date)
+    newer_qty = ranked.c.cum_qty - ranked.c.qty
+    take = func.greatest(func.least(ranked.c.qty, bal.c.on_hand - newer_qty), 0)
     return (
         select(
-            StockMovement.item_id.label("item_id"),
-            StockMovement.warehouse_id.label("warehouse_id"),
-            in_qty.label("in_qty"),
-            out_qty.label("out_qty"),
-            (in_qty - out_qty).label("on_hand"),
+            ranked.c.item_id,
+            ranked.c.wh_key,
+            func.sum(take).label("fifo_qty"),
+            func.sum(take * ranked.c.unit_cost).label("fifo_value"),
         )
-        .where(StockMovement.tenant_id == tenant_id)
-        .group_by(StockMovement.item_id, StockMovement.warehouse_id)
-        .subquery("stock_balance")
+        .select_from(
+            ranked.join(
+                bal,
+                and_(bal.c.item_id == ranked.c.item_id, func.coalesce(bal.c.warehouse_id, -1) == ranked.c.wh_key),
+            )
+        )
+        .where(bal.c.on_hand > 0, newer_qty < bal.c.on_hand)
+        .group_by(ranked.c.item_id, ranked.c.wh_key)
+        .subquery("fifo")
     )
+
+
+async def fifo_qty_value_map_as_of(
+    db: AsyncSession,
+    tenant_id: int,
+    as_of_date: date,
+    pairs: list[tuple[int, int | None]] | None = None,
+) -> dict[tuple[int, int | None], tuple[float, float]]:
+    """``{(item_id, warehouse_id): (fifo_qty, fifo_value)}`` held on ``as_of_date`` (see ``fifo_subquery``)."""
+    fifo = fifo_subquery(tenant_id, as_of_date)
+    stmt = select(fifo.c.item_id, fifo.c.wh_key, fifo.c.fifo_qty, fifo.c.fifo_value)
+    if pairs is not None:
+        wanted = sorted({(int(i), int(w) if w is not None else -1) for i, w in pairs})
+        if not wanted:
+            return {}
+        stmt = stmt.where(tuple_(fifo.c.item_id, fifo.c.wh_key).in_(wanted))
+    out: dict[tuple[int, int | None], tuple[float, float]] = {}
+    for item_id, wh_key, qty, value in (await db.execute(stmt)).all():
+        if float(qty or 0) <= 0:
+            continue
+        key = (int(item_id), None if int(wh_key) == -1 else int(wh_key))
+        out[key] = (float(qty), round(float(value or 0), 4))
+    return out
+
+
+async def stock_valuation_totals(
+    db: AsyncSession,
+    tenant_id: int,
+    feature_flags: dict | None,
+    *,
+    as_of_date: date | None = None,
+) -> tuple[float, int]:
+    """(total value, number of lines) for the whole stock valuation report, across all pages.
+
+    Same rule per line as the report rows: FIFO value when there are FIFO layers with value,
+    otherwise on-hand qty x item default cost.
+    """
+    from_snapshot = as_of_date is None and await use_snapshot_balances(db, tenant_id, feature_flags)
+    bal = _balance_subquery(tenant_id, from_snapshot, as_of_date)
+    fifo = fifo_subquery(tenant_id, as_of_date)
+    on_hand = func.round(cast(bal.c.on_hand, Numeric), 3)
+    line_value = case(
+        (and_(fifo.c.fifo_qty > Decimal("0.000000001"), fifo.c.fifo_value > 0), func.round(fifo.c.fifo_value, 2)),
+        else_=func.round(on_hand * func.coalesce(Item.default_cost, 0), 2),
+    )
+    stmt = (
+        select(func.coalesce(func.sum(line_value), 0), func.count())
+        .select_from(
+            bal.join(Item, Item.id == bal.c.item_id).outerjoin(
+                fifo,
+                and_(fifo.c.item_id == bal.c.item_id, fifo.c.wh_key == func.coalesce(bal.c.warehouse_id, -1)),
+            )
+        )
+        .where(Item.tenant_id == tenant_id)
+    )
+    total, count = (await db.execute(stmt)).one()
+    return round(float(total or 0), 2), int(count or 0)
 
 
 def _rounded_qtys(in_raw, out_raw, on_hand_raw, from_snapshot: bool) -> tuple[float, float, float]:
@@ -104,13 +225,15 @@ async def load_stock_balance_lines(
     positive_only: bool = False,
     limit: int | None = None,
     offset: int = 0,
+    as_of_date: date | None = None,
 ) -> list[StockBalanceLine]:
     """Balances joined to item / warehouse labels, sorted by (item_code, warehouse_name) like the old reports.
 
     ``positive_only`` keeps rows whose rounded on-hand qty is > 0 (same test the reports used in Python).
+    ``as_of_date`` gives the quantities on that date (movements up to and including it).
     """
-    from_snapshot = await use_snapshot_balances(db, tenant_id, feature_flags)
-    bal = _balance_subquery(tenant_id, from_snapshot)
+    from_snapshot = as_of_date is None and await use_snapshot_balances(db, tenant_id, feature_flags)
+    bal = _balance_subquery(tenant_id, from_snapshot, as_of_date)
     stmt = (
         select(
             bal.c.item_id,

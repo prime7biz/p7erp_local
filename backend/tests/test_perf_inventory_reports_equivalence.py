@@ -247,20 +247,97 @@ def _old_line(s: dict, item_map: dict, fifo_map: dict) -> dict:
     }
 
 
-async def _old_stock_valuation(db, tenant, limit, offset, as_of_date=None) -> dict:
-    fifo_map = await _old_fifo_map(db, tenant.id, as_of_date)
-    summary = (await _old_stock_summary_rows(db, tenant.id, tenant.feature_flags))[offset : offset + limit]
-    item_map = {r.id: r for r in (await db.execute(select(Item).where(Item.tenant_id == tenant.id))).scalars()}
-    rows = [_old_line(s, item_map, fifo_map) for s in summary]
-    total = sum(r["line_value"] for r in rows)
+def _effective_day(movement_date, created_at):
+    return movement_date if movement_date is not None else created_at.date()
+
+
+async def _ref_summary_rows_as_of(db, tenant_id: int, as_of_date) -> list[dict]:
+    """Quantities on ``as_of_date``: movements whose (movement_date or created day) <= that date."""
+    item_map = {r.id: r for r in (await db.execute(select(Item).where(Item.tenant_id == tenant_id))).scalars()}
+    wh_map = {r.id: r for r in (await db.execute(select(Warehouse).where(Warehouse.tenant_id == tenant_id))).scalars()}
+    acc: dict = defaultdict(lambda: [0.0, 0.0])
+    for mv in (await db.execute(select(StockMovement).where(StockMovement.tenant_id == tenant_id))).scalars():
+        if _effective_day(mv.movement_date, mv.created_at) > as_of_date:
+            continue
+        acc[(mv.item_id, mv.warehouse_id)][0 if mv.movement_type == "IN" else 1] += float(mv.quantity)
+    rows = []
+    for (item_id, warehouse_id), (in_qty, out_qty) in acc.items():
+        item = item_map.get(item_id)
+        wh = wh_map.get(warehouse_id) if warehouse_id is not None else None
+        rows.append(
+            {
+                "item_id": item_id,
+                "item_code": item.item_code,
+                "item_name": item.name,
+                "warehouse_id": warehouse_id,
+                "warehouse_name": wh.name if wh else None,
+                "in_qty": round(in_qty, 3),
+                "out_qty": round(out_qty, 3),
+                "on_hand_qty": round(in_qty - out_qty, 3),
+                "_on_hand_raw": in_qty - out_qty,
+            }
+        )
     rows.sort(key=lambda r: (r["item_code"], r["warehouse_name"] or ""))
-    return {"method": "fifo", "total_value": round(total, 2), "rows": rows}
+    return rows
+
+
+async def _ref_fifo_map_as_of(db, tenant_id: int, as_of_date) -> dict:
+    """FIFO stock held on ``as_of_date``: newest layers received up to that date cover the on-hand qty."""
+    on_hand = {(r["item_id"], r["warehouse_id"]): r["_on_hand_raw"] for r in await _ref_summary_rows_as_of(db, tenant_id, as_of_date)}
+    layers = (
+        await db.execute(
+            select(InventoryCostLayer)
+            .where(InventoryCostLayer.tenant_id == tenant_id)
+            .order_by(InventoryCostLayer.id.desc())
+        )
+    ).scalars().all()
+    need = {k: v for k, v in on_hand.items() if v > 0}
+    acc: dict = defaultdict(lambda: [0.0, 0.0])
+    for layer in layers:
+        if _effective_day(layer.layer_date, layer.created_at) > as_of_date or float(layer.qty_original) <= 0:
+            continue
+        key = (layer.item_id, layer.warehouse_id)
+        left = need.get(key, 0.0)
+        if left <= 0:
+            continue
+        take = min(float(layer.qty_original), left)
+        need[key] = left - take
+        acc[key][0] += take
+        acc[key][1] += take * float(layer.unit_cost)
+    return {k: (v[0], round(v[1], 4)) for k, v in acc.items() if v[0] > 0}
+
+
+async def _old_stock_valuation(db, tenant, limit, offset, as_of_date=None) -> dict:
+    """Old rows for today; for an as-of date the reference uses as-of qty + as-of FIFO (old code used today's)."""
+    if as_of_date is None:
+        fifo_map = await _old_fifo_map(db, tenant.id, None)
+        all_rows = await _old_stock_summary_rows(db, tenant.id, tenant.feature_flags)
+    else:
+        fifo_map = await _ref_fifo_map_as_of(db, tenant.id, as_of_date)
+        all_rows = await _ref_summary_rows_as_of(db, tenant.id, as_of_date)
+    item_map = {r.id: r for r in (await db.execute(select(Item).where(Item.tenant_id == tenant.id))).scalars()}
+    rows = [_old_line(s, item_map, fifo_map) for s in all_rows[offset : offset + limit]]
+    total = sum(r["line_value"] for r in rows)
+    grand_total = sum(_old_line(s, item_map, fifo_map)["line_value"] for s in all_rows)
+    rows.sort(key=lambda r: (r["item_code"], r["warehouse_name"] or ""))
+    return {
+        "method": "fifo",
+        "total_value": round(grand_total, 2),
+        "rows": rows,
+        "page_total_value": round(total, 2),
+        "total_count": len(all_rows),
+        "as_of_date": as_of_date.isoformat() if as_of_date else None,
+    }
 
 
 async def _old_grouped(db, tenant, key: str, as_of_date=None) -> list[dict]:
     """key = 'group' (stock-summary/by-group) or 'warehouse' (stock-summary/by-warehouse)."""
-    fifo_map = await _old_fifo_map(db, tenant.id, as_of_date)
-    summary = await _old_stock_summary_rows(db, tenant.id, tenant.feature_flags)
+    if as_of_date is None:
+        fifo_map = await _old_fifo_map(db, tenant.id, None)
+        summary = await _old_stock_summary_rows(db, tenant.id, tenant.feature_flags)
+    else:
+        fifo_map = await _ref_fifo_map_as_of(db, tenant.id, as_of_date)
+        summary = await _ref_summary_rows_as_of(db, tenant.id, as_of_date)
     item_map = {r.id: r for r in (await db.execute(select(Item).where(Item.tenant_id == tenant.id))).scalars()}
     sg_map = {r.id: r for r in (await db.execute(select(StockGroup).where(StockGroup.tenant_id == tenant.id))).scalars()}
     wh_map = {r.id: r for r in (await db.execute(select(Warehouse).where(Warehouse.tenant_id == tenant.id))).scalars()}
@@ -486,16 +563,19 @@ async def test_stock_valuation_and_grouped_match_old(db_session_integration, use
         await _enable_snapshot(db, tenant)
     async with api_client(db, tenant, user) as ac:
         for limit, offset in ((100, 0), (2, 0), (3, 2), (5, 50)):
-            for as_of in (None, date(2026, 1, 2)):
+            for as_of in (None, date(2026, 1, 2), date(2026, 1, 3), date(2026, 1, 5)):
                 expected = await _old_stock_valuation(db, tenant, limit, offset, as_of)
                 params = {"limit": limit, "offset": offset}
                 if as_of:
                     params["as_of_date"] = as_of.isoformat()
                 r = await ac.get("/api/v1/inventory/stock-valuation", params=params)
                 assert r.status_code == 200, r.text
-                assert r.json() == expected, (limit, offset, as_of)
+                body = r.json()
+                # SQL sums NUMERIC exactly; the reference sums floats (can differ in the last cent).
+                assert body.pop("total_value") == pytest.approx(expected.pop("total_value"), abs=0.011)
+                assert body == expected, (limit, offset, as_of)
 
-        for as_of in (None, date(2026, 1, 2)):
+        for as_of in (None, date(2026, 1, 2), date(2026, 1, 3), date(2026, 1, 5)):
             params = {"as_of_date": as_of.isoformat()} if as_of else {}
             r = await ac.get("/api/v1/inventory/stock-summary/by-group", params=params)
             assert r.status_code == 200, r.text

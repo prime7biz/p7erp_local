@@ -2,6 +2,14 @@
  * HTTP client for `/api/external/*` — separate auth from internal ERP (`p7_token`).
  */
 import { API_BASE } from "@/api/apiBase";
+import {
+  EXTERNAL_PRINCIPAL_KEY,
+  EXTERNAL_REFRESH_TOKEN_KEY,
+  EXTERNAL_TENANT_KEY,
+  EXTERNAL_TOKEN_KEY,
+  clearAllSessionsForNewLogin,
+  clearExternalSessionStorage,
+} from "@/api/authStorage";
 import { parseFastApiErrorDetail } from "@/utils/fastApiDetail";
 import { redirectToUnifiedLogin } from "@/utils/portalAuthRedirect";
 import {
@@ -20,7 +28,7 @@ function refreshOnce(refreshToken: string): Promise<ExternalTokenResponse> {
   if (!refreshInFlight) {
     refreshInFlight = postRefreshTokens(refreshToken)
       .then((next) => {
-        setExtAuth(next.access_token, next.refresh_token, next.tenant_id, next.principal_type);
+        storeExtTokens(next.access_token, next.refresh_token, next.tenant_id, next.principal_type);
         return next;
       })
       .finally(() => {
@@ -31,34 +39,37 @@ function refreshOnce(refreshToken: string): Promise<ExternalTokenResponse> {
 }
 
 export function getExtToken(): string | null {
-  return localStorage.getItem("p7_ext_token");
+  return localStorage.getItem(EXTERNAL_TOKEN_KEY);
 }
 
 export function getExtRefreshToken(): string | null {
-  return localStorage.getItem("p7_ext_refresh_token");
+  return localStorage.getItem(EXTERNAL_REFRESH_TOKEN_KEY);
 }
 
 export function getExtTenantId(): string | null {
-  return localStorage.getItem("p7_ext_tenant_id");
+  return localStorage.getItem(EXTERNAL_TENANT_KEY);
 }
 
 export function getExtPrincipalType(): ExternalPrincipalType | null {
-  const t = localStorage.getItem("p7_ext_principal_type");
+  const t = localStorage.getItem(EXTERNAL_PRINCIPAL_KEY);
   return isExternalPrincipalType(t) ? t : null;
 }
 
+function storeExtTokens(accessToken: string, refreshToken: string, tenantId: number, principalType: ExternalPrincipalType) {
+  localStorage.setItem(EXTERNAL_TOKEN_KEY, accessToken);
+  localStorage.setItem(EXTERNAL_REFRESH_TOKEN_KEY, refreshToken);
+  localStorage.setItem(EXTERNAL_TENANT_KEY, String(tenantId));
+  localStorage.setItem(EXTERNAL_PRINCIPAL_KEY, principalType);
+}
+
+/** Store a new portal login. Any older staff or portal session in this browser is removed first. */
 export function setExtAuth(accessToken: string, refreshToken: string, tenantId: number, principalType: ExternalPrincipalType) {
-  localStorage.setItem("p7_ext_token", accessToken);
-  localStorage.setItem("p7_ext_refresh_token", refreshToken);
-  localStorage.setItem("p7_ext_tenant_id", String(tenantId));
-  localStorage.setItem("p7_ext_principal_type", principalType);
+  clearAllSessionsForNewLogin();
+  storeExtTokens(accessToken, refreshToken, tenantId, principalType);
 }
 
 export function clearExtAuth() {
-  localStorage.removeItem("p7_ext_token");
-  localStorage.removeItem("p7_ext_refresh_token");
-  localStorage.removeItem("p7_ext_tenant_id");
-  localStorage.removeItem("p7_ext_principal_type");
+  clearExternalSessionStorage();
 }
 
 function extSessionExpiredRedirect(sentAuth: boolean) {
@@ -71,8 +82,8 @@ function extSessionExpiredRedirect(sentAuth: boolean) {
     } else if (path.startsWith("/portal/financier")) {
       redirectToUnifiedLogin("financier", { reason: "session_expired" });
     }
-  } catch {
-    /* ignore */
+  } catch (e) {
+    console.error("[P7 API] externalClient.sessionExpiredRedirect", e);
   }
 }
 

@@ -15,6 +15,12 @@ import type {
 } from "@/types/externalAccess";
 import { parseFastApiErrorDetail } from "@/utils/fastApiDetail";
 import { API_BASE } from "@/api/apiBase";
+import {
+  INTERNAL_TENANT_KEY,
+  INTERNAL_TOKEN_KEY,
+  clearAllSessionsForNewLogin,
+  clearInternalSessionStorage,
+} from "@/api/authStorage";
 import { queryClient } from "@/lib/queryClient";
 
 export const APP_VERSION = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? "dev";
@@ -1443,24 +1449,23 @@ export interface HrPayrollReportRow {
 }
 
 export function getToken(): string | null {
-  return localStorage.getItem("p7_token");
+  return localStorage.getItem(INTERNAL_TOKEN_KEY);
 }
 
 export function getTenantId(): string | null {
-  return localStorage.getItem("p7_tenant_id");
+  return localStorage.getItem(INTERNAL_TENANT_KEY);
 }
 
+/** Store a new staff login. Any older staff or portal session in this browser is removed first. */
 export function setAuth(token: string, tenantId: number): void {
-  localStorage.setItem("p7_token", token);
-  localStorage.setItem("p7_tenant_id", String(tenantId));
+  clearAllSessionsForNewLogin();
+  localStorage.setItem(INTERNAL_TOKEN_KEY, token);
+  localStorage.setItem(INTERNAL_TENANT_KEY, String(tenantId));
 }
 
 /** Remove stored credentials and drop cached API data so the next user cannot see it. */
 export function clearAuth(): void {
-  localStorage.removeItem("p7_token");
-  localStorage.removeItem("p7_tenant_id");
-  localStorage.removeItem("p7_platform_admin_token");
-  localStorage.removeItem("p7_ai_last_session_id");
+  clearInternalSessionStorage();
   queryClient.clear();
 }
 
@@ -6751,11 +6756,18 @@ export const api = {
     const suffix = q.toString() ? `?${q}` : "";
     return request<AbcAnalysisReport>(`/api/v1/inventory/abc-analysis/report${suffix}`);
   },
+  /** @deprecated Opening this URL directly sends no auth headers; use `exportAbcAnalysisCsv`. */
   abcAnalysisExportUrl(params?: { abc_class?: string; category_id?: number }): string {
     const q = new URLSearchParams({ export: "csv" });
     if (params?.abc_class) q.set("abc_class", params.abc_class);
     if (params?.category_id != null) q.set("category_id", String(params.category_id));
-    return `/api/v1/inventory/abc-analysis/report?${q}`;
+    return `${API_BASE}/api/v1/inventory/abc-analysis/report?${q}`;
+  },
+  async exportAbcAnalysisCsv(params?: { abc_class?: string; category_id?: number }): Promise<Blob> {
+    const q = new URLSearchParams({ export: "csv" });
+    if (params?.abc_class) q.set("abc_class", params.abc_class);
+    if (params?.category_id != null) q.set("category_id", String(params.category_id));
+    return requestBlob(`/api/v1/inventory/abc-analysis/report?${q}`, { method: "GET" });
   },
   async getItemEoq(itemId: number): Promise<EoqResult> {
     return request<EoqResult>(`/api/v1/inventory/items/${itemId}/eoq`);

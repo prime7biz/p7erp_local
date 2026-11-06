@@ -6606,6 +6606,8 @@ class PhysicalInventoryLineOut(BaseModel):
     item_id: int
     expected_qty: str
     counted_qty: str | None
+    # Only on the post response: on-hand qty the variance was posted against.
+    expected_qty_at_post: str | None = None
 
 
 class PhysicalInventorySessionOut(BaseModel):
@@ -6619,7 +6621,13 @@ class PhysicalInventorySessionOut(BaseModel):
     lines: list[PhysicalInventoryLineOut]
 
 
-def _phys_session_out(row: PhysicalInventorySession, lines: list[PhysicalInventoryLine]) -> PhysicalInventorySessionOut:
+def _phys_session_out(
+    row: PhysicalInventorySession,
+    lines: list[PhysicalInventoryLine],
+    *,
+    on_hand_at_post: dict[int, float] | None = None,
+) -> PhysicalInventorySessionOut:
+    at_post = on_hand_at_post or {}
     return PhysicalInventorySessionOut(
         id=row.id,
         tenant_id=row.tenant_id,
@@ -6635,6 +6643,11 @@ def _phys_session_out(row: PhysicalInventorySession, lines: list[PhysicalInvento
                 item_id=ln.item_id,
                 expected_qty=decimal_to_money_response(ln.expected_qty),
                 counted_qty=ln.counted_qty,
+                expected_qty_at_post=(
+                    decimal_to_money_response(Decimal(str(round(at_post[ln.id], 6))))
+                    if ln.id in at_post
+                    else None
+                ),
             )
             for ln in lines
         ],
@@ -6755,14 +6768,19 @@ async def post_physical_inventory_session(
     await _lock_stock_items(db, tenant.id, (ln.item_id for ln in lines))
     mv_date = row.count_date or date.today()
     allow_neg = await tenant_allows_negative_stock(db, tenant.id)
+    on_hand_at_post: dict[int, float] = {}
     for line in lines:
-        expected = _to_float(line.expected_qty)
-        counted = _to_float(line.counted_qty) if line.counted_qty is not None else expected
-        delta = counted - expected
+        # Variance is against stock on hand now (rows are locked), not the qty captured
+        # when the count was created, so GRNs/issues in between are not counted twice.
+        # line.expected_qty keeps the creation-time snapshot for display.
+        current = await _on_hand_qty(db, tenant.id, line.item_id, row.warehouse_id)
+        on_hand_at_post[line.id] = current
+        counted = _to_float(line.counted_qty) if line.counted_qty is not None else current
+        delta = counted - current
         if abs(delta) < 1e-9:
             continue
         if delta < 0:
-            available = await _on_hand_qty(db, tenant.id, line.item_id, row.warehouse_id)
+            available = current
             if not allow_neg and available + 1e-9 < abs(delta):
                 raise HTTPException(
                     status_code=400,
@@ -6813,7 +6831,7 @@ async def post_physical_inventory_session(
     lines_result = await db.execute(
         select(PhysicalInventoryLine).where(PhysicalInventoryLine.session_id == row.id).order_by(PhysicalInventoryLine.id)
     )
-    return _phys_session_out(row, list(lines_result.scalars().all()))
+    return _phys_session_out(row, list(lines_result.scalars().all()), on_hand_at_post=on_hand_at_post)
 
 
 class BulkPoStatusBody(BaseModel):

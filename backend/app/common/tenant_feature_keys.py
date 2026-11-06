@@ -47,6 +47,11 @@ BUDGET_MODE_OFF: Literal["off"] = "off"
 BUDGET_MODE_WARN: Literal["warn"] = "warn"
 BUDGET_MODE_BLOCK: Literal["block"] = "block"
 BUDGET_ENFORCEMENT_MODES: tuple[str, str, str] = (BUDGET_MODE_OFF, BUDGET_MODE_WARN, BUDGET_MODE_BLOCK)
+# How warn / block measures spend (default ON — explicit False = the old rule). ON: same numbers as
+# Budget vs Actual (base currency, debit - credit, each budget line's own month / quarter / year) and
+# only the budget lines this voucher adds spend to can warn or block. OFF: voucher-currency debits of
+# the voucher month only; any over-budget line with a cost centre on the voucher blocked it.
+BUDGET_ENFORCEMENT_V2 = "budget_enforcement_v2"
 
 # When not explicitly false, auto-post WIP journals from inventory/manufacturing paths (default on).
 AUTO_POST_WIP_JOURNAL = "auto_post_wip_journal"
@@ -343,6 +348,10 @@ def get_budget_enforcement_mode(feature_flags: Any) -> Literal["off", "warn", "b
         if normalized in BUDGET_ENFORCEMENT_MODES:
             return normalized  # type: ignore[return-value]
     return BUDGET_MODE_OFF
+
+
+def is_budget_enforcement_v2_enabled(feature_flags: Any) -> bool:
+    return _flag_default_true(feature_flags, BUDGET_ENFORCEMENT_V2)
 
 
 def is_auto_post_wip_journal_enabled(feature_flags: Any) -> bool:

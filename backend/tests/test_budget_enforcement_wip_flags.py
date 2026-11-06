@@ -18,6 +18,7 @@ from app.common.permissions import (
 from app.common.tenant_feature_keys import (
     AUTO_POST_WIP_JOURNAL,
     BUDGET_ENFORCEMENT_MODE,
+    BUDGET_ENFORCEMENT_V2,
     get_budget_enforcement_mode,
     is_auto_post_wip_journal_enabled,
     normalize_feature_flag_value,
@@ -137,7 +138,7 @@ async def test_evaluate_voucher_budget_warn_exceeded_allows_post():
     result = await evaluate_voucher_budget(
         db,  # type: ignore[arg-type]
         tenant_id=1,
-        feature_flags={BUDGET_ENFORCEMENT_MODE: "warn"},
+        feature_flags={BUDGET_ENFORCEMENT_MODE: "warn", BUDGET_ENFORCEMENT_V2: False},
         voucher=voucher,  # type: ignore[arg-type]
         lines=lines,  # type: ignore[arg-type]
     )
@@ -172,7 +173,7 @@ async def test_evaluate_voucher_budget_block_exceeded_denies_post():
     result = await evaluate_voucher_budget(
         db,  # type: ignore[arg-type]
         tenant_id=1,
-        feature_flags={BUDGET_ENFORCEMENT_MODE: "block"},
+        feature_flags={BUDGET_ENFORCEMENT_MODE: "block", BUDGET_ENFORCEMENT_V2: False},
         voucher=voucher,  # type: ignore[arg-type]
         lines=lines,  # type: ignore[arg-type]
     )
@@ -205,7 +206,7 @@ async def test_evaluate_voucher_budget_near_limit():
     result = await evaluate_voucher_budget(
         db,  # type: ignore[arg-type]
         tenant_id=1,
-        feature_flags={BUDGET_ENFORCEMENT_MODE: "warn"},
+        feature_flags={BUDGET_ENFORCEMENT_MODE: "warn", BUDGET_ENFORCEMENT_V2: False},
         voucher=voucher,  # type: ignore[arg-type]
         lines=lines,  # type: ignore[arg-type]
     )

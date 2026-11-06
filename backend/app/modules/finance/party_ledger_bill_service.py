@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Literal
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import Numeric, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.business_date import today_local
@@ -64,22 +65,17 @@ def _refresh_bill_status(bill: PartyLedgerBill, *, as_of: date | None = None) ->
 
 
 async def _next_bill_number(db: AsyncSession, tenant_id: int, prefix: str) -> str:
-    like = f"{prefix}%"
-    last = (
+    # Numeric max of the digits after the prefix: a text sort would put "BL-9999" after "BL-10000".
+    only_digits_after_prefix = "^" + re.escape(prefix) + "[0-9]+$"
+    last_seq = (
         await db.execute(
-            select(PartyLedgerBill.bill_number)
-            .where(
+            select(func.max(cast(func.substr(PartyLedgerBill.bill_number, len(prefix) + 1), Numeric))).where(
                 PartyLedgerBill.tenant_id == tenant_id,
-                PartyLedgerBill.bill_number.ilike(like),
+                PartyLedgerBill.bill_number.op("~*")(only_digits_after_prefix),
             )
-            .order_by(PartyLedgerBill.bill_number.desc())
-            .limit(1)
         )
     ).scalar_one_or_none()
-    if not last:
-        return f"{prefix}0001"
-    digits = "".join(ch for ch in str(last)[len(prefix) :] if ch.isdigit()) or "0"
-    return f"{prefix}{int(digits) + 1:04d}"
+    return f"{prefix}{int(last_seq or 0) + 1:04d}"
 
 
 async def create_bill_from_voucher_line(

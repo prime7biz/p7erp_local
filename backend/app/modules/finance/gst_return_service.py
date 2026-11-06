@@ -16,6 +16,8 @@ from app.modules.finance.tax_calculation_service import _d, _money, _rate
 
 logger = logging.getLogger(__name__)
 
+# Tax types whose line carries the invoice's taxable value (SGST / UTGST repeat the CGST base).
+_BASE_COUNTING_TAX_TYPES = frozenset({"CGST", "IGST", "VAT", "CST"})
 
 async def _tax_rows_in_period(
     db: AsyncSession,
@@ -67,15 +69,17 @@ async def generate_gstr1(
 ) -> dict[str, Any]:
     rows = await _tax_rows_in_period(db, tenant_id, period_from, period_to, direction="OUTWARD")
     supplies = [_row_dict(vtl, v, tl) for vtl, v, tl in rows]
-    taxable = sum((_d(r["taxable_amount"]) for r in supplies), Decimal("0"))
+    # CGST and SGST/UTGST lines repeat the same taxable base, so the base is counted only on the
+    # CGST line; IGST / VAT / CST lines carry their own base (an IGST sale must not be halved).
+    taxable = sum(
+        (_d(r["taxable_amount"]) for r in supplies if r["tax_type"] in _BASE_COUNTING_TAX_TYPES), Decimal("0")
+    )
     tax = sum((_d(r["tax_amount"]) for r in supplies), Decimal("0"))
     by_hsn: dict[str, dict[str, Decimal]] = {}
     for r in supplies:
         key = r["hsn_code"] or "UNKNOWN"
         bucket = by_hsn.setdefault(key, {"taxable": Decimal("0"), "tax": Decimal("0")})
-        # Avoid double-counting taxable when multiple components share same base
-        # Count taxable once per voucher+hsn+rate group via tax_type CGST or IGST only
-        if r["tax_type"] in {"CGST", "IGST", "VAT"}:
+        if r["tax_type"] in _BASE_COUNTING_TAX_TYPES:
             bucket["taxable"] += _d(r["taxable_amount"])
         bucket["tax"] += _d(r["tax_amount"])
     missing_hsn = sum(1 for r in supplies if not r["hsn_code"])
@@ -86,7 +90,7 @@ async def generate_gstr1(
         "supplies": supplies,
         "summary": {
             "line_count": len(supplies),
-            "taxable_total": str(_money(taxable / 2)) if any(r["tax_type"] == "SGST" for r in supplies) else str(_money(taxable)),
+            "taxable_total": str(_money(taxable)),
             "tax_total": str(_money(tax)),
             "missing_hsn_count": missing_hsn,
         },
@@ -203,7 +207,7 @@ async def export_gstr1_portal_json(
         itms = []
         for i, ln in enumerate(lines, start=1):
             base_key = f"{ln['taxable_amount']}:{ln['hsn_code']}"
-            if base_key not in seen_bases and ln["tax_type"] in {"CGST", "IGST", "VAT"}:
+            if base_key not in seen_bases and ln["tax_type"] in _BASE_COUNTING_TAX_TYPES:
                 inv_taxable += _d(ln["taxable_amount"])
                 seen_bases.add(base_key)
             itms.append(

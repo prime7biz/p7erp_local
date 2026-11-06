@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -20,6 +21,7 @@ from app.database import get_db
 from app.models import (
     AlertInstance,
     BtbLc,
+    CurrencyExchangeRate,
     Customer,
     MasterContract,
     Order,
@@ -690,11 +692,19 @@ async def get_trade_case_margin(
     if not trade_case or trade_case.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Trade case not found")
 
-    amount = float(trade_case.amount) if trade_case.amount is not None else None
+    base_ccy = (trade_case.base_currency or tenant.base_currency or "BDT").strip().upper()
+    amount = Decimal(str(trade_case.amount)) if trade_case.amount is not None else None
+    amount_ccy = (trade_case.currency or "").strip().upper() or None
     if amount is None and trade_case.proforma_invoice_id:
         pi = await db.get(ProformaInvoice, trade_case.proforma_invoice_id)
         if pi and pi.tenant_id == tenant.id and pi.amount is not None:
-            amount = float(pi.amount)
+            amount = Decimal(str(pi.amount))
+            amount_ccy = (pi.currency or "").strip().upper() or amount_ccy
+    amount_ccy = amount_ccy or base_ccy
+
+    # Purchase-order cost below is in base currency, so revenue is converted to base currency first.
+    fx_rate = await _rate_to_base(db, tenant, amount_ccy, base_ccy)
+    amount_base = (amount * fx_rate).quantize(Decimal("0.01")) if amount is not None and fx_rate else None
 
     estimated_cost: float | None = None
     if trade_case.btb_lc_id:
@@ -717,21 +727,55 @@ async def get_trade_case_margin(
 
     margin_amount = None
     margin_pct = None
-    if amount is not None and estimated_cost is not None:
-        margin_amount = amount - estimated_cost
-        if amount > 0:
-            margin_pct = (margin_amount / amount) * 100
+    margin_note = None
+    if amount is not None and fx_rate is None:
+        margin_note = (
+            f"No exchange rate from {amount_ccy} to {base_ccy}; add one under currency settings to see the margin."
+        )
+    if amount_base is not None and estimated_cost is not None:
+        cost = Decimal(str(estimated_cost))
+        margin_dec = amount_base - cost
+        margin_amount = float(margin_dec)
+        if amount_base > 0:
+            margin_pct = float((margin_dec / amount_base * 100).quantize(Decimal("0.0001")))
 
     return TradeCaseMarginResponse(
         trade_case_id=trade_case.id,
-        amount=amount,
+        amount=float(amount) if amount is not None else None,
         estimated_cost=estimated_cost,
         margin_amount=margin_amount,
         margin_pct=margin_pct,
         currency=trade_case.currency,
         base_currency=trade_case.base_currency,
         base_currency_margin=float(trade_case.base_currency_margin) if trade_case.base_currency_margin is not None else None,
+        amount_base=float(amount_base) if amount_base is not None else None,
+        fx_rate_to_base=float(fx_rate) if fx_rate is not None else None,
+        margin_currency=base_ccy,
+        margin_note=margin_note,
     )
+
+
+async def _rate_to_base(db: AsyncSession, tenant: Tenant, from_ccy: str, base_ccy: str) -> Decimal | None:
+    """Latest active tenant rate from_ccy -> base_ccy effective on or before today (1 for the same currency)."""
+    if from_ccy == base_ccy:
+        return Decimal("1")
+    rate = (
+        await db.execute(
+            select(CurrencyExchangeRate.exchange_rate)
+            .where(
+                CurrencyExchangeRate.tenant_id == tenant.id,
+                CurrencyExchangeRate.from_currency == from_ccy,
+                CurrencyExchangeRate.to_currency == base_ccy,
+                CurrencyExchangeRate.is_active.is_(True),
+                CurrencyExchangeRate.effective_date <= today_local(tenant),
+            )
+            .order_by(CurrencyExchangeRate.effective_date.desc(), CurrencyExchangeRate.id.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if rate is None or Decimal(str(rate)) <= 0:
+        return None
+    return Decimal(str(rate))
 
 
 @router.get("/dashboard/summary", response_model=TradeCaseDashboardResponse)

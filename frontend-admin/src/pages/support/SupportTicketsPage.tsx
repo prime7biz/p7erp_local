@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   listSupportTickets,
@@ -9,7 +9,6 @@ import {
 } from "@/api/client";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { DataTable } from "@/components/ui/DataTable";
-import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SideDrawer } from "@/components/ui/SideDrawer";
 import { useToast } from "@/context/ToastContext";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -35,18 +34,18 @@ export function SupportTicketsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", tenant_id: "", priority: "medium" });
 
-  function load() {
+  const load = useCallback(() => {
     setLoading(true);
     const tid = tenantFilter ? parseInt(tenantFilter, 10) : NaN;
     listSupportTickets(tid != null && !Number.isNaN(tid) ? { tenant_id: tid } : undefined)
       .then((r) => setItems(r.items))
       .catch((e: unknown) => showToast(e instanceof Error ? e.message : "Failed", "error"))
       .finally(() => setLoading(false));
-  }
+  }, [tenantFilter, showToast]);
 
   useEffect(() => {
     load();
-  }, [tenantFilter]);
+  }, [load]);
 
   async function openDetail(id: number) {
     try {

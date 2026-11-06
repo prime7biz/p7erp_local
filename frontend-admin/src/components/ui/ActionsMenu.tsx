@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/utils/cn";
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { listAdminSessions, revokeAdminSession } from "@/api/client";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { DataTable } from "@/components/ui/DataTable";
@@ -13,16 +13,16 @@ export function SessionsPage() {
   >([]);
   const [loading, setLoading] = useState(true);
 
-  function load() {
+  const load = useCallback(() => {
     listAdminSessions(1, 200)
       .then((r) => setItems(r.items))
       .catch((e: unknown) => showToast(e instanceof Error ? e.message : "Failed", "error"))
       .finally(() => setLoading(false));
-  }
+  }, [showToast]);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   if (loading) return <LoadingState />;
 

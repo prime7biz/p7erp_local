@@ -519,6 +519,15 @@ export type UsageDailyItem = {
   ai_tokens_used: number;
 };
 
+export type SystemResourcesResponse = {
+  cpu_percent: number | null;
+  memory_total_bytes: number | null;
+  memory_used_bytes: number | null;
+  memory_percent: number | null;
+  note: string | null;
+  db_pool: { size: number; checked_in: number; checked_out: number; overflow: number } | null;
+};
+
 export type DbStatsResponse = { tables: { table_name: string; total_bytes: number }[] };
 
 export type SlowQueryItem = { query: string; calls: number; mean_ms: number; total_ms: number };

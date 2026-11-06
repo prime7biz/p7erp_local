@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { listRateLimits, putRateLimit } from "@/api/client";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { DataTable } from "@/components/ui/DataTable";
@@ -11,16 +11,16 @@ export function RateLimitsPage() {
   const [items, setItems] = useState<{ tenant_id: number; requests_per_minute: number; requests_per_hour: number; is_custom: boolean }[]>([]);
   const [loading, setLoading] = useState(true);
 
-  function load() {
+  const load = useCallback(() => {
     listRateLimits()
       .then((r) => setItems(r.items))
       .catch((e: unknown) => showToast(e instanceof Error ? e.message : "Failed", "error"))
       .finally(() => setLoading(false));
-  }
+  }, [showToast]);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   if (loading) return <LoadingState />;
 

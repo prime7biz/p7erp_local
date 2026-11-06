@@ -59,6 +59,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- hook lives next to its provider
 export function useToast() {
   const ctx = useContext(ToastCtx);
   if (!ctx) throw new Error("useToast must be used within ToastProvider");

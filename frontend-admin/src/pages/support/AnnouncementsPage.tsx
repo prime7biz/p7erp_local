@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { listAnnouncements, deleteAnnouncement, type AnnouncementItem } from "@/api/client";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -16,18 +16,18 @@ export function AnnouncementsPage() {
   const [items, setItems] = useState<AnnouncementItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [delId, setDelId] = useState<number | null>(null);
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  const [openActionsId, setOpenActionsId] = useState<string | number | null>(null);
 
-  function load() {
+  const load = useCallback(() => {
     listAnnouncements()
       .then((r) => setItems(r.items))
       .catch((e: unknown) => showToast(e instanceof Error ? e.message : "Failed", "error"))
       .finally(() => setLoading(false));
-  }
+  }, [showToast]);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   if (loading) return <LoadingState />;
 

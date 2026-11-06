@@ -14,12 +14,16 @@ from app.models.tenant import TenantType
 class AdminLoginRequest(BaseModel):
     username: str
     password: str
+    # Six-digit authenticator code; required once two-factor authentication is enabled.
+    totp_code: str | None = None
 
 
 class AdminTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in_minutes: int
+    # True when the token only allows setting up two-factor authentication (PLATFORM_ADMIN_MFA_REQUIRED).
+    mfa_enrolment_required: bool = False
 
 
 class AdminMeResponse(BaseModel):
@@ -30,6 +34,22 @@ class AdminMeResponse(BaseModel):
     is_active: bool
     last_login: datetime | None
     capabilities: dict[str, bool]
+    totp_enabled: bool = False
+    mfa_enrolment_required: bool = False
+
+
+class AdminTotpSetupResponse(BaseModel):
+    secret: str
+    otpauth_uri: str
+
+
+class AdminTotpCodeRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=10)
+
+
+class AdminTotpDisableRequest(BaseModel):
+    current_password: str
+    code: str = Field(min_length=6, max_length=10)
 
 
 class AdminChangePasswordRequest(BaseModel):

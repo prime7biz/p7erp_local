@@ -57,6 +57,7 @@ const navSections: { section: string; items: NavItem[] }[] = [
       { to: "/security/sessions", label: "Sessions", cap: "security.sessions" },
       { to: "/security/rate-limits", label: "Rate limits", cap: "security.rate_limits" },
       { to: "/security/impersonation", label: "Impersonation log", cap: "security.impersonation" },
+      { to: "/security/two-factor", label: "Two-factor auth" },
     ],
   },
   {

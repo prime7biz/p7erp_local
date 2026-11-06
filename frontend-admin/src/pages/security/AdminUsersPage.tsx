@@ -4,6 +4,7 @@ import {
   createPlatformAdmin,
   patchPlatformAdmin,
   deletePlatformAdmin,
+  resetPlatformAdminMfa,
   type PlatformAdminItem,
 } from "@/api/client";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -98,10 +99,36 @@ export function AdminUsersPage() {
             ),
           },
           {
+            key: "mfa",
+            header: "2FA",
+            cell: (a) => (
+              <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${a.totp_enabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}`}>
+                {a.totp_enabled ? "On" : "Off"}
+              </span>
+            ),
+          },
+          {
             key: "x",
             header: "",
             cell: (a) => (
               <div className="flex flex-wrap gap-1">
+                {a.totp_enabled && (
+                  <button
+                    type="button"
+                    className="text-xs text-slate-700"
+                    onClick={() => {
+                      if (!window.confirm(`Remove ${a.username}'s authenticator? They must set it up again.`)) return;
+                      resetPlatformAdminMfa(a.id)
+                        .then(() => {
+                          showToast("Two-factor reset", "success");
+                          load();
+                        })
+                        .catch((e: unknown) => showToast(e instanceof Error ? e.message : "Failed", "error"));
+                    }}
+                  >
+                    Reset 2FA
+                  </button>
+                )}
                 <button
                   type="button"
                   className="text-xs text-indigo-600"

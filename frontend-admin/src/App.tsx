@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAdminAuth } from "./context/AdminAuthContext";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -24,6 +24,7 @@ import { AdminUsersPage } from "./pages/security/AdminUsersPage";
 import { SessionsPage } from "./pages/security/SessionsPage";
 import { RateLimitsPage } from "./pages/security/RateLimitsPage";
 import { ImpersonationLogPage } from "./pages/security/ImpersonationLogPage";
+import { TwoFactorPage } from "./pages/security/TwoFactorPage";
 import { PlatformSettingsPage } from "./pages/config/PlatformSettingsPage";
 import { FeatureFlagsPage } from "./pages/config/FeatureFlagsPage";
 import { AdminLayout } from "./components/AdminLayout";
@@ -32,9 +33,13 @@ import { RestoreCenterPage } from "./pages/operations/RestoreCenterPage";
 import { BackgroundJobsPage } from "./pages/operations/BackgroundJobsPage";
 
 function Protected({ children }: { children: React.ReactNode }) {
-  const { token, loading } = useAdminAuth();
+  const { token, loading, me } = useAdminAuth();
+  const location = useLocation();
   if (loading) return <div className="p-8">Loading…</div>;
   if (!token) return <Navigate to="/login" replace />;
+  if (me?.mfa_enrolment_required && location.pathname !== "/security/two-factor") {
+    return <Navigate to="/security/two-factor" replace />;
+  }
   return <>{children}</>;
 }
 
@@ -266,6 +271,7 @@ export default function App() {
             </RequireCapability>
           }
         />
+        <Route path="security/two-factor" element={<TwoFactorPage />} />
         <Route
           path="config/settings"
           element={

@@ -31,7 +31,14 @@ async def list_admins(
     rows = r.scalars().all()
     return {
         "items": [
-            {"id": a.id, "username": a.username, "email": a.email, "role": a.role, "is_active": a.is_active}
+            {
+                "id": a.id,
+                "username": a.username,
+                "email": a.email,
+                "role": a.role,
+                "is_active": a.is_active,
+                "totp_enabled": bool(a.totp_enabled),
+            }
             for a in rows
         ]
     }
@@ -79,6 +86,27 @@ async def patch_admin(
         a.is_active = bool(body["is_active"])
     a.updated_at = datetime.utcnow()
     await log_admin_action(db, admin_id=ctx.admin.id, action="ADMIN_USER_UPDATE", resource="platform_admin", details=str(aid))
+    await db.commit()
+    return {"ok": True}
+
+
+@router.post("/admins/{aid}/mfa/reset")
+async def reset_admin_mfa(
+    aid: int,
+    db: AsyncSession = Depends(get_db),
+    ctx: AdminContext = Depends(super_only),
+):
+    """Remove another admin's authenticator (e.g. lost phone); they enrol again at next login."""
+    a = await db.get(PlatformAdmin, aid)
+    if not a:
+        raise HTTPException(404)
+    if aid == ctx.admin.id:
+        raise HTTPException(400, detail="Use your own security settings to change your two-factor authentication")
+    a.totp_enabled = False
+    a.totp_secret = None
+    a.totp_last_used_step = None
+    a.updated_at = datetime.utcnow()
+    await log_admin_action(db, admin_id=ctx.admin.id, action="ADMIN_MFA_RESET", resource="platform_admin", details=str(aid))
     await db.commit()
     return {"ok": True}
 

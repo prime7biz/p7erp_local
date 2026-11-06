@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
+import { ApiError } from "@/api/client";
 import { useAdminAuth } from "@/context/AdminAuthContext";
 
 export function LoginPage() {
   const { token, login } = useAdminAuth();
   const [u, setU] = useState("");
   const [p, setP] = useState("");
+  const [code, setCode] = useState("");
+  const [needCode, setNeedCode] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -16,9 +19,14 @@ export function LoginPage() {
     setErr(null);
     setLoading(true);
     try {
-      await login(u, p);
+      await login(u, p, needCode ? code.trim() : undefined);
     } catch (e2: unknown) {
-      setErr(e2 instanceof Error ? e2.message : "Login failed");
+      if (e2 instanceof ApiError && (e2.code === "mfa_required" || e2.code === "mfa_invalid")) {
+        setNeedCode(true);
+        setErr(e2.code === "mfa_invalid" ? e2.message : null);
+      } else {
+        setErr(e2 instanceof Error ? e2.message : "Login failed");
+      }
     } finally {
       setLoading(false);
     }
@@ -59,6 +67,23 @@ export function LoginPage() {
                 autoComplete="current-password"
               />
             </div>
+            {needCode && (
+              <div>
+                <label className="block text-xs font-medium text-slate-600 uppercase tracking-wide">
+                  Authenticator code
+                </label>
+                <input
+                  inputMode="numeric"
+                  maxLength={6}
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm tracking-widest text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                  autoComplete="one-time-code"
+                  autoFocus
+                />
+                <p className="mt-1 text-xs text-slate-500">Open your authenticator app and enter the 6-digit code.</p>
+              </div>
+            )}
           </div>
           <button
             type="submit"

@@ -1,4 +1,5 @@
 from datetime import datetime
+from functools import lru_cache
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -157,6 +158,12 @@ async def update_settings_config(
     )
 
 
+@lru_cache(maxsize=1)
+def _cached_permissions_registry_payload() -> dict:
+    # Built only from static constants in app.common.permissions; callers must not mutate it.
+    return permissions_registry_api_payload()
+
+
 @router.get("/permissions-registry")
 async def get_permissions_registry(
     tenant: Tenant = Depends(require_tenant),
@@ -166,7 +173,7 @@ async def get_permissions_registry(
     """Return the canonical permission tree for the Roles UI (admin only)."""
     _ensure_user_tenant(user, tenant)
     await ensure_user_is_tenant_admin(db, user, tenant.id)
-    return permissions_registry_api_payload()
+    return _cached_permissions_registry_payload()
 
 
 @router.get("/roles", response_model=list[SettingsRoleResponse])

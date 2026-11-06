@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -147,13 +147,46 @@ def seed_tenant_system_coa_sync_session(session: Session, tenant_id: int) -> dic
     }
 
 
+def _tenant_ids_fully_seeded(session: Session, tenant_ids: list[int]) -> set[int]:
+    """Tenants that already have every system group, ledger and mapping (3 grouped queries total)."""
+    if not tenant_ids:
+        return set()
+    group_codes = {g["system_code"] for g in SYSTEM_ACCOUNT_GROUPS}
+    ledger_codes = {led["system_code"] for led in SYSTEM_LEDGERS}
+
+    def _counts(tenant_col, code_col, codes: set[str]) -> dict[int, int]:
+        rows = session.execute(
+            select(tenant_col, func.count(distinct(code_col)))
+            .where(tenant_col.in_(tenant_ids), code_col.in_(codes))
+            .group_by(tenant_col)
+        ).all()
+        return {int(tid): int(n) for tid, n in rows}
+
+    groups = _counts(AccountGroup.tenant_id, AccountGroup.system_code, group_codes)
+    ledgers = _counts(ChartOfAccount.tenant_id, ChartOfAccount.system_code, ledger_codes)
+    mappings = _counts(AccountingSystemMapping.tenant_id, AccountingSystemMapping.mapping_key, ledger_codes)
+    return {
+        tid
+        for tid in tenant_ids
+        if groups.get(tid, 0) >= len(group_codes)
+        and ledgers.get(tid, 0) >= len(ledger_codes)
+        and mappings.get(tid, 0) >= len(ledger_codes)
+    }
+
+
 def seed_all_tenants_system_coa_sync_session(session: Session) -> list[dict[str, Any]]:
+    """Seed every tenant; tenants that already have the full system COA are skipped cheaply."""
     from app.models.tenant import Tenant
 
     out: list[dict[str, Any]] = []
-    tenant_ids = session.execute(select(Tenant.id)).scalars().all()
+    tenant_ids = [int(t) for t in session.execute(select(Tenant.id)).scalars().all()]
+    already_seeded = _tenant_ids_fully_seeded(session, tenant_ids)
     for tid in tenant_ids:
-        out.append(seed_tenant_system_coa_sync_session(session, int(tid)))
+        if tid in already_seeded:
+            continue
+        out.append(seed_tenant_system_coa_sync_session(session, tid))
+    if already_seeded:
+        logger.info("System COA seed: %s tenant(s) already complete, skipped", len(already_seeded))
     return out
 
 

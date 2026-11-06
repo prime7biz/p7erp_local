@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import pandas as pd
 from sqlalchemy.ext.asyncio import AsyncSession
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 @dataclass

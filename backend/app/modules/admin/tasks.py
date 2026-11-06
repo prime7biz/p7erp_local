@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import date, datetime, timedelta
 
 from sqlalchemy import distinct, func, select
@@ -11,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.storage import get_media_root
 from app.models import AiUsageLog, AuditLog, BackupSchedule, BillingInvoice, Tenant, TenantAiBudget, TenantUsageDaily
 from app.modules.admin.backup_service import run_full_backup_job, run_tenant_export_job, cleanup_expired_backups
+
+logger = logging.getLogger(__name__)
 
 
 def _tenant_media_size(tenant_id: int) -> int:
@@ -94,7 +98,7 @@ async def aggregate_yesterday_usage(db: AsyncSession) -> None:
                 )
             )
         ).scalar() or 0
-        storage = _tenant_media_size(tid)
+        storage = await asyncio.to_thread(_tenant_media_size, tid)
         stmt = insert(TenantUsageDaily).values(
             tenant_id=tid,
             date=y,
@@ -181,11 +185,27 @@ async def process_due_backup_schedules(db: AsyncSession) -> None:
             else:
                 sch.next_run_at = now + timedelta(days=30)
             sch.last_run_at = now
-    cleanup_expired_backups()
+    await asyncio.to_thread(cleanup_expired_backups)
+
+
+async def daily_work_done_for(db: AsyncSession, day: date) -> bool:
+    """True when the once-a-day block already ran for ``day``.
+
+    ``aggregate_yesterday_usage`` writes tenant_usage_daily rows for the previous day in the same
+    transaction as the AI budget reset, so those rows double as the "ran today" marker (no extra table).
+    """
+    y = day - timedelta(days=1)
+    row = (await db.execute(select(TenantUsageDaily.id).where(TenantUsageDaily.date == y).limit(1))).first()
+    return row is not None
 
 
 async def run_platform_daily_maintenance(db: AsyncSession) -> None:
-    await aggregate_yesterday_usage(db)
+    """Runs hourly. Usage roll-up and the 1st-of-month AI budget reset run once per day;
+    overdue invoices and due backup schedules are checked every run."""
+    if await daily_work_done_for(db, date.today()):
+        logger.debug("platform maintenance: daily block already done today; skipping")
+    else:
+        await aggregate_yesterday_usage(db)
+        await reset_ai_budgets_for_new_month(db)
     await mark_overdue_invoices(db)
-    await reset_ai_budgets_for_new_month(db)
     await process_due_backup_schedules(db)

@@ -22,6 +22,10 @@ def make_celery() -> Celery:
         accept_content=["json"],
         timezone="UTC",
         enable_utc=True,
+        worker_prefetch_multiplier=max(1, int(settings.celery_worker_prefetch_multiplier)),
+        worker_max_tasks_per_child=int(settings.celery_worker_max_tasks_per_child) or None,
+        task_soft_time_limit=int(settings.celery_task_soft_time_limit_seconds) or None,
+        task_time_limit=int(settings.celery_task_time_limit_seconds) or None,
     )
     return app
 

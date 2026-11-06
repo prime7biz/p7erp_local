@@ -25,7 +25,6 @@ from app.modules.ai_tool.tools import (
     suggest_orders_with_shortage,
     suggest_vendor_for_item,
 )
-from app.modules.ai_tool.analysis.registry import detect_analysis_type, run_analysis
 from app.modules.ai_tool.retrieval.unstructured_search import search_unstructured_context
 from app.modules.ai_tool.tools.calendar_tools import (
     calendar_impact_tool,
@@ -122,6 +121,9 @@ async def _calendar_manage_handler(db: AsyncSession, tenant_id: int, prompt: str
 
 
 async def _analyze_structured_metrics_handler(db: AsyncSession, tenant_id: int, prompt: str) -> dict:
+    # Imported here so pandas only loads when an analysis actually runs.
+    from app.modules.ai_tool.analysis.registry import detect_analysis_type, run_analysis
+
     mtype = detect_analysis_type(prompt)
     text = prompt.lower()
     include_sem = any(k in text for k in ("note", "remark", "comment", "context", "unstructured"))

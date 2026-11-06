@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import json
 
-import httpx
-
+from app.common.http_clients import get_shared_async_client
 from app.config import get_settings
 from app.modules.ai_tool.llm_provider.base import BaseLlmProvider
 
@@ -47,10 +46,10 @@ class OllamaLlmProvider(BaseLlmProvider):
         }
         timeout_seconds = float(max(10, settings.ai_timeout_chat_seconds + 10))
         try:
-            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-                resp = await client.post(f"{base_url}/api/generate", json=payload)
-                resp.raise_for_status()
-                data = resp.json()
+            client = get_shared_async_client("ollama", timeout=timeout_seconds)
+            resp = await client.post(f"{base_url}/api/generate", json=payload)
+            resp.raise_for_status()
+            data = resp.json()
         except Exception as exc:
             return (
                 "Local AI is unavailable right now. "

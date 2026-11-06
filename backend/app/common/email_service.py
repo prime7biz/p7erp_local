@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from urllib.parse import quote
 
-from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
-
 from app.config import get_settings
+
+if TYPE_CHECKING:
+    from fastapi_mail import ConnectionConfig
 
 POSTMARK_HEADERS = {"X-PM-Message-Stream": "outbound"}
 
@@ -24,6 +26,8 @@ def _require_email_settings() -> None:
 
 
 def get_mail_connection_config() -> ConnectionConfig:
+    from fastapi_mail import ConnectionConfig
+
     settings = get_settings()
     _require_email_settings()
     return ConnectionConfig(
@@ -38,6 +42,20 @@ def get_mail_connection_config() -> ConnectionConfig:
         USE_CREDENTIALS=True,
         VALIDATE_CERTS=True,
     )
+
+
+async def _send_html_email(*, to_email: str, subject: str, body: str) -> None:
+    from fastapi_mail import FastMail, MessageSchema, MessageType
+
+    message = MessageSchema(
+        subject=subject,
+        recipients=[to_email],
+        body=body,
+        subtype=MessageType.html,
+        headers=POSTMARK_HEADERS,
+    )
+    fm = FastMail(get_mail_connection_config())
+    await fm.send_message(message)
 
 
 def _build_forgot_password_html(*, recipient_name: str, reset_url: str) -> str:
@@ -85,18 +103,14 @@ async def send_forgot_password_email(
     settings = get_settings()
     frontend_url = settings.frontend_url.rstrip("/") or "https://prime7erp.com"
     reset_url = f"{frontend_url}/reset-password?token={reset_token}"
-    message = MessageSchema(
+    await _send_html_email(
+        to_email=to_email,
         subject="Reset your Prime7 ERP password",
-        recipients=[to_email],
         body=_build_forgot_password_html(
             recipient_name=recipient_name or "",
             reset_url=reset_url,
         ),
-        subtype=MessageType.html,
-        headers=POSTMARK_HEADERS,
     )
-    fm = FastMail(get_mail_connection_config())
-    await fm.send_message(message)
 
 
 def _build_registration_confirmation_html(
@@ -155,20 +169,16 @@ async def send_registration_confirmation_email(
     settings = get_settings()
     frontend_url = settings.frontend_url.rstrip("/") or "https://prime7erp.com"
     login_url = f"{frontend_url}/login"
-    message = MessageSchema(
+    await _send_html_email(
+        to_email=to_email,
         subject="Your Prime7 ERP account is ready",
-        recipients=[to_email],
         body=_build_registration_confirmation_html(
             recipient_name=recipient_name or "",
             tenant_name=tenant_name.strip() or "your organization",
             company_code=company_code,
             login_url=login_url,
         ),
-        subtype=MessageType.html,
-        headers=POSTMARK_HEADERS,
     )
-    fm = FastMail(get_mail_connection_config())
-    await fm.send_message(message)
 
 
 _PORTAL_LABELS = {"customer": "Customer Portal", "financier": "Financier Portal", "supplier": "Supplier Portal"}
@@ -252,9 +262,9 @@ async def send_external_invitation_email(
     frontend_url = settings.frontend_url.rstrip("/") or "https://prime7erp.com"
     accept_url = f"{frontend_url}/portal/{_portal_segment(principal_type)}/accept-invite?token={quote(invite_token, safe='')}"
     portal_label = _portal_label(principal_type)
-    message = MessageSchema(
+    await _send_html_email(
+        to_email=to_email,
         subject=f"Prime7 ERP invitation: {portal_label}",
-        recipients=[to_email],
         body=_build_external_invitation_html(
             recipient_name=recipient_name or "",
             tenant_name=tenant_name,
@@ -263,11 +273,7 @@ async def send_external_invitation_email(
             accept_url=accept_url,
             expires_at_label=expires_at_label,
         ),
-        subtype=MessageType.html,
-        headers=POSTMARK_HEADERS,
     )
-    fm = FastMail(get_mail_connection_config())
-    await fm.send_message(message)
 
 
 def _build_external_password_reset_html(
@@ -336,9 +342,9 @@ async def send_external_password_reset_email(
     frontend_url = settings.frontend_url.rstrip("/") or "https://prime7erp.com"
     reset_url = f"{frontend_url}/portal/{_portal_segment(principal_type)}/reset-password?token={quote(reset_token, safe='')}"
     portal_label = _portal_label(principal_type)
-    message = MessageSchema(
+    await _send_html_email(
+        to_email=to_email,
         subject=f"Reset your Prime7 ERP {portal_label} password",
-        recipients=[to_email],
         body=_build_external_password_reset_html(
             recipient_name=recipient_name or "",
             tenant_name=tenant_name,
@@ -346,11 +352,7 @@ async def send_external_password_reset_email(
             principal_type=principal_type,
             reset_url=reset_url,
         ),
-        subtype=MessageType.html,
-        headers=POSTMARK_HEADERS,
     )
-    fm = FastMail(get_mail_connection_config())
-    await fm.send_message(message)
 
 
 def _build_staff_invitation_html(
@@ -419,9 +421,9 @@ async def send_staff_invitation_email(
     settings = get_settings()
     frontend_url = settings.frontend_url.rstrip("/") or "https://prime7erp.com"
     accept_url = f"{frontend_url}/accept-invite?token={quote(invite_token, safe='')}&type=staff"
-    message = MessageSchema(
+    await _send_html_email(
+        to_email=to_email,
         subject=f"Prime7 ERP invitation: join {tenant_name.strip() or 'your organization'}",
-        recipients=[to_email],
         body=_build_staff_invitation_html(
             recipient_name=recipient_name or "",
             tenant_name=tenant_name,
@@ -430,11 +432,7 @@ async def send_staff_invitation_email(
             accept_url=accept_url,
             expires_at_label=expires_at_label,
         ),
-        subtype=MessageType.html,
-        headers=POSTMARK_HEADERS,
     )
-    fm = FastMail(get_mail_connection_config())
-    await fm.send_message(message)
 
 
 def _build_staff_welcome_html(
@@ -491,20 +489,16 @@ async def send_staff_welcome_email(
     settings = get_settings()
     frontend_url = settings.frontend_url.rstrip("/") or "https://prime7erp.com"
     login_url = f"{frontend_url}/login"
-    message = MessageSchema(
+    await _send_html_email(
+        to_email=to_email,
         subject="Your Prime7 ERP staff account is ready",
-        recipients=[to_email],
         body=_build_staff_welcome_html(
             recipient_name=recipient_name or "",
             tenant_name=tenant_name,
             company_code=company_code,
             login_url=login_url,
         ),
-        subtype=MessageType.html,
-        headers=POSTMARK_HEADERS,
     )
-    fm = FastMail(get_mail_connection_config())
-    await fm.send_message(message)
 
 
 def _build_password_changed_html(*, recipient_name: str) -> str:
@@ -538,15 +532,11 @@ async def send_new_lead_notification_email(*, to_email: str, lead: dict[str, str
         f"<td style='padding:4px 0;'>{escape(v or '—')}</td></tr>"
         for k, v in lead.items()
     )
-    message = MessageSchema(
+    await _send_html_email(
+        to_email=to_email,
         subject=f"New Prime7 ERP lead: {lead.get('company') or lead.get('name') or 'website'}",
-        recipients=[to_email],
         body=f"<html><body style='font-family:Arial,sans-serif;'><h2>New website lead</h2><table>{rows}</table></body></html>",
-        subtype=MessageType.html,
-        headers=POSTMARK_HEADERS,
     )
-    fm = FastMail(get_mail_connection_config())
-    await fm.send_message(message)
 
 
 async def send_password_changed_notification_email(
@@ -554,12 +544,8 @@ async def send_password_changed_notification_email(
     to_email: str,
     recipient_name: str | None,
 ) -> None:
-    message = MessageSchema(
+    await _send_html_email(
+        to_email=to_email,
         subject="Prime7 ERP: password changed",
-        recipients=[to_email],
         body=_build_password_changed_html(recipient_name=recipient_name or ""),
-        subtype=MessageType.html,
-        headers=POSTMARK_HEADERS,
     )
-    fm = FastMail(get_mail_connection_config())
-    await fm.send_message(message)

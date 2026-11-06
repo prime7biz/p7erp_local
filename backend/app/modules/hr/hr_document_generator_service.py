@@ -6,9 +6,6 @@ import io
 import zipfile
 from datetime import date, datetime
 
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
-from reportlab.pdfgen import canvas
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +26,9 @@ def generate_id_card_pdf(
     desig_title: str | None = None,
     company_name: str = "Company",
 ) -> bytes:
+    from reportlab.lib.units import mm
+    from reportlab.pdfgen import canvas
+
     # Credit-card-ish landscape page
     w, h = 85.6 * mm, 54 * mm
     buf = io.BytesIO()
@@ -69,6 +69,9 @@ def generate_appointment_letter_pdf(
     manager_name: str | None = None,
     company_name: str = "Company",
 ) -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     width, height = A4
@@ -114,6 +117,9 @@ def generate_age_verification_cert_pdf(
     company_name: str = "Company",
     verifier_label: str = "HR",
 ) -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     y = A4[1] - 50
@@ -154,6 +160,9 @@ def generate_payslip_pdf(
     payslip: PayrollPayslip | None = None,
     company_name: str = "Company",
 ) -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     y = A4[1] - 50
@@ -190,6 +199,9 @@ def generate_payslip_pdf(
 
 
 def generate_joining_letter_pdf(emp: Employee, *, company_name: str = "Company") -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     y = A4[1] - 50

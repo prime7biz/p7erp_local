@@ -7,8 +7,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-import httpx
-
+from app.common.http_clients import get_shared_async_client
 from app.common.httpx_openrouter_retry import post_chat_completions_with_429_retry
 from app.config import get_settings
 
@@ -96,20 +95,20 @@ async def openrouter_chat_completion(
         "messages": messages,
     }
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            log_feat = "tier1"
-            if isinstance(log_context, dict) and log_context.get("feature"):
-                log_feat = str(log_context["feature"])
-            resp = await post_chat_completions_with_429_retry(
-                client,
-                url,
-                json=body,
-                headers=headers,
-                max_attempts=5,
-                log_feature=log_feat,
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_shared_async_client("openrouter", timeout=timeout)
+        log_feat = "tier1"
+        if isinstance(log_context, dict) and log_context.get("feature"):
+            log_feat = str(log_context["feature"])
+        resp = await post_chat_completions_with_429_retry(
+            client,
+            url,
+            json=body,
+            headers=headers,
+            max_attempts=5,
+            log_feature=log_feat,
+        )
+        resp.raise_for_status()
+        data = resp.json()
     except Exception as exc:
         latency_ms = int((time.perf_counter() - t0) * 1000)
         logger.warning(

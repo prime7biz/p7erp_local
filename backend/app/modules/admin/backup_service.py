@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import os
 import shutil
 import tarfile
@@ -19,10 +20,28 @@ from app.config import get_settings
 from app.models import BackupJob
 
 
+logger = logging.getLogger(__name__)
+
+
 def backup_root() -> Path:
     p = Path(get_settings().backup_dir or "./backups").resolve()
     p.mkdir(parents=True, exist_ok=True)
     return p
+
+
+def _sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(chunk_size), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _write_tenant_archive(tmp: Path, out: Path, meta: dict[str, Any]) -> None:
+    (tmp / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    with tarfile.open(out, "w:gz") as tar:
+        tar.add(tmp, arcname="export")
+    shutil.rmtree(tmp)
 
 
 async def run_full_backup_job(db: AsyncSession, job_id: int) -> None:
@@ -70,7 +89,7 @@ async def run_full_backup_job(db: AsyncSession, job_id: int) -> None:
     job.file_name = fname
     job.storage_path = str(out.relative_to(backup_root()))
     job.size_bytes = out.stat().st_size
-    job.checksum = hashlib.sha256(out.read_bytes()).hexdigest()
+    job.checksum = await asyncio.to_thread(_sha256_file, out)
     job.completed_at = datetime.utcnow()
     job.expires_at = datetime.utcnow() + timedelta(days=30)
     await db.flush()
@@ -97,28 +116,29 @@ async def run_tenant_export_job(db: AsyncSession, job_id: int, tenant_id: int) -
     ]
     tmp = out.with_suffix(".tmp_dir")
     if tmp.exists():
-        shutil.rmtree(tmp)
+        await asyncio.to_thread(shutil.rmtree, tmp)
     tmp.mkdir(parents=True)
     try:
         for tbl in tables:
             try:
-                r = await db.execute(text(f'SELECT * FROM "{tbl}" WHERE tenant_id = :tid'), {"tid": tenant_id})
-                cols = r.keys()
-                rows = [dict(zip(cols, row)) for row in r.all()]
-                p = tmp / f"{tbl}.json"
-                p.write_text(json.dumps(rows, default=str), encoding="utf-8")
+                # Savepoint: a failing SELECT (e.g. missing table) must not abort the outer
+                # transaction, or every later table and the job status update would fail too.
+                async with db.begin_nested():
+                    r = await db.execute(text(f'SELECT * FROM "{tbl}" WHERE tenant_id = :tid'), {"tid": tenant_id})
+                    cols = r.keys()
+                    rows = [dict(zip(cols, row)) for row in r.all()]
+                payload = json.dumps(rows, default=str)
+                await asyncio.to_thread((tmp / f"{tbl}.json").write_text, payload, encoding="utf-8")
             except Exception:
+                logger.warning("tenant export: skipped table %s for tenant %s", tbl, tenant_id, exc_info=True)
                 continue
         meta = {"tenant_id": tenant_id, "exported_at": datetime.utcnow().isoformat(), "tables": tables}
-        (tmp / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
-        with tarfile.open(out, "w:gz") as tar:
-            tar.add(tmp, arcname="export")
-        shutil.rmtree(tmp)
+        await asyncio.to_thread(_write_tenant_archive, tmp, out, meta)
         job.status = "completed"
         job.file_name = fname
         job.storage_path = str(out.relative_to(backup_root()))
         job.size_bytes = out.stat().st_size
-        job.checksum = hashlib.sha256(out.read_bytes()).hexdigest()
+        job.checksum = await asyncio.to_thread(_sha256_file, out)
         job.completed_at = datetime.utcnow()
         job.expires_at = datetime.utcnow() + timedelta(days=30)
     except Exception as e:

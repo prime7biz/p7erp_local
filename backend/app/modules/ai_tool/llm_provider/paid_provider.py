@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from app.common.http_clients import get_shared_async_client
 from app.common.httpx_openrouter_retry import post_chat_completions_with_429_retry
 from app.config import get_settings
 from app.modules.ai_tool.escalation_shortcuts import maybe_lightweight_paid_escalation
@@ -242,65 +243,65 @@ class PaidLlmProvider(BaseLlmProvider):
         if extra_headers:
             headers.update(extra_headers)
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                for _ in range(6):
-                    body = {
-                        "model": model,
-                        "temperature": 0.2,
-                        "max_tokens": max_tok,
-                        "messages": messages,
-                    }
-                    if openai_tools:
-                        body["tools"] = openai_tools
-                        body["tool_choice"] = tool_choice
-                    resp = await post_chat_completions_with_429_retry(
-                        client,
-                        url,
-                        json=body,
-                        headers=headers,
-                        max_attempts=5,
-                        log_feature="paid_mcp",
+            client = get_shared_async_client("paid_openai_compatible", timeout=60.0)
+            for _ in range(6):
+                body = {
+                    "model": model,
+                    "temperature": 0.2,
+                    "max_tokens": max_tok,
+                    "messages": messages,
+                }
+                if openai_tools:
+                    body["tools"] = openai_tools
+                    body["tool_choice"] = tool_choice
+                resp = await post_chat_completions_with_429_retry(
+                    client,
+                    url,
+                    json=body,
+                    headers=headers,
+                    max_attempts=5,
+                    log_feature="paid_mcp",
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                msg = data["choices"][0]["message"]
+                tool_calls = msg.get("tool_calls") or []
+                if not tool_calls:
+                    out = str(msg.get("content") or "").strip() or "Paid AI returned no text."
+                    if error_label == "OpenRouter" or ("openrouter" in (url or "").lower()):
+                        pt, ct, tt = parse_openai_compatible_usage(data)
+                        logger.info(
+                            "openrouter_chat_completion",
+                            extra={
+                                "model": model,
+                                "feature": "paid_mcp",
+                                "prompt_tokens": pt,
+                                "completion_tokens": ct,
+                                "total_tokens": tt,
+                                "ok": bool(out and "returned no text" not in out.lower()),
+                            },
+                        )
+                    return out
+                messages.append(msg)
+                for call in tool_calls:
+                    fname = call["function"]["name"]
+                    raw_args = call["function"].get("arguments") or "{}"
+                    args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                    tool_result = await run_paid_loop_tool(
+                        fname,
+                        args,
+                        tenant_id=tenant_id,
+                        user=user,
+                        allowed_names=valid_tool_names,
                     )
-                    resp.raise_for_status()
-                    data = resp.json()
-                    msg = data["choices"][0]["message"]
-                    tool_calls = msg.get("tool_calls") or []
-                    if not tool_calls:
-                        out = str(msg.get("content") or "").strip() or "Paid AI returned no text."
-                        if error_label == "OpenRouter" or ("openrouter" in (url or "").lower()):
-                            pt, ct, tt = parse_openai_compatible_usage(data)
-                            logger.info(
-                                "openrouter_chat_completion",
-                                extra={
-                                    "model": model,
-                                    "feature": "paid_mcp",
-                                    "prompt_tokens": pt,
-                                    "completion_tokens": ct,
-                                    "total_tokens": tt,
-                                    "ok": bool(out and "returned no text" not in out.lower()),
-                                },
-                            )
-                        return out
-                    messages.append(msg)
-                    for call in tool_calls:
-                        fname = call["function"]["name"]
-                        raw_args = call["function"].get("arguments") or "{}"
-                        args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
-                        tool_result = await run_paid_loop_tool(
-                            fname,
-                            args,
-                            tenant_id=tenant_id,
-                            user=user,
-                            allowed_names=valid_tool_names,
-                        )
-                        messages.append(
-                            {
-                                "role": "tool",
-                                "tool_call_id": call["id"],
-                                "content": json.dumps(tool_result, default=str),
-                            }
-                        )
-                return "Paid AI reached tool-call iteration limit."
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": call["id"],
+                            "content": json.dumps(tool_result, default=str),
+                        }
+                    )
+            return "Paid AI reached tool-call iteration limit."
         except Exception as exc:
             detail = type(exc).__name__
             if isinstance(exc, httpx.HTTPStatusError):
@@ -354,48 +355,48 @@ class PaidLlmProvider(BaseLlmProvider):
             "content-type": "application/json",
         }
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                for _ in range(6):
-                    sys_line = "You are a paid ERP execution assistant. Use tools when needed, then answer clearly."
-                    if (tenant_system_prefix or "").strip():
-                        sys_line = (tenant_system_prefix or "").strip() + "\n\n" + sys_line
-                    body = {
-                        "model": model,
-                        "max_tokens": max_tok,
-                        "temperature": 0.2,
-                        "system": sys_line,
-                        "messages": messages,
-                    }
-                    if anthropic_tools:
-                        body["tools"] = anthropic_tools
-                    resp = await client.post("https://api.anthropic.com/v1/messages", json=body, headers=headers)
-                    resp.raise_for_status()
-                    data = resp.json()
-                    blocks = data.get("content") or []
-                    tool_uses = [b for b in blocks if isinstance(b, dict) and b.get("type") == "tool_use"]
-                    if not tool_uses:
-                        text_blocks = [b.get("text", "") for b in blocks if isinstance(b, dict) and b.get("type") == "text"]
-                        return "\n".join(x for x in text_blocks if x).strip() or "Paid AI returned no text."
+            client = get_shared_async_client("anthropic", timeout=60.0)
+            for _ in range(6):
+                sys_line = "You are a paid ERP execution assistant. Use tools when needed, then answer clearly."
+                if (tenant_system_prefix or "").strip():
+                    sys_line = (tenant_system_prefix or "").strip() + "\n\n" + sys_line
+                body = {
+                    "model": model,
+                    "max_tokens": max_tok,
+                    "temperature": 0.2,
+                    "system": sys_line,
+                    "messages": messages,
+                }
+                if anthropic_tools:
+                    body["tools"] = anthropic_tools
+                resp = await client.post("https://api.anthropic.com/v1/messages", json=body, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                blocks = data.get("content") or []
+                tool_uses = [b for b in blocks if isinstance(b, dict) and b.get("type") == "tool_use"]
+                if not tool_uses:
+                    text_blocks = [b.get("text", "") for b in blocks if isinstance(b, dict) and b.get("type") == "text"]
+                    return "\n".join(x for x in text_blocks if x).strip() or "Paid AI returned no text."
 
-                    messages.append({"role": "assistant", "content": blocks})
-                    tool_results_blocks = []
-                    for b in tool_uses:
-                        fname = str(b.get("name") or "")
-                        tool_result = await run_paid_loop_tool(
-                            fname,
-                            b.get("input") or {},
-                            tenant_id=tenant_id,
-                            user=user,
-                            allowed_names=allowed_names,
-                        )
-                        tool_results_blocks.append(
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": b.get("id"),
-                                "content": json.dumps(tool_result, default=str),
-                            }
-                        )
-                    messages.append({"role": "user", "content": tool_results_blocks})
-                return "Paid AI reached tool-call iteration limit."
+                messages.append({"role": "assistant", "content": blocks})
+                tool_results_blocks = []
+                for b in tool_uses:
+                    fname = str(b.get("name") or "")
+                    tool_result = await run_paid_loop_tool(
+                        fname,
+                        b.get("input") or {},
+                        tenant_id=tenant_id,
+                        user=user,
+                        allowed_names=allowed_names,
+                    )
+                    tool_results_blocks.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": b.get("id"),
+                            "content": json.dumps(tool_result, default=str),
+                        }
+                    )
+                messages.append({"role": "user", "content": tool_results_blocks})
+            return "Paid AI reached tool-call iteration limit."
         except Exception as exc:
             return f"Paid AI (Anthropic) call failed: {type(exc).__name__}"

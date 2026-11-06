@@ -7,11 +7,6 @@ from app.modules.mcp_server.tools import execute_tool_call, get_tools, register_
 
 logger = logging.getLogger(__name__)
 
-try:
-    from mcp.server.fastmcp import FastMCP
-except Exception:  # pragma: no cover - safety when dependency is missing
-    FastMCP = None  # type: ignore[assignment]
-
 _MCP_SERVER = None
 
 
@@ -19,7 +14,9 @@ def _build_server():
     global _MCP_SERVER
     if _MCP_SERVER is not None:
         return _MCP_SERVER
-    if FastMCP is None:
+    try:
+        from mcp.server.fastmcp import FastMCP
+    except Exception:  # pragma: no cover - safety when dependency is missing
         return None
     server = FastMCP("P7 ERP MCP", stateless_http=True)
     register_tools(server)

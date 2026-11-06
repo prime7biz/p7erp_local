@@ -18,11 +18,13 @@ def run_async(coro: Coroutine[Any, Any, T]) -> T:
     """
 
     async def _main() -> T:
+        from app.common.http_clients import close_shared_http_clients
         from app.database import engine
 
         try:
             return await coro
         finally:
+            await close_shared_http_clients()
             await engine.dispose()
 
     return asyncio.run(_main())

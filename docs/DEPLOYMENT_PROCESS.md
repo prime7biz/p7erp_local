@@ -119,6 +119,106 @@ DEPLOY_PATH=/home/primeadmin/p7erp_local bash scripts/deploy_production_remote.s
 
 ---
 
+## Server tuning: Postgres, DB pools, Celery, schedulers
+
+All values below have safe defaults in `docker-compose.prod.yml` / `backend/app/config.py`.
+You do **not** need to add anything to the live `.env`; add a line only to override a default.
+
+### Postgres restart (first deploy after the tuning change)
+
+`docker-compose.prod.yml` now starts Postgres with tuned memory settings. Because the
+Postgres `command:` changed, the next `docker compose -f docker-compose.prod.yml up -d`
+(run by `scripts/deploy_production_remote.sh`) **recreates the Postgres container once**.
+Data is safe (it lives in the `postgres_data` volume) but the site is **down for roughly
+10–30 seconds** while Postgres restarts and the backend reconnects. Deploy at a quiet time
+and take the usual backup first.
+
+If Postgres does not come back (`docker compose -f docker-compose.prod.yml logs postgres`
+shows a memory error), lower `PG_SHARED_BUFFERS` (e.g. `256MB`) in `.env` and run `up -d` again.
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `PG_SHARED_BUFFERS` | `512MB` | Postgres page cache (~25% of RAM left after Ollama/API) |
+| `PG_EFFECTIVE_CACHE_SIZE` | `1536MB` | Planner hint for OS + Postgres cache |
+| `PG_WORK_MEM` | `8MB` | Per sort/hash step (multiplies with concurrent queries) |
+| `PG_MAINTENANCE_WORK_MEM` | `128MB` | VACUUM / CREATE INDEX memory |
+| `PG_MAX_CONNECTIONS` | `100` | Hard cap on DB connections |
+| `PG_IDLE_IN_TRANSACTION_SESSION_TIMEOUT` | `0` (off) | Keep 0: background jobs hold an advisory-lock connection idle inside a transaction |
+| `PG_RANDOM_PAGE_COST` | `1.1` | SSD storage |
+| `PG_SHM_SIZE` | `256mb` | `/dev/shm` for parallel queries (Docker default 64 MB is too small) |
+
+### pg_stat_statements (one-time, after the Postgres restart)
+
+The library is preloaded, but the extension must be created once per database
+(idempotent — safe to run again):
+
+```bash
+cd /home/primeadmin/p7erp_local
+docker compose -f docker-compose.prod.yml exec -T postgres \
+  sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;"'
+# Top 10 slowest queries (total time):
+docker compose -f docker-compose.prod.yml exec -T postgres \
+  sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT calls, round(total_exec_time) AS total_ms, round(mean_exec_time) AS mean_ms, left(query, 80) FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 10;"'
+```
+
+### DB connection pools (per process)
+
+Each uvicorn worker and each Celery child process has its **own** pool.
+Budget = API `2 x (10 + 10)` + worker `CELERY_CONCURRENCY x (2 + 3)` + beat `1 + 1` ≈ 52, under `PG_MAX_CONNECTIONS=100`.
+
+| Variable | Default | Applies to |
+|----------|---------|------------|
+| `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` | `10` / `10` (was 20 / 30) | API (backend) |
+| `CELERY_DB_POOL_SIZE` / `CELERY_DB_MAX_OVERFLOW` | `2` / `3` | Celery worker children |
+| (fixed) | `1` / `1` | Celery beat |
+| `PERF_SESSION_STATEMENT_TIMEOUT_MS` / `PERF_SESSION_LOCK_TIMEOUT_MS` | `0` (off) | Set once per connection; with `USE_PGBOUNCER=true` they are `SET LOCAL` per request instead. When on, they also apply to background jobs. |
+
+If logs show `QueuePool limit ... reached`, raise `DB_POOL_SIZE` a little and keep the budget under `PG_MAX_CONNECTIONS`.
+
+### Celery worker
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `CELERY_CONCURRENCY` | `2` | Worker processes (was: one per CPU) |
+| `CELERY_WORKER_PREFETCH_MULTIPLIER` | `1` | Reserve one task at a time |
+| `CELERY_WORKER_MAX_TASKS_PER_CHILD` | `200` | Recycle child processes (frees leaked memory); `0` = never |
+| `CELERY_TASK_SOFT_TIME_LIMIT_SECONDS` / `CELERY_TASK_TIME_LIMIT_SECONDS` | `3300` / `3600` | Soft / hard per-task limit; `0` = none |
+
+### Housekeeping
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `ALERT_SCAN_LOG_RETENTION_DAYS` | `30` | Hourly platform maintenance deletes older `alert_scan_log` rows in 5,000-row batches; `0` = keep forever |
+| `ALERT_SCAN_LOG_PURGE_BATCH_SIZE` | `5000` | Rows per delete batch (not passed by compose; set in config only if needed) |
+
+Platform maintenance still runs hourly, but the daily part (usage roll-up and the 1st-of-month
+AI budget reset) now runs **once per day** instead of every hour.
+
+### Moving scheduled jobs from the API to Celery beat (`INPROCESS_SCHEDULERS_ENABLED`)
+
+Default `true`: merch alert scan (15 min), trade alert scan (daily), weekly AI report
+(Sunday 02:00 UTC) and platform maintenance (hourly) run inside the API process.
+Celery beat has the same four jobs ready and uses them only when the flag is `false`.
+
+Switch to beat **only after** worker + beat are healthy:
+
+```bash
+cd /home/primeadmin/p7erp_local
+docker compose -f docker-compose.prod.yml ps worker beat          # both "running"
+docker compose -f docker-compose.prod.yml logs --tail=50 beat      # "beat: Starting..." and no errors
+docker compose -f docker-compose.prod.yml exec -T worker \
+  celery -A app.common.celery_app.celery_app inspect ping          # "pong"
+echo "INPROCESS_SCHEDULERS_ENABLED=false" >> .env
+docker compose -f docker-compose.prod.yml up -d backend worker beat
+# Within ~15 minutes beat logs should show "Sending due task scheduled-merch-alert-scan".
+docker compose -f docker-compose.prod.yml logs --since 20m beat | grep scheduled-
+```
+
+Rollback: remove the line from `.env` (or set it to `true`) and run the same `up -d` command.
+Never run both: the flag decides which scheduler owns the jobs.
+
+---
+
 ## Rollback
 
 **App only (no DB change):**

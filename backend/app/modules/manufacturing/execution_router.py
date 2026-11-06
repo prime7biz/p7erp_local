@@ -34,6 +34,7 @@ from app.models import (
     User,
 )
 from app.services.fifo_inventory import finalize_movement_fifo
+from app.modules.manufacturing.codes import next_mfg_code
 from app.modules.manufacturing.schemas import (
     DowntimeCreate,
     DowntimeEndBody,
@@ -88,10 +89,6 @@ async def _require_any_role(
     role_name = await _role_name(db, user, tenant_id)
     if role_name not in allowed_roles:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=message)
-
-
-def _next_code(prefix: str, last_id: int | None) -> str:
-    return f"{prefix}{(last_id or 0) + 1:04d}"
 
 
 def _to_float(value: str | float | int | None) -> float:
@@ -185,8 +182,13 @@ async def create_work_order(
     if body.mo_number:
         mo_number = body.mo_number.strip()
     else:
-        last_id = (await db.execute(select(func.max(ManufacturingWorkOrder.id)).where(ManufacturingWorkOrder.tenant_id == tenant.id))).scalar()
-        mo_number = _next_code("MWO-", last_id)
+        mo_number = await next_mfg_code(
+            db,
+            model=ManufacturingWorkOrder,
+            code_column=ManufacturingWorkOrder.mo_number,
+            tenant_id=tenant.id,
+            prefix="MWO-",
+        )
     await _assert_tenant_refs(
         db,
         tenant.id,

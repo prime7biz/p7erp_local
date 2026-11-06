@@ -7007,18 +7007,44 @@ async def bulk_receive_grn(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    # Plain ids: after a rollback the ORM objects are expired and touching them would fail.
+    tenant_id = tenant.id
+    user_id = user.id
     out: list[dict] = []
-    for gid in body.ids:
+    for gid in list(dict.fromkeys(body.ids)):
+        # Each GRN runs inside its own savepoint; a successful receive commits everything so far.
+        savepoint = await db.begin_nested()
         try:
             res = await _apply_grn_receive_goods(db, tenant, user, gid)
             out.append({"id": gid, "ok": True, "grn_code": res.grn_code})
+            continue
         except HTTPException as e:
-            # Each GRN commits on success; drop this one's half-applied changes before the next.
-            await safe_async_session_rollback(db)
-            out.append({"id": gid, "ok": False, "detail": e.detail})
+            detail = e.detail
         except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception("bulk GRN receive failed grn=%s tenant=%s", gid, tenant_id)
+            detail = "Receive failed"
+        if savepoint.is_active:
+            await savepoint.rollback()
+        else:
+            # The savepoint is gone (receive already committed, or a DB error ended it): start clean.
             await safe_async_session_rollback(db)
-            out.append({"id": gid, "ok": False, "detail": "Receive failed"})
+            tenant = await db.get(Tenant, tenant_id, populate_existing=True)
+            user = await db.get(User, user_id, populate_existing=True)
+        received_code = (
+            await db.execute(
+                select(GoodsReceiving.grn_code).where(
+                    GoodsReceiving.id == gid,
+                    GoodsReceiving.tenant_id == tenant_id,
+                    GoodsReceiving.status == "RECEIVED",
+                )
+            )
+        ).scalar_one_or_none()
+        if received_code is not None and detail != "GRN already received":
+            out.append({"id": gid, "ok": True, "grn_code": received_code, "warning": "Received; a follow-up step failed"})
+        else:
+            out.append({"id": gid, "ok": False, "detail": detail})
     return out
 
 

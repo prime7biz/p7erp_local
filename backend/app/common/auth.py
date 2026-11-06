@@ -12,8 +12,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.common.rls import bind_session_tenant
 from app.common.tenant_feature_keys import is_single_session_enforced
-from app.database import get_db
+from app.database import get_db, rls_request_scope
 from app.models import Tenant, User
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -182,6 +183,7 @@ async def get_current_user(
     db: Annotated[AsyncSession, Depends(get_db)],
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],
+    _rls_scope: Annotated[None, Depends(rls_request_scope)] = None,
 ) -> User:
     payload = decode_access_token(credentials.credentials)
     _reject_non_internal_token(payload)
@@ -211,6 +213,7 @@ async def get_current_user(
     tenant = tenant_result.scalar_one_or_none()
     if tenant is None or not tenant.is_active or tenant.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization is inactive or suspended")
+    await bind_session_tenant(db, user.tenant_id)
     request.state.auth_user_tenant = tenant
     request.state.tenant_feature_flags = tenant.feature_flags if tenant else None
     request.state.tenant_feature_flags_cached = True
@@ -247,6 +250,7 @@ _bearer_optional = HTTPBearer(auto_error=False)
 async def get_current_user_optional(
     db: Annotated[AsyncSession, Depends(get_db)],
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_optional)],
+    _rls_scope: Annotated[None, Depends(rls_request_scope)] = None,
 ) -> User | None:
     if not credentials:
         return None
@@ -279,11 +283,15 @@ async def get_current_user_optional(
     if is_single_session_enforced(tenant.feature_flags):
         token_sv = payload.get("sv")
         if token_sv is None:
-            return user if _legacy_token_without_sv_allowed() else None
+            if not _legacy_token_without_sv_allowed():
+                return None
+            await bind_session_tenant(db, user.tenant_id)
+            return user
         try:
             token_session_version = int(token_sv)
         except (TypeError, ValueError):
             return None
         if token_session_version != int(user.auth_session_version or 0):
             return None
+    await bind_session_tenant(db, user.tenant_id)
     return user

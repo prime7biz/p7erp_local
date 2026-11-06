@@ -187,6 +187,7 @@ async def execute_tool_call(
         {"create_sales_inquiry", "create_financial_voucher", "process_goods_receipt"}
     )
     if settings.mcp_commit_uses_artifact and tool_name in _ARTIFACT_COMMIT_TOOLS:
+        from app.common.rls import bind_session_tenant
         from app.database import AsyncSessionLocal
         from app.modules.ai_tool.artifacts.service import create_artifact
 
@@ -198,6 +199,7 @@ async def execute_tool_call(
         artifact_type, source_module = mapping[tool_name]
         async with AsyncSessionLocal() as session:
             try:
+                await bind_session_tenant(session, int(data["tenant_id"]))
                 art = await create_artifact(
                     session,
                     tenant_id=int(data["tenant_id"]),
@@ -223,11 +225,13 @@ async def execute_tool_call(
                 return {"status": "FAILED", "tool_name": tool_name, "message": str(exc)}
 
     if tool_name == "search_unstructured_context":
+        from app.common.rls import bind_session_tenant
         from app.database import AsyncSessionLocal
         from app.modules.ai_tool.retrieval.unstructured_search import search_unstructured_context
 
         async with AsyncSessionLocal() as session:
             try:
+                await bind_session_tenant(session, int(data["tenant_id"]))
                 out = await search_unstructured_context(
                     session,
                     tenant_id=int(data["tenant_id"]),
@@ -243,11 +247,13 @@ async def execute_tool_call(
                 return {"status": "FAILED", "tool_name": tool_name, "message": str(exc)}
 
     if tool_name == "analyze_structured_metrics":
+        from app.common.rls import bind_session_tenant
         from app.database import AsyncSessionLocal
         from app.modules.ai_tool.analysis.registry import PIPELINES, run_analysis
 
         async with AsyncSessionLocal() as session:
             try:
+                await bind_session_tenant(session, int(data["tenant_id"]))
                 mt = str(data["metric_type"]).strip().lower()
                 if mt not in PIPELINES:
                     mt = "margin"
@@ -270,11 +276,13 @@ async def execute_tool_call(
                 return {"status": "FAILED", "tool_name": tool_name, "message": str(exc)}
 
     if tool_name == "generate_forecast":
+        from app.common.rls import bind_session_tenant
         from app.database import AsyncSessionLocal
         from app.modules.ai_tool.forecast.job_manager import run_forecast_for_mcp
 
         async with AsyncSessionLocal() as session:
             try:
+                await bind_session_tenant(session, int(data["tenant_id"]))
                 out = await run_forecast_for_mcp(
                     session,
                     tenant_id=int(data["tenant_id"]),
@@ -292,6 +300,7 @@ async def execute_tool_call(
                 return {"status": "FAILED", "tool_name": tool_name, "message": str(exc)}
 
     if tool_name == "create_system_task":
+        from app.common.rls import bind_session_tenant
         from app.database import AsyncSessionLocal
         from app.modules.ai_tool import repository
         from app.modules.ai_tool.tasks.executor import execute_system_task_inline
@@ -300,6 +309,7 @@ async def execute_tool_call(
 
         async with AsyncSessionLocal() as session:
             try:
+                await bind_session_tenant(session, int(data["tenant_id"]))
                 tid = int(data["tenant_id"])
                 sim = bool(data.get("simulation", False))
                 ok_pol, pol_msg = await evaluate_task_creation_policy(

@@ -37,11 +37,13 @@ async def _list_tenant_ids() -> list[int]:
 
 
 async def _run_per_tenant(job_name: str, work: Callable[[AsyncSession, int], Awaitable[object]]) -> None:
+    from app.common.rls import bind_session_tenant
     from app.database import AsyncSessionLocal, safe_async_session_rollback
 
     for tid in await _list_tenant_ids():
         async with AsyncSessionLocal() as db:
             try:
+                await bind_session_tenant(db, tid)
                 await work(db, tid)
                 await db.commit()
             except Exception:

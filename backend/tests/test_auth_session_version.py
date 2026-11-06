@@ -49,7 +49,16 @@ async def _seed_user(db, *, single_session_enforced: bool) -> tuple[Tenant, User
     return tenant, user
 
 
+_COLUMN_EXISTS_SQL = (
+    "SELECT 1 FROM information_schema.columns "
+    "WHERE table_name = 'users' AND column_name = 'auth_session_version'"
+)
+
+
 async def _ensure_auth_session_version_column(db) -> None:
+    exists = (await db.execute(text(_COLUMN_EXISTS_SQL))).scalar()
+    if exists:
+        return  # DDL needs the table owner; the RLS app role (non-owner) cannot run it
     await db.execute(
         text(
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_session_version INTEGER NOT NULL DEFAULT 0"

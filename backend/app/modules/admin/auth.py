@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.client_ip import client_ip_from_request
+from app.common.rls import bind_session_bypass
 from app.config import get_settings
 from app.database import get_db
 from app.models import AdminSession, PlatformAdmin, PlatformAdminAuditLog
@@ -109,6 +110,8 @@ async def get_current_admin_allow_mfa_enrolment(
     enrol_only = bool(payload.get("mfa_enrol_only")) and not admin.totp_enabled
     if not enrol_only and get_settings().platform_admin_mfa_required and not admin.totp_enabled:
         enrol_only = True
+    # Platform admins manage every tenant: run this request's session in RLS bypass.
+    await bind_session_bypass(db)
     return AdminContext(admin=admin, session=session, mfa_enrol_only=enrol_only)
 
 

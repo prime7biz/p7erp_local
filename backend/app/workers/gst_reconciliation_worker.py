@@ -13,6 +13,7 @@ from app.common.tenant_feature_keys import is_gst_system_enabled
 from app.database import AsyncSessionLocal, safe_async_session_rollback
 from app.modules.finance.gst_return_service import monthly_gst_reconciliation
 from app.workers.tenant_rows import active_tenant_rows
+from app.common.rls import bind_session_tenant
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ async def _run() -> dict:
             if not is_gst_system_enabled(flags):
                 continue
             try:
+                await bind_session_tenant(db, tenant_id)
                 result = await monthly_gst_reconciliation(db, tenant_id, period_from, period_to)
                 await db.commit()
                 processed += 1

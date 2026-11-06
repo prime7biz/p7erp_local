@@ -94,6 +94,9 @@ services:
       DATABASE_URL: postgresql://p7erp:p7erp@postgres:5432/p7erp
       USE_PGBOUNCER: ${USE_PGBOUNCER:-false}
       DATABASE_URL_PGBOUNCER: ${DATABASE_URL_PGBOUNCER:-postgresql://p7erp:p7erp@pgbouncer:5432/p7erp}
+      # Row-Level Security (docs/erp-modernization/RLS_RUNBOOK.md). Off by default.
+      RLS_SESSION_TENANT_ENABLED: ${RLS_SESSION_TENANT_ENABLED:-false}
+      DATABASE_URL_APP: ${DATABASE_URL_APP:-}
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
       TENANT_STRATEGY: header
@@ -196,6 +199,9 @@ services:
       DATABASE_URL: postgresql://p7erp:p7erp@postgres:5432/p7erp
       USE_PGBOUNCER: ${USE_PGBOUNCER:-false}
       DATABASE_URL_PGBOUNCER: ${DATABASE_URL_PGBOUNCER:-postgresql://p7erp:p7erp@pgbouncer:5432/p7erp}
+      # Row-Level Security (docs/erp-modernization/RLS_RUNBOOK.md). Off by default.
+      RLS_SESSION_TENANT_ENABLED: ${RLS_SESSION_TENANT_ENABLED:-false}
+      DATABASE_URL_APP: ${DATABASE_URL_APP:-}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
@@ -224,6 +230,9 @@ services:
       DATABASE_URL: postgresql://p7erp:p7erp@postgres:5432/p7erp
       USE_PGBOUNCER: ${USE_PGBOUNCER:-false}
       DATABASE_URL_PGBOUNCER: ${DATABASE_URL_PGBOUNCER:-postgresql://p7erp:p7erp@pgbouncer:5432/p7erp}
+      # Row-Level Security (docs/erp-modernization/RLS_RUNBOOK.md). Off by default.
+      RLS_SESSION_TENANT_ENABLED: ${RLS_SESSION_TENANT_ENABLED:-false}
+      DATABASE_URL_APP: ${DATABASE_URL_APP:-}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}

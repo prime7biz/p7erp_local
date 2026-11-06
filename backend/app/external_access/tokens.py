@@ -13,8 +13,9 @@ from app.common.jwt_compat import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.rls import bind_session_tenant
 from app.config import get_settings
-from app.database import get_db
+from app.database import get_db, rls_request_scope
 from app.models import ExternalPrincipal, Tenant
 
 from app.external_access.constants import (
@@ -116,6 +117,7 @@ def decode_external_token(token: str) -> dict[str, Any]:
 async def get_current_external_principal(
     db: Annotated[AsyncSession, Depends(get_db)],
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],
+    _rls_scope: Annotated[None, Depends(rls_request_scope)] = None,
 ) -> ExternalPrincipal:
     payload = decode_external_token(credentials.credentials)
     if payload.get(JWT_CLAIM_TYPE) != JWT_VALUE_EXTERNAL:
@@ -161,6 +163,7 @@ async def get_current_external_principal(
     )
     if not tr.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization inactive")
+    await bind_session_tenant(db, principal.tenant_id)
     return principal
 
 

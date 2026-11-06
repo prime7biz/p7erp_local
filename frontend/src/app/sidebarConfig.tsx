@@ -619,7 +619,10 @@ export const menuSections: MenuSection[] = [
     subsections: [
       {
         label: "Overview",
-        items: [{ icon: LayoutDashboard, label: "HR Dashboard", href: `${PREFIX}/hr`, exact: true }],
+        items: [
+          { icon: LayoutDashboard, label: "HR Dashboard", href: `${PREFIX}/hr`, exact: true },
+          { icon: SlidersHorizontal, label: "HR Settings", href: `${PREFIX}/hr/settings` },
+        ],
       },
       {
         label: "Core HR",
@@ -647,6 +650,7 @@ export const menuSections: MenuSection[] = [
           { icon: Calendar, label: "Holidays", href: `${PREFIX}/hr/attendance/holidays` },
           { icon: Calendar, label: "Roster", href: `${PREFIX}/hr/attendance/roster` },
           { icon: ClipboardCheck, label: "Daily Entry", href: `${PREFIX}/hr/attendance/entries` },
+          { icon: HardDrive, label: "Attendance Devices", href: `${PREFIX}/hr/attendance/devices` },
           { icon: AlertTriangle, label: "Regularizations", href: `${PREFIX}/hr/attendance/regularizations` },
           { icon: Activity, label: "Overtime Rules", href: `${PREFIX}/hr/attendance/overtime-rules` },
           { icon: Clock, label: "Overtime", href: `${PREFIX}/hr/attendance/overtime` },

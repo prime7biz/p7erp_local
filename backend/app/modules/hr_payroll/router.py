@@ -1694,6 +1694,7 @@ async def auto_calculate_preview(
         missing_assignment_employee_ids=preview.missing_assignment_employee_ids,
         warnings=preview.warnings,
         lop_applied=preview.lop_applied,
+        ot_from_salary=preview.ot_from_salary,
         employees=[
             PayrollEmployeeCalcPreviewOut(
                 employee_id=e.employee_id,
@@ -1729,6 +1730,10 @@ async def auto_calculate_preview(
                 lop_absent_days=e.lop_absent_days,
                 lop_unpaid_leave_days=e.lop_unpaid_leave_days,
                 lop_amount=e.lop_amount,
+                ot_from_salary=e.ot_from_salary,
+                ot_paid_hours=e.ot_paid_hours,
+                ot_hourly_rate=e.ot_hourly_rate,
+                ot_amount=e.ot_amount,
                 components=[
                     PayrollComponentCalcOut(
                         component_id=c.component_id,

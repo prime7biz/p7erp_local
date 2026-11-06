@@ -89,6 +89,16 @@ PAYROLL_GROSS_POSTING = "payroll_gross_posting"
 # prorated by payable days (unpaid absences / unpaid leave / joining or leaving mid-period).
 # Runs that were already auto-calculated without it keep their old numbers.
 PAYROLL_LOP_ENABLED = "payroll_lop_enabled"
+# Overtime priced from salary in payroll auto-calculate (default OFF — changes pay): each approved
+# OT entry pays hours x (monthly base salary / hr_ot_hours_per_month) x multiplier.
+# Runs that were already auto-calculated without it keep their old numbers.
+PAYROLL_OT_FROM_SALARY_ENABLED = "payroll_ot_from_salary_enabled"
+# Numeric HR settings stored in feature_flags (edited on HR -> HR Settings).
+HR_OT_HOURS_PER_MONTH = "hr_ot_hours_per_month"
+HR_OT_MULTIPLIER = "hr_ot_multiplier"
+# Bangladesh Labour Act: hourly basic = monthly basic / 208, overtime paid at twice that rate.
+DEFAULT_HR_OT_HOURS_PER_MONTH = 208
+DEFAULT_HR_OT_MULTIPLIER = 2
 
 # Sprint H1 compliance / OCR / AI / documents (all default off).
 COMPLIANCE_TRACKING_ENABLED = "compliance_tracking_enabled"
@@ -436,6 +446,34 @@ def is_payroll_gross_posting_enabled(feature_flags: Any) -> bool:
 def is_payroll_lop_enabled(feature_flags: Any) -> bool:
     """Loss of pay is on unless the tenant explicitly sets ``payroll_lop_enabled`` to False."""
     return _flag_default_true(feature_flags, PAYROLL_LOP_ENABLED)
+
+
+def is_payroll_ot_from_salary_enabled(feature_flags: Any) -> bool:
+    """Strict: only explicit True prices overtime from salary (default off)."""
+    return _flag_true(feature_flags, PAYROLL_OT_FROM_SALARY_ENABLED)
+
+
+def _positive_number_setting(feature_flags: Any, key: str, default: float) -> float:
+    if not isinstance(feature_flags, dict):
+        return default
+    raw = feature_flags.get(key)
+    if isinstance(raw, bool):
+        return default
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
+def get_hr_ot_hours_per_month(feature_flags: Any) -> float:
+    """Hours in a month used to turn monthly salary into an hourly rate (default 208)."""
+    return _positive_number_setting(feature_flags, HR_OT_HOURS_PER_MONTH, float(DEFAULT_HR_OT_HOURS_PER_MONTH))
+
+
+def get_hr_ot_multiplier(feature_flags: Any) -> float:
+    """Overtime multiplier when an OT entry has no overtime rule (default 2)."""
+    return _positive_number_setting(feature_flags, HR_OT_MULTIPLIER, float(DEFAULT_HR_OT_MULTIPLIER))
 
 
 def is_statutory_payroll_enabled(feature_flags: Any) -> bool:

@@ -3,6 +3,7 @@ import {
   api,
   type HrPayrollAutoCalcComponent,
   type HrPayrollAutoCalcEmployee,
+  type HrPayrollAutoCalcEmployeeWithOt,
   type HrPayrollAutoCalcPreview,
   type HrPayrollPeriodResponse,
   type HrPayrollRunCreate,
@@ -30,6 +31,16 @@ function groupPreviewComponents(components: HrPayrollAutoCalcComponent[]) {
   );
   const hasStatutory = statutoryLines.length > 0;
   return { earnings, statutoryLines, statutoryDeductions, otherDeductions, hasStatutory };
+}
+
+function OvertimeFromSalaryNote({ employee }: { employee: HrPayrollAutoCalcEmployeeWithOt }) {
+  if (!employee.ot_from_salary || Number(employee.ot_paid_hours ?? 0) <= 0) return null;
+  return (
+    <div className="text-[11px] text-text-muted">
+      OT {Number(employee.ot_paid_hours)} h · rate {Number(employee.ot_hourly_rate ?? 0).toFixed(2)}/h ·{" "}
+      {Number(employee.ot_amount ?? 0).toFixed(2)}
+    </div>
+  );
 }
 
 function PayrollEmployeeBreakdown({ employee }: { employee: HrPayrollAutoCalcEmployee }) {
@@ -495,7 +506,10 @@ export function HrPayrollRunsPage() {
                         </td>
                         <td className="px-3 py-1.5">{e.gross_pay}</td>
                         <td className="px-3 py-1.5">{e.deductions}</td>
-                        <td className="px-3 py-1.5">{e.gross_pay}</td>
+                        <td className="px-3 py-1.5">
+                          {e.gross_pay}
+                          <OvertimeFromSalaryNote employee={e} />
+                        </td>
                         <td className="px-3 py-1.5">{e.net_pay}</td>
                         <td className="px-3 py-1.5">{e.status ?? (e.skipped ? "Missing Assignment" : "Ready")}</td>
                         <td className="px-3 py-1.5 text-xs text-text-muted">

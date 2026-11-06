@@ -259,6 +259,7 @@ from app.models.hr_attendance import (
     OvertimeRule,
     OvertimeEntry,
 )
+from app.models.hr_attendance_device import AttendanceDevice, AttendancePunch
 from app.models.hr_leave import (
     LeaveType,
     LeavePolicy,
@@ -598,6 +599,8 @@ __all__ = [
     "AttendanceRegularizationRequest",
     "OvertimeRule",
     "OvertimeEntry",
+    "AttendanceDevice",
+    "AttendancePunch",
     "LeaveType",
     "LeavePolicy",
     "LeaveBalance",

@@ -34,6 +34,7 @@ from app.models import (
     Tenant,
     User,
 )
+from app.modules.hr_attendance.device_service import ENTRY_SOURCE_DEVICE
 from app.modules.hr_attendance.schemas import (
     AttendanceBulkEntryBody,
     AttendanceEntryCreate,
@@ -446,6 +447,10 @@ async def update_entry(
         payload["status"] = payload["status"].strip().upper()
     if payload.get("source") is not None:
         payload["source"] = payload["source"].strip().upper()
+    hand_edited = any(k in payload and getattr(row, k) != payload[k] for k in ("in_time", "out_time", "status"))
+    if hand_edited and (row.source or "").upper() == ENTRY_SOURCE_DEVICE and payload.get("source") is None:
+        # Device imports never overwrite non-DEVICE entries, so the correction survives re-imports.
+        payload["source"] = "MANUAL"
     changes = {k: (str(getattr(row, k, None)), str(v)) for k, v in payload.items() if getattr(row, k, None) != v}
     for key, value in payload.items():
         setattr(row, key, value)

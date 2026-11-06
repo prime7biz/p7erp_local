@@ -1574,7 +1574,8 @@ Answers come only from a fixed list: open orders, open quantity, orders due in 1
 - **HR Dashboard** — \`/app/hr\`
 - **Employees** — \`/app/hr/employees\`
 - **AI employee onboarding** — \`/app/hr/employees/ai-onboard\` (OCR CV / NID / medical; feature flags)
-- **Attendance** — routes under \`/app/hr/attendance/...\`
+- **Attendance** — routes under \`/app/hr/attendance/...\` (including **Attendance Devices** — \`/app/hr/attendance/devices\` — for fingerprint / card machines)
+- **HR Settings** — \`/app/hr/settings\` (weekend days, overtime pay from salary)
 - **Leave** — \`/app/hr/leave/...\`
 - **Payroll** — \`/app/hr/payroll/...\` (components, structures, **structure assignments**, periods, runs with optional auto-calculate)
 - **Compliance (BSCI/WRAP/SEDEX)** — \`/app/hr/compliance\`
@@ -1605,13 +1606,14 @@ For piece rate, the **operator code** typed or scanned at the Scan station must 
 - **Payslips** — managers see everyone's payslips; other staff see only their own (their user must be linked to an employee record). Downloads are PDF files.
 - **Late** attendance counts as a worked day for salary; late penalties are calculated separately.
 - **Loss of pay** (flag \`payroll_lop_enabled\`, on unless set to false): auto-calculate pays **Fixed amount** and **% of base salary** components only for **payable days** — the days the person was employed in the period (joining / exit date) minus **Absent** days not covered by approved leave and minus approved **unpaid** leave days. People who left during the period are included for the days they worked. The preview shows LOP days and the amount deducted. A run that was already auto-calculated before this switched on keeps its old numbers.
+- **Overtime from salary** (off by default; **HR → HR Settings**): approved overtime is paid as hours × (base salary ÷ 208) × multiplier on an **Overtime (from salary)** line — see the article *Overtime pay from salary*.
 - **Manual run lines** — gross, deductions and net must be valid amounts, not negative, and **net = gross − deductions** (0.01 rounding allowed). Leave net empty and it is calculated for you.
 
 **Leave balances** — submitting a request reserves the days immediately (pending); approval moves them to used, rejection releases them. When an allocation is set for the leave type, requests beyond the remaining balance are blocked.
 
 **Leave days are counted for you** (HR leave and **My Leave** in ESS):
 
-- Every date from **From** to **To** counts, except **weekend** days and **holidays** from **Time & Attendance → Holidays** (optional holidays still count). The weekend is **Friday** unless your administrator has set a different HR weekend for the company (the production planning calendar does not change leave days).
+- Every date from **From** to **To** counts, except **weekend** days and **holidays** from **Time & Attendance → Holidays** (optional holidays still count). The weekend is **Friday** unless a manager changes it on **HR → HR Settings** (\`/app/hr/settings\`) — the production planning calendar does not change leave days.
 - A single working day can be a **half day** (0.5). The number typed in "days" is otherwise ignored.
 - Refused with a message: **To** before **From**; dates that are all weekends / holidays; dates that **overlap** your own pending or approved leave; leave that **crosses the year end** — apply separately for each year.
 - **Carry forward** to the next year can be run more than once safely: each balance is carried only once, and never more than the leave policy's **max carry forward days**.
@@ -1636,7 +1638,121 @@ For piece rate, the **operator code** typed or scanned at the Scan station must 
           "/app/hr/payroll/assignments",
           "/app/hr/payroll/runs",
         ],
-        relatedArticleIds: [],
+        relatedArticleIds: ["hr-attendance-devices", "hr-settings-weekend", "hr-overtime-from-salary"],
+      },
+      {
+        id: "hr-attendance-devices",
+        title: "Attendance devices and punch import",
+        summary: "Register fingerprint / card machines, import their punch files or let them push punches, and see how punches become daily attendance.",
+        content: `## Overview
+
+**HR → Time & Attendance → Attendance Devices** (\`/app/hr/attendance/devices\`) turns machine punches into daily attendance. Each punch is stored once; attendance for that day is then rebuilt from all punches of the day with source **DEVICE**.
+
+Only a **manager / admin** or a role with **hr.attendance.manage** can open this screen.
+
+## Add a device
+
+1. Click **Add device** and fill **Code**, **Name**, **Type** (ZKTeco or Other) and optionally a **Default shift** (used on days the employee has no roster).
+2. Save. A window shows the device's **API key once** — click **Copy** and keep it safe. P7 stores only a fingerprint of the key, so it cannot show it again.
+3. Lost the key? **Actions → Rotate key** makes a new one; the old key stops working at once.
+4. **Actions → Deactivate** stops a device from sending punches (devices are never deleted).
+
+## Import a punch file
+
+**Actions → Import punches**, choose the file and click **Import**. Accepted files (up to 5,000 punches each):
+
+- **CSV** — columns \`employee_code,punched_at,direction\` (direction optional; header row optional). Times like \`2026-11-05 08:01\`.
+- **ZKTeco attendance log** — \`attlog.dat\` / .txt from the machine's USB export.
+- **JSON** — a list of \`{"employee_code": "...", "punched_at": "..."}\`.
+
+The device user number (PIN) must be the **employee code**. The summary shows new punches, punches already imported, attendance days created / updated, unknown employee codes and lines that could not be read. Importing the same file again adds nothing.
+
+## Automatic push
+
+A device or a small bridge program can send punches to \`POST /api/v1/hr/attendance/device-push\` with the header \`X-Device-Key\` (JSON list or ZKTeco log lines). The key decides the company, so it can only add punches for its own employees. **Last push** on the list shows when the device last sent data.
+
+## How a day is built
+
+- **In** = first punch, **Out** = last punch (only when there are two or more).
+- Shift = the employee's **roster** for that day, otherwise the device's default shift.
+- **Late** when the first punch is after shift start + grace minutes (late minutes counted from the start); **early out** and **overtime minutes** compare the last punch with the shift end.
+- **Night shift:** an early-morning punch (up to 4 hours after the shift end) belongs to the previous day.
+- Days typed or corrected by hand (including an approved **regularization**) are never overwritten, and days inside a **locked payroll period** are skipped. Editing a device day on **Daily Entry** turns it into a manual day.
+
+> **Tip:** Overtime minutes on attendance are for information. Paid overtime still comes from approved entries on **Overtime** (\`/app/hr/attendance/overtime\`).`,
+        tags: ["HR", "attendance", "device", "biometric", "fingerprint", "ZKTeco", "punch", "import"],
+        keywords: ["machine", "attlog", "card", "clock in", "API key"],
+        lastUpdated: "2026-11-06",
+        infographics: [
+          {
+            type: "flow",
+            title: "From machine to payroll",
+            steps: [
+              { label: "Add device", href: "/app/hr/attendance/devices" },
+              { label: "Import or push punches" },
+              { label: "Daily attendance", href: "/app/hr/attendance/entries" },
+              { label: "Payroll run", href: "/app/hr/payroll/runs" },
+            ],
+          },
+        ],
+        relatedAppRoutes: ["/app/hr/attendance/devices", "/app/hr/attendance/entries"],
+        relatedArticleIds: ["hr-overview", "hr-settings-weekend"],
+      },
+      {
+        id: "hr-settings-weekend",
+        title: "HR Settings: weekend days",
+        summary: "Choose the company's weekly holiday so leave requests do not count those days.",
+        content: `## Overview
+
+**HR → HR Settings** (\`/app/hr/settings\`) holds company-wide HR rules. The **Weekend (weekly holiday)** box lists the seven days; tick the days that are off every week.
+
+## Steps
+
+1. Open **HR Settings**.
+2. Tick the weekend days (default **Friday** until you save).
+3. Click **Save weekend**.
+
+## Rules
+
+- At least one day must be a weekend day and at least one a working day.
+- Leave requests (HR leave and **My Leave**) skip weekend days and company **Holidays** when counting days.
+- Only a **manager / admin** or a role with **hr.attendance.manage** can change the weekend; everyone in HR can see it.
+- The production planning calendar has its own weekend and does not change leave days.`,
+        tags: ["HR", "settings", "weekend", "leave", "holiday"],
+        keywords: ["weekly holiday", "friday", "saturday", "off day"],
+        lastUpdated: "2026-11-06",
+        relatedAppRoutes: ["/app/hr/settings", "/app/hr/leave/requests"],
+        relatedArticleIds: ["hr-overview", "hr-overtime-from-salary"],
+      },
+      {
+        id: "hr-overtime-from-salary",
+        title: "Overtime pay from salary",
+        summary: "Pay approved overtime as hours × (base salary ÷ 208) × multiplier in payroll auto-calculate.",
+        content: `## Overview
+
+When **Pay overtime from salary** is on (**HR → HR Settings**, \`/app/hr/settings\`), payroll auto-calculate adds an **Overtime (from salary)** earning line (code \`OT_SALARY\`) for every employee with approved overtime. It is **off** by default.
+
+## How the amount is worked out
+
+- Hourly rate = monthly **base salary** on the structure assignment ÷ **Hours per month** (default **208**, the Bangladesh rule).
+- Each **approved** overtime entry pays hours × hourly rate × multiplier.
+- Multiplier = the entry's **Overtime rule** (weekday, weekend or holiday multiplier by OT type; the rule's **max OT hours per day** caps the hours paid per day). Without a rule, the **Default multiplier** from HR Settings is used (default **2**).
+- A salary change in the middle of the month is handled: each entry uses the salary in effect on its date. Entries before joining or after the exit date are not paid.
+- Overtime is **not** reduced by loss of pay.
+- Salary components of type **Per OT hour** pay 0 while this is on, so overtime is never paid twice (the preview shows a warning).
+
+## Turning it on
+
+1. Make sure overtime entries are approved on **Overtime** (\`/app/hr/attendance/overtime\`) and rules are set on **Overtime Rules**.
+2. On **HR Settings**, tick **Pay overtime from salary**, check the hours and multiplier, then **Save overtime settings** (needs manager / admin or **hr.payroll.manage**).
+3. On **Payroll → Runs**, preview auto-calculate: the gross column shows OT hours, hourly rate and amount.
+
+> **Warning:** A payroll run keeps the overtime method of its **first** auto-calculation. Runs calculated before you switched this on keep their old numbers; new runs use the new method.`,
+        tags: ["HR", "payroll", "overtime", "OT", "salary", "settings"],
+        keywords: ["208", "overtime rate", "double rate", "OT_SALARY"],
+        lastUpdated: "2026-11-06",
+        relatedAppRoutes: ["/app/hr/settings", "/app/hr/payroll/runs", "/app/hr/attendance/overtime-rules"],
+        relatedArticleIds: ["hr-overview", "hr-attendance-devices"],
       },
     ],
   },

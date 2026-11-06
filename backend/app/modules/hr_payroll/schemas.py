@@ -315,6 +315,10 @@ class PayrollEmployeeCalcPreviewOut(BaseModel):
     lop_absent_days: str = "0.0000"
     lop_unpaid_leave_days: str = "0.0000"
     lop_amount: str = "0.0000"
+    ot_from_salary: bool = False
+    ot_paid_hours: str = "0.0000"
+    ot_hourly_rate: str = "0.0000"
+    ot_amount: str = "0.0000"
 
 
 class PayrollAutoCalculatePreviewOut(BaseModel):
@@ -327,6 +331,7 @@ class PayrollAutoCalculatePreviewOut(BaseModel):
     missing_assignment_employee_ids: list[int]
     warnings: list[str] = []
     lop_applied: bool = False
+    ot_from_salary: bool = False
 
 
 class PayrollAutoCalculateApplyOut(BaseModel):

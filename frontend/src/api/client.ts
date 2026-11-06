@@ -11,6 +11,8 @@
 import { financeApi } from "@/api/finance";
 import { inventoryApi } from "@/api/inventory";
 import { hrApi } from "@/api/hr";
+import { hrAttendanceDevicesApi } from "@/api/hrAttendanceDevices";
+import { hrSettingsApi } from "@/api/hrSettings";
 import { authApi } from "@/api/auth";
 import { aiChatApi } from "@/api/aiChat";
 import { merchApi } from "@/api/merch";
@@ -26,6 +28,8 @@ export type { ListWithTotal, PaginatedRows } from "@/api/core";
 export { financeApi } from "@/api/finance";
 export { inventoryApi } from "@/api/inventory";
 export { hrApi } from "@/api/hr";
+export * from "@/api/hrAttendanceDevices";
+export * from "@/api/hrSettings";
 export { authApi } from "@/api/auth";
 export { aiChatApi } from "@/api/aiChat";
 export { merchApi } from "@/api/merch";
@@ -39,6 +43,8 @@ export const api = {
   ...financeApi,
   ...inventoryApi,
   ...hrApi,
+  ...hrAttendanceDevicesApi,
+  ...hrSettingsApi,
   ...authApi,
   ...aiChatApi,
   ...merchApi,

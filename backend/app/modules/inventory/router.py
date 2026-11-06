@@ -2698,6 +2698,19 @@ async def create_purchase_order(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    row = await add_purchase_order_rows(db, tenant, body)
+    await commit_handling_duplicate_document_code(db)
+    await db.refresh(row)
+    items_result = await db.execute(select(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == row.id))
+    return _purchase_order_to_out(row, list(items_result.scalars().all()))
+
+
+async def add_purchase_order_rows(db: AsyncSession, tenant: Tenant, body: PurchaseOrderBody) -> PurchaseOrder:
+    """Validate and add a purchase order with its lines (flushed, NOT committed).
+
+    Callers that must save something else in the same transaction (e.g. the requisition -> PO link)
+    use this directly and commit once at the end.
+    """
     await ensure_owned(db, BtbLc, body.btb_lc_id, tenant.id, "BTB LC")
     await ensure_owned(db, Bom, body.source_bom_id, tenant.id, "BOM")
     await ensure_all_owned(
@@ -2770,10 +2783,8 @@ async def create_purchase_order(
         ld = line.model_dump()
         ld["warehouse_id"] = wh_id
         db.add(PurchaseOrderItem(tenant_id=tenant.id, purchase_order_id=row.id, **ld))
-    await commit_handling_duplicate_document_code(db)
-    await db.refresh(row)
-    items_result = await db.execute(select(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == row.id))
-    return _purchase_order_to_out(row, list(items_result.scalars().all()))
+    await flush_handling_duplicate_document_code(db)
+    return row
 
 
 @router.post("/purchase-orders/generate-from-bom/{bom_id}")

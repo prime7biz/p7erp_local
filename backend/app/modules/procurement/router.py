@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.codegen import next_tenant_code
+from app.common.db_errors import commit_handling_duplicate_document_code
 from app.common.document_history import list_doc_events, record_doc_event
 from app.common.ownership import ensure_owned
 from app.common.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
@@ -503,8 +504,12 @@ async def create_po_from_selection(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a DRAFT purchase order from the selected quotation (prices and quantities copied)."""
-    from app.modules.inventory.router import PurchaseOrderBody, PurchaseOrderItemBody, create_purchase_order
+    """Create a DRAFT purchase order from the selected quotation (prices and quantities copied).
+
+    The requisition stays locked until the PO and the requisition link are committed together, so a
+    second click waits and then sees ``purchase_order_id`` already set (no duplicate PO).
+    """
+    from app.modules.inventory.router import PurchaseOrderBody, PurchaseOrderItemBody, add_purchase_order_rows
 
     _ensure(user, tenant)
     body = body or CreatePoIn()
@@ -536,8 +541,7 @@ async def create_po_from_selection(
             for ln in lines
         ],
     )
-    po = await create_purchase_order(body=po_body, tenant=tenant, user=user, db=db)
-    pr = await _get_pr(db, tenant.id, pr_id, lock=True)
+    po = await add_purchase_order_rows(db, tenant, po_body)
     pr.purchase_order_id = po.id
     pr.status = "PO_CREATED"
     await record_doc_event(
@@ -545,5 +549,6 @@ async def create_po_from_selection(
         summary=f"Created {po.po_code}", from_status="CS_SELECTED", to_status="PO_CREATED",
         extra={"purchase_order_id": po.id},
     )
-    await db.commit()
-    return {"requisition_id": pr.id, "purchase_order_id": po.id, "po_code": po.po_code}
+    result = {"requisition_id": pr.id, "purchase_order_id": po.id, "po_code": po.po_code}
+    await commit_handling_duplicate_document_code(db)
+    return result

@@ -11,6 +11,7 @@ import {
   type BankReconciliationResponse,
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { todayLocalISO } from "@/lib/dates";
 
 export function BankReconciliationPage() {
   const { me } = useAuth();
@@ -31,7 +32,7 @@ export function BankReconciliationPage() {
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [lineForm, setLineForm] = useState<BankStatementLineCreate>({
-    transaction_date: new Date().toISOString().slice(0, 10),
+    transaction_date: todayLocalISO(),
     description: "",
     reference: "",
     debit_amount: "0",
@@ -40,7 +41,7 @@ export function BankReconciliationPage() {
   });
   const [form, setForm] = useState<BankReconciliationCreate>({
     bank_account_id: 0,
-    statement_date: new Date().toISOString().slice(0, 10),
+    statement_date: todayLocalISO(),
     statement_balance: "0",
     notes: "",
   });
@@ -208,7 +209,7 @@ export function BankReconciliationPage() {
       if (!selectedReconId) throw new Error("Select a reconciliation first");
       await api.importBankStatementLines(selectedReconId, [lineForm]);
       setLineForm({
-        transaction_date: new Date().toISOString().slice(0, 10),
+        transaction_date: todayLocalISO(),
         description: "",
         reference: "",
         debit_amount: "0",

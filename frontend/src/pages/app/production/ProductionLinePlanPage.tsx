@@ -4,9 +4,10 @@ import { api } from "@/api/client";
 import { AISuggestionModal } from "@/components/production/planning/AISuggestionModal";
 import { logApiError } from "@/utils/logApiError";
 import type { OrderReadinessPayload, PipelineOrderRow } from "@/types/productionPlanning";
+import { todayLocalISO } from "@/lib/dates";
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalISO();
 }
 
 function addDays(iso: string, days: number) {

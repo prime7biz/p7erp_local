@@ -12,6 +12,7 @@ import {
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { BillAllocationModal } from "./BillAllocationModal";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 type Tab = "bills" | "statement" | "aging" | "allocations";
 
@@ -30,7 +31,7 @@ export function PartyLedgerDetailPage() {
     d.setDate(d.getDate() - 90);
     return d.toISOString().slice(0, 10);
   });
-  const [toDate, setToDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [toDate, setToDate] = useState(() => todayLocalISO());
   const [aging, setAging] = useState<PartyLedgerAgingResponse | null>(null);
   const [allocations, setAllocations] = useState<PartyLedgerAllocationResponse[]>([]);
   const [allocBill, setAllocBill] = useState<PartyLedgerBillResponse | null>(null);

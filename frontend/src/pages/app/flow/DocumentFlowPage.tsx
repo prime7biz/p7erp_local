@@ -45,6 +45,7 @@ import {
   Download,
   ArrowRight,
 } from "lucide-react";
+import { todayLocalISO } from "@/lib/dates";
 
 const PREFIX = "/app";
 
@@ -281,7 +282,7 @@ export function DocumentFlowPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `document-flow-page${page}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `document-flow-page${page}-${todayLocalISO()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }, [flowRows, tradeCaseByOrderId, tradeDocCounts, tradeShipCounts, page]);

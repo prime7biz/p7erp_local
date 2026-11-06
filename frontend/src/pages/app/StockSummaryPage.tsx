@@ -15,6 +15,7 @@ import {
 } from "@/components/inventory/InventoryMobileList";
 import { useListViewPreference } from "@/hooks/useInventoryListView";
 import { exportPagedCsv } from "@/lib/exportPagedCsv";
+import { todayLocalISO } from "@/lib/dates";
 
 type SortKey = "item" | "warehouse" | "in" | "out" | "on_hand";
 
@@ -126,7 +127,7 @@ export function StockSummaryPage() {
           String(r.on_hand_qty),
         ],
       });
-      downloadCsv(`stock_summary_${new Date().toISOString().slice(0, 10)}.csv`, outcome.csv);
+      downloadCsv(`stock_summary_${todayLocalISO()}.csv`, outcome.csv);
       const parts: string[] = [];
       if (outcome.truncated && outcome.truncationReason) parts.push(outcome.truncationReason);
       if (outcome.warnings.length) parts.push(...outcome.warnings);

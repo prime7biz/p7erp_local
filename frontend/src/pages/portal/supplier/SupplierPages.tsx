@@ -11,9 +11,10 @@ import {
   type SupplierPoDetail,
   type SupplierUpdateKind,
 } from "./supplierApi";
+import { todayLocalISO } from "@/lib/dates";
 
 const card = "rounded-xl border border-border bg-surface-raised p-4";
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayLocalISO();
 
 function ResponseBadge({ po }: { po: SupplierPo }) {
   if (po.supplier_status === "CONFIRMED")

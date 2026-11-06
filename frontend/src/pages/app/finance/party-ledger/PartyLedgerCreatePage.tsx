@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, type PartyLedgerCreate } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 type PartyOption = { id: number; label: string };
 
@@ -16,7 +17,7 @@ export function PartyLedgerCreatePage() {
   const [interestRate, setInterestRate] = useState("");
   const [openingBalance, setOpeningBalance] = useState("0");
   const [openingType, setOpeningType] = useState<"DR" | "CR">("DR");
-  const [openingDate, setOpeningDate] = useState(new Date().toISOString().slice(0, 10));
+  const [openingDate, setOpeningDate] = useState(todayLocalISO());
   const [billWise, setBillWise] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 type Tab = "overview" | "plans" | "rates" | "workOrders";
 
@@ -59,7 +60,7 @@ export function ProductionKnittingPage() {
 
   const [newRateFabric, setNewRateFabric] = useState("");
   const [newRateAmount, setNewRateAmount] = useState("");
-  const [newRateFrom, setNewRateFrom] = useState(() => new Date().toISOString().slice(0, 10));
+  const [newRateFrom, setNewRateFrom] = useState(() => todayLocalISO());
 
   const [woSrc, setWoSrc] = useState("in_house");
   const [woYarn, setWoYarn] = useState("");

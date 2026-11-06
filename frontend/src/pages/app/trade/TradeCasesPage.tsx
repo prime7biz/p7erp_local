@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Download, Plus } from "lucide-react";
 
 import { api, type TradeCaseCreate, type TradeCaseRow } from "@/api/client";
+import { todayLocalISO } from "@/lib/dates";
 
 const EMPTY_FORM: TradeCaseCreate = {
   direction: "EXPORT",
@@ -94,7 +95,7 @@ export function TradeCasesPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `trade-cases-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `trade-cases-${todayLocalISO()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

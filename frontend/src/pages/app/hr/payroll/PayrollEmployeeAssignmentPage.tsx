@@ -5,6 +5,7 @@ import {
   type HrPayrollAssignmentResponse,
 } from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { todayLocalISO } from "@/lib/dates";
 
 const PREFIX = "/app/hr";
 
@@ -16,7 +17,7 @@ type PayrollStructureOption = {
 };
 
 function assignmentStatus(row: HrPayrollAssignmentResponse): string {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalISO();
   if (row.effective_from > today) return "Future";
   if (row.effective_to && row.effective_to < today) return "Ended";
   return "Active";
@@ -33,7 +34,7 @@ export function PayrollEmployeeAssignmentPage() {
   const [form, setForm] = useState({
     employee_id: 0,
     structure_id: 0,
-    effective_from: new Date().toISOString().slice(0, 10),
+    effective_from: todayLocalISO(),
     base_salary: "",
     component_overrides: "",
   });
@@ -109,7 +110,7 @@ export function PayrollEmployeeAssignmentPage() {
   const endAssignment = async (id: number) => {
     setMsg("");
     try {
-      await api.endHrPayrollAssignment(id, { effective_to: new Date().toISOString().slice(0, 10) });
+      await api.endHrPayrollAssignment(id, { effective_to: todayLocalISO() });
       setMsg("Assignment ended.");
       setOpenActionsId(null);
       await load();

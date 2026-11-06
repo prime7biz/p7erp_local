@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { api, type PartyLedgerBillResponse, type PartyLedgerAllocationResponse } from "@/api/client";
+import { todayLocalISO } from "@/lib/dates";
 
 type Props = {
   ledgerId: number;
@@ -12,7 +13,7 @@ export function BillAllocationModal({ ledgerId, bill, onClose, onAllocated }: Pr
   const [voucherId, setVoucherId] = useState("");
   const [amount, setAmount] = useState(bill.pending_amount);
   const [notes, setNotes] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayLocalISO());
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 

@@ -8,6 +8,7 @@ import {
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 export function DebitNoteCreatePage() {
   const navigate = useNavigate();
@@ -24,7 +25,7 @@ export function DebitNoteCreatePage() {
     tax_amount: "0",
     tax_account_id: "",
     revenue_or_purchase_account_id: "",
-    voucher_date: new Date().toISOString().slice(0, 10),
+    voucher_date: todayLocalISO(),
     description: "",
   });
 

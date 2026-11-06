@@ -11,6 +11,7 @@ import type { ConflictResolutionChoice, FieldApplyState } from "@/types/extracti
 import { buildShippingFieldApplyStates } from "@/utils/extractionHelpers";
 import { logApiError } from "@/utils/logApiError";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { todayLocalISO } from "@/lib/dates";
 
 const EMPTY_FORM: ShipmentCreate = {
   trade_case_id: 0,
@@ -211,7 +212,7 @@ export function LogisticsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `shipments-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `shipments-${todayLocalISO()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }, [filteredItems]);

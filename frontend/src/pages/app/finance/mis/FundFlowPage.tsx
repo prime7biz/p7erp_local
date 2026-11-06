@@ -4,13 +4,14 @@ import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { logApiError } from "@/utils/logApiError";
 import { formatMoney } from "./misFormat";
+import { todayLocalISO } from "@/lib/dates";
 
 export function FundFlowPage() {
   const [fromDate, setFromDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-01-01`;
   });
-  const [toDate, setToDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [toDate, setToDate] = useState(() => todayLocalISO());
   const [data, setData] = useState<FundFlowResponse | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);

@@ -11,6 +11,7 @@ import { logApiError } from "@/utils/logApiError";
 import { LinkedRecordsSection } from "@/components/app/LinkedRecordsSection";
 import { WorkflowSummaryStrip } from "@/components/app/WorkflowSummaryStrip";
 import { PartyLedgerSummaryCard } from "@/pages/app/finance/party-ledger/PartyLedgerSummaryCard";
+import { todayLocalISO } from "@/lib/dates";
 
 function money(n: number | null | undefined, currency?: string | null) {
   const v = Number(n ?? 0);
@@ -19,7 +20,7 @@ function money(n: number | null | undefined, currency?: string | null) {
 }
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalISO();
 }
 
 function newKey(prefix: string) {

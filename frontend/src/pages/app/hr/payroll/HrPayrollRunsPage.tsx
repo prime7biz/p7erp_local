@@ -9,6 +9,7 @@ import {
   type HrPayrollRunResponse,
 } from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { todayLocalISO } from "@/lib/dates";
 
 const PREFIX = "/app/hr";
 
@@ -79,7 +80,7 @@ export function HrPayrollRunsPage() {
   const [msg, setMsg] = useState("");
   const [form, setForm] = useState<HrPayrollRunCreate>({
     period_id: 0,
-    run_date: new Date().toISOString().slice(0, 10),
+    run_date: todayLocalISO(),
     run_code: "",
   });
   const [submitting, setSubmitting] = useState(false);

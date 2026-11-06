@@ -4,9 +4,10 @@ import { Link } from "react-router-dom";
 import { api } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalISO();
 }
 
 type WipJournalRow = {

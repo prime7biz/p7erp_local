@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type EmiPreviewResponse } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
 import { erpControlFocusClass } from "@/components/app/listPageLayout";
+import { todayLocalISO } from "@/lib/dates";
 
 export function UtilizationCreatePage() {
   const { facilityId } = useParams<{ facilityId: string }>();
@@ -14,7 +15,7 @@ export function UtilizationCreatePage() {
   const [rate, setRate] = useState("12");
   const [moratorium, setMoratorium] = useState("0");
   const [freq, setFreq] = useState("monthly");
-  const [disbDate, setDisbDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [disbDate, setDisbDate] = useState(() => todayLocalISO());
   const [preview, setPreview] = useState<EmiPreviewResponse | null>(null);
   const [err, setErr] = useState("");
 

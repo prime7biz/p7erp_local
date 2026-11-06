@@ -8,6 +8,7 @@ import { useConfirm } from "@/components/app/useConfirm";
 import { listPageTableCardClass } from "@/components/app/listPageLayout";
 import { logApiError } from "@/utils/logApiError";
 import { btnPrimary, btnSecondary, errMsg, inputClass, labelClass, num, UD_STATUS_BADGE } from "./shared";
+import { todayLocalISO } from "@/lib/dates";
 
 const EMPTY_LINE: UdEntitlementInput = { item_description: "", uom: "", hs_code: "", entitled_qty: "", entitled_value_usd: "" };
 
@@ -15,7 +16,7 @@ function emptyForm(): UdBodyInput {
   return {
     ud_no: "",
     amendment_no: 0,
-    ud_date: new Date().toISOString().slice(0, 10),
+    ud_date: todayLocalISO(),
     issuer: "BGMEA",
     export_lc_no: "",
     buyer_name: "",

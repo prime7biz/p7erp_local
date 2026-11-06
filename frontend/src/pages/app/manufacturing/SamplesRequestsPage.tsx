@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api, type MfgSampleRequestCreate } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { todayLocalISO } from "@/lib/dates";
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalISO();
 }
 
 export function SamplesRequestsPage() {

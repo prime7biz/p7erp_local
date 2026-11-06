@@ -3,6 +3,7 @@ import { api, type MisRatioAnalysisResponse, type MisRatioTrendResponse } from "
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
 import { formatRatioValue, statusBadgeClass } from "./misFormat";
+import { todayLocalISO } from "@/lib/dates";
 
 const CATEGORY_LABELS: Record<string, string> = {
   liquidity: "Liquidity",
@@ -14,7 +15,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 const CATEGORY_ORDER = ["liquidity", "profitability", "efficiency", "leverage"];
 
 export function RatioAnalysisMisPage() {
-  const [asOfDate, setAsOfDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [asOfDate, setAsOfDate] = useState(() => todayLocalISO());
   const [data, setData] = useState<MisRatioAnalysisResponse | null>(null);
   const [selectedRatio, setSelectedRatio] = useState<string>("current_ratio");
   const [trend, setTrend] = useState<MisRatioTrendResponse | null>(null);

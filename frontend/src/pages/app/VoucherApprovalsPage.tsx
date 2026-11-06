@@ -7,6 +7,7 @@ import { useListPagination } from "@/hooks/useListPagination";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { VoucherActionReasonModal } from "@/components/vouchers/VoucherActionReasonModal";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 const QUEUE_STATUSES = ["SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED"] as const;
 
@@ -52,7 +53,7 @@ export function VoucherApprovalsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [fromDate, setFromDate] = useState(defaultFromDate);
-  const [toDate, setToDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [toDate, setToDate] = useState(() => todayLocalISO());
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [pendingWorkflowAction, setPendingWorkflowAction] = useState<{ voucherId: number; action: string } | null>(null);
   const loadedActionsRef = useRef<Set<number>>(new Set());

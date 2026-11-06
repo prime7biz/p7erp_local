@@ -6,6 +6,7 @@ import {
   type SettlementAuditRow,
 } from "@/api/client";
 import { downloadCsv } from "@/lib/reportExport";
+import { todayLocalISO } from "@/lib/dates";
 
 const STATUS_OPTIONS = ["DRAFT", "APPROVED", "PROCESSED", "EXECUTED"] as const;
 
@@ -33,7 +34,7 @@ export function SettlementAuditPage() {
   const [error, setError] = useState("");
   const [filters, setFilters] = useState<SettlementFilters>({
     from_date: startOfMonth(),
-    to_date: new Date().toISOString().slice(0, 10),
+    to_date: todayLocalISO(),
     status_filter: "",
     source_currency: "",
     party_query: "",
@@ -255,7 +256,7 @@ export function SettlementAuditPage() {
             onClick={() =>
               setFilters({
                 from_date: startOfMonth(),
-                to_date: new Date().toISOString().slice(0, 10),
+                to_date: todayLocalISO(),
                 status_filter: "",
                 source_currency: "",
                 party_query: "",

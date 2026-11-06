@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type CashForecastScenarioCreate, type CashForecastScenarioResponse } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 export function CashForecastPage() {
   const [rows, setRows] = useState<CashForecastScenarioResponse[]>([]);
@@ -12,12 +13,12 @@ export function CashForecastPage() {
   const [editingScenarioId, setEditingScenarioId] = useState<number | null>(null);
   const [form, setForm] = useState<CashForecastScenarioCreate>({
     name: "",
-    start_date: new Date().toISOString().slice(0, 10),
+    start_date: todayLocalISO(),
     months: 6,
   });
   const [editForm, setEditForm] = useState<CashForecastScenarioCreate>({
     name: "",
-    start_date: new Date().toISOString().slice(0, 10),
+    start_date: todayLocalISO(),
     months: 6,
   });
 

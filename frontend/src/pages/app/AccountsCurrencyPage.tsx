@@ -7,6 +7,7 @@ import {
   type MultiCurrencyRevaluationResponse,
 } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 export function AccountsCurrencyPage() {
   const [rates, setRates] = useState<CurrencyExchangeRateResponse[]>([]);
@@ -18,7 +19,7 @@ export function AccountsCurrencyPage() {
     from_currency: "USD",
     to_currency: "BDT",
     exchange_rate: "120",
-    effective_date: new Date().toISOString().slice(0, 10),
+    effective_date: todayLocalISO(),
     source: "manual",
   });
 
@@ -62,7 +63,7 @@ export function AccountsCurrencyPage() {
         from_currency: "USD",
         to_currency: "BDT",
         exchange_rate: "120",
-        effective_date: new Date().toISOString().slice(0, 10),
+        effective_date: todayLocalISO(),
         source: "manual",
       });
       await load();
@@ -93,7 +94,7 @@ export function AccountsCurrencyPage() {
           from_currency: "USD",
           to_currency: "BDT",
           exchange_rate: "120",
-          effective_date: new Date().toISOString().slice(0, 10),
+          effective_date: todayLocalISO(),
           source: "manual",
         });
       }
@@ -140,7 +141,7 @@ export function AccountsCurrencyPage() {
                   from_currency: "USD",
                   to_currency: "BDT",
                   exchange_rate: "120",
-                  effective_date: new Date().toISOString().slice(0, 10),
+                  effective_date: todayLocalISO(),
                   source: "manual",
                 });
               }}

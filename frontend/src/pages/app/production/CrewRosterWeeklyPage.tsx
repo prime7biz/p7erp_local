@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 function mondayISO(d: Date) {
   const day = d.getDay();
@@ -20,7 +21,7 @@ export function CrewRosterWeeklyPage() {
   const [filters, setFilters] = useState<Awaited<ReturnType<typeof api.getCrewDailyFilters>> | null>(null);
   const [rows, setRows] = useState<Awaited<ReturnType<typeof api.listCrewRosterWeekly>>>([]);
   const [crewRoles, setCrewRoles] = useState<Awaited<ReturnType<typeof api.listCrewRoles>>>([]);
-  const [targetDate, setTargetDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [targetDate, setTargetDate] = useState(() => todayLocalISO());
   const [msg, setMsg] = useState("");
 
   const sewingRoles = useMemo(() => crewRoles.filter((r) => r.department_type === "sewing"), [crewRoles]);

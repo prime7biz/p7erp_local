@@ -1,17 +1,18 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api, type AccountingPeriodCreate, type AccountingPeriodResponse } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
 
 export function AccountingPeriodsPage() {
   const [rows, setRows] = useState<AccountingPeriodResponse[]>([]);
   const [error, setError] = useState("");
-  const [lockDate, setLockDate] = useState(new Date().toISOString().slice(0, 10));
+  const [lockDate, setLockDate] = useState(todayLocalISO());
   const [lockInfo, setLockInfo] = useState<{ locked: boolean; reason?: string; period_id?: number; period_name?: string } | null>(null);
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [form, setForm] = useState<AccountingPeriodCreate>({
     period_name: "",
-    start_date: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10),
-    end_date: new Date().toISOString().slice(0, 10),
+    start_date: startOfMonthLocalISO(),
+    end_date: todayLocalISO(),
   });
 
   const sorted = useMemo(() => {
@@ -91,7 +92,7 @@ export function AccountingPeriodsPage() {
     }
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalISO();
 
   return (
     <div className="space-y-6">

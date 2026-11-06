@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { api, type CashFlowStatementResponse, type CashForecastScenarioResponse } from "@/api/client";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
+import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
 
 export function CashFlowReportPage() {
   const [mode, setMode] = useState<"statement" | "forecast">("statement");
-  const [fromDate, setFromDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10));
-  const [toDate, setToDate] = useState(new Date().toISOString().slice(0, 10));
+  const [fromDate, setFromDate] = useState(startOfMonthLocalISO());
+  const [toDate, setToDate] = useState(todayLocalISO());
   const [statement, setStatement] = useState<CashFlowStatementResponse | null>(null);
   const [rows, setRows] = useState<CashForecastScenarioResponse[]>([]);
   const [error, setError] = useState("");

@@ -7,6 +7,7 @@ import {
 } from "@/api/client";
 import { listPageErrorClass, listTableHeadCellClass, listTableRowClass } from "@/components/app/listPageLayout";
 import { Button } from "@/components/ui/button";
+import { todayLocalISO } from "@/lib/dates";
 
 const ADMIN_TOKEN_KEY = "p7_platform_admin_token";
 const TENANT_TYPES: TenantType[] = ["manufacturer", "buying_house", "both"];
@@ -104,7 +105,7 @@ export function BulkTenantOnboardingPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `bulk-created-tenants-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `bulk-created-tenants-${todayLocalISO()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }

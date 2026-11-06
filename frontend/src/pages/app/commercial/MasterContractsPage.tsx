@@ -17,6 +17,7 @@ import { FileImportCard } from "@/components/ai-extract/FileImportCard";
 import { useCommercialDocExtraction } from "@/hooks/useCommercialDocExtraction";
 import type { ConflictResolutionChoice, FieldApplyState } from "@/types/extraction";
 import { buildLcFieldApplyStates } from "@/utils/extractionHelpers";
+import { todayLocalISO } from "@/lib/dates";
 
 const CONTRACT_TYPES = [
   { value: "EXPORT_LC", label: "Master Export LC" },
@@ -338,7 +339,7 @@ export function MasterContractsPage() {
     if (!selectedContract) return;
     const contractRef = selectedContract.reference || `contract_${selectedContract.id}`;
     const safeRef = contractRef.replace(/[^\w.-]+/g, "_");
-    const now = new Date().toISOString().slice(0, 10);
+    const now = todayLocalISO();
     const utilTotal = Number(selectedContract.amount || 0);
     const utilUsed = selectedLcs.reduce((sum, lc) => sum + Number(lc.amount || 0), 0);
     const utilPct = utilTotal > 0 ? (utilUsed / utilTotal) * 100 : 0;

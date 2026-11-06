@@ -14,9 +14,10 @@ import { useProductionPipeline, type PipelineViewMode } from "@/hooks/useProduct
 import type { CustomerApprovalChain, MaterialReadinessChain, PipelineOrderRow } from "@/types/productionPlanning";
 import { logApiError } from "@/utils/logApiError";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { todayLocalISO } from "@/lib/dates";
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalISO();
 }
 
 type TabKey = "pipeline" | "whatif" | "history";

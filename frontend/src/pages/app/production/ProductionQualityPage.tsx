@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalISO();
 }
 
 export function ProductionQualityPage() {

@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type OutstandingBillCreate, type OutstandingBillResponse, type BillsAgingResponse } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 export function OutstandingBillsPage() {
   const [rows, setRows] = useState<OutstandingBillResponse[]>([]);
@@ -18,8 +19,8 @@ export function OutstandingBillsPage() {
     bill_no: "",
     party_name: "",
     bill_type: "RECEIVABLE",
-    bill_date: new Date().toISOString().slice(0, 10),
-    due_date: new Date().toISOString().slice(0, 10),
+    bill_date: todayLocalISO(),
+    due_date: todayLocalISO(),
     amount: "0",
     paid_amount: "0",
     currency: "BDT",

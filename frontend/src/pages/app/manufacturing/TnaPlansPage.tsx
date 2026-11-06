@@ -3,9 +3,10 @@ import { Link } from "react-router-dom";
 
 import { api, type MfgTnaPlanCreate } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { todayLocalISO } from "@/lib/dates";
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalISO();
 }
 
 export function TnaPlansPage() {

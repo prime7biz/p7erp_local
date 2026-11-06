@@ -8,6 +8,7 @@ import {
   type PaymentRunResponse,
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { todayLocalISO } from "@/lib/dates";
 
 const RUN_STATUSES = ["DRAFT", "APPROVED", "PROCESSED", "EXECUTED"] as const;
 
@@ -35,7 +36,7 @@ export function PaymentRunsPage() {
   const [fxRates, setFxRates] = useState<Record<string, number>>({});
   const [form, setForm] = useState<PaymentRunCreate>({
     run_code: "",
-    run_date: new Date().toISOString().slice(0, 10),
+    run_date: todayLocalISO(),
     bank_account_id: undefined,
     remarks: "",
     items: [],

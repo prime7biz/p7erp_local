@@ -47,6 +47,7 @@ import { logApiError } from "@/utils/logApiError";
 import { useAuth } from "@/context/AuthContext";
 import { resolveRole } from "@/lib/roles";
 import type { TaxPreviewResponse } from "@/api/client";
+import { todayLocalISO } from "@/lib/dates";
 
 const CTL =
   "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20";
@@ -416,7 +417,7 @@ export function VouchersPage() {
         setForm((p) => ({
           ...p,
           exchange_rate: String(json.rates[base]),
-          exchange_rate_source: `open.er-api.com ${new Date().toISOString().slice(0, 10)}`,
+          exchange_rate_source: `open.er-api.com ${todayLocalISO()}`,
         }));
         setLiveRateStatus("fetched");
       } else {

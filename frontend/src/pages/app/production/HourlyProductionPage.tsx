@@ -4,9 +4,10 @@ import { useTranslation } from "react-i18next";
 import { api } from "@/api/client";
 import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalISO();
 }
 
 const DEPTS = new Set(["sewing", "cutting", "knitting", "dyeing", "printing", "aop", "embroidery", "elastic", "washing", "iron", "finishing"]);

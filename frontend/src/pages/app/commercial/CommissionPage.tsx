@@ -18,6 +18,7 @@ import { RowActionsMenu, type RowActionItem } from "@/components/app/RowActionsM
 import { useConfirm } from "@/components/app/useConfirm";
 import { listPageRootClass, listPageTableCardClass } from "@/components/app/listPageLayout";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 type Tab = "shipments" | "statements" | "rules";
 type Option = { id: number; label: string };
@@ -124,7 +125,7 @@ function ShipmentsTab({ options }: { options: ReturnType<typeof useOptions> }) {
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | number | null>(null);
   const [saving, setSaving] = useState(false);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalISO();
   const [form, setForm] = useState({
     order_id: "",
     vendor_id: "",

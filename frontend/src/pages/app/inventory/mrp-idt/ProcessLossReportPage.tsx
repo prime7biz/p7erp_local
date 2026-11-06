@@ -2,9 +2,10 @@ import { useState } from "react";
 import { api, type ProcessLossReportResponse } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalISO();
 }
 
 function daysAgo(n: number) {

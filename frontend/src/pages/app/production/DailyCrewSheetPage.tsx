@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 const OPTIONAL_UNITS = ["knitting", "dyeing", "printing", "aop", "embroidery", "elastic", "washing"];
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalISO();
 }
 
 function crewEmpOptionKey(designationId: number | null | undefined, designationFilter: string | null | undefined) {

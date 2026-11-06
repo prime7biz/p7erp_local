@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, type FxReceiptCreate, type FxReceiptResponse, type FxUnsettledSummaryResponse } from "@/api/client";
+import { todayLocalISO } from "@/lib/dates";
 
 export function FxReceiptsPage() {
   const [rows, setRows] = useState<FxReceiptResponse[]>([]);
@@ -10,7 +11,7 @@ export function FxReceiptsPage() {
   const [settleMap, setSettleMap] = useState<Record<number, string>>({});
   const [form, setForm] = useState<FxReceiptCreate>({
     receipt_no: "",
-    receipt_date: new Date().toISOString().slice(0, 10),
+    receipt_date: todayLocalISO(),
     source_ref: "",
     currency: "USD",
     fc_amount: "0",

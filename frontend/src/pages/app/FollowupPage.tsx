@@ -19,6 +19,7 @@ import {
 } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { todayLocalISO } from "@/lib/dates";
 
 const TNA_PHASES = [
   "pre_order",
@@ -134,7 +135,7 @@ function downloadActionsCsv(rows: OrderFollowupActionResponse[]) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `tna-followup-actions-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `tna-followup-actions-${todayLocalISO()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -616,7 +617,7 @@ export function FollowupPage() {
     await loadManageTemplates();
   };
 
-  const todayIso = () => new Date().toISOString().slice(0, 10);
+  const todayIso = () => todayLocalISO();
 
   const setDueToday = () => {
     const t = todayIso();

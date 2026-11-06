@@ -6,10 +6,11 @@ import {
   type VoucherReportTopPreparersResponse,
 } from "@/api/client";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
+import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
 
 export function VoucherAnalyticsPage() {
-  const [fromDate, setFromDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10));
-  const [toDate, setToDate] = useState(new Date().toISOString().slice(0, 10));
+  const [fromDate, setFromDate] = useState(startOfMonthLocalISO());
+  const [toDate, setToDate] = useState(todayLocalISO());
   const [voucherType, setVoucherType] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [voucherTypes, setVoucherTypes] = useState<string[]>([]);
@@ -106,8 +107,8 @@ export function VoucherAnalyticsPage() {
   function clearFilters() {
     setVoucherType("");
     setStatusFilter("");
-    setFromDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10));
-    setToDate(new Date().toISOString().slice(0, 10));
+    setFromDate(startOfMonthLocalISO());
+    setToDate(todayLocalISO());
   }
 
   return (

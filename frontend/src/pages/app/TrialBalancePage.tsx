@@ -3,11 +3,12 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api, type AccountGroupResponse, type ChartOfAccountResponse, type ReportBasis, type TrialBalanceResponse } from "@/api/client";
 import { dateParam, idParam, ledgerActivityHref, yearStart } from "@/lib/financeDrilldown";
 import { downloadCsv, downloadXlsx, printCurrentPage } from "@/lib/reportExport";
+import { todayLocalISO } from "@/lib/dates";
 
 export function TrialBalancePage() {
   const [searchParams] = useSearchParams();
   const natureFilter = searchParams.get("nature") ?? "";
-  const [asOfDate, setAsOfDate] = useState(() => dateParam(searchParams.get("as_of"), new Date().toISOString().slice(0, 10)));
+  const [asOfDate, setAsOfDate] = useState(() => dateParam(searchParams.get("as_of"), todayLocalISO()));
   const [groupId, setGroupId] = useState<number | "">(() => idParam(searchParams.get("group_id")) ?? "");
   const [accountId, setAccountId] = useState<number | "">("");
   const [groups, setGroups] = useState<AccountGroupResponse[]>([]);

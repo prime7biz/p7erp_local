@@ -15,6 +15,7 @@ import {
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { listPageRootClass } from "@/components/app/listPageLayout";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 const STATUS_OPTIONS = ["DRAFT", "OPEN", "AMENDED", "CLOSED"] as const;
 
@@ -260,20 +261,20 @@ export function BtbLcsPage() {
     setOpenEntryForm({
       upcoming_lc_liability_account_id: "",
       blocked_credit_facility_account_id: "",
-      voucher_date: lc.open_date ?? lc.lc_date ?? new Date().toISOString().slice(0, 10),
+      voucher_date: lc.open_date ?? lc.lc_date ?? todayLocalISO(),
       amount: lc.amount != null ? String(lc.amount) : "",
     });
     setDocsEntryForm({
       lc_liability_account_id: "",
       import_bill_liability_account_id: "",
       maturity_date: lc.maturity_date ?? "",
-      voucher_date: new Date().toISOString().slice(0, 10),
+      voucher_date: todayLocalISO(),
       amount: lc.maturity_amount != null ? String(lc.maturity_amount) : lc.amount != null ? String(lc.amount) : "",
     });
     setRealizationEntryForm({
       import_bill_liability_account_id: "",
       payment_account_id: "",
-      voucher_date: lc.maturity_date ?? new Date().toISOString().slice(0, 10),
+      voucher_date: lc.maturity_date ?? todayLocalISO(),
       amount: lc.maturity_amount != null ? String(lc.maturity_amount) : lc.amount != null ? String(lc.amount) : "",
     });
   };

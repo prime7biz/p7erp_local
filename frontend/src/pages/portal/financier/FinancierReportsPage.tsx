@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { financierPortalApi } from "@/hooks/useFinancierPortal";
 import { PortalErrorState } from "@/components/external-access/PortalErrorState";
+import { todayLocalISO } from "@/lib/dates";
 
 const REPORTS: {
   key: string;
@@ -57,7 +58,7 @@ export function FinancierReportsPage() {
           ? await financierPortalApi.bankPortfolioExport()
           : await financierPortalApi.report(key);
       if (!("status" in data) || data.status === "ok") {
-        downloadJson(`${key}_${new Date().toISOString().slice(0, 10)}.json`, data);
+        downloadJson(`${key}_${todayLocalISO()}.json`, data);
       } else {
         setErr(typeof data.message === "string" ? data.message : "Export not available.");
       }

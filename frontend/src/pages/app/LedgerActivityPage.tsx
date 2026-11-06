@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api, type ChartOfAccountResponse, type LedgerActivityResponse } from "@/api/client";
 import { dateParam, idParam, voucherHref } from "@/lib/financeDrilldown";
 import { downloadCsv, downloadXlsx, printCurrentPage } from "@/lib/reportExport";
+import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
 
 export function LedgerActivityPage() {
   const [searchParams] = useSearchParams();
@@ -10,9 +11,9 @@ export function LedgerActivityPage() {
   const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(() => idParam(searchParams.get("account_id")));
   const [fromDate, setFromDate] = useState(() =>
-    dateParam(searchParams.get("from"), new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10)),
+    dateParam(searchParams.get("from"), startOfMonthLocalISO()),
   );
-  const [toDate, setToDate] = useState(() => dateParam(searchParams.get("to"), new Date().toISOString().slice(0, 10)));
+  const [toDate, setToDate] = useState(() => dateParam(searchParams.get("to"), todayLocalISO()));
   const [data, setData] = useState<LedgerActivityResponse | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");

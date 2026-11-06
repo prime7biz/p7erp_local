@@ -8,6 +8,7 @@ import {
 } from "@/api/client";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 function sumOutstanding(r: BillsAgingResponse | null): number {
   if (!r?.rows?.length) return 0;
@@ -62,7 +63,7 @@ function buildMetrics(fs: FinancialStatementsResponse, arAging: BillsAgingRespon
 }
 
 export function RatioAnalysisPage() {
-  const [asOfDate, setAsOfDate] = useState(new Date().toISOString().slice(0, 10));
+  const [asOfDate, setAsOfDate] = useState(todayLocalISO());
   const [compareDate, setCompareDate] = useState("");
   const [groupId, setGroupId] = useState<number | "">("");
   const [groups, setGroups] = useState<AccountGroupResponse[]>([]);

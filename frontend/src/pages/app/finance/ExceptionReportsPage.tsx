@@ -18,6 +18,7 @@ import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { RowActionsMenu, type RowActionItem } from "@/components/app/RowActionsMenu";
 import { ledgerActivityHref, voucherHref, yearStart } from "@/lib/financeDrilldown";
 import { logApiError } from "@/utils/logApiError";
+import { todayLocalISO } from "@/lib/dates";
 
 const CHECKS: { key: ExceptionCheckKey; title: string; hint: string }[] = [
   { key: "grn_not_billed", title: "Goods received, not billed", hint: "GRNs received with no vendor bill yet (Tally: Purchase Bills to Come)." },
@@ -112,7 +113,7 @@ export function ExceptionReportsPage() {
     }
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalISO();
   const activeMeta = CHECKS.find((c) => c.key === active)!;
 
   function actions(rowKey: string, items: RowActionItem[]) {

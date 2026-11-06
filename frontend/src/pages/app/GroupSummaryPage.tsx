@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type AccountGroupResponse, type ChartOfAccountResponse, type TrialBalanceResponse } from "@/api/client";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
+import { todayLocalISO } from "@/lib/dates";
 
 export function GroupSummaryPage() {
-  const [asOfDate, setAsOfDate] = useState(new Date().toISOString().slice(0, 10));
+  const [asOfDate, setAsOfDate] = useState(todayLocalISO());
   const [groupId, setGroupId] = useState<number | "">("");
   const [accountId, setAccountId] = useState<number | "">("");
   const [groups, setGroups] = useState<AccountGroupResponse[]>([]);

@@ -3,10 +3,11 @@ import { Link } from "react-router-dom";
 import { api, type AccountGroupResponse, type ChartOfAccountResponse, type DayBookResponse } from "@/api/client";
 import { voucherHref } from "@/lib/financeDrilldown";
 import { downloadCsv, downloadXlsx, printCurrentPage } from "@/lib/reportExport";
+import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
 
 export function DayBookPage() {
-  const [fromDate, setFromDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10));
-  const [toDate, setToDate] = useState(new Date().toISOString().slice(0, 10));
+  const [fromDate, setFromDate] = useState(startOfMonthLocalISO());
+  const [toDate, setToDate] = useState(todayLocalISO());
   const [voucherType, setVoucherType] = useState("");
   const [groupId, setGroupId] = useState<number | "">("");
   const [accountId, setAccountId] = useState<number | "">("");

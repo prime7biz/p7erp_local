@@ -9,6 +9,7 @@ import { MasterLcLadder } from "@/components/control-tower/MasterLcLadder";
 import { OrderExecutionGrid } from "@/components/control-tower/OrderExecutionGrid";
 import { useAuth } from "@/context/AuthContext";
 import { useControlTower } from "@/hooks/useControlTower";
+import { todayLocalISO } from "@/lib/dates";
 
 function addDays(iso: string, days: number) {
   const d = new Date(iso + "T12:00:00");
@@ -40,8 +41,8 @@ export function ControlTowerPage() {
   const enabled = flags?.control_tower_enabled === true;
   const vis = sectionVisibility(me?.role_name);
 
-  const [deliveryFrom, setDeliveryFrom] = useState(() => addDays(new Date().toISOString().slice(0, 10), 0));
-  const [deliveryTo, setDeliveryTo] = useState(() => addDays(new Date().toISOString().slice(0, 10), 90));
+  const [deliveryFrom, setDeliveryFrom] = useState(() => addDays(todayLocalISO(), 0));
+  const [deliveryTo, setDeliveryTo] = useState(() => addDays(todayLocalISO(), 90));
 
   const [openHeatmap, setOpenHeatmap] = useState(true);
   const [openLc, setOpenLc] = useState(true);

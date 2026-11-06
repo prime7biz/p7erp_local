@@ -3,9 +3,10 @@ import { Link } from "react-router-dom";
 import { api, type AccountGroupResponse, type FinancialStatementsResponse, type ReportBasis } from "@/api/client";
 import { trialBalanceHref, type AccountNature } from "@/lib/financeDrilldown";
 import { downloadCsv, downloadXlsx, printCurrentPage } from "@/lib/reportExport";
+import { todayLocalISO } from "@/lib/dates";
 
 export function FinancialStatementsPage() {
-  const [asOfDate, setAsOfDate] = useState(new Date().toISOString().slice(0, 10));
+  const [asOfDate, setAsOfDate] = useState(todayLocalISO());
   const [groupId, setGroupId] = useState<number | "">("");
   const [groups, setGroups] = useState<AccountGroupResponse[]>([]);
   const [compactView, setCompactView] = useState(false);

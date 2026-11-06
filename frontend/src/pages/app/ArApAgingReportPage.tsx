@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { api, type BillsAgingResponse } from "@/api/client";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
+import { todayLocalISO } from "@/lib/dates";
 
 export function ArApAgingReportPage() {
   const [billType, setBillType] = useState<"PAYABLE" | "RECEIVABLE">("RECEIVABLE");
-  const [asOfDate, setAsOfDate] = useState(new Date().toISOString().slice(0, 10));
+  const [asOfDate, setAsOfDate] = useState(todayLocalISO());
   const [partyName, setPartyName] = useState("");
   const [data, setData] = useState<BillsAgingResponse | null>(null);
   const [error, setError] = useState("");

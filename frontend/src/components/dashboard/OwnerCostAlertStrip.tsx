@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowRight, X } from "lucide-react";
 import { api, type DashboardPendingPriceAlert } from "@/api/client";
+import { usePolling } from "@/hooks/usePolling";
 import { logApiError } from "@/utils/logApiError";
 
 type Props = {
@@ -43,18 +44,13 @@ export function OwnerCostAlertStrip({ className = "" }: Props) {
     } catch (e) {
       logApiError("OwnerCostAlertStrip", e);
       setAlerts([]);
+      throw e;
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    void load();
-    const t = window.setInterval(() => {
-      void load();
-    }, REFRESH_MS);
-    return () => window.clearInterval(t);
-  }, [load]);
+  usePolling(load, { intervalMs: REFRESH_MS });
 
   const visible = useMemo(
     () => alerts.filter((a) => !dismissed.has(a.id || `order:${a.order_id}`)),

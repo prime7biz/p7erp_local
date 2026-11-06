@@ -6,10 +6,14 @@ New, empty tables only — nothing existing is changed:
 - ``hr_attendance_punches``: every punch received (file import or device push); unique on
   tenant + device + employee + time so a re-import adds nothing.
 
-Rollback: `alembic downgrade 265` (drops both tables and their punches).
+Both tables get the tenant Row-Level Security policy ``p7_tenant_isolation`` from migration 270
+(270 only covers tables that already existed when it ran). Same expression as 270; both
+tenant_id columns are NOT NULL, so there is no shared ``tenant_id IS NULL`` branch.
+
+Rollback: `alembic downgrade 270` (drops both tables, their punches and their policies).
 
 Revision ID: 280
-Revises: 265
+Revises: 270
 """
 
 from __future__ import annotations
@@ -20,9 +24,37 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "280"
-down_revision: Union[str, None] = "265"
+down_revision: Union[str, None] = "270"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
+
+# Copied from 270_tenant_rls_policies.py (migrations stay frozen, so no cross-file import).
+# tests/test_rls_policies.py checks every policy still matches 270's expression.
+RLS_POLICY_NAME = "p7_tenant_isolation"
+_RLS_BYPASS = "(SELECT current_setting('app.rls_bypass', true)) = 'on'"
+_RLS_SAME_TENANT = "tenant_id = (SELECT NULLIF(current_setting('app.tenant_id', true), '')::integer)"
+_RLS_TABLES = ("hr_attendance_devices", "hr_attendance_punches")
+
+
+def _rls_expression(nullable: bool) -> str:
+    parts = [_RLS_BYPASS, _RLS_SAME_TENANT]
+    if nullable:
+        parts.append("tenant_id IS NULL")
+    return " OR ".join(f"({p})" for p in parts)
+
+
+def _enable_rls(table: str, nullable: bool = False) -> None:
+    expr = _rls_expression(nullable)
+    op.execute(f"DROP POLICY IF EXISTS {RLS_POLICY_NAME} ON {table}")
+    op.execute(
+        f"CREATE POLICY {RLS_POLICY_NAME} ON {table} AS PERMISSIVE FOR ALL USING ({expr}) WITH CHECK ({expr})"
+    )
+    op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
+
+
+def _disable_rls(table: str) -> None:
+    op.execute(f"DROP POLICY IF EXISTS {RLS_POLICY_NAME} ON {table}")
+    op.execute(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY")
 
 
 def upgrade() -> None:
@@ -84,9 +116,13 @@ def upgrade() -> None:
         "hr_attendance_punches",
         ["tenant_id", "employee_id", "punched_at"],
     )
+    for table in _RLS_TABLES:
+        _enable_rls(table)
 
 
 def downgrade() -> None:
+    for table in _RLS_TABLES:
+        _disable_rls(table)
     op.drop_index("ix_hr_attendance_punches_tenant_employee_time", table_name="hr_attendance_punches")
     op.drop_index("ix_hr_attendance_punches_employee_id", table_name="hr_attendance_punches")
     op.drop_index("ix_hr_attendance_punches_device_id", table_name="hr_attendance_punches")

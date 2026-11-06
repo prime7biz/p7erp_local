@@ -144,6 +144,35 @@ async def test_every_tenant_table_has_rls_policy(owner_session):
     assert not forced, f"RLS must not be FORCED (owner/migrations would be filtered): {forced}"
 
 
+@pytest.mark.asyncio
+async def test_every_tenant_policy_uses_the_270_expression(owner_session):
+    """Later migrations copy 270's policy; all copies must stay identical (per tenant_id nullability)."""
+    rows = (
+        await owner_session.execute(
+            text(
+                """
+                SELECT p.tablename, p.cmd, p.permissive, p.qual, p.with_check, c.is_nullable = 'YES' AS nullable
+                FROM pg_policies p
+                JOIN information_schema.columns c
+                  ON c.table_schema = p.schemaname AND c.table_name = p.tablename AND c.column_name = 'tenant_id'
+                WHERE p.schemaname = current_schema() AND p.policyname = :policy
+                """
+            ),
+            {"policy": POLICY},
+        )
+    ).all()
+    assert rows
+    bad_shape = sorted(r.tablename for r in rows if r.cmd != "ALL" or r.permissive != "PERMISSIVE" or r.qual != r.with_check)
+    assert not bad_shape, f"policy must be PERMISSIVE FOR ALL with USING == WITH CHECK: {bad_shape}"
+    by_nullability: dict[bool, set[str]] = {}
+    for r in rows:
+        by_nullability.setdefault(bool(r.nullable), set()).add(r.qual)
+    for nullable, quals in by_nullability.items():
+        assert len(quals) == 1, f"tenant policies differ (nullable tenant_id={nullable}): {sorted(quals)}"
+    for r in rows:
+        assert ("tenant_id IS NULL" in r.qual) == bool(r.nullable), r.tablename
+
+
 # --- Database policies (non-owner role) ------------------------------------------------------
 
 

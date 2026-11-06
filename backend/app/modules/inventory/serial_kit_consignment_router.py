@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from decimal import Decimal
 
@@ -30,6 +31,8 @@ from app.common.tenant_feature_keys import (
 from app.database import get_db, safe_async_session_rollback
 from app.models import Tenant, User
 from app.modules.inventory import consignment_service, kitting_service, serial_tracking_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/inventory", tags=["inventory-serial-kit-consignment"])
 
@@ -180,7 +183,10 @@ async def issue_serials(
         raise
     except Exception as exc:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.exception("Serial issue failed tenant_id=%s", tenant.id)
+        raise HTTPException(
+            status_code=500, detail="Could not issue serials. Please try again or contact support."
+        ) from exc
 
 
 @router.post("/serials/import")
@@ -204,7 +210,10 @@ async def import_serials(
         raise
     except Exception as exc:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.exception("Serial import failed tenant_id=%s", tenant.id)
+        raise HTTPException(
+            status_code=500, detail="Could not import serials. Please try again or contact support."
+        ) from exc
 
 
 # ---- Kits ----
@@ -254,7 +263,10 @@ async def create_kit(
         raise
     except Exception as exc:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.exception("Kit create failed tenant_id=%s", tenant.id)
+        raise HTTPException(
+            status_code=500, detail="Could not create kit. Please try again or contact support."
+        ) from exc
 
 
 @router.patch("/kits/{kit_id}")
@@ -288,7 +300,10 @@ async def update_kit(
         raise
     except Exception as exc:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.exception("Kit update failed tenant_id=%s kit_id=%s", tenant.id, kit_id)
+        raise HTTPException(
+            status_code=500, detail="Could not update kit. Please try again or contact support."
+        ) from exc
 
 
 @router.post("/kits/explode")
@@ -314,7 +329,10 @@ async def explode_kit(
         raise
     except Exception as exc:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.exception("Kit explode failed tenant_id=%s", tenant.id)
+        raise HTTPException(
+            status_code=500, detail="Could not explode kit. Please try again or contact support."
+        ) from exc
 
 
 @router.post("/kits/sell")
@@ -340,7 +358,10 @@ async def sell_kit(
         raise
     except Exception as exc:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.exception("Kit sell failed tenant_id=%s", tenant.id)
+        raise HTTPException(
+            status_code=500, detail="Could not sell kit. Please try again or contact support."
+        ) from exc
 
 
 # ---- Consignment ----
@@ -394,7 +415,10 @@ async def receive_consignment(
         raise
     except Exception as exc:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.exception("Consignment receive failed tenant_id=%s", tenant.id)
+        raise HTTPException(
+            status_code=500, detail="Could not receive consignment stock. Please try again or contact support."
+        ) from exc
 
 
 @router.post("/consignment/consume")
@@ -425,7 +449,10 @@ async def consume_consignment(
         raise
     except Exception as exc:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.exception("Consignment consume failed tenant_id=%s", tenant.id)
+        raise HTTPException(
+            status_code=500, detail="Could not consume consignment stock. Please try again or contact support."
+        ) from exc
 
 
 @router.post("/consignment/settle")
@@ -451,4 +478,7 @@ async def settle_consignment(
         raise
     except Exception as exc:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.exception("Consignment settle failed tenant_id=%s", tenant.id)
+        raise HTTPException(
+            status_code=500, detail="Could not settle consignment stock. Please try again or contact support."
+        ) from exc

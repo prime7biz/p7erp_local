@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from decimal import Decimal
 
@@ -66,6 +67,8 @@ from app.modules.inventory.mrp_idt_schemas import (
     ReorderCheckResultOut,
     ReorderSuggestionOut,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/inventory", tags=["inventory-mrp-idt"])
 
@@ -258,9 +261,18 @@ async def run_mrp(
                 for x in result.explosion
             ],
         )
-    except Exception as exc:
+    except HTTPException:
+        await safe_async_session_rollback(db)
+        raise
+    except ValueError as exc:
         await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        await safe_async_session_rollback(db)
+        logger.exception("MRP run failed tenant_id=%s", tenant.id)
+        raise HTTPException(
+            status_code=500, detail="Could not run MRP. Please try again or contact support."
+        ) from exc
 
 
 @router.get("/mrp/planned-orders", response_model=list[PlannedOrderOut])
@@ -565,7 +577,11 @@ async def create_idt(
         raise
     except Exception as exc:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.exception("IDT create failed tenant_id=%s", tenant.id)
+        raise HTTPException(
+            status_code=500,
+            detail="Could not create inter-department transfer. Please try again or contact support.",
+        ) from exc
 
 
 @router.get("/inter-department-transfers", response_model=list[IDTOut])
@@ -652,7 +668,11 @@ async def receive_idt(
         raise
     except Exception as exc:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.exception("IDT receive failed tenant_id=%s idt_id=%s", tenant.id, idt_id)
+        raise HTTPException(
+            status_code=500,
+            detail="Could not receive inter-department transfer. Please try again or contact support.",
+        ) from exc
 
 
 # --- Process loss standards / reports ---

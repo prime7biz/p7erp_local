@@ -2810,11 +2810,23 @@ async def generate_purchase_orders_from_bom(
         await db.commit()
         await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=bom.order_id)
         await db.commit()
+    except HTTPException:
+        await safe_async_session_rollback(db)
+        raise
+    except ValueError as e:
+        await safe_async_session_rollback(db)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         await safe_async_session_rollback(db)
-        if isinstance(e, HTTPException):
-            raise
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "PO generate from BOM failed tenant_id=%s bom_id=%s", tenant.id, bom_id
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Could not generate purchase orders from BOM. Please try again or contact support.",
+        ) from e
     return {
         "created": [{"id": po.id, "po_code": po.po_code, "line_count": len(pois)} for po, pois in created],
     }

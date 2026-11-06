@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from decimal import Decimal
 
@@ -35,6 +36,8 @@ from app.modules.inventory import (
     eoq_service,
     stock_aging_service,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/inventory", tags=["inventory-abc-eoq-aging"])
 
@@ -102,9 +105,15 @@ async def run_abc_analysis(
         )
         await db.commit()
         return result
+    except HTTPException:
+        await safe_async_session_rollback(db)
+        raise
     except Exception as exc:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.exception("ABC analysis run failed tenant_id=%s", tenant.id)
+        raise HTTPException(
+            status_code=500, detail="Could not run ABC analysis. Please try again or contact support."
+        ) from exc
 
 
 @router.get("/abc-analysis/report")
@@ -239,9 +248,15 @@ async def cycle_count_schedule(
                 db, tenant.id, for_date=date.today(), status=status
             )
         return [await cycle_count_service.task_to_dict(db, t) for t in tasks]
+    except HTTPException:
+        await safe_async_session_rollback(db)
+        raise
     except Exception as exc:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.exception("Cycle count schedule load failed tenant_id=%s", tenant.id)
+        raise HTTPException(
+            status_code=500, detail="Could not load cycle count schedule. Please try again or contact support."
+        ) from exc
 
 
 @router.post("/cycle-count/generate")
@@ -270,9 +285,15 @@ async def cycle_count_generate(
             "created": len(created),
             "tasks": [await cycle_count_service.task_to_dict(db, t) for t in created],
         }
+    except HTTPException:
+        await safe_async_session_rollback(db)
+        raise
     except Exception as exc:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.exception("Cycle count generate failed tenant_id=%s", tenant.id)
+        raise HTTPException(
+            status_code=500, detail="Could not generate cycle count tasks. Please try again or contact support."
+        ) from exc
 
 
 @router.post("/cycle-count/{task_id}/submit")
@@ -305,4 +326,7 @@ async def cycle_count_submit(
         raise
     except Exception as exc:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.exception("Cycle count submit failed tenant_id=%s task_id=%s", tenant.id, task_id)
+        raise HTTPException(
+            status_code=500, detail="Could not submit cycle count. Please try again or contact support."
+        ) from exc

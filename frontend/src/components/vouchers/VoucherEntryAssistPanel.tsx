@@ -85,6 +85,7 @@ export function VoucherEntryAssistPanel({ data, loading, error, onAddAccount, on
               key={v.id}
               to={`/app/accounts/vouchers/${v.id}`}
               target="_blank"
+              rel="noopener noreferrer"
               className="block text-xs font-medium text-brand-primary hover:underline"
             >
               Open {v.voucher_number} in a new tab

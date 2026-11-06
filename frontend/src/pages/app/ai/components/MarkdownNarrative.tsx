@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
+import { safeHref } from "@/utils/safeUrl";
 
 const mdComponents = {
   h1: ({ children }: { children?: ReactNode }) => (
@@ -30,7 +31,7 @@ const mdComponents = {
   a: ({ children, href }: { children?: ReactNode; href?: string }) => (
     <a
       className="text-brand-primary underline-offset-2 hover:underline"
-      href={href ?? "#"}
+      href={safeHref(href) ?? "#"}
       target="_blank"
       rel="noopener noreferrer"
     >

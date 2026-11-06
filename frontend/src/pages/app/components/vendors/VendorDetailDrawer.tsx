@@ -25,6 +25,7 @@ import {
   formatExtractedValue,
 } from "@/utils/extractionHelpers";
 import { logApiError } from "@/utils/logApiError";
+import { safeHref } from "@/utils/safeUrl";
 import {
   emptyVendorCreate,
   vendorCreateToAiFieldCurrent,
@@ -1445,12 +1446,12 @@ export function VendorDetailDrawer({
                           <p className="text-text-muted mt-1">
                             {a.target_module} · priority {a.priority}
                           </p>
-                          {a.target_url ? (
+                          {safeHref(a.target_url) ? (
                             <a
-                              href={a.target_url}
+                              href={safeHref(a.target_url)}
                               className="text-xs text-brand-primary hover:underline"
                               target="_blank"
-                              rel="noreferrer"
+                              rel="noopener noreferrer"
                             >
                               Open link
                             </a>

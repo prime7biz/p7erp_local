@@ -158,6 +158,18 @@ export const SEO_BY_PATH: Record<string, SeoMeta> = {
     title: "Sign Up – Prime7 ERP",
     description: "Start your Prime7 ERP free trial. Create your account for garment or buying house ERP.",
   },
+  "/forgot-password": {
+    title: "Forgot Password – Prime7 ERP",
+    description: "Request a password reset link for your Prime7 ERP account.",
+  },
+  "/reset-password": {
+    title: "Reset Password – Prime7 ERP",
+    description: "Choose a new password for your Prime7 ERP account.",
+  },
+  "/accept-invite": {
+    title: "Accept Invitation – Prime7 ERP",
+    description: "Accept your Prime7 ERP invitation and set up your account.",
+  },
   "/verify/proforma": {
     title: "Verify Proforma – Prime7 ERP",
     description: "Verify proforma invoice with Prime7 ERP.",

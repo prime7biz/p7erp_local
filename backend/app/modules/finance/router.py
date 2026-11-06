@@ -67,6 +67,7 @@ from app.modules.finance.voucher_controls import (
 )
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.control_tower_flags import require_control_tower_enabled
+from app.common.ownership import ensure_all_owned, ensure_owned
 from app.common.tenant import require_tenant
 from app.config import get_settings
 from app.database import get_db, safe_async_session_rollback
@@ -1549,6 +1550,7 @@ async def create_account_group(
             prefix=coa_cfg["group_code_prefix"],
             width=coa_cfg["group_code_width"],
         )
+    await ensure_owned(db, AccountGroup, body.parent_group_id, tenant.id, "Parent account group")
     payload = body.model_dump(exclude={"code"})
     payload["code"] = code
     row = AccountGroup(tenant_id=tenant.id, **payload)
@@ -1579,6 +1581,7 @@ async def update_account_group(
         await db.commit()
         await db.refresh(row)
         return row
+    await ensure_owned(db, AccountGroup, body.parent_group_id, tenant.id, "Parent account group")
     new_parent_id = body.parent_group_id if body.parent_group_id is not None else row.parent_group_id
     if new_parent_id is not None and await _account_group_parent_would_cycle(db, tenant.id, group_id, new_parent_id):
         raise HTTPException(
@@ -1791,6 +1794,7 @@ async def create_chart_account(
             prefix=coa_cfg["account_number_prefix"],
             width=coa_cfg["account_number_width"],
         )
+    await ensure_owned(db, ChartOfAccount, body.parent_account_id, tenant.id, "Parent ledger account")
     payload = body.model_dump(exclude={"account_number"})
     payload["account_number"] = account_number
     payload["balance"] = body.opening_balance
@@ -1841,6 +1845,7 @@ async def update_chart_account(
             status_code=400,
             detail=f"Normal balance must be '{group.default_normal_balance}' for this account group.",
         )
+    await ensure_owned(db, ChartOfAccount, body.parent_account_id, tenant.id, "Parent ledger account")
     for key, value in body.model_dump(exclude={"account_number"}).items():
         setattr(row, key, value)
     await db.commit()
@@ -1938,6 +1943,13 @@ async def put_coa_config(
 ):
     _ensure_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
+    await ensure_all_owned(
+        db,
+        ChartOfAccount,
+        [body.inventory_stock_account_id, body.inventory_clearing_account_id],
+        tenant.id,
+        "Ledger account",
+    )
     r = await db.execute(select(CoAConfig).where(CoAConfig.tenant_id == tenant.id))
     cfg = r.scalars().first()
     payload = body.model_dump()
@@ -2431,6 +2443,8 @@ async def create_voucher(
         fu = await db.get(FacilityUtilization, body.facility_utilization_id)
         if not fu or fu.tenant_id != tenant.id:
             raise HTTPException(status_code=400, detail="Facility utilization not found")
+    await ensure_owned(db, BankReconciliation, body.bank_reconciliation_id, tenant.id, "Bank reconciliation")
+    await ensure_owned(db, TradeCase, body.trade_case_id, tenant.id, "Trade case")
     txn_currency = _normalize_currency(body.currency, default="BDT")
     base_currency = _normalize_currency(body.base_currency, default=getattr(tenant, "base_currency", None) or "BDT")
     rate_source = (body.exchange_rate_source or "system").strip() or "system"
@@ -2611,6 +2625,7 @@ async def update_voucher(
     if voucher_type_code not in await _active_voucher_type_codes(db, tenant.id):
         raise HTTPException(status_code=400, detail="Voucher type is inactive or not configured")
     _assert_body_amounts_balanced(body)
+    await ensure_owned(db, BankReconciliation, body.bank_reconciliation_id, tenant.id, "Bank reconciliation")
 
     before_header = header_snapshot(row)
     before_lines = lines_snapshot(
@@ -4473,6 +4488,8 @@ async def create_budget(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await ensure_all_owned(db, ChartOfAccount, [ln.account_id for ln in body.lines], tenant.id, "Ledger account")
+    await ensure_all_owned(db, CostCenter, [ln.cost_center_id for ln in body.lines], tenant.id, "Cost center")
     row = Budget(
         tenant_id=tenant.id,
         budget_name=body.budget_name,
@@ -4511,6 +4528,8 @@ async def update_budget(
     budget = await db.get(Budget, budget_id)
     if not budget or budget.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Budget not found")
+    await ensure_all_owned(db, ChartOfAccount, [ln.account_id for ln in body.lines], tenant.id, "Ledger account")
+    await ensure_all_owned(db, CostCenter, [ln.cost_center_id for ln in body.lines], tenant.id, "Cost center")
     budget.budget_name = body.budget_name
     budget.fiscal_year = body.fiscal_year
     budget.status = body.status
@@ -4632,6 +4651,7 @@ async def create_bank_account(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await ensure_owned(db, ChartOfAccount, body.gl_account_id, tenant.id, "Ledger account")
     row = BankAccount(tenant_id=tenant.id, **body.model_dump())
     db.add(row)
     await db.commit()
@@ -4651,6 +4671,7 @@ async def update_bank_account(
     row = await db.get(BankAccount, account_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Bank account not found")
+    await ensure_owned(db, ChartOfAccount, body.gl_account_id, tenant.id, "Ledger account")
     for key, value in body.model_dump().items():
         setattr(row, key, value)
     await db.commit()
@@ -5187,6 +5208,7 @@ async def create_payment_run(
         bank = await db.get(BankAccount, body.bank_account_id)
         if not bank or bank.tenant_id != tenant.id:
             raise HTTPException(status_code=404, detail="Bank account not found")
+    await ensure_owned(db, TradeCase, body.trade_case_id, tenant.id, "Trade case")
     code = await next_tenant_code(
         db,
         model=PaymentRun,
@@ -7077,6 +7099,7 @@ async def create_bill_reference(
     acct = await db.get(ChartOfAccount, body.account_id)
     if not acct or acct.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Account not found")
+    await ensure_owned(db, Voucher, body.source_voucher_id, tenant.id, "Voucher")
     bill_number = body.bill_number
     if not bill_number:
         prefix = "PAY-" if body.bill_type == "PAYABLE" else "RCV-"
@@ -7187,6 +7210,9 @@ async def allocate_bill_wise(
     acct = await db.get(ChartOfAccount, body.account_id)
     if not acct or acct.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Account not found")
+    await ensure_owned(db, VoucherLine, body.voucher_line_id, tenant.id, "Voucher line")
+    if body.allocation_type == "ON_ACCOUNT":
+        await ensure_owned(db, BillReference, body.bill_reference_id, tenant.id, "Bill reference")
     today = date.today()
 
     if body.allocation_type == "AGAINST_REF":

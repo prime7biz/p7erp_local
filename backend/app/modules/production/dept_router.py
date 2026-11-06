@@ -8,9 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.ownership import ensure_owned
 from app.common.tenant import require_tenant
 from app.database import get_db
-from app.models import DepartmentProductionPlan, Tenant, User
+from app.models import DepartmentMachine, DepartmentProductionPlan, GarmentStyle, Item, Order, Tenant, User
 from app.modules.production.schemas import DeptPlanCreate
 
 router = APIRouter(prefix="/production/departments", tags=["production-departments"])
@@ -45,6 +46,10 @@ async def create_plan(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure(user, tenant)
+    await ensure_owned(db, DepartmentMachine, body.machine_id, tenant.id, "Machine")
+    await ensure_owned(db, Item, body.input_item_id, tenant.id, "Item")
+    await ensure_owned(db, Order, body.order_id, tenant.id, "Order")
+    await ensure_owned(db, GarmentStyle, body.style_id, tenant.id, "Style")
     pd = date.fromisoformat(body.planned_date) if body.planned_date else None
     row = DepartmentProductionPlan(
         tenant_id=tenant.id,

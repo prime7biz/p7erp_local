@@ -1,7 +1,7 @@
 """MCP HTTP endpoint authentication and tenant binding.
 
-Uses a ContextVar so MCP tool handlers can read the authenticated tenant_id
-without needing FastAPI Depends (MCP is a mounted ASGI sub-app).
+Uses ContextVars so MCP tool handlers can read the authenticated tenant_id and
+caller User without needing FastAPI Depends (MCP is a mounted ASGI sub-app).
 """
 
 from __future__ import annotations
@@ -11,19 +11,33 @@ import json
 import logging
 from typing import Any
 
-from app.common.jwt_compat import JWTError, jwt
-from sqlalchemy import select
+from fastapi import HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
+from starlette.requests import Request
 
-from app.common.auth import is_internal_access_payload
-from app.config import get_settings
+from app.common.auth import get_current_user
+from app.common.tenant import get_tenant
 from app.database import AsyncSessionLocal
 from app.models import User
+from app.modules.ai_tool.authz import require_ai_access
 
 logger = logging.getLogger(__name__)
 
 _mcp_tenant_ctx: contextvars.ContextVar[int | None] = contextvars.ContextVar(
     "mcp_tenant_id", default=None
 )
+_mcp_user_ctx: contextvars.ContextVar[User | None] = contextvars.ContextVar(
+    "mcp_user", default=None
+)
+
+
+class McpAuthError(ValueError):
+    """Auth failure for /mcp; ``status_code`` is 401 (identity) or 403 (permission)."""
+
+    def __init__(self, detail: Any, status_code: int = 401) -> None:
+        super().__init__(detail if isinstance(detail, str) else json.dumps(detail, default=str))
+        self.detail = detail
+        self.status_code = status_code
 
 
 def get_mcp_tenant_id() -> int | None:
@@ -31,70 +45,65 @@ def get_mcp_tenant_id() -> int | None:
     return _mcp_tenant_ctx.get(None)
 
 
-async def resolve_mcp_tenant(
+def get_mcp_user() -> User | None:
+    """Read the authenticated caller for the current MCP request (if any)."""
+    return _mcp_user_ctx.get(None)
+
+
+async def resolve_mcp_user(
     raw_headers: dict[str, str],
     *,
     require_auth: bool = True,
-) -> int | None:
-    """Validate JWT and resolve user tenant from MCP HTTP request headers.
+) -> User | None:
+    """Resolve the MCP caller like ``get_current_user`` plus active tenant and AI access.
 
-    Returns the authenticated tenant_id, or None when auth is not required
-    and no credentials are provided.  Raises ValueError on auth failure.
+    Returns the User, or None when auth is not required and no credentials are
+    provided. Raises McpAuthError on failure.
     """
-    settings = get_settings()
     auth_value = raw_headers.get("authorization", "")
     tenant_header = raw_headers.get("x-tenant-id", "")
 
     if not auth_value.startswith("Bearer "):
         if require_auth:
-            raise ValueError("Missing or invalid Authorization header.")
+            raise McpAuthError("Missing or invalid Authorization header.")
         return None
 
-    token = auth_value[7:]
-    try:
-        payload = jwt.decode(
-            token,
-            settings.jwt_secret,
-            algorithms=[settings.jwt_algorithm],
-            options={"verify_aud": False},
-        )
-    except JWTError as exc:
-        raise ValueError("Invalid or expired Bearer token.") from exc
-
-    if not is_internal_access_payload(payload):
-        raise ValueError("Only staff access tokens are valid for MCP tool calls.")
-
-    sub = payload.get("sub")
-    if not sub:
-        raise ValueError("Token missing subject claim.")
-    try:
-        user_id = int(sub)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Token subject is not a valid user id.") from exc
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=auth_value[7:])
+    request = Request({"type": "http", "headers": [], "state": {}})
 
     async with AsyncSessionLocal() as db:
-        row = await db.execute(
-            select(User.tenant_id, User.is_active).where(User.id == user_id)
-        )
-        result = row.one_or_none()
-
-    if result is None:
-        raise ValueError("User not found.")
-    user_tenant_id, is_active = result.tuple()
-    if not is_active:
-        raise ValueError("User account is inactive.")
-
-    if tenant_header:
         try:
-            hdr_tid = int(tenant_header)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("X-Tenant-Id header is not a valid integer.") from exc
-        if hdr_tid != user_tenant_id:
-            raise ValueError(
-                "X-Tenant-Id does not match the authenticated user's tenant."
-            )
+            user = await get_current_user(db=db, request=request, credentials=credentials)
+        except HTTPException as exc:
+            raise McpAuthError(exc.detail, 401) from exc
 
-    return user_tenant_id
+        if tenant_header:
+            try:
+                hdr_tid = int(tenant_header)
+            except (TypeError, ValueError) as exc:
+                raise McpAuthError("X-Tenant-Id header is not a valid integer.") from exc
+            if hdr_tid != user.tenant_id:
+                raise McpAuthError("X-Tenant-Id does not match the authenticated user's tenant.")
+
+        if await get_tenant(db, user.tenant_id) is None:
+            raise McpAuthError("Tenant not found or inactive.")
+
+        try:
+            await require_ai_access(db, user)
+        except HTTPException as exc:
+            raise McpAuthError(exc.detail, 403) from exc
+
+    return user
+
+
+async def resolve_mcp_tenant(
+    raw_headers: dict[str, str],
+    *,
+    require_auth: bool = True,
+) -> int | None:
+    """Backward-compatible wrapper: return only the caller's tenant_id."""
+    user = await resolve_mcp_user(raw_headers, require_auth=require_auth)
+    return user.tenant_id if user is not None else None
 
 
 def _parse_scope_headers(scope: dict[str, Any]) -> dict[str, str]:
@@ -109,8 +118,8 @@ def _parse_scope_headers(scope: dict[str, Any]) -> dict[str, str]:
 class McpAuthMiddleware:
     """ASGI middleware that wraps the MCP sub-app with JWT + tenant validation.
 
-    On success the resolved tenant_id is stored in a ContextVar so tool
-    handlers can retrieve it via ``get_mcp_tenant_id()``.
+    On success the resolved tenant_id and caller are stored in ContextVars so
+    tool handlers can retrieve them via ``get_mcp_tenant_id()`` / ``get_mcp_user()``.
     """
 
     def __init__(self, app: Any, *, require_auth: bool = True) -> None:
@@ -125,21 +134,21 @@ class McpAuthMiddleware:
         headers = _parse_scope_headers(scope)
 
         try:
-            tenant_id = await resolve_mcp_tenant(
-                headers, require_auth=self.require_auth
-            )
-        except ValueError as exc:
-            await self._send_json_error(send, 401, str(exc))
+            user = await resolve_mcp_user(headers, require_auth=self.require_auth)
+        except McpAuthError as exc:
+            await self._send_json_error(send, exc.status_code, exc.detail)
             return
 
-        token = _mcp_tenant_ctx.set(tenant_id)
+        tenant_token = _mcp_tenant_ctx.set(user.tenant_id if user is not None else None)
+        user_token = _mcp_user_ctx.set(user)
         try:
             await self.app(scope, receive, send)
         finally:
-            _mcp_tenant_ctx.reset(token)
+            _mcp_user_ctx.reset(user_token)
+            _mcp_tenant_ctx.reset(tenant_token)
 
     @staticmethod
-    async def _send_json_error(send: Any, status_code: int, detail: str) -> None:
+    async def _send_json_error(send: Any, status_code: int, detail: Any) -> None:
         body = json.dumps({"detail": detail}).encode()
         await send(
             {

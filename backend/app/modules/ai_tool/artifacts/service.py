@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -71,6 +72,13 @@ async def list_artifacts_for_tenant(
     return list((await db.execute(q)).scalars().all())
 
 
+def is_artifact_expired(row: AiApprovalArtifact, *, now: datetime | None = None) -> bool:
+    if row.expires_at is None:
+        return False
+    expires_at = row.expires_at.replace(tzinfo=None) if row.expires_at.tzinfo else row.expires_at
+    return expires_at <= (now or datetime.utcnow())
+
+
 async def approve_artifact(
     db: AsyncSession,
     *,
@@ -79,11 +87,22 @@ async def approve_artifact(
     reviewer: User,
     comments: str | None = None,
 ) -> AiApprovalArtifact | None:
+    """Approve a pending artifact. Raises 400 when expired and 403 when the reviewer requested it."""
     row = await get_artifact(db, tenant_id=tenant_id, artifact_id=artifact_id)
     if not row:
         return None
     if not can_transition_artifact(row.status, "approved"):
         return None
+    if is_artifact_expired(row):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Artifact has expired and can no longer be approved.",
+        )
+    if row.user_id is not None and row.user_id == reviewer.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="An artifact must be approved by a different user than the one who requested it.",
+        )
     row.status = "approved"
     row.reviewer_user_id = reviewer.id
     row.reviewer_comments = comments
@@ -126,6 +145,8 @@ async def commit_artifact(
         return None, None, "Artifact not found"
     if row.status != "approved":
         return row, None, "Artifact must be approved before commit"
+    if is_artifact_expired(row):
+        return row, None, "Artifact has expired and can no longer be committed"
     payload = row.generated_payload_json or {}
     tool = row.source_tool
     err: str | None = None

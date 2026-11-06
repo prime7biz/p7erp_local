@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.codegen import next_tenant_code
+from app.common.ownership import ensure_owned
 from app.common.pagination import MAX_PAGE_SIZE
 from app.common.tenant import require_tenant
 from app.database import get_db
@@ -547,6 +548,7 @@ async def create_sample(
         o = await db.get(Order, body.order_id)
         if not o or o.tenant_id != tenant.id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    await ensure_owned(db, User, body.assigned_to_id, tenant.id, "User", status_code=404)
     code = await next_tenant_code(
         db, model=MerchSampleRequest, tenant_id=tenant.id, prefix="SMP-", width=4
     )
@@ -583,6 +585,7 @@ async def update_sample(
     ensure_tenant(user, tenant)
     row = await _get_sample_or_404(db, tenant_id=tenant.id, sample_id=sample_id)
     data = body.model_dump(exclude_unset=True)
+    await ensure_owned(db, User, data.get("assigned_to_id"), tenant.id, "User", status_code=404)
     if "sample_type" in data and data["sample_type"] is not None:
         st = data["sample_type"].strip().lower()
         if st not in SAMPLE_TYPES:
@@ -669,6 +672,7 @@ async def create_sample_task(
 ):
     ensure_tenant(user, tenant)
     await _get_sample_or_404(db, tenant_id=tenant.id, sample_id=sample_id)
+    await ensure_owned(db, User, body.assigned_to_id, tenant.id, "User", status_code=404)
     pct = body.pct_complete if body.pct_complete is not None else Decimal("0")
     row = MerchSampleTask(
         tenant_id=tenant.id,
@@ -705,6 +709,7 @@ async def update_sample_task(
     if not row or row.tenant_id != tenant.id or row.sample_request_id != sample_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     data = body.model_dump(exclude_unset=True)
+    await ensure_owned(db, User, data.get("assigned_to_id"), tenant.id, "User", status_code=404)
     for k, v in data.items():
         setattr(row, k, v)
     row.updated_at = datetime.utcnow()

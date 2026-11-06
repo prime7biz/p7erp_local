@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.delete_guards import ensure_shift_deletable
 from app.common.tenant import require_tenant
 from app.database import get_db
@@ -44,6 +45,8 @@ from app.modules.production.schemas import (
 )
 
 router = APIRouter(prefix="/production", tags=["production-settings"])
+
+TENANT_ADMIN_ROLES = frozenset({"admin", "super_admin", "superadmin", "owner"})
 
 
 def _ensure(user: User, tenant: Tenant) -> None:
@@ -188,6 +191,11 @@ async def update_production_settings(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure(user, tenant)
+    # Factory profile rewrites tenant feature flags; AI config controls the model provider.
+    if body.factory_profile is not None or body.ai_provider_config is not None:
+        role = await get_user_role_scoped_to_tenant(db, user, tenant.id)
+        if (role.name if role else "").strip().lower() not in TENANT_ADMIN_ROLES:
+            raise HTTPException(status_code=403, detail="Admin only")
     s = await _get_or_create_settings(db, tenant.id)
     t = await db.get(Tenant, tenant.id)
     if not t:

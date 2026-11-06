@@ -12,9 +12,40 @@ from app.modules.ai_tool.escalation_shortcuts import maybe_lightweight_paid_esca
 from app.modules.ai_tool.llm_provider.base import BaseLlmProvider
 from app.modules.ai_tool.llm_provider.openrouter_client import parse_openai_compatible_usage
 from app.modules.ai_tool.llm_provider.prompt_sanitizer import clamp_text_for_llm, redact_pii_for_external_provider
+from app.models import User
 from app.modules.mcp_server import call_registered_tool, get_registered_tools
+from app.modules.mcp_server.safety import is_read_only_tool
 
 logger = logging.getLogger(__name__)
+
+
+def paid_loop_tools(user: User | None) -> list[dict[str, Any]]:
+    """Tools the paid model may call: read-only only, and none without a requesting user."""
+    if user is None:
+        return []
+    return [t for t in get_registered_tools() if is_read_only_tool(t["name"])]
+
+
+async def run_paid_loop_tool(
+    fname: str,
+    args: Any,
+    *,
+    tenant_id: int,
+    user: User | None,
+    allowed_names: set[str],
+) -> dict[str, Any]:
+    """Execute one model-requested tool call as the requesting user (read-only tools only)."""
+    if user is None or fname not in allowed_names or not is_read_only_tool(fname):
+        return {
+            "status": "BLOCKED",
+            "tool_name": fname,
+            "message": "Only read-only ERP tools are available to the paid assistant.",
+        }
+    if not isinstance(args, dict):
+        args = {}
+    if "tenant_id" not in args:
+        args["tenant_id"] = tenant_id
+    return await call_registered_tool(fname, args, context_tenant_id=tenant_id, user=user)
 
 
 def _sanitize_conv(
@@ -51,6 +82,7 @@ class PaidLlmProvider(BaseLlmProvider):
         tenant_id: int,
         requested_tool: str | None,
         tenant_system_prefix: str | None = None,
+        user: User | None = None,
     ) -> str:
         if requested_tool:
             lite = await maybe_lightweight_paid_escalation(requested_tool)
@@ -67,7 +99,7 @@ class PaidLlmProvider(BaseLlmProvider):
                 provider = "openrouter"
         api_key = (settings.paid_llm_api_key or "").strip()
         model = (settings.paid_llm_model or "").strip()
-        tools = get_registered_tools()
+        tools = paid_loop_tools(user)
 
         if provider == "openrouter":
             s = get_settings()
@@ -96,6 +128,7 @@ class PaidLlmProvider(BaseLlmProvider):
                 extra_headers=extra or None,
                 tenant_system_prefix=tenant_system_prefix,
                 error_label="OpenRouter",
+                user=user,
             )
 
         if not provider or not api_key or not model:
@@ -129,6 +162,7 @@ class PaidLlmProvider(BaseLlmProvider):
                 extra_headers=extra,
                 tenant_system_prefix=tenant_system_prefix,
                 error_label=label,
+                user=user,
             )
         if provider == "anthropic":
             return await self._generate_anthropic_with_tool_loop(
@@ -139,6 +173,7 @@ class PaidLlmProvider(BaseLlmProvider):
                 tools=tools,
                 requested_tool=requested_tool,
                 tenant_system_prefix=tenant_system_prefix,
+                user=user,
             )
         return "Paid AI provider is not supported. Use 'openai', 'openrouter', or 'anthropic'."
 
@@ -155,6 +190,7 @@ class PaidLlmProvider(BaseLlmProvider):
         extra_headers: dict[str, str] | None = None,
         tenant_system_prefix: str | None = None,
         error_label: str = "OpenAI-compatible",
+        user: User | None = None,
     ) -> str:
         settings = get_settings()
         max_tok = max(256, min(32_000, int(getattr(settings, "ai_max_tokens_per_request", 4096) or 4096)))
@@ -213,9 +249,10 @@ class PaidLlmProvider(BaseLlmProvider):
                         "temperature": 0.2,
                         "max_tokens": max_tok,
                         "messages": messages,
-                        "tools": openai_tools,
-                        "tool_choice": tool_choice,
                     }
+                    if openai_tools:
+                        body["tools"] = openai_tools
+                        body["tool_choice"] = tool_choice
                     resp = await post_chat_completions_with_429_retry(
                         client,
                         url,
@@ -249,9 +286,13 @@ class PaidLlmProvider(BaseLlmProvider):
                         fname = call["function"]["name"]
                         raw_args = call["function"].get("arguments") or "{}"
                         args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
-                        if "tenant_id" not in args:
-                            args["tenant_id"] = tenant_id
-                        tool_result = await call_registered_tool(fname, args, context_tenant_id=tenant_id)
+                        tool_result = await run_paid_loop_tool(
+                            fname,
+                            args,
+                            tenant_id=tenant_id,
+                            user=user,
+                            allowed_names=valid_tool_names,
+                        )
                         messages.append(
                             {
                                 "role": "tool",
@@ -283,6 +324,7 @@ class PaidLlmProvider(BaseLlmProvider):
         tools: list[dict[str, Any]],
         requested_tool: str | None,
         tenant_system_prefix: str | None = None,
+        user: User | None = None,
     ) -> str:
         settings = get_settings()
         max_tok = max(256, min(8192, int(getattr(settings, "ai_max_tokens_per_request", 4096) or 4096)))
@@ -297,6 +339,7 @@ class PaidLlmProvider(BaseLlmProvider):
             for t in tools
             if not requested_tool or t["name"] == requested_tool
         ]
+        allowed_names = {t["name"] for t in anthropic_tools}
         messages: list[dict[str, Any]] = [
             {
                 "role": x.get("role", "user"),
@@ -322,8 +365,9 @@ class PaidLlmProvider(BaseLlmProvider):
                         "temperature": 0.2,
                         "system": sys_line,
                         "messages": messages,
-                        "tools": anthropic_tools,
                     }
+                    if anthropic_tools:
+                        body["tools"] = anthropic_tools
                     resp = await client.post("https://api.anthropic.com/v1/messages", json=body, headers=headers)
                     resp.raise_for_status()
                     data = resp.json()
@@ -337,10 +381,13 @@ class PaidLlmProvider(BaseLlmProvider):
                     tool_results_blocks = []
                     for b in tool_uses:
                         fname = str(b.get("name") or "")
-                        args = b.get("input") or {}
-                        if "tenant_id" not in args:
-                            args["tenant_id"] = tenant_id
-                        tool_result = await call_registered_tool(fname, args, context_tenant_id=tenant_id)
+                        tool_result = await run_paid_loop_tool(
+                            fname,
+                            b.get("input") or {},
+                            tenant_id=tenant_id,
+                            user=user,
+                            allowed_names=allowed_names,
+                        )
                         tool_results_blocks.append(
                             {
                                 "type": "tool_result",

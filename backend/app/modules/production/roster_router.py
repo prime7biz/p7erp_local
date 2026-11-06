@@ -8,6 +8,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.ownership import ensure_owned
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -101,6 +102,7 @@ async def upsert_roster_cell(
     role = await db.get(ProductionCrewRole, body.crew_role_id)
     if not role or role.tenant_id != tenant.id or role.department_type != "sewing":
         raise HTTPException(400, "Invalid crew role")
+    await ensure_owned(db, Employee, body.employee_id, tenant.id, "Employee")
     ws = date.fromisoformat(body.week_start_date)
     r = (
         await db.execute(
@@ -265,6 +267,8 @@ async def update_line_crew_sheet_status(
 ):
     _ensure(user, tenant)
     d = date.fromisoformat(production_date)
+    await ensure_owned(db, SewingLine, line_id, tenant.id, "Sewing line", status_code=404)
+    await ensure_owned(db, ProductionShift, shift_id, tenant.id, "Shift", status_code=404)
     row = (
         await db.execute(
             select(LineCrewSheetHeader).where(

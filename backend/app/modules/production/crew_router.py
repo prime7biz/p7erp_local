@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.delete_guards import ensure_crew_role_deletable
+from app.common.ownership import ensure_owned
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -610,7 +611,13 @@ async def _template_rows_for_line(db: AsyncSession, tenant_id: int, line_id: int
     employee_ids = [x.employee_id for x in existing if x.employee_id is not None]
     emp_map: dict[int, Employee] = {}
     if employee_ids:
-        emp_rows = list((await db.execute(select(Employee).where(Employee.id.in_(employee_ids)))).scalars().all())
+        emp_rows = list(
+            (
+                await db.execute(
+                    select(Employee).where(Employee.tenant_id == tenant_id, Employee.id.in_(employee_ids))
+                )
+            ).scalars().all()
+        )
         emp_map = {e.id: e for e in emp_rows}
 
     out: list[CrewTemplateRowResponse] = []
@@ -676,6 +683,7 @@ async def put_line_crew_template(
             raise HTTPException(400, f"Invalid sewing crew role: {row.crew_role_id}")
         if role.is_named and row.employee_id is None:
             raise HTTPException(400, f"Role '{role.role_name}' requires employee selection.")
+        await ensure_owned(db, Employee, row.employee_id, tenant.id, "Employee")
         ex = (
             await db.execute(
                 select(LineCrewTemplate).where(
@@ -733,7 +741,13 @@ async def _template_rows_for_unit(
     employee_ids = [x.employee_id for x in existing if x.employee_id is not None]
     emp_map: dict[int, Employee] = {}
     if employee_ids:
-        emp_rows = list((await db.execute(select(Employee).where(Employee.id.in_(employee_ids)))).scalars().all())
+        emp_rows = list(
+            (
+                await db.execute(
+                    select(Employee).where(Employee.tenant_id == tenant_id, Employee.id.in_(employee_ids))
+                )
+            ).scalars().all()
+        )
         emp_map = {e.id: e for e in emp_rows}
 
     out: list[CrewTemplateRowResponse] = []
@@ -799,6 +813,7 @@ async def put_unit_crew_template(
             raise HTTPException(400, f"Invalid {dept} crew role: {row.crew_role_id}")
         if role.is_named and row.employee_id is None:
             raise HTTPException(400, f"Role '{role.role_name}' requires employee selection.")
+        await ensure_owned(db, Employee, row.employee_id, tenant.id, "Employee")
         ex = (
             await db.execute(
                 select(UnitCrewTemplate).where(
@@ -939,7 +954,11 @@ async def _daily_rows(
                 await db.execute(
                     select(LineCrewDaily, ProductionCrewRole, Employee)
                     .join(ProductionCrewRole, ProductionCrewRole.id == LineCrewDaily.crew_role_id)
-                    .join(Employee, Employee.id == LineCrewDaily.employee_id, isouter=True)
+                    .join(
+                        Employee,
+                        and_(Employee.id == LineCrewDaily.employee_id, Employee.tenant_id == tenant_id),
+                        isouter=True,
+                    )
                     .where(
                         LineCrewDaily.tenant_id == tenant_id,
                         LineCrewDaily.sewing_line_id == line_id,
@@ -956,7 +975,11 @@ async def _daily_rows(
                 await db.execute(
                     select(UnitCrewDaily, ProductionCrewRole, Employee)
                     .join(ProductionCrewRole, ProductionCrewRole.id == UnitCrewDaily.crew_role_id)
-                    .join(Employee, Employee.id == UnitCrewDaily.employee_id, isouter=True)
+                    .join(
+                        Employee,
+                        and_(Employee.id == UnitCrewDaily.employee_id, Employee.tenant_id == tenant_id),
+                        isouter=True,
+                    )
                     .where(
                         UnitCrewDaily.tenant_id == tenant_id,
                         UnitCrewDaily.department_type == department_type,
@@ -1044,6 +1067,9 @@ async def init_crew_daily_from_template(
 ):
     _ensure(user, tenant)
     d = date.fromisoformat(body.production_date)
+    await ensure_owned(db, SewingLine, body.line_id, tenant.id, "Sewing line")
+    await ensure_owned(db, ProductionShift, body.shift_id, tenant.id, "Shift")
+    await ensure_owned(db, DepartmentMachine, body.machine_id, tenant.id, "Machine")
     await _init_daily_from_template(
         db,
         tenant_id=tenant.id,
@@ -1076,6 +1102,11 @@ async def put_crew_daily(
     _ensure(user, tenant)
     d = date.fromisoformat(body.production_date)
     dept = body.department_type.strip().lower() if body.department_type else None
+    await ensure_owned(db, SewingLine, body.line_id, tenant.id, "Sewing line")
+    await ensure_owned(db, ProductionShift, body.shift_id, tenant.id, "Shift")
+    await ensure_owned(db, DepartmentMachine, body.machine_id, tenant.id, "Machine")
+    for row in body.rows:
+        await ensure_owned(db, Employee, row.employee_id, tenant.id, "Employee")
     if body.line_id is not None:
         hdr = (
             await db.execute(

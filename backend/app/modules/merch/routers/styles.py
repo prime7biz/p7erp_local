@@ -17,11 +17,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.auth import get_current_user
 from app.common.money import format_money, parse_money
 from app.common.codegen import next_tenant_code
+from app.common.ownership import ensure_owned
 from app.common.pagination import MAX_PAGE_SIZE
 from app.common.storage import FileStorageService
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
+    Customer,
     FxReceipt,
     GarmentStyle,
     Inquiry,
@@ -852,6 +854,7 @@ async def update_style(
     row = await db.get(GarmentStyle, style_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Style not found")
+    await ensure_owned(db, Customer, body.buyer_customer_id, tenant.id, "Buyer customer", status_code=404)
     changes: list[str] = []
     if body.style_code is not None:
         new_code = body.style_code.strip().upper()

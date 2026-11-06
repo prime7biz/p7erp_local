@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.db_errors import commit_handling_duplicate_document_code, flush_handling_duplicate_document_code
+from app.common.ownership import ensure_owned
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -19,6 +20,7 @@ from app.models import (
     ManufacturingWorkOrder,
     ManufacturingWorkOrderOperation,
     ManufacturingRoutingStep,
+    Order,
     Tenant,
     User,
 )
@@ -171,6 +173,7 @@ async def create_production_plan(
             routing = await db.get(ManufacturingRoutingTemplate, line.routing_id)
             if not routing or routing.tenant_id != tenant.id:
                 raise HTTPException(status_code=404, detail=f"Routing not found for routing_id={line.routing_id}")
+        await ensure_owned(db, Order, line.order_id, tenant.id, "Order", status_code=404)
         db.add(
             ManufacturingProductionPlanLine(
                 tenant_id=tenant.id,

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.orm_numeric import api_money_to_decimal, decimal_to_money_response
+from app.common.ownership import ensure_owned
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.permissions import (
@@ -47,6 +48,7 @@ from app.models import (
     VoucherLine,
 )
 from app.modules.hr_payroll.schemas import (
+    PayrollAccountingConfigUpdate,
     PayrollApproveBody,
     PayrollAssignmentCreate,
     PayrollAssignmentEndBody,
@@ -841,6 +843,7 @@ async def list_run_lines(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await _require_payroll_manage(db, user, tenant.id)
     await _run_or_404(db, tenant.id, run_id)
     rows = (
         await db.execute(
@@ -1411,32 +1414,24 @@ async def get_payroll_accounting_config(
 
 @router.put("/accounting-config")
 async def upsert_payroll_accounting_config(
-    body: dict,
+    body: PayrollAccountingConfigUpdate,
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
+    changes = body.model_dump(exclude_unset=True)
+    for key, account_id in changes.items():
+        await ensure_owned(db, ChartOfAccount, account_id, tenant.id, key)
     row = (
         await db.execute(select(PayrollAccountingConfig).where(PayrollAccountingConfig.tenant_id == tenant.id).limit(1))
     ).scalar_one_or_none()
     if not row:
         row = PayrollAccountingConfig(tenant_id=tenant.id)
         db.add(row)
-    for key in (
-        "salary_expense_account_id",
-        "salary_payable_account_id",
-        "bank_account_id",
-        "cash_account_id",
-        "tax_payable_account_id",
-        "pf_payable_account_id",
-        "esi_payable_account_id",
-        "pt_payable_account_id",
-        "advance_receivable_account_id",
-    ):
-        if key in body:
-            setattr(row, key, body[key])
+    for key, account_id in changes.items():
+        setattr(row, key, account_id)
     await db.commit()
     await db.refresh(row)
     return await get_payroll_accounting_config(tenant, user, db)
@@ -1449,6 +1444,7 @@ async def list_advances(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await _require_payroll_manage(db, user, tenant.id)
     rows = (await db.execute(select(EmployeeAdvance).where(EmployeeAdvance.tenant_id == tenant.id).limit(500))).scalars().all()
     return [
         {
@@ -1629,6 +1625,7 @@ async def list_assignments(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await _require_payroll_manage(db, user, tenant.id)
     rows = await payroll_service.list_structure_assignments(
         db, tenant_id=tenant.id, employee_id=employee_id, limit=limit, offset=offset
     )
@@ -1689,6 +1686,7 @@ async def auto_calculate_preview(
     await assert_soft_permission_allowed(
         db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_AUTO_CALCULATE
     )
+    await _require_payroll_manage(db, user, tenant.id)
     preview = await payroll_service.preview_auto_calculate(db, tenant=tenant, run_id=run_id)
     return PayrollAutoCalculatePreviewOut(
         run_id=preview.run_id,

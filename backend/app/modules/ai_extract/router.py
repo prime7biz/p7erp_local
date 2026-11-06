@@ -44,6 +44,7 @@ router = APIRouter(prefix="/ai-extract", tags=["ai-extract"])
 heavy_limit = Depends(rate_limit_dependency("heavy"))
 
 MAX_BYTES = 10 * 1024 * 1024
+_READ_CHUNK_BYTES = 1024 * 1024
 ALLOWED_TYPES = {
     "image/png": "png",
     "image/jpeg": "jpg",
@@ -58,6 +59,31 @@ def _ensure_user_tenant(user: User, tenant: Tenant) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
 
+def _too_large() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+        detail=f"File too large (max {MAX_BYTES // (1024 * 1024)} MB).",
+    )
+
+
+async def _read_upload_limited(file: UploadFile) -> bytes:
+    """Read the upload in chunks and stop with 413 as soon as it exceeds MAX_BYTES."""
+    declared_size = getattr(file, "size", None)
+    if declared_size is not None and declared_size > MAX_BYTES:
+        raise _too_large()
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(_READ_CHUNK_BYTES)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_BYTES:
+            raise _too_large()
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def _validate_upload(content_type: str | None, data: bytes) -> None:
     ct = (content_type or "").lower().split(";")[0].strip()
     if ct not in ALLOWED_TYPES:
@@ -68,10 +94,7 @@ def _validate_upload(content_type: str | None, data: bytes) -> None:
     if len(data) == 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file.")
     if len(data) > MAX_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File too large (max {MAX_BYTES // (1024 * 1024)} MB).",
-        )
+        raise _too_large()
     if ct == "application/pdf" and not data.startswith(b"%PDF"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -89,7 +112,7 @@ async def extract_customer(
     _: None = heavy_limit,
 ):
     _ensure_user_tenant(user, tenant)
-    data = await file.read()
+    data = await _read_upload_limited(file)
     _validate_upload(file.content_type, data)
     return await extract_customer_form(db, tenant.id, data, file.content_type or "")
 
@@ -104,7 +127,7 @@ async def extract_inquiry(
     _: None = heavy_limit,
 ):
     _ensure_user_tenant(user, tenant)
-    data = await file.read()
+    data = await _read_upload_limited(file)
     _validate_upload(file.content_type, data)
     return await extract_inquiry_form(db, tenant.id, data, file.content_type or "")
 
@@ -123,7 +146,7 @@ async def extract_lc(
     await assert_soft_permission_allowed(
         db, user, tenant.id, permission_key=PERMISSION_AI_LC_EXTRACT
     )
-    data = await file.read()
+    data = await _read_upload_limited(file)
     _validate_upload(file.content_type, data)
     return await extract_lc_form(db, tenant.id, data, file.content_type or "")
 
@@ -146,7 +169,7 @@ async def extract_shipping_doc(
     await assert_soft_permission_allowed(
         db, user, tenant.id, permission_key=PERMISSION_AI_SHIPPING_EXTRACT
     )
-    data = await file.read()
+    data = await _read_upload_limited(file)
     _validate_upload(file.content_type, data)
     return await extract_shipping_doc_form(
         db, tenant.id, data, file.content_type or "", doc_type=type
@@ -174,7 +197,7 @@ async def extract_hr_cv(
 ):
     _ensure_user_tenant(user, tenant)
     await _hr_ocr_gate(db, user, tenant, is_ocr_cv_extraction_enabled(tenant.feature_flags))
-    data = await file.read()
+    data = await _read_upload_limited(file)
     _validate_upload(file.content_type, data)
     return await extract_hr_cv_form(db, tenant.id, data, file.content_type or "")
 
@@ -190,7 +213,7 @@ async def extract_hr_national_id(
 ):
     _ensure_user_tenant(user, tenant)
     await _hr_ocr_gate(db, user, tenant, is_ocr_id_extraction_enabled(tenant.feature_flags))
-    data = await file.read()
+    data = await _read_upload_limited(file)
     _validate_upload(file.content_type, data)
     return await extract_hr_national_id_form(db, tenant.id, data, file.content_type or "")
 
@@ -206,7 +229,7 @@ async def extract_hr_medical(
 ):
     _ensure_user_tenant(user, tenant)
     await _hr_ocr_gate(db, user, tenant, is_ocr_medical_extraction_enabled(tenant.feature_flags))
-    data = await file.read()
+    data = await _read_upload_limited(file)
     _validate_upload(file.content_type, data)
     return await extract_hr_medical_form(db, tenant.id, data, file.content_type or "")
 
@@ -222,6 +245,6 @@ async def extract_hr_birth(
 ):
     _ensure_user_tenant(user, tenant)
     await _hr_ocr_gate(db, user, tenant, is_ocr_id_extraction_enabled(tenant.feature_flags))
-    data = await file.read()
+    data = await _read_upload_limited(file)
     _validate_upload(file.content_type, data)
     return await extract_hr_birth_certificate_form(db, tenant.id, data, file.content_type or "")

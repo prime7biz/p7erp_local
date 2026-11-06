@@ -6,6 +6,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 from app.config import get_settings
+from app.models import User
 from app.modules.mcp_server import erp_backend
 from app.modules.mcp_server.safety import check_commit_allowed
 from app.modules.mcp_server.tenant_guard import validate_tenant
@@ -139,14 +140,28 @@ async def execute_tool_call(
     arguments: dict[str, Any],
     *,
     context_tenant_id: int | None = None,
+    user: User | None = None,
 ) -> dict[str, Any]:
-    """Validate and execute a dynamic tool call against ERP backend handlers."""
+    """Validate and execute a dynamic tool call against ERP backend handlers.
+
+    ``user`` is the authenticated caller; tool-level permission checks run as this user.
+    """
     if tool_name not in TOOL_REGISTRY:
         return {
             "status": "BLOCKED",
             "tool_name": tool_name,
             "message": "Unknown tool requested.",
         }
+
+    if user is not None:
+        if context_tenant_id is None:
+            context_tenant_id = int(user.tenant_id)
+        elif int(context_tenant_id) != int(user.tenant_id):
+            return {
+                "status": "BLOCKED",
+                "tool_name": tool_name,
+                "message": "Active tenant context does not match the authenticated user.",
+            }
 
     ok_tenant, tenant_msg = validate_tenant(
         tool_tenant_id=arguments.get("tenant_id"),
@@ -186,7 +201,7 @@ async def execute_tool_call(
                 art = await create_artifact(
                     session,
                     tenant_id=int(data["tenant_id"]),
-                    user_id=None,
+                    user_id=user.id if user is not None else None,
                     session_id=None,
                     artifact_type=artifact_type,
                     source_tool=tool_name,
@@ -220,7 +235,7 @@ async def execute_tool_call(
                     domain=str(data["domain"]),
                     filters=data.get("filters"),
                     top_k=int(data.get("top_k") or 5),
-                    user=None,
+                    user=user,
                 )
                 return {"status": "SUCCESS", **out}
             except Exception as exc:
@@ -262,6 +277,7 @@ async def execute_tool_call(
                 out = await run_forecast_for_mcp(
                     session,
                     tenant_id=int(data["tenant_id"]),
+                    user=user,
                     target_variable=str(data["target_variable"]),
                     timeframe=str(data.get("timeframe") or "30d"),
                     parameters=data.get("parameters"),
@@ -324,7 +340,7 @@ async def execute_tool_call(
                 row = await repository.create_system_task(
                     session,
                     tenant_id=tid,
-                    user_id=None,
+                    user_id=user.id if user is not None else None,
                     session_id=data.get("session_id"),
                     task_code=code,
                     task_type=str(data["task_type"]),
@@ -396,7 +412,7 @@ async def execute_tool_call(
 def register_tools(mcp) -> None:
     """Register MCP tools with strict Pydantic validation."""
 
-    from app.modules.mcp_server.auth import get_mcp_tenant_id
+    from app.modules.mcp_server.auth import get_mcp_tenant_id, get_mcp_user
 
     @mcp.tool(name="create_sales_inquiry")
     async def create_sales_inquiry_tool(payload: CreateSalesInquiryInput) -> dict:
@@ -406,6 +422,7 @@ def register_tools(mcp) -> None:
             "create_sales_inquiry",
             payload.model_dump(),
             context_tenant_id=tid,
+            user=get_mcp_user(),
         )
 
     @mcp.tool(name="create_financial_voucher")
@@ -416,6 +433,7 @@ def register_tools(mcp) -> None:
             "create_financial_voucher",
             payload.model_dump(),
             context_tenant_id=tid,
+            user=get_mcp_user(),
         )
 
     @mcp.tool(name="process_goods_receipt")
@@ -426,6 +444,7 @@ def register_tools(mcp) -> None:
             "process_goods_receipt",
             payload.model_dump(),
             context_tenant_id=tid,
+            user=get_mcp_user(),
         )
 
     @mcp.tool(name="search_unstructured_context")
@@ -436,6 +455,7 @@ def register_tools(mcp) -> None:
             "search_unstructured_context",
             payload.model_dump(),
             context_tenant_id=tid,
+            user=get_mcp_user(),
         )
 
     @mcp.tool(name="analyze_structured_metrics")
@@ -446,6 +466,7 @@ def register_tools(mcp) -> None:
             "analyze_structured_metrics",
             payload.model_dump(),
             context_tenant_id=tid,
+            user=get_mcp_user(),
         )
 
     @mcp.tool(name="generate_forecast")
@@ -456,6 +477,7 @@ def register_tools(mcp) -> None:
             "generate_forecast",
             payload.model_dump(),
             context_tenant_id=tid,
+            user=get_mcp_user(),
         )
 
     @mcp.tool(name="create_system_task")
@@ -466,4 +488,5 @@ def register_tools(mcp) -> None:
             "create_system_task",
             payload.model_dump(),
             context_tenant_id=tid,
+            user=get_mcp_user(),
         )

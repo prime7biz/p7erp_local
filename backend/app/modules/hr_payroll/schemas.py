@@ -30,6 +30,20 @@ class PayrollComponentUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class PayrollAccountingConfigUpdate(BaseModel):
+    """Partial update: only fields present in the request body are changed."""
+
+    salary_expense_account_id: int | None = None
+    salary_payable_account_id: int | None = None
+    bank_account_id: int | None = None
+    cash_account_id: int | None = None
+    tax_payable_account_id: int | None = None
+    pf_payable_account_id: int | None = None
+    esi_payable_account_id: int | None = None
+    pt_payable_account_id: int | None = None
+    advance_receivable_account_id: int | None = None
+
+
 class PayrollComponentOut(BaseModel):
     id: int
     tenant_id: int

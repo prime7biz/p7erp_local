@@ -12,7 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.codegen import next_tenant_code
-from app.common.permissions import PERMISSION_HR_DOCUMENTS_GENERATE, assert_soft_permission_allowed
+from app.common.permissions import (
+    HR_SETUP_BYPASS_ROLES,
+    PERMISSION_HR_DOCUMENTS_GENERATE,
+    PERMISSION_HR_PAYROLL_MANAGE,
+    assert_hr_manager_or_permission,
+    assert_soft_permission_allowed,
+    internal_permission_granted,
+)
 from app.common.tenant import require_tenant
 from app.common.tenant_feature_keys import is_age_verification_required, is_auto_document_generation_enabled
 from app.database import get_db, safe_async_session_rollback
@@ -127,7 +134,27 @@ def _designation_to_response(row: Designation) -> DesignationResponse:
     )
 
 
-def _employee_to_response(row: Employee) -> EmployeeResponse:
+EMPLOYEE_SENSITIVE_FIELDS = ("date_of_birth", "address_line", "national_id")
+
+
+async def _can_view_employee_sensitive(db: AsyncSession, user: User, tenant_id: int) -> bool:
+    """Manager-type roles and roles granted HR module access see national ID, DOB and address."""
+    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
+    if (role.name if role else "").strip().lower() in HR_SETUP_BYPASS_ROLES:
+        return True
+    return internal_permission_granted(role=role, permission_key="hr.access") or internal_permission_granted(
+        role=role, permission_key=PERMISSION_HR_PAYROLL_MANAGE
+    )
+
+
+def _employee_to_response(row: Employee, *, mask_sensitive: bool = False) -> EmployeeResponse:
+    out = _employee_to_response_full(row)
+    if mask_sensitive:
+        out = out.model_copy(update={f: None for f in EMPLOYEE_SENSITIVE_FIELDS})
+    return out
+
+
+def _employee_to_response_full(row: Employee) -> EmployeeResponse:
     return EmployeeResponse(
         id=row.id,
         tenant_id=row.tenant_id,
@@ -492,7 +519,8 @@ async def list_employees(
         )
     stmt = stmt.order_by(Employee.employee_code).offset(offset).limit(limit)
     result = await db.execute(stmt)
-    return [_employee_to_response(r) for r in result.scalars().all()]
+    mask = not await _can_view_employee_sensitive(db, user, tenant.id)
+    return [_employee_to_response(r, mask_sensitive=mask) for r in result.scalars().all()]
 
 
 @router.get("/employees/{employee_id}", response_model=EmployeeResponse)
@@ -504,7 +532,8 @@ async def get_employee(
 ):
     _ensure_user_tenant(user, tenant)
     row = await _get_employee_or_404(db, tenant.id, employee_id)
-    return _employee_to_response(row)
+    mask = not await _can_view_employee_sensitive(db, user, tenant.id)
+    return _employee_to_response(row, mask_sensitive=mask)
 
 
 @router.post("/employees", response_model=EmployeeResponse, status_code=status.HTTP_201_CREATED)
@@ -515,6 +544,8 @@ async def create_employee(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
+    if body.user_id is not None:
+        await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_MANAGE)
     assert_dob_allowed(body.date_of_birth, required=is_age_verification_required(tenant.feature_flags))
     employee_code = await _next_employee_code(db, tenant.id)
     await _validate_fk_values(
@@ -576,6 +607,14 @@ async def update_employee(
     _ensure_user_tenant(user, tenant)
     row = await _get_employee_or_404(db, tenant.id, employee_id)
     payload = body.model_dump(exclude_unset=True)
+    # The linked login decides whose payslips and ESS data a user sees.
+    if "user_id" in payload and payload["user_id"] != row.user_id:
+        await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_MANAGE)
+    can_view_sensitive = await _can_view_employee_sensitive(db, user, tenant.id)
+    if not can_view_sensitive:
+        # These fields are masked for this caller, so a resubmitted form must not overwrite them.
+        for field in EMPLOYEE_SENSITIVE_FIELDS:
+            payload.pop(field, None)
     if "date_of_birth" in payload:
         assert_dob_allowed(
             payload.get("date_of_birth"),
@@ -651,7 +690,7 @@ async def update_employee(
         await safe_async_session_rollback(db)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Employee code already exists")
     await db.refresh(row)
-    return _employee_to_response(row)
+    return _employee_to_response(row, mask_sensitive=not can_view_sensitive)
 
 
 @router.post("/employees/{employee_id}/activate", response_model=EmployeeResponse)

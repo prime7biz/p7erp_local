@@ -6,7 +6,6 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -35,23 +34,21 @@ def _parse_timeframe(timeframe: str) -> int:
     return 30
 
 
-async def _first_tenant_user(db: AsyncSession, tenant_id: int) -> User | None:
-    r = await db.scalars(select(User).where(User.tenant_id == tenant_id).order_by(User.id.asc()).limit(1))
-    return r.first()
-
-
 async def run_forecast_for_mcp(
     db: AsyncSession,
     *,
     tenant_id: int,
+    user: User | None,
     target_variable: str,
     timeframe: str,
     parameters: dict[str, Any] | None,
     request_id: str | None = None,
 ) -> dict[str, Any]:
-    user = await _first_tenant_user(db, tenant_id)
-    if not user:
-        return {"status": "FAILED", "message": "No tenant user found to evaluate forecast permissions."}
+    """Run a forecast as ``user`` (the authenticated caller); refuses when no caller is known."""
+    if user is None:
+        return {"status": "FAILED", "message": "An authenticated user is required to run forecasts."}
+    if int(user.tenant_id) != int(tenant_id):
+        return {"status": "FAILED", "message": "Forecast tenant does not match the authenticated user."}
 
     prompt = _TARGET_PROMPTS.get(
         (target_variable or "").strip().lower(),

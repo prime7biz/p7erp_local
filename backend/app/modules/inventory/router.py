@@ -9,7 +9,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 from sqlalchemy import Date as SQLDate
-from sqlalchemy import case, cast, delete, desc, func, or_, select
+from sqlalchemy import case, cast, delete, desc, func, or_, select, tuple_
 from sqlalchemy.types import Numeric
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -68,7 +68,7 @@ from app.modules.inventory.document_qr_service import (
     sign_warehouse_transfer,
     verify_inventory_document,
 )
-from app.modules.inventory import stock_snapshot_service
+from app.modules.inventory import stock_report_queries, stock_snapshot_service
 from app.modules.inventory.qty_format import ZERO as QTY_ZERO, format_qty, to_qty_decimal
 from app.modules.inventory.stock_locks import lock_stock_items
 from app.models import (
@@ -543,7 +543,7 @@ async def _stock_summary_page_sql(
     - hide_zero: exclude rows where round(on_hand, 3) == 0
     - sort keys match the previous Python sort_tuple ordering
 
-    Other endpoints still use `_stock_summary_rows` (full tenant scan) until a later pass.
+    Report endpoints (valuation, by-group, dashboard, ...) use ``stock_report_queries`` instead.
     """
     qty_col = cast(StockMovement.quantity, Numeric)
     in_agg = func.coalesce(
@@ -604,9 +604,6 @@ async def _stock_summary_page_sql(
     if hide_zero:
         base = base.where(on_hand_rounded != 0)
 
-    count_stmt = select(func.count()).select_from(base.subquery())
-    total = int((await db.execute(count_stmt)).scalar() or 0)
-
     sk = (sort_key or "item").lower()
 
     def _ord(col):
@@ -627,10 +624,16 @@ async def _stock_summary_page_sql(
     else:
         order_cols = (_ord(Item.item_code), _ord(Item.name), _ord(wh_sort))
 
-    page_stmt = base.order_by(*order_cols).limit(limit).offset(offset)
-    result = await db.execute(page_stmt)
+    # COUNT(*) OVER () returns the filtered total with the page, so the aggregate runs once.
+    page_stmt = base.add_columns(func.count().over().label("total_count")).order_by(*order_cols).limit(limit).offset(offset)
+    page_rows = (await db.execute(page_stmt)).all()
+    if page_rows:
+        total = int(page_rows[0][-1])
+    else:
+        count_stmt = select(func.count()).select_from(base.subquery())
+        total = int((await db.execute(count_stmt)).scalar() or 0)
     out: list[StockSummaryRow] = []
-    for row in result.all():
+    for row in page_rows:
         (
             item_id,
             item_code,
@@ -640,6 +643,7 @@ async def _stock_summary_page_sql(
             in_qty_raw,
             out_qty_raw,
             on_hand_r,
+            _total_count,
         ) = row
         in_qty = round(float(in_qty_raw or 0), 3)
         out_qty = round(float(out_qty_raw or 0), 3)
@@ -660,23 +664,39 @@ async def _stock_summary_page_sql(
 
 
 async def _fifo_layer_qty_value_map(
-    db: AsyncSession, tenant_id: int, as_of_date: date | None = None
+    db: AsyncSession,
+    tenant_id: int,
+    as_of_date: date | None = None,
+    *,
+    pairs: Iterable[tuple[int, int | None]] | None = None,
 ) -> dict[tuple[int, int | None], tuple[float, float]]:
-    """Map (item_id, warehouse_id) -> (qty_remaining, value)."""
-    stmt = select(InventoryCostLayer).where(InventoryCostLayer.tenant_id == tenant_id)
+    """Map (item_id, warehouse_id) -> (qty_remaining, value). Exhausted layers are skipped in SQL.
+
+    ``pairs`` limits the scan to those (item_id, warehouse_id) keys (e.g. one report page).
+    """
+    layer = InventoryCostLayer
+    stmt = (
+        select(layer.item_id, layer.warehouse_id, layer.qty_remaining, layer.unit_cost)
+        .where(layer.tenant_id == tenant_id, layer.qty_remaining > 0)
+        .order_by(layer.id)
+    )
     if as_of_date is not None:
         stmt = stmt.where(
-            InventoryCostLayer.layer_date.is_not(None),
-            InventoryCostLayer.layer_date <= as_of_date,
+            layer.layer_date.is_not(None),
+            layer.layer_date <= as_of_date,
         )
-    layers = list((await db.execute(stmt)).scalars().all())
+    if pairs is not None:
+        wanted = sorted({(int(i), int(w) if w is not None else -1) for i, w in pairs})
+        if not wanted:
+            return {}
+        stmt = stmt.where(tuple_(layer.item_id, func.coalesce(layer.warehouse_id, -1)).in_(wanted))
     acc: dict[tuple[int, int | None], list[float]] = defaultdict(lambda: [0.0, 0.0])
-    for layer in layers:
-        qr = _to_float(layer.qty_remaining)
+    for item_id, warehouse_id, qty_remaining, unit_cost in (await db.execute(stmt)).all():
+        qr = _to_float(qty_remaining)
         if qr <= 0:
             continue
-        key = (layer.item_id, layer.warehouse_id)
-        uc = _to_float(layer.unit_cost)
+        key = (item_id, warehouse_id)
+        uc = _to_float(unit_cost)
         acc[key][0] += qr
         acc[key][1] += qr * uc
     return {k: (v[0], round(v[1], 4)) for k, v in acc.items()}
@@ -706,6 +726,70 @@ def _inventory_line_from_summary(
         unit_cost=round(uc, 4),
         line_value=lv,
     )
+
+
+def _inventory_line_from_balance(
+    s: stock_report_queries.StockBalanceLine,
+    fifo_map: dict[tuple[int, int | None], tuple[float, float]],
+) -> InventorySummaryLine:
+    """Same valuation rule as ``_inventory_line_from_summary`` (FIFO layers, else item default cost)."""
+    fq, fv = fifo_map.get((s.item_id, s.warehouse_id), (0.0, 0.0))
+    if fq > 1e-9 and fv > 0:
+        uc = fv / fq
+        lv = round(fv, 2)
+    else:
+        uc = _to_float(s.default_cost if s.default_cost is not None else "0")
+        lv = round(s.on_hand_qty * uc, 2)
+    return InventorySummaryLine(
+        item_id=s.item_id,
+        item_code=s.item_code,
+        item_name=s.item_name,
+        warehouse_id=s.warehouse_id,
+        warehouse_name=s.warehouse_name,
+        on_hand_qty=s.on_hand_qty,
+        unit_cost=round(uc, 4),
+        line_value=lv,
+    )
+
+
+async def _positive_stock_lines_grouped(
+    db: AsyncSession,
+    tenant: Tenant,
+    *,
+    as_of_date: date | None,
+    group_by: str,
+    limit: int | None,
+    offset: int,
+) -> list[tuple[int | None, list[InventorySummaryLine]]]:
+    """Positive on-hand lines grouped by ``stock_group`` or ``warehouse``; groups sorted by id (None last).
+
+    ``limit`` / ``offset`` page over the groups (all groups when ``limit`` is None).
+    """
+    balances = await stock_report_queries.load_stock_balance_lines(
+        db, tenant.id, tenant.feature_flags, positive_only=True
+    )
+    by_key: dict[int | None, list[stock_report_queries.StockBalanceLine]] = defaultdict(list)
+    for s in balances:
+        key = s.stock_group_id if group_by == "stock_group" else s.warehouse_id
+        by_key[key].append(s)
+    ordered = sorted(by_key.items(), key=lambda x: (x[0] is None, x[0] or 0))
+    if limit is not None:
+        ordered = ordered[offset:offset + limit]
+    elif offset:
+        ordered = ordered[offset:]
+
+    fifo_map = await _fifo_layer_qty_value_map(
+        db,
+        tenant.id,
+        as_of_date,
+        pairs=[(s.item_id, s.warehouse_id) for _key, group in ordered for s in group],
+    )
+    out: list[tuple[int | None, list[InventorySummaryLine]]] = []
+    for key, group in ordered:
+        lines = [_inventory_line_from_balance(s, fifo_map) for s in group]
+        lines.sort(key=lambda r: (r.item_code, r.warehouse_name or ""))
+        out.append((key, lines))
+    return out
 
 
 async def _ensure_chart_account_for_tenant(db: AsyncSession, tenant_id: int, account_id: int | None) -> None:
@@ -3667,36 +3751,18 @@ async def stock_valuation(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    fifo_map = await _fifo_layer_qty_value_map(db, tenant.id, as_of_date)
-    all_summary = await _stock_summary_rows(db, tenant.id, tenant_feature_flags=tenant.feature_flags)
-    summary = all_summary[offset:offset + limit]
-    items_result = await db.execute(select(Item).where(Item.tenant_id == tenant.id))
-    item_map = {r.id: r for r in items_result.scalars().all()}
+    page = await stock_report_queries.load_stock_balance_lines(
+        db, tenant.id, tenant.feature_flags, limit=limit, offset=offset
+    )
+    fifo_map = await _fifo_layer_qty_value_map(
+        db, tenant.id, as_of_date, pairs=[(s.item_id, s.warehouse_id) for s in page]
+    )
     out_rows: list[StockValuationRow] = []
     total = 0.0
-    for s in summary:
-        item = item_map.get(s.item_id)
-        key = (s.item_id, s.warehouse_id)
-        fq, fv = fifo_map.get(key, (0.0, 0.0))
-        if fq > 1e-9 and fv > 0:
-            uc = fv / fq
-            lv = round(fv, 2)
-        else:
-            uc = _to_float(item.default_cost if item else "0")
-            lv = round(s.on_hand_qty * uc, 2)
-        total += lv
-        out_rows.append(
-            StockValuationRow(
-                item_id=s.item_id,
-                item_code=s.item_code,
-                item_name=s.item_name,
-                warehouse_id=s.warehouse_id,
-                warehouse_name=s.warehouse_name,
-                on_hand_qty=s.on_hand_qty,
-                unit_cost=round(uc, 4),
-                line_value=lv,
-            )
-        )
+    for s in page:
+        line = _inventory_line_from_balance(s, fifo_map)
+        total += line.line_value
+        out_rows.append(StockValuationRow(**line.model_dump()))
     out_rows.sort(key=lambda r: (r.item_code, r.warehouse_name or ""))
     return StockValuationOut(method="fifo", total_value=round(total, 2), rows=out_rows)
 
@@ -3717,29 +3783,26 @@ async def fifo_rebuild(
 @router.get("/stock-summary/by-group", response_model=StockSummaryByGroupOut)
 async def stock_summary_by_group(
     as_of_date: date | None = Query(default=None),
+    limit: int | None = Query(default=None, ge=1, le=MAX_PAGE_SIZE, description="Optional: max groups to return"),
+    offset: int = Query(default=0, ge=0, description="Optional: groups to skip (with limit)"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    fifo_map = await _fifo_layer_qty_value_map(db, tenant.id, as_of_date)
-    summary = await _stock_summary_rows(db, tenant.id, tenant_feature_flags=tenant.feature_flags)
-    items_result = await db.execute(select(Item).where(Item.tenant_id == tenant.id))
-    item_map = {r.id: r for r in items_result.scalars().all()}
-    sg_result = await db.execute(select(StockGroup).where(StockGroup.tenant_id == tenant.id))
-    sg_map = {r.id: r for r in sg_result.scalars().all()}
-
-    by_gid: dict[int | None, list[InventorySummaryLine]] = defaultdict(list)
-    for s in summary:
-        if s.on_hand_qty <= 0:
-            continue
-        it = item_map.get(s.item_id)
-        gid = it.stock_group_id if it else None
-        by_gid[gid].append(_inventory_line_from_summary(s, item_map, fifo_map))
+    grouped = await _positive_stock_lines_grouped(
+        db, tenant, as_of_date=as_of_date, group_by="stock_group", limit=limit, offset=offset
+    )
+    group_ids = [gid for gid, _lines in grouped if gid is not None]
+    sg_map: dict[int, StockGroup] = {}
+    if group_ids:
+        sg_result = await db.execute(
+            select(StockGroup).where(StockGroup.tenant_id == tenant.id, StockGroup.id.in_(group_ids))
+        )
+        sg_map = {r.id: r for r in sg_result.scalars().all()}
 
     blocks: list[StockSummaryGroupBlock] = []
-    for gid, lines in sorted(by_gid.items(), key=lambda x: (x[0] is None, x[0] or 0)):
-        lines.sort(key=lambda r: (r.item_code, r.warehouse_name or ""))
+    for gid, lines in grouped:
         tq = sum(r.on_hand_qty for r in lines)
         tv = sum(r.line_value for r in lines)
         sg = sg_map.get(gid) if gid is not None else None
@@ -3759,27 +3822,26 @@ async def stock_summary_by_group(
 @router.get("/stock-summary/by-warehouse", response_model=StockSummaryByWarehouseOut)
 async def stock_summary_by_warehouse(
     as_of_date: date | None = Query(default=None),
+    limit: int | None = Query(default=None, ge=1, le=MAX_PAGE_SIZE, description="Optional: max warehouses to return"),
+    offset: int = Query(default=0, ge=0, description="Optional: warehouses to skip (with limit)"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    fifo_map = await _fifo_layer_qty_value_map(db, tenant.id, as_of_date)
-    summary = await _stock_summary_rows(db, tenant.id, tenant_feature_flags=tenant.feature_flags)
-    items_result = await db.execute(select(Item).where(Item.tenant_id == tenant.id))
-    item_map = {r.id: r for r in items_result.scalars().all()}
-    wh_result = await db.execute(select(Warehouse).where(Warehouse.tenant_id == tenant.id))
-    wh_map = {r.id: r for r in wh_result.scalars().all()}
-
-    by_wh: dict[int | None, list[InventorySummaryLine]] = defaultdict(list)
-    for s in summary:
-        if s.on_hand_qty <= 0:
-            continue
-        by_wh[s.warehouse_id].append(_inventory_line_from_summary(s, item_map, fifo_map))
+    grouped = await _positive_stock_lines_grouped(
+        db, tenant, as_of_date=as_of_date, group_by="warehouse", limit=limit, offset=offset
+    )
+    warehouse_ids = [wid for wid, _lines in grouped if wid is not None]
+    wh_map: dict[int, Warehouse] = {}
+    if warehouse_ids:
+        wh_result = await db.execute(
+            select(Warehouse).where(Warehouse.tenant_id == tenant.id, Warehouse.id.in_(warehouse_ids))
+        )
+        wh_map = {r.id: r for r in wh_result.scalars().all()}
 
     blocks: list[StockSummaryWarehouseBlock] = []
-    for wid, lines in sorted(by_wh.items(), key=lambda x: (x[0] is None, x[0] or 0)):
-        lines.sort(key=lambda r: (r.item_code, r.warehouse_name or ""))
+    for wid, lines in grouped:
         tq = sum(r.on_hand_qty for r in lines)
         tv = sum(r.line_value for r in lines)
         wh = wh_map.get(wid) if wid is not None else None
@@ -3976,29 +4038,31 @@ async def stock_dashboard(
             .where(GoodsReceiving.tenant_id == tenant.id, GoodsReceiving.status != "RECEIVED")
         )
     ).scalar_one()
-    summary = await _stock_summary_rows(db, tenant.id, tenant_feature_flags=tenant.feature_flags)
-    skus = sum(1 for r in summary if r.on_hand_qty > 0)
-    low = sum(1 for r in summary if 0 < r.on_hand_qty < low_stock_threshold)
+    skus, low = await stock_report_queries.count_positive_stock_lines(
+        db, tenant.id, tenant.feature_flags, low_stock_threshold=low_stock_threshold
+    )
 
     stmt = select(StockMovement).where(StockMovement.tenant_id == tenant.id)
     stmt = stmt.order_by(desc(StockMovement.movement_date).nulls_last(), desc(StockMovement.id)).limit(12)
     result = await db.execute(stmt)
     mv_rows = list(result.scalars().all())
-    items_result = await db.execute(select(Item).where(Item.tenant_id == tenant.id))
-    item_map = {r.id: r for r in items_result.scalars().all()}
-    wh_result = await db.execute(select(Warehouse).where(Warehouse.tenant_id == tenant.id))
-    wh_map = {r.id: r for r in wh_result.scalars().all()}
+    item_labels, wh_names = await stock_report_queries.label_maps(
+        db,
+        tenant.id,
+        {r.item_id for r in mv_rows},
+        {r.warehouse_id for r in mv_rows if r.warehouse_id is not None},
+    )
     recent = [
         StockLedgerRow(
             id=row.id,
             movement_date=row.movement_date,
             movement_type=row.movement_type,
             item_id=row.item_id,
-            item_code=item_map[row.item_id].item_code if row.item_id in item_map else f"#{row.item_id}",
-            item_name=item_map[row.item_id].name if row.item_id in item_map else "Unknown",
+            item_code=item_labels[row.item_id][0] if row.item_id in item_labels else f"#{row.item_id}",
+            item_name=item_labels[row.item_id][1] if row.item_id in item_labels else "Unknown",
             warehouse_id=row.warehouse_id,
-            warehouse_name=wh_map[row.warehouse_id].name if row.warehouse_id in wh_map else None,
-            quantity=row.quantity,
+            warehouse_name=wh_names.get(row.warehouse_id) if row.warehouse_id is not None else None,
+            quantity=str(row.quantity),
             reference_type=row.reference_type,
             reference_id=row.reference_id,
             notes=row.notes,
@@ -4030,77 +4094,78 @@ async def stock_ledger(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Cumulative running balance per item + warehouse (signed IN − OUT) through each movement in chronological order."""
+    """Cumulative running balance per item + warehouse (signed IN − OUT) through each movement in chronological order.
+
+    Filters, count and paging run on ``stock_movements`` directly; running balances are then computed only
+    for the page's (item, warehouse) pairs (see ``stock_report_queries.stock_ledger_running_balances``).
+    """
     _ensure_tenant(user, tenant)
     sm = StockMovement
     eff = func.coalesce(sm.movement_date, cast(sm.created_at, SQLDate))
-    qty_n = cast(sm.quantity, Numeric)
-    signed_qty = case((sm.movement_type == "IN", qty_n), else_=-qty_n)
-    wh_key = func.coalesce(sm.warehouse_id, -1)
-    running_bal = func.sum(signed_qty).over(
-        partition_by=(sm.item_id, wh_key),
-        order_by=(eff.asc(), sm.id.asc()),
-    )
 
-    inner = select(
-        sm.id,
-        sm.movement_date,
-        sm.movement_type,
-        sm.item_id,
-        sm.warehouse_id,
-        sm.quantity,
-        sm.reference_type,
-        sm.reference_id,
-        sm.notes,
-        sm.created_by_user_id,
-        sm.created_at,
-        eff.label("eff_date"),
-        running_bal.label("running_balance"),
-    ).where(sm.tenant_id == tenant.id)
+    filters = [sm.tenant_id == tenant.id]
     if item_id is not None:
-        inner = inner.where(sm.item_id == item_id)
+        filters.append(sm.item_id == item_id)
     if warehouse_id is not None:
-        inner = inner.where(sm.warehouse_id == warehouse_id)
-
-    sq = inner.subquery()
-    count_stmt = select(func.count()).select_from(sq)
+        filters.append(sm.warehouse_id == warehouse_id)
     if date_from is not None:
-        count_stmt = count_stmt.where(sq.c.eff_date >= date_from)
+        filters.append(eff >= date_from)
     if date_to is not None:
-        count_stmt = count_stmt.where(sq.c.eff_date <= date_to)
-    total = int((await db.execute(count_stmt)).scalar() or 0)
+        filters.append(eff <= date_to)
 
-    page_stmt = select(sq)
-    if date_from is not None:
-        page_stmt = page_stmt.where(sq.c.eff_date >= date_from)
-    if date_to is not None:
-        page_stmt = page_stmt.where(sq.c.eff_date <= date_to)
+    # Page rows with item / warehouse labels joined in, plus COUNT(*) OVER () for the filtered total.
     page_stmt = (
-        page_stmt.order_by(desc(sq.c.eff_date).nulls_last(), desc(sq.c.id)).limit(limit).offset(offset)
+        select(
+            sm.id,
+            sm.movement_date,
+            sm.movement_type,
+            sm.item_id,
+            sm.warehouse_id,
+            sm.quantity,
+            sm.reference_type,
+            sm.reference_id,
+            sm.notes,
+            sm.created_by_user_id,
+            eff.label("eff_date"),
+            Item.item_code.label("item_code"),
+            Item.name.label("item_name"),
+            Warehouse.name.label("warehouse_name"),
+            func.count().over().label("total_count"),
+        )
+        .select_from(sm)
+        .outerjoin(Item, (Item.id == sm.item_id) & (Item.tenant_id == tenant.id))
+        .outerjoin(Warehouse, (Warehouse.id == sm.warehouse_id) & (Warehouse.tenant_id == tenant.id))
+        .where(*filters)
+        .order_by(eff.desc().nulls_last(), sm.id.desc())
+        .limit(limit)
+        .offset(offset)
     )
-    result = await db.execute(page_stmt)
-    raw_rows = list(result.mappings())
+    raw_rows = [dict(r) for r in (await db.execute(page_stmt)).mappings()]
+    if raw_rows:
+        total = int(raw_rows[0]["total_count"])
+    else:
+        total = int((await db.execute(select(func.count()).select_from(sm).where(*filters))).scalar() or 0)
 
-    items_result = await db.execute(select(Item).where(Item.tenant_id == tenant.id))
-    item_map = {r.id: r for r in items_result.scalars().all()}
-    wh_result = await db.execute(select(Warehouse).where(Warehouse.tenant_id == tenant.id))
-    wh_map = {r.id: r for r in wh_result.scalars().all()}
+    balances = await stock_report_queries.stock_ledger_running_balances(
+        db, tenant.id, raw_rows, date_from=date_from
+    )
 
     out_items: list[StockLedgerRow] = []
     for row in raw_rows:
         iid = row["item_id"]
         wid = row["warehouse_id"]
-        rb = row["running_balance"]
+        rb = balances.get(row["id"])
+        has_item = row["item_code"] is not None
         out_items.append(
             StockLedgerRow(
                 id=row["id"],
                 movement_date=row["movement_date"],
                 movement_type=row["movement_type"],
                 item_id=iid,
-                item_code=item_map[iid].item_code if iid in item_map else f"#{iid}",
-                item_name=item_map[iid].name if iid in item_map else "Unknown",
+                item_code=row["item_code"] if has_item else f"#{iid}",
+                item_name=row["item_name"] if has_item else "Unknown",
                 warehouse_id=wid,
-                warehouse_name=wh_map[wid].name if wid is not None and wid in wh_map else None,
+                warehouse_name=row["warehouse_name"] if wid is not None else None,
                 quantity=str(row["quantity"]),
                 reference_type=row["reference_type"],
                 reference_id=row["reference_id"],
@@ -5861,38 +5926,50 @@ async def reconciliation_overview(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    po_rows = list((await db.execute(select(PurchaseOrder).where(PurchaseOrder.tenant_id == tenant.id))).scalars().all())
-    grn_rows = list((await db.execute(select(GoodsReceiving).where(GoodsReceiving.tenant_id == tenant.id))).scalars().all())
-    challan_rows = list(
-        (await db.execute(select(DeliveryChallan).where(DeliveryChallan.tenant_id == tenant.id))).scalars().all()
-    )
-    gate_rows = list(
-        (await db.execute(select(EnhancedGatePass).where(EnhancedGatePass.tenant_id == tenant.id))).scalars().all()
-    )
-    stock_rows = await _stock_summary_rows(db, tenant.id, tenant_feature_flags=tenant.feature_flags)
-    on_hand_items = len([r for r in stock_rows if r.on_hand_qty > 0])
+
+    async def total_and_status_count(model, statuses: list[str], *, negate: bool = False) -> tuple[int, int]:
+        """(all rows, rows whose upper-cased status is in / not in ``statuses``) for this tenant."""
+        status_upper = func.upper(func.coalesce(model.status, ""))
+        matches = status_upper.notin_(statuses) if negate else status_upper.in_(statuses)
+        stmt = select(func.count(), func.count().filter(matches)).where(model.tenant_id == tenant.id)
+        total_n, matched_n = (await db.execute(stmt)).one()
+        return int(total_n or 0), int(matched_n or 0)
+
+    po_total, po_open = await total_and_status_count(PurchaseOrder, ["CLOSED", "CANCELLED"], negate=True)
+    grn_total, grn_open = await total_and_status_count(GoodsReceiving, ["RECEIVED"], negate=True)
+    challan_total, challan_posted = await total_and_status_count(DeliveryChallan, ["POSTED"])
+    gate_total, gate_released = await total_and_status_count(EnhancedGatePass, ["RELEASED"])
+    on_hand_items, _low = await stock_report_queries.count_positive_stock_lines(db, tenant.id, tenant.feature_flags)
     pmi_n = (
         await db.execute(
             select(func.count()).select_from(ProductionMaterialIssue).where(ProductionMaterialIssue.tenant_id == tenant.id)
         )
     ).scalar() or 0
-    vb_rows = list((await db.execute(select(VendorBill).where(VendorBill.tenant_id == tenant.id))).scalars().all())
+    vb_status = func.upper(func.coalesce(VendorBill.status, ""))
+    vb_draft, vb_posted = (
+        await db.execute(
+            select(
+                func.count().filter(vb_status == "DRAFT"),
+                func.count().filter(vb_status == "POSTED"),
+            ).where(VendorBill.tenant_id == tenant.id)
+        )
+    ).one()
     sm_n = (
         await db.execute(select(func.count()).select_from(StockMovement).where(StockMovement.tenant_id == tenant.id))
     ).scalar() or 0
     return ReconciliationOverview(
-        purchase_orders_total=len(po_rows),
-        purchase_orders_open=len([r for r in po_rows if (r.status or "").upper() not in {"CLOSED", "CANCELLED"}]),
-        goods_receiving_total=len(grn_rows),
-        goods_receiving_open=len([r for r in grn_rows if (r.status or "").upper() != "RECEIVED"]),
-        delivery_challans_total=len(challan_rows),
-        delivery_challans_posted=len([r for r in challan_rows if (r.status or "").upper() == "POSTED"]),
-        gate_pass_total=len(gate_rows),
-        gate_pass_released=len([r for r in gate_rows if (r.status or "").upper() == "RELEASED"]),
+        purchase_orders_total=po_total,
+        purchase_orders_open=po_open,
+        goods_receiving_total=grn_total,
+        goods_receiving_open=grn_open,
+        delivery_challans_total=challan_total,
+        delivery_challans_posted=challan_posted,
+        gate_pass_total=gate_total,
+        gate_pass_released=gate_released,
         stock_items_on_hand=on_hand_items,
         production_material_issues_total=int(pmi_n),
-        vendor_bills_draft=len([b for b in vb_rows if (b.status or "").upper() == "DRAFT"]),
-        vendor_bills_posted=len([b for b in vb_rows if (b.status or "").upper() == "POSTED"]),
+        vendor_bills_draft=int(vb_draft or 0),
+        vendor_bills_posted=int(vb_posted or 0),
         stock_movements_total=int(sm_n),
     )
 

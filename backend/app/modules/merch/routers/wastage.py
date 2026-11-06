@@ -934,29 +934,47 @@ async def get_wastage_order_detail(
             BomItem.item_id.isnot(None),
         )
     )
+    bom_line_rows = list(lines_result.scalars().all())
+    line_item_ids = {line.item_id for line in bom_line_rows}
+    items_map: dict[int, Item] = {}
+    if line_item_ids:
+        ir = await db.execute(select(Item).where(Item.id.in_(line_item_ids)))
+        items_map = {i.id: i for i in ir.scalars().all() if i.tenant_id == tenant.id}
+    cat_ids = {i.category_id for i in items_map.values() if i.category_id}
+    categories: dict[int, ItemCategory] = {}
+    if cat_ids:
+        catr = await db.execute(select(ItemCategory).where(ItemCategory.id.in_(cat_ids)))
+        categories = {c.id: c for c in catr.scalars().all()}
+    # Issued qty per item: only OUT consumption movements count.
+    actual_by_item: dict[int, float] = defaultdict(float)
+    if items_map:
+        movr = await db.execute(
+            select(StockMovement.item_id, StockMovement.quantity, StockMovement.movement_type)
+            .where(
+                StockMovement.tenant_id == tenant.id,
+                StockMovement.reference_type == "CONSUMPTION_ISSUE",
+                StockMovement.reference_id == order.id,
+                StockMovement.item_id.in_(list(items_map)),
+            )
+            .order_by(StockMovement.id)
+        )
+        for mv_item_id, mv_qty, mv_type in movr.all():
+            if (mv_type or "").upper() == "OUT":
+                actual_by_item[mv_item_id] += _to_float_safe(mv_qty)
+
     total_expected_value = 0.0
     total_actual_value = 0.0
     bom_lines: list[WastageOrderDetailBomLine] = []
-    for line in lines_result.scalars().all():
-        item = await db.get(Item, line.item_id)
-        if not item or item.tenant_id != tenant.id:
+    for line in bom_line_rows:
+        item = items_map.get(line.item_id)
+        if not item:
             continue
-        cat = await db.get(ItemCategory, item.category_id) if item.category_id else None
+        cat = categories.get(item.category_id) if item.category_id else None
         category = material_group_from_item(item, cat)
         base = _to_float_safe(line.base_consumption)
         wastage_pct_val = _to_float_safe(line.wastage_pct)
         expected = order_qty * base * (1.0 + wastage_pct_val / 100.0)
-        act_result = await db.execute(
-            select(StockMovement).where(
-                StockMovement.tenant_id == tenant.id,
-                StockMovement.reference_type == "CONSUMPTION_ISSUE",
-                StockMovement.reference_id == order.id,
-                StockMovement.item_id == line.item_id,
-            )
-        )
-        actual = sum(
-            _to_float_safe(m.quantity) for m in act_result.scalars().all() if (m.movement_type or "").upper() == "OUT"
-        )
+        actual = actual_by_item.get(line.item_id, 0)
         variance_qty = actual - expected
         wastage_pct_vs_bom = round((variance_qty / expected * 100.0), 2) if expected > 0 else 0.0
         unit_cost = _to_float_safe(item.default_cost)

@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.customer import Customer
 from app.models.finance import AccountGroup, ChartOfAccount
 from app.models.inventory import Vendor
-from app.models.party_ledger import PartyLedger, PartyLedgerBill
+from app.models.party_ledger import PartyLedger, PartyLedgerBill, PartyLedgerBillAllocation
 
 logger = logging.getLogger(__name__)
 
@@ -382,38 +382,35 @@ async def get_party_ledger_statement(
     if (pl.opening_balance_type or "DR").upper() == "CR":
         opening = -opening
 
-    prior = (
+    # Each earlier bill adds (original - settled before from_date): + for DR bills, - otherwise.
+    settled_prior = (
+        select(
+            PartyLedgerBillAllocation.bill_id.label("bill_id"),
+            func.sum(PartyLedgerBillAllocation.allocated_amount).label("settled"),
+        )
+        .join(PartyLedgerBill, PartyLedgerBill.id == PartyLedgerBillAllocation.bill_id)
+        .where(
+            PartyLedgerBill.party_ledger_id == party_ledger_id,
+            PartyLedgerBillAllocation.allocated_date < from_date,
+        )
+        .group_by(PartyLedgerBillAllocation.bill_id)
+        .subquery()
+    )
+    net = PartyLedgerBill.original_amount - func.coalesce(settled_prior.c.settled, 0)
+    prior_net = (
         await db.execute(
-            select(PartyLedgerBill).where(
+            select(func.coalesce(func.sum(case((PartyLedgerBill.amount_type == "DR", net), else_=-net)), 0))
+            .select_from(PartyLedgerBill)
+            .outerjoin(settled_prior, settled_prior.c.bill_id == PartyLedgerBill.id)
+            .where(
                 PartyLedgerBill.party_ledger_id == party_ledger_id,
                 PartyLedgerBill.tenant_id == tenant_id,
                 PartyLedgerBill.status != "CANCELLED",
                 PartyLedgerBill.bill_date < from_date,
             )
         )
-    ).scalars().all()
-    for bill in prior:
-        amt = _d(bill.original_amount)
-        if bill.amount_type == "DR":
-            opening += amt
-        else:
-            opening -= amt
-        # Subtract settlements that happened before from_date via allocations
-        from app.models.party_ledger import PartyLedgerBillAllocation
-
-        alloc_sum = (
-            await db.execute(
-                select(func.coalesce(func.sum(PartyLedgerBillAllocation.allocated_amount), 0)).where(
-                    PartyLedgerBillAllocation.bill_id == bill.id,
-                    PartyLedgerBillAllocation.allocated_date < from_date,
-                )
-            )
-        ).scalar_one()
-        settled_prior = _d(alloc_sum)
-        if bill.amount_type == "DR":
-            opening -= settled_prior
-        else:
-            opening += settled_prior
+    ).scalar_one()
+    opening += _d(prior_net)
 
     bills = (
         await db.execute(

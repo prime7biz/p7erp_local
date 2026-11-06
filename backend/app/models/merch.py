@@ -850,6 +850,16 @@ class StyleSizeScale(Base):
 
 class OrderAmendment(Base):
     __tablename__ = "order_amendments"
+    __table_args__ = (
+        # Migration 265 may build this as a partial index (id > last legacy duplicate) on old data.
+        Index(
+            "uq_order_amendments_tenant_order_no",
+            "tenant_id",
+            "order_id",
+            "amendment_no",
+            unique=True,
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(

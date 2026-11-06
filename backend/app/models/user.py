@@ -31,6 +31,8 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     first_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    designation: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    signature_image_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     auth_session_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     failed_login_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")

@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.document_signature import apply_document_signature, verify_payload_against_hash
+from app.common.signatories import SignatoryEntry, build_signatories
 from app.models.finance import Voucher, VoucherLine
 from app.models.inventory import (
     DeliveryChallan,
@@ -201,6 +202,25 @@ def sign_process_order(row: ProcessOrder, cost_lines: list[ProcessOrderCostLine]
 
 def sign_warehouse_transfer(row: WarehouseTransfer, lines: list[WarehouseTransferLine]) -> None:
     apply_document_signature(row, warehouse_transfer_payload(row, lines))
+
+
+# --- Signature blocks for print (labels match the print sheet: Prepared / Checked / Security / Approved) ---
+
+
+async def inventory_doc_signatories(db: AsyncSession, tenant_id: int, row: Any) -> list[dict[str, Any]]:
+    """Prepared = creator (if the table records one); Approved = user who approved/posted (signed_by_user_id)."""
+    created_by = getattr(row, "created_by_user_id", None)
+    signed_by = getattr(row, "signed_by_user_id", None)
+    return await build_signatories(
+        db,
+        tenant_id,
+        [
+            SignatoryEntry("Prepared", created_by, getattr(row, "created_at", None)),
+            SignatoryEntry("Checked", None),
+            SignatoryEntry("Security", None),
+            SignatoryEntry("Approved", signed_by, getattr(row, "signed_at", None)),
+        ],
+    )
 
 
 # --- Verify: reload payload from DB ---

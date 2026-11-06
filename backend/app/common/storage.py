@@ -11,7 +11,7 @@ from fastapi import HTTPException, UploadFile, status
 from app.config import get_settings
 
 # Allowed module subfolders under MEDIA_ROOT / {tenant_id} /
-ALLOWED_MODULES = frozenset({"customer_logos", "style_pictures", "trade_docs", "hr_documents"})
+ALLOWED_MODULES = frozenset({"customer_logos", "style_pictures", "trade_docs", "hr_documents", "user_signatures"})
 
 # image modules: strict image MIME only
 _IMAGE_MIME_TO_EXT: dict[str, str] = {
@@ -19,6 +19,14 @@ _IMAGE_MIME_TO_EXT: dict[str, str] = {
     "image/jpeg": ".jpg",
     "image/jpg": ".jpg",
     "image/gif": ".gif",
+    "image/webp": ".webp",
+}
+
+# signatures are printed on documents: static raster images only (no animated GIF)
+_SIGNATURE_MIME_TO_EXT: dict[str, str] = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
     "image/webp": ".webp",
 }
 
@@ -39,6 +47,7 @@ _MODULE_MAX_BYTES: dict[str, int] = {
     "style_pictures": 2 * 1024 * 1024,
     "trade_docs": 25 * 1024 * 1024,
     "hr_documents": 10 * 1024 * 1024,
+    "user_signatures": 2 * 1024 * 1024,
 }
 
 _MODULE_MIME: dict[str, dict[str, str]] = {
@@ -46,6 +55,7 @@ _MODULE_MIME: dict[str, dict[str, str]] = {
     "style_pictures": _IMAGE_MIME_TO_EXT,
     "trade_docs": _TRADE_MIME_TO_EXT,
     "hr_documents": _TRADE_MIME_TO_EXT,
+    "user_signatures": _SIGNATURE_MIME_TO_EXT,
 }
 
 _FILENAME_SAFE = re.compile(r"^[a-zA-Z0-9._-]+$")

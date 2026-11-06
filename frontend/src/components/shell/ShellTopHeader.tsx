@@ -7,6 +7,7 @@ import {
   Landmark,
   LogOut,
   Moon,
+  PenLine,
   Plus,
   Search,
   Settings,
@@ -255,6 +256,14 @@ export function ShellTopHeader({
                   >
                     <User className="h-4 w-4" />
                     My Profile
+                  </Link>
+                  <Link
+                    to="/app/my-signature"
+                    onClick={() => setProfileOpen(false)}
+                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-text-secondary hover:bg-surface-subtle"
+                  >
+                    <PenLine className="h-4 w-4" />
+                    My Signature
                   </Link>
                   <Link
                     to="/app/settings"

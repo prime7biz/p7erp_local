@@ -9716,6 +9716,20 @@ export const api = {
   async getVoucherPrint(voucherId: number): Promise<VoucherPrintResponse> {
     return request<VoucherPrintResponse>(`/api/v1/finance/vouchers/${voucherId}/print`);
   },
+  async getMySignature(): Promise<MySignature> {
+    return request<MySignature>("/api/v1/me/signature");
+  },
+  async updateMySignature(body: { designation: string | null }): Promise<MySignature> {
+    return request<MySignature>("/api/v1/me/signature", { method: "PUT", body: JSON.stringify(body) });
+  },
+  async uploadMySignatureImage(file: File): Promise<MySignature> {
+    const form = new FormData();
+    form.append("file", file);
+    return request<MySignature>("/api/v1/me/signature/image", { method: "POST", body: form });
+  },
+  async deleteMySignatureImage(): Promise<MySignature> {
+    return request<MySignature>("/api/v1/me/signature/image", { method: "DELETE" });
+  },
   async verifyVoucher(verificationId: string): Promise<VoucherVerificationResponse> {
     return request<VoucherVerificationResponse>(`/api/v1/finance/vouchers/verify/${encodeURIComponent(verificationId)}`);
   },
@@ -14719,6 +14733,25 @@ export interface InventoryDocumentVerifyResponse {
   signed_at: string | null;
 }
 
+/** One signature block on a printed document; `user_id` null means the stage is not signed yet. */
+export interface DocumentSignatory {
+  role_label: string;
+  user_id: number | null;
+  name: string | null;
+  designation: string | null;
+  signed_at: string | null;
+  /** Embedded `data:image/...;base64,...` so it prints without an auth header. */
+  signature_image_data_uri: string | null;
+}
+
+export interface MySignature {
+  user_id: number;
+  display_name: string;
+  designation: string | null;
+  /** Auth-protected `/api/v1/files/user_signatures/...` path; fetch with the API client. */
+  signature_image_url: string | null;
+}
+
 export interface InventoryDocumentPrintPayload {
   tenant: {
     name: string;
@@ -14730,6 +14763,7 @@ export interface InventoryDocumentPrintPayload {
   document: Record<string, unknown>;
   lines: Array<Record<string, unknown>>;
   verification_path?: string | null;
+  signatories?: DocumentSignatory[];
   print_meta?: {
     generated_at?: string;
     title?: string;
@@ -19192,6 +19226,7 @@ export interface PurchaseApOverviewResponse {
 }
 
 export interface VoucherPrintResponse {
+  signatories?: DocumentSignatory[];
   voucher: {
     id: number;
     voucher_number: string;

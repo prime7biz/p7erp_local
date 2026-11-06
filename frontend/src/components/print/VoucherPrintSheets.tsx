@@ -1,6 +1,7 @@
 import { QRCodeSVG } from "qrcode.react";
 import "@/styles/voucher-print.css";
 import type { VoucherPrintResponse } from "@/api/client";
+import { SignatureBlocks } from "@/components/print/SignatureBlocks";
 
 const ONES = [
   "",
@@ -164,14 +165,10 @@ export function VoucherPrintSheets({ data, copyCount, template, verificationUrl 
           <div className={`vp-balance-badge ${data.totals.is_balanced ? "vp-balanced" : "vp-unbalanced"}`}>
             {data.totals.is_balanced ? "Balanced" : "Not Balanced"}
           </div>
-          <div className="vp-signatures">
-            {["Prepared By", "Checked By", "Recommended By", "Approved By", "Audited By"].map((label) => (
-              <div key={label} className="vp-sig-block">
-                <div className="vp-sig-line" />
-                <span>{label}</span>
-              </div>
-            ))}
-          </div>
+          <SignatureBlocks
+            signatories={data.signatories}
+            fallbackLabels={["Prepared By", "Checked By", "Recommended By", "Approved By", "Posted By"]}
+          />
           <div className="vp-footer">
             <p className="vp-verification-info">
               Verification ID: {data.voucher.verification_id ?? "N/A"}

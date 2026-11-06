@@ -77,6 +77,7 @@ from app.modules.compliance.router import router as compliance_router
 from app.modules.compliance.bd_router import bd_trade_router, bd_vat_router
 from app.modules.data_migration.router import router as data_migration_router
 from app.modules.files.router import router as files_router
+from app.modules.profile.router import router as profile_router
 from app.modules.admin.router import router as admin_router
 from app.modules.billing_lemonsqueezy.router import router as lemonsqueezy_api_router
 from app.modules.billing_lemonsqueezy.router import webhook_router as lemonsqueezy_webhook_router
@@ -205,6 +206,7 @@ app.include_router(external_financier_router, prefix="/api/external")
 app.include_router(external_supplier_router, prefix="/api/external")
 
 app.include_router(files_router, prefix=settings.api_v1_prefix)
+app.include_router(profile_router, prefix=settings.api_v1_prefix)
 app.include_router(marketing_public_router, prefix=settings.api_v1_prefix)
 app.include_router(saved_views_router, prefix=settings.api_v1_prefix)
 app.include_router(global_search_router, prefix=settings.api_v1_prefix)

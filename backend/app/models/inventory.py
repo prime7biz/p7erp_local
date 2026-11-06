@@ -237,6 +237,9 @@ class GoodsReceiving(Base):
     verification_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
     signature_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     signed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    signed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -573,6 +576,9 @@ class DeliveryChallan(Base):
     verification_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
     signature_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     signed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    signed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -635,6 +641,9 @@ class EnhancedGatePass(Base):
     verification_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
     signature_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     signed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    signed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -700,6 +709,9 @@ class ProcessOrder(Base):
     verification_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
     signature_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     signed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    signed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -786,6 +798,9 @@ class WarehouseTransfer(Base):
     verification_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
     signature_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     signed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    signed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -854,6 +869,9 @@ class ProductionMaterialIssue(Base):
     verification_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
     signature_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     signed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    signed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow

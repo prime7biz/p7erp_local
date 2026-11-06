@@ -57,6 +57,7 @@ import {
   Recycle,
   GitBranch,
   Percent,
+  PenLine,
 } from "lucide-react";
 
 export type TenantTypeFilter = "manufacturer" | "buying_house" | "both";
@@ -952,6 +953,7 @@ export const menuSections: MenuSection[] = [
       { icon: Wrench, label: "Configuration", href: `${PREFIX}/settings/config` },
       { icon: Settings, label: "Settings", href: `${PREFIX}/settings` },
       { icon: UserCog, label: "User Mgmt", href: `${PREFIX}/settings/users` },
+      { icon: PenLine, label: "My Signature", href: `${PREFIX}/my-signature` },
       { icon: Shield, label: "Roles", href: `${PREFIX}/settings/roles` },
       { icon: Building2, label: "Tenant", href: `${PREFIX}/settings/tenant` },
       { icon: DollarSign, label: "Pricing", href: `${PREFIX}/settings/pricing` },

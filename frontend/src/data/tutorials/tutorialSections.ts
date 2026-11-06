@@ -1965,7 +1965,64 @@ Use **Actions → Open** to jump to the document. **Reject** and **Cancel** alwa
           },
         ],
         relatedAppRoutes: ["/app/approvals", "/app/accounts/vouchers/approval-queue"],
-        relatedArticleIds: ["fin-overview", "fin-voucher-approval-queue"],
+        relatedArticleIds: ["fin-overview", "fin-voucher-approval-queue", "wf-digital-signatures"],
+      },
+      {
+        id: "wf-digital-signatures",
+        title: "Digital signatures on approved documents",
+        summary:
+          "Set your designation and signature image once; they print automatically in the signature blocks of vouchers, challans, gate passes, GRNs and other documents you approve.",
+        content: `## Overview
+
+When you complete an approval step, P7 ERP puts your **digital signature** in that step's block on the printed document: your **name**, **designation**, the **date and time** you signed, and your **signature image** if you uploaded one. Blocks for steps nobody has done yet stay as a blank line, so they can still be signed by hand.
+
+## Set up your signature (once)
+
+1. Open your name in the top bar → **My Signature** (or **Settings → My Signature** in the sidebar), \`/app/my-signature\`.
+2. Type your **Designation** (for example *Finance Manager*) and click **Save designation**. Your name comes from your user account.
+3. Click **Upload image** and choose a PNG, JPG or WEBP up to 2 MB. Sign on white paper, scan or photograph it and crop tightly; a PNG with a transparent background looks best.
+4. Use **Replace image** or **Remove image** at any time. Printed documents always show your current image.
+
+## Which block gets filled
+
+| Document | Block | Filled by |
+|---|---|---|
+| Voucher | Prepared By | User who created the voucher |
+| Voucher | Checked By / Recommended By / Approved By / Posted By | User who moved the voucher to that status |
+| Delivery challan, warehouse transfer, production material issue | Approved | User who posted it |
+| Gate pass | Approved | User who approved it (or released it, if it skipped approval) |
+| GRN | Approved | User who received it |
+| Process order | Approved | User who approved it (issuer until then) |
+| GRN, challan, transfer, material issue | Prepared | User who created it |
+
+If a voucher is **rejected** and sent back to draft, the earlier Checked / Recommended / Approved signatures are cleared and the next approval cycle signs again. **Cancel posting** clears the Posted By signature.
+
+## Tips
+
+- The QR code and **Verification ID** on the print still prove the document has not been changed since it was signed.
+- Documents approved before this feature have blank blocks until they go through an approval step again.`,
+        tags: ["signature", "digital signature", "approval", "print", "voucher", "delivery challan", "gate pass", "GRN"],
+        keywords: ["sign", "designation", "approved by", "prepared by", "posted by", "signatory", "e-signature"],
+        lastUpdated: "2026-11-05",
+        infographics: [
+          {
+            type: "flow",
+            title: "From approval to signed print",
+            steps: [
+              { label: "My Signature", href: "/app/my-signature" },
+              { label: "Approve in All Approvals", href: "/app/approvals" },
+              { label: "Print the document" },
+            ],
+          },
+        ],
+        relatedAppRoutes: [
+          "/app/my-signature",
+          "/app/approvals",
+          "/app/accounts/vouchers",
+          "/app/inventory/delivery-challans",
+          "/app/inventory/goods-receiving",
+        ],
+        relatedArticleIds: ["wf-approvals", "fin-voucher-approval-queue"],
       },
     ],
   },

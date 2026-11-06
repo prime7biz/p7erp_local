@@ -129,6 +129,10 @@ services:
       DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
       PERF_SESSION_STATEMENT_TIMEOUT_MS: ${PERF_SESSION_STATEMENT_TIMEOUT_MS:-0}
       PERF_SESSION_LOCK_TIMEOUT_MS: ${PERF_SESSION_LOCK_TIMEOUT_MS:-0}
+      # Row-Level Security (docs/erp-modernization/RLS_RUNBOOK.md). Off by default; DATABASE_URL_APP
+      # (non-owner role) is used only while the flag is true. Alembic keeps DATABASE_URL (owner).
+      RLS_SESSION_TENANT_ENABLED: ${RLS_SESSION_TENANT_ENABLED:-false}
+      DATABASE_URL_APP: ${DATABASE_URL_APP:-}
       # true = alert scans / weekly AI report / platform maintenance run inside the API process.
       # Switch to false only after beat + worker are healthy (docs/DEPLOYMENT_PROCESS.md).
       INPROCESS_SCHEDULERS_ENABLED: ${INPROCESS_SCHEDULERS_ENABLED:-true}

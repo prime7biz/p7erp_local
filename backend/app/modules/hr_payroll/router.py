@@ -76,6 +76,7 @@ from app.modules.hr_payroll.schemas import (
     PayrollStructureOut,
 )
 from app.modules.hr_payroll import service as payroll_service
+from app.modules.hr_payroll.formula_engine import quantize_money
 
 router = APIRouter(prefix="/hr/payroll", tags=["hr-payroll"])
 
@@ -94,13 +95,6 @@ async def _require_manager_or_admin(db: AsyncSession, user: User, tenant_id: int
     role_name = (role.name if role else "").strip().lower()
     if role_name not in {"admin", "manager", "super_admin", "superadmin", "owner"}:
         raise HTTPException(status_code=403, detail="Only manager/admin can perform this action")
-
-
-def _to_float(value: str | None) -> float:
-    try:
-        return float(value or "0")
-    except (TypeError, ValueError):
-        return 0.0
 
 
 PERMISSION_HR_PAYSLIPS_VIEW_ALL = "hr.payroll.payslips.view_all"
@@ -886,11 +880,15 @@ async def upsert_run_line(
             )
         )
     ).scalar_one_or_none()
+    # The schema already checked: valid, not negative, net = gross - deductions.
+    gross_pay = Decimal(body.gross_pay)
+    deductions = Decimal(body.deductions)
+    net_pay = Decimal(body.net_pay or "0")
     if existing:
         existing.structure_id = body.structure_id
-        existing.gross_pay = body.gross_pay
-        existing.deductions = body.deductions
-        existing.net_pay = body.net_pay
+        existing.gross_pay = gross_pay
+        existing.deductions = deductions
+        existing.net_pay = net_pay
         existing.remarks = body.remarks.strip() if body.remarks else None
         existing.calculation_source = "MANUAL"
         await db.commit()
@@ -901,9 +899,9 @@ async def upsert_run_line(
         run_id=run.id,
         employee_id=body.employee_id,
         structure_id=body.structure_id,
-        gross_pay=body.gross_pay,
-        deductions=body.deductions,
-        net_pay=body.net_pay,
+        gross_pay=gross_pay,
+        deductions=deductions,
+        net_pay=net_pay,
         remarks=body.remarks.strip() if body.remarks else None,
         calculation_source="MANUAL",
     )
@@ -932,12 +930,10 @@ async def finalize_run(
     ).scalars().all()
     if not lines:
         raise HTTPException(status_code=400, detail="Cannot finalize run without payroll lines")
-    gross_total = sum(_to_float(x.gross_pay) for x in lines)
-    deduction_total = sum(_to_float(x.deductions) for x in lines)
-    net_total = sum(_to_float(x.net_pay) for x in lines)
-    run.gross_total = api_money_to_decimal(f"{gross_total:.4f}")
-    run.deduction_total = api_money_to_decimal(f"{deduction_total:.4f}")
-    run.net_total = api_money_to_decimal(f"{net_total:.4f}")
+    zero = Decimal("0")
+    run.gross_total = quantize_money(sum((api_money_to_decimal(x.gross_pay) for x in lines), zero))
+    run.deduction_total = quantize_money(sum((api_money_to_decimal(x.deductions) for x in lines), zero))
+    run.net_total = quantize_money(sum((api_money_to_decimal(x.net_pay) for x in lines), zero))
     run.status = "FINALIZED"
     run.finalized_by = user.id
     run.finalized_at = datetime.utcnow()

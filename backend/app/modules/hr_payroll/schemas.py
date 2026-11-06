@@ -1,9 +1,28 @@
 from datetime import date
-from typing import Literal
+from decimal import Decimal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field, model_validator
+
+from app.common.money import format_money, parse_money
+from app.common.money_schema import MoneyStrNonNeg, MoneyStrNonNegOpt
 
 PayrollComponentType = Literal["EARNING", "DEDUCTION"]
+
+
+def _reject_non_finite_money(value: Any) -> Any:
+    """Runs before MoneyStrNonNeg: refuse NaN / Infinity and true/false instead of reading them as 0."""
+    if isinstance(value, bool):
+        raise ValueError("Invalid monetary amount")
+    parsed = parse_money(value) if isinstance(value, (str, int, float, Decimal)) else None
+    if parsed is not None and not parsed.is_finite():
+        raise ValueError("Invalid monetary amount")
+    return value
+
+
+PayrollMoney = Annotated[MoneyStrNonNeg, BeforeValidator(_reject_non_finite_money)]
+PayrollMoneyOpt = Annotated[MoneyStrNonNegOpt, BeforeValidator(_reject_non_finite_money)]
+NET_PAY_TOLERANCE = Decimal("0.01")
 
 
 class PayrollComponentCreate(BaseModel):
@@ -150,12 +169,31 @@ class PayrollRunOut(BaseModel):
 
 
 class PayrollRunLineUpsert(BaseModel):
+    """Manual payroll line. Amounts may be sent as numbers or strings; they must be valid and >= 0.
+
+    ``net_pay`` must equal ``gross_pay - deductions`` (0.01 rounding allowed); when it is left out
+    the server calculates it.
+    """
+
     employee_id: int
     structure_id: int | None = None
-    gross_pay: str = "0"
-    deductions: str = "0"
-    net_pay: str = "0"
+    gross_pay: PayrollMoney = "0"
+    deductions: PayrollMoney = "0"
+    net_pay: PayrollMoneyOpt = None
     remarks: str | None = None
+
+    @model_validator(mode="after")
+    def _net_matches_gross_minus_deductions(self) -> "PayrollRunLineUpsert":
+        expected = Decimal(self.gross_pay) - Decimal(self.deductions)
+        if expected < 0:
+            raise ValueError("deductions cannot be more than gross_pay")
+        if self.net_pay is None:
+            self.net_pay = format_money(expected) or "0.0000"
+        elif abs(Decimal(self.net_pay) - expected) > NET_PAY_TOLERANCE:
+            raise ValueError(
+                f"net_pay {self.net_pay} must equal gross_pay - deductions ({format_money(expected)})"
+            )
+        return self
 
 
 class PayrollRunLineOut(BaseModel):

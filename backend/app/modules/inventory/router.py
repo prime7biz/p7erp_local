@@ -4359,32 +4359,61 @@ async def update_delivery_challan_status(
             db.add(dc_mv)
             await db.flush()
             await finalize_movement_fifo(db, tenant.id, dc_mv)
-            # Sprint 2: FIFO physical batch allocate on challan post
-            try:
-                from decimal import Decimal as _Dec
+            # Sprint 2: FIFO physical batch allocate on challan post.
+            # Only batch-tracked items (tenant flag + item flag) take stock from batches.
+            # If that fails, the whole posting fails: stock must not leave without batches.
+            from app.common.tenant_feature_keys import is_batch_tracking_enabled
+
+            it_dc = await db.get(Item, line.item_id)
+            if (
+                it_dc
+                and it_dc.tenant_id == tenant.id
+                and getattr(it_dc, "batch_tracking", False)
+                and is_batch_tracking_enabled(tenant.feature_flags)
+            ):
+                import logging
+
                 from app.modules.inventory.stock_batch_service import issue_batch_fifo
 
-                it_dc = await db.get(Item, line.item_id)
-                if it_dc and it_dc.tenant_id == tenant.id and getattr(it_dc, "batch_tracking", False):
+                # Read these now: after a rollback the ORM rows can no longer be read.
+                challan_code = row.challan_code
+                item_code = it_dc.item_code
+                warehouse_id = line.warehouse_id
+                try:
                     allocs = await issue_batch_fifo(
                         db,
                         tenant.id,
                         line.item_id,
                         line.warehouse_id,
-                        _Dec(str(line.quantity)),
+                        Decimal(str(line.quantity)),
                         method="FIFO",
                         feature_flags=tenant.feature_flags,
                     )
-                    if allocs:
-                        dc_mv.batch_id = allocs[0]["batch_id"]
-                        dc_mv.lot_number = allocs[0].get("batch_number")
-                        await db.flush()
-            except Exception:
-                import logging
-
-                logging.getLogger(__name__).exception(
-                    "issue_batch_fifo failed challan=%s line=%s", row.id, line.id
-                )
+                except HTTPException as exc:
+                    await safe_async_session_rollback(db)
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            f"Cannot post {challan_code}: not enough batch stock for item {item_code} "
+                            f"in warehouse #{warehouse_id}. {exc.detail}"
+                        ),
+                    ) from exc
+                except Exception as exc:
+                    logging.getLogger(__name__).exception(
+                        "issue_batch_fifo failed challan=%s line=%s", challan_id, line.id
+                    )
+                    await safe_async_session_rollback(db)
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            f"Cannot post {challan_code}: batch allocation failed for item {item_code} "
+                            f"in warehouse #{warehouse_id}. Nothing was posted; please try again."
+                        ),
+                    ) from exc
+                if allocs:
+                    dc_mv.batch_id = allocs[0]["batch_id"]
+                    dc_mv.lot_number = allocs[0].get("batch_number")
+                    await db.flush()
         await post_delivery_challan_gl(db, tenant.id, user.id, row.id, row.delivery_date, row.challan_code, lines)
         oids_for_sign = list(
             dict.fromkeys(
@@ -6606,6 +6635,8 @@ class PhysicalInventoryLineOut(BaseModel):
     item_id: int
     expected_qty: str
     counted_qty: str | None
+    # Only on the post response: on-hand qty the variance was posted against.
+    expected_qty_at_post: str | None = None
 
 
 class PhysicalInventorySessionOut(BaseModel):
@@ -6619,7 +6650,13 @@ class PhysicalInventorySessionOut(BaseModel):
     lines: list[PhysicalInventoryLineOut]
 
 
-def _phys_session_out(row: PhysicalInventorySession, lines: list[PhysicalInventoryLine]) -> PhysicalInventorySessionOut:
+def _phys_session_out(
+    row: PhysicalInventorySession,
+    lines: list[PhysicalInventoryLine],
+    *,
+    on_hand_at_post: dict[int, float] | None = None,
+) -> PhysicalInventorySessionOut:
+    at_post = on_hand_at_post or {}
     return PhysicalInventorySessionOut(
         id=row.id,
         tenant_id=row.tenant_id,
@@ -6635,6 +6672,11 @@ def _phys_session_out(row: PhysicalInventorySession, lines: list[PhysicalInvento
                 item_id=ln.item_id,
                 expected_qty=decimal_to_money_response(ln.expected_qty),
                 counted_qty=ln.counted_qty,
+                expected_qty_at_post=(
+                    decimal_to_money_response(Decimal(str(round(at_post[ln.id], 6))))
+                    if ln.id in at_post
+                    else None
+                ),
             )
             for ln in lines
         ],
@@ -6755,14 +6797,19 @@ async def post_physical_inventory_session(
     await _lock_stock_items(db, tenant.id, (ln.item_id for ln in lines))
     mv_date = row.count_date or date.today()
     allow_neg = await tenant_allows_negative_stock(db, tenant.id)
+    on_hand_at_post: dict[int, float] = {}
     for line in lines:
-        expected = _to_float(line.expected_qty)
-        counted = _to_float(line.counted_qty) if line.counted_qty is not None else expected
-        delta = counted - expected
+        # Variance is against stock on hand now (rows are locked), not the qty captured
+        # when the count was created, so GRNs/issues in between are not counted twice.
+        # line.expected_qty keeps the creation-time snapshot for display.
+        current = await _on_hand_qty(db, tenant.id, line.item_id, row.warehouse_id)
+        on_hand_at_post[line.id] = current
+        counted = _to_float(line.counted_qty) if line.counted_qty is not None else current
+        delta = counted - current
         if abs(delta) < 1e-9:
             continue
         if delta < 0:
-            available = await _on_hand_qty(db, tenant.id, line.item_id, row.warehouse_id)
+            available = current
             if not allow_neg and available + 1e-9 < abs(delta):
                 raise HTTPException(
                     status_code=400,
@@ -6813,7 +6860,7 @@ async def post_physical_inventory_session(
     lines_result = await db.execute(
         select(PhysicalInventoryLine).where(PhysicalInventoryLine.session_id == row.id).order_by(PhysicalInventoryLine.id)
     )
-    return _phys_session_out(row, list(lines_result.scalars().all()))
+    return _phys_session_out(row, list(lines_result.scalars().all()), on_hand_at_post=on_hand_at_post)
 
 
 class BulkPoStatusBody(BaseModel):

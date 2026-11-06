@@ -146,13 +146,14 @@ async def resolve_in_unit_cost(
                     return _q(pl.unit_price)
         return dc
 
-    if rt == "WAREHOUSE_TRANSFER" and rid:
+    # STOCK_TRANSFER = batch-aware godown transfer (stock hierarchy); same cost rule.
+    if rt in ("WAREHOUSE_TRANSFER", "STOCK_TRANSFER") and rid:
         out_mv = (
             await db.execute(
                 select(StockMovement)
                 .where(
                     StockMovement.tenant_id == tenant_id,
-                    StockMovement.reference_type == "WAREHOUSE_TRANSFER",
+                    StockMovement.reference_type == rt,
                     StockMovement.reference_id == rid,
                     StockMovement.item_id == movement.item_id,
                     StockMovement.movement_type == "OUT",

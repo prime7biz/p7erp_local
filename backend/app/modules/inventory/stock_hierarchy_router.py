@@ -61,6 +61,7 @@ from app.modules.inventory.stock_valuation_service import (
     get_stock_value,
     refresh_item_stock_caches,
 )
+from app.services.fifo_inventory import finalize_movement_fifo
 
 router = APIRouter(prefix="/inventory", tags=["inventory-stock-hierarchy"])
 
@@ -807,6 +808,9 @@ async def create_stock_transfer(
         )
         db.add(out_mv)
         await db.flush()
+        # Consume the source godown's FIFO cost layers (layer rows are locked inside).
+        await finalize_movement_fifo(db, tenant.id, out_mv)
+        transfer_unit_cost = float(_d(out_mv.movement_value) / qty)
 
         batch_allocs: list[dict[str, Any]] = []
         if is_batch_tracking_enabled(tenant.feature_flags) and it.batch_tracking:
@@ -883,6 +887,9 @@ async def create_stock_transfer(
             movement_kind="WAREHOUSE_TRANSFER_IN",
         )
         db.add(in_mv)
+        await db.flush()
+        # Destination gets a cost layer at the same cost that left the source.
+        await finalize_movement_fifo(db, tenant.id, in_mv, in_unit_cost=transfer_unit_cost)
         await refresh_item_stock_caches(db, tenant.id, line.stock_item_id)
         results.append(
             {

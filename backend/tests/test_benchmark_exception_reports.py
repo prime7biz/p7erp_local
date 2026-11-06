@@ -5,11 +5,12 @@ Run: docker compose exec backend pytest tests/test_benchmark_exception_reports.p
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 
 import pytest
 
+from app.common.business_date import today_local
 from app.models.costing import Item, ItemCategory, ItemUnit
 from app.models.finance import AccountGroup, ChartOfAccount, OutstandingBill, VendorBill
 from app.models.inventory import GoodsReceiving, StockMovement, Vendor, Warehouse
@@ -23,7 +24,7 @@ async def _seed(db):
     db.add(vendor)
     await db.flush()
     grn_open = GoodsReceiving(tenant_id=t, grn_code="EXC-GRN-1", status="RECEIVED", vendor_id=vendor.id,
-                              received_date=date.today() - timedelta(days=10))
+                              received_date=today_local() - timedelta(days=10))
     grn_billed = GoodsReceiving(tenant_id=t, grn_code="EXC-GRN-2", status="RECEIVED", vendor_id=vendor.id)
     grn_draft = GoodsReceiving(tenant_id=t, grn_code="EXC-GRN-3", status="DRAFT", vendor_id=vendor.id)
     db.add_all([grn_open, grn_billed, grn_draft])
@@ -52,10 +53,10 @@ async def _seed(db):
     ])
 
     db.add(OutstandingBill(tenant_id=t, bill_no="EXC-OB-1", party_name="Late Buyer", bill_type="RECEIVABLE",
-                           bill_date=date.today() - timedelta(days=60), due_date=date.today() - timedelta(days=30),
+                           bill_date=today_local() - timedelta(days=60), due_date=today_local() - timedelta(days=30),
                            amount=Decimal("1000"), paid_amount=Decimal("400"), status="PARTIAL"))
     db.add(OutstandingBill(tenant_id=t, bill_no="EXC-OB-2", party_name="Paid Buyer", bill_type="RECEIVABLE",
-                           bill_date=date.today() - timedelta(days=60), due_date=date.today() - timedelta(days=30),
+                           bill_date=today_local() - timedelta(days=60), due_date=today_local() - timedelta(days=30),
                            amount=Decimal("500"), paid_amount=Decimal("500"), status="PAID"))
     await db.flush()
     await db.commit()
@@ -108,7 +109,7 @@ async def test_posted_challan_without_invoice_is_listed(db_session_integration):
     tenant, user = await seed_tenant_admin(db)
     db.add_all([
         DeliveryChallan(tenant_id=tenant.id, challan_code="EXC-DC-1", customer_name="Buyer A", status="POSTED",
-                        delivery_date=date.today() - timedelta(days=4)),
+                        delivery_date=today_local() - timedelta(days=4)),
         DeliveryChallan(tenant_id=tenant.id, challan_code="EXC-DC-2", customer_name="Buyer B", status="DRAFT"),
     ])
     await db.commit()

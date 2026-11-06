@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.codegen import next_tenant_code
+from app.common.inventory_policy import tenant_allows_negative_stock
 from app.common.permissions import (
     PERMISSION_INVENTORY_BATCH_CREATE,
     PERMISSION_INVENTORY_BATCH_VIEW,
@@ -52,6 +53,7 @@ from app.modules.inventory.stock_batch_service import (
     mark_expired_batches,
     transfer_batch_qty,
 )
+from app.modules.inventory.stock_locks import lock_stock_items, on_hand_qty_decimal
 from app.modules.inventory.stock_valuation_service import (
     _d,
     _money,
@@ -736,6 +738,21 @@ async def create_stock_transfer(
         raise HTTPException(status_code=404, detail="Destination godown not found")
     if not body.items:
         raise HTTPException(status_code=400, detail="At least one item is required")
+
+    await lock_stock_items(db, tenant.id, (ln.stock_item_id for ln in body.items))
+    if not await tenant_allows_negative_stock(db, tenant.id):
+        need_by_item: dict[int, Decimal] = {}
+        for ln in body.items:
+            q = _money(_d(ln.qty))
+            if q > 0:
+                need_by_item[ln.stock_item_id] = need_by_item.get(ln.stock_item_id, Decimal("0")) + q
+        for iid, need in need_by_item.items():
+            available = await on_hand_qty_decimal(db, tenant.id, iid, body.from_godown_id)
+            if available + Decimal("0.0001") < need:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Insufficient stock for item {iid} at source. Available={available}, required={need}",
+                )
 
     code = await next_tenant_code(db, model=WarehouseTransfer, tenant_id=tenant.id, prefix="ST-", width=5)
     transfer = WarehouseTransfer(

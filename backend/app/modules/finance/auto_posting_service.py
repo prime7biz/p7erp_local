@@ -51,15 +51,6 @@ def _to_float(v: object) -> float:
     return float(str(v).replace(",", "").strip() or 0)
 
 
-def _apply_voucher_impact(account: ChartOfAccount, entry_type: str, amount: float) -> None:
-    current_balance = _to_float(account.balance)
-    if account.normal_balance == "debit":
-        current_balance += amount if entry_type == "DEBIT" else -amount
-    else:
-        current_balance += amount if entry_type == "CREDIT" else -amount
-    account.balance = str(round(current_balance, 4))
-
-
 def _voucher_signature_payload(voucher: Voucher, lines: list[VoucherLine]) -> dict:
     serialized_lines = [
         {
@@ -93,23 +84,6 @@ def _apply_internal_signature(voucher: Voucher, lines: list[VoucherLine]) -> Non
     voucher.verification_id = voucher.verification_id or f"VFY-{secrets.token_hex(8).upper()}"
     voucher.signed_at = datetime.utcnow()
     voucher.signed_by_system = True
-
-
-async def _lock_chart_accounts_for_subset(
-    db: AsyncSession,
-    tenant_id: int,
-    account_ids: list[int],
-) -> dict[int, ChartOfAccount]:
-    ids = sorted(set(account_ids))
-    if not ids:
-        return {}
-    result = await db.execute(
-        select(ChartOfAccount)
-        .where(ChartOfAccount.tenant_id == tenant_id, ChartOfAccount.id.in_(ids))
-        .order_by(ChartOfAccount.id)
-        .with_for_update()
-    )
-    return {a.id: a for a in result.scalars().all()}
 
 
 async def _validate_posting_account(db: AsyncSession, tenant_id: int, account_id: int) -> ChartOfAccount:
@@ -303,13 +277,10 @@ async def create_system_voucher(
         await finalize_posted_voucher_metadata(
             db, tenant_id, voucher, line_rows, strict_duplicate_check=True
         )
-        locked = await _lock_chart_accounts_for_subset(
-            db, tenant_id, [ln.account_id for ln in line_rows]
-        )
-        for ln in line_rows:
-            acct = locked.get(ln.account_id)
-            if acct:
-                _apply_voucher_impact(acct, ln.entry_type, _to_float(ln.amount))
+        from app.modules.finance.posting_core import apply_voucher_to_books
+
+        # Sets books_applied=True so convert/activate paths can never apply it a second time.
+        await apply_voucher_to_books(db, tenant_id, voucher, line_rows)
         voucher.status = "POSTED"
         from app.modules.facility.posting_hooks import process_facility_voucher_posted
         from app.modules.finance.party_ledger_hooks import on_voucher_posted

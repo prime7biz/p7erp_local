@@ -90,7 +90,8 @@ async def fifo_process_outbound(db: AsyncSession, tenant_id: int, movement: Stoc
         stmt = stmt.where(InventoryCostLayer.warehouse_id.is_(None))
     else:
         stmt = stmt.where(InventoryCostLayer.warehouse_id == movement.warehouse_id)
-    stmt = stmt.order_by(InventoryCostLayer.id)
+    # FOR UPDATE: two concurrent issues must not both consume the same layer quantity.
+    stmt = stmt.order_by(InventoryCostLayer.id).with_for_update()
     layers = list((await db.execute(stmt)).scalars().all())
 
     remaining = qty_need

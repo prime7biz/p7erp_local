@@ -106,46 +106,17 @@ async def apply_voucher_line_balances(
     *,
     reverse: bool = False,
 ) -> None:
-    """Apply (or reverse) CoA balance impact for voucher lines. Sets books_applied."""
-    lines = list(
-        (await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id))).scalars().all()
-    )
+    """Apply (or reverse) CoA balance impact for voucher lines. Sets books_applied.
+
+    Locks the touched accounts, posts base-currency amounts and refuses unbalanced vouchers.
+    """
+    from app.modules.finance.posting_core import apply_voucher_to_books, load_voucher_lines
+
+    lines = await load_voucher_lines(db, voucher.id)
     if not lines:
         voucher.books_applied = not reverse and voucher_should_affect_books(voucher)
         return
-    account_ids = {ln.account_id for ln in lines}
-    accounts = {
-        a.id: a
-        for a in (
-            await db.execute(
-                select(ChartOfAccount).where(
-                    ChartOfAccount.tenant_id == tenant_id,
-                    ChartOfAccount.id.in_(account_ids),
-                )
-            )
-        )
-        .scalars()
-        .all()
-    }
-    for line in lines:
-        account = accounts.get(line.account_id)
-        if not account:
-            continue
-        try:
-            current = Decimal(str(account.balance or 0))
-            amount = Decimal(str(line.amount or 0))
-        except Exception:
-            current = ZERO
-            amount = ZERO
-        entry = line.entry_type
-        if reverse:
-            entry = "CREDIT" if entry == "DEBIT" else "DEBIT"
-        if (account.normal_balance or "debit").lower() == "debit":
-            current = current + amount if entry == "DEBIT" else current - amount
-        else:
-            current = current + amount if entry == "CREDIT" else current - amount
-        account.balance = current.quantize(Decimal("0.0001"))
-    voucher.books_applied = not reverse
+    await apply_voucher_to_books(db, tenant_id, voucher, lines, reverse=reverse)
     await db.flush()
 
 
@@ -351,42 +322,7 @@ async def create_note_voucher(
             )
         )
     await db.flush()
-
-    # Party bill for the note (CR for CN reduces AR pending; DR for DN reduces AP)
-    note_bill = PartyLedgerBill(
-        tenant_id=tenant_id,
-        party_ledger_id=ledger.id,
-        bill_number=f"{note_kind}-{voucher.voucher_number}",
-        bill_date=voucher_date,
-        bill_type=note_kind,
-        original_amount=gross,
-        amount_type="CR" if note_kind == "CREDIT_NOTE" else "DR",
-        pending_amount=gross,
-        settled_amount=ZERO,
-        status="PENDING",
-        due_date=voucher_date,
-        voucher_id=voucher.id,
-        narration=description,
-    )
-    db.add(note_bill)
-    await db.flush()
-
-    # Allocate note against original bill
-    from app.modules.finance.party_ledger_bill_service import allocate_to_bill
-
-    try:
-        await allocate_to_bill(
-            db,
-            tenant_id,
-            bill_id=original.id,
-            voucher_id=voucher.id,
-            allocated_amount=min(gross, _d(original.pending_amount)),
-            allocated_date=voucher_date,
-            notes=f"Auto from {note_kind}",
-            created_by=created_by,
-        )
-    except Exception as exc:
-        logger.warning("CN/DN allocate skipped: %s", exc)
+    # The party outstanding changes only when the note is posted (apply_posted_note_to_party_bills).
 
     # Optional stock impact (goods returned)
     if stock_returns:
@@ -417,6 +353,134 @@ async def create_note_voucher(
         await db.flush()
 
     return voucher
+
+
+NOTE_VOUCHER_TYPES = frozenset({"CREDIT_NOTE", "DEBIT_NOTE"})
+
+
+def is_party_note_voucher(voucher: Voucher) -> bool:
+    return (voucher.voucher_type or "").upper() in NOTE_VOUCHER_TYPES and bool(
+        getattr(voucher, "original_party_bill_id", None)
+    )
+
+
+async def apply_posted_note_to_party_bills(
+    db: AsyncSession,
+    tenant_id: int,
+    voucher: Voucher,
+    *,
+    created_by: int | None = None,
+) -> PartyLedgerBill | None:
+    """Reduce the party outstanding for a posted CN/DN exactly once.
+
+    Records one note bill for the gross amount and settles it against the original bill as far
+    as that bill is still pending; any excess stays open on the note bill as an unapplied credit.
+    Safe to call twice: a voucher that already has a note bill is skipped.
+    """
+    if not is_party_note_voucher(voucher):
+        return None
+    note_kind = (voucher.voucher_type or "").upper()
+    previous = list(
+        (
+            await db.execute(
+                select(PartyLedgerBill).where(
+                    PartyLedgerBill.tenant_id == tenant_id,
+                    PartyLedgerBill.voucher_id == voucher.id,
+                    PartyLedgerBill.bill_type == note_kind,
+                )
+            )
+        ).scalars().all()
+    )
+    live = next((b for b in previous if b.status != "CANCELLED"), None)
+    if live is not None:
+        return live
+    # A note re-posted after cancel-posting reuses its cancelled bill (bill numbers are unique).
+    reusable = previous[0] if previous else None
+
+    original = (
+        await db.execute(
+            select(PartyLedgerBill)
+            .where(PartyLedgerBill.id == voucher.original_party_bill_id, PartyLedgerBill.tenant_id == tenant_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if original is None:
+        return None
+    ledger = await db.get(PartyLedger, original.party_ledger_id)
+    if ledger is None or ledger.tenant_id != tenant_id:
+        return None
+
+    lines = list(
+        (await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id))).scalars().all()
+    )
+    party_side = "CREDIT" if note_kind == "CREDIT_NOTE" else "DEBIT"
+    side_lines = [ln for ln in lines if (ln.entry_type or "").upper() == party_side]
+    party_line = next((ln for ln in side_lines if ln.account_id == ledger.ledger_account_id), None)
+    if party_line is None and side_lines:
+        party_line = max(side_lines, key=lambda ln: _d(ln.amount))
+    if party_line is None:
+        return None
+    gross = _money(_d(party_line.amount))
+    if gross <= ZERO:
+        return None
+
+    if reusable is not None:
+        note_bill = reusable
+        note_bill.party_ledger_id = ledger.id
+        note_bill.original_amount = gross
+        note_bill.pending_amount = gross
+        note_bill.settled_amount = ZERO
+        note_bill.status = "PENDING"
+        note_bill.voucher_line_id = party_line.id
+    else:
+        note_bill = PartyLedgerBill(
+            tenant_id=tenant_id,
+            party_ledger_id=ledger.id,
+            bill_number=f"{note_kind}-{voucher.voucher_number}",
+            bill_date=voucher.voucher_date,
+            bill_type=note_kind,
+            original_amount=gross,
+            amount_type="CR" if note_kind == "CREDIT_NOTE" else "DR",
+            pending_amount=gross,
+            settled_amount=ZERO,
+            status="PENDING",
+            due_date=voucher.voucher_date,
+            voucher_id=voucher.id,
+            voucher_line_id=party_line.id,
+            narration=voucher.description,
+        )
+        db.add(note_bill)
+    await db.flush()
+
+    from app.modules.finance.party_ledger_bill_service import _refresh_bill_status, allocate_to_bill
+    from app.modules.finance.party_ledger_service import update_party_ledger_balance
+
+    opposite = "DR" if note_kind == "CREDIT_NOTE" else "CR"
+    applied = ZERO
+    if (
+        original.amount_type == opposite
+        and original.status not in {"CANCELLED", "SETTLED"}
+        and _d(original.pending_amount) > ZERO
+    ):
+        applied = _money(min(gross, _d(original.pending_amount)))
+        await allocate_to_bill(
+            db,
+            tenant_id,
+            bill_id=original.id,
+            voucher_id=voucher.id,
+            voucher_line_id=party_line.id,
+            allocated_amount=applied,
+            allocated_date=voucher.voucher_date,
+            notes=f"Auto from {note_kind}",
+            created_by=created_by,
+        )
+    if applied > ZERO:
+        note_bill.pending_amount = _money(gross - applied)
+        note_bill.settled_amount = applied
+        _refresh_bill_status(note_bill)
+    await db.flush()
+    await update_party_ledger_balance(db, ledger.id)
+    return note_bill
 
 
 async def create_stock_transfer_voucher(
@@ -578,29 +642,115 @@ async def create_stock_transfer_voucher(
     }
 
 
-async def convert_optional_to_books(db: AsyncSession, tenant_id: int, voucher_id: int) -> Voucher:
-    voucher = await db.get(Voucher, voucher_id)
-    if not voucher or voucher.tenant_id != tenant_id:
+async def _lock_voucher_row(db: AsyncSession, tenant_id: int, voucher_id: int) -> Voucher:
+    await db.flush()
+    voucher = (
+        await db.execute(
+            select(Voucher)
+            .where(Voucher.id == voucher_id, Voucher.tenant_id == tenant_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if voucher is None:
         raise HTTPException(status_code=404, detail="Voucher not found")
+    return voucher
+
+
+async def post_held_voucher_to_books(
+    db: AsyncSession,
+    tenant_id: int,
+    voucher: Voucher,
+    *,
+    feature_flags: Any = None,
+    user_id: int | None = None,
+) -> list[str]:
+    """Put an already-POSTED voucher that was held out of the books (memorandum / optional /
+    post-dated) into the books, with the same checks and hooks as normal posting.
+
+    Caller must hold the voucher row lock. Returns control warnings.
+    """
+    from app.models.finance import AccountingPeriod
+    from app.modules.finance.posting_core import apply_voucher_to_books, load_voucher_lines
+    from app.modules.finance.voucher_controls import finalize_posted_voucher_metadata
+
+    if voucher.books_applied:
+        return []
+    open_period = (
+        await db.execute(
+            select(AccountingPeriod.id).where(
+                AccountingPeriod.tenant_id == tenant_id,
+                AccountingPeriod.is_closed.is_(False),
+                AccountingPeriod.start_date <= voucher.voucher_date,
+                AccountingPeriod.end_date >= voucher.voucher_date,
+            )
+        )
+    ).scalars().first()
+    if not open_period:
+        raise HTTPException(status_code=400, detail="No open accounting period for this voucher date")
+    lines = await load_voucher_lines(db, voucher.id)
+    warnings = await finalize_posted_voucher_metadata(db, tenant_id, voucher, lines, strict_duplicate_check=True)
+    await apply_voucher_to_books(db, tenant_id, voucher, lines)
+
+    from app.modules.commercial.commercial_invoice_service import sync_ci_allocation_status_for_voucher
+    from app.modules.commercial.proforma_receipt_service import sync_allocation_status_for_voucher
+    from app.modules.facility.posting_hooks import process_facility_voucher_posted
+    from app.modules.finance.party_ledger_hooks import on_voucher_posted
+
+    await process_facility_voucher_posted(db, tenant_id, voucher, user_id)
+    await sync_allocation_status_for_voucher(db, tenant_id=tenant_id, voucher=voucher)
+    await sync_ci_allocation_status_for_voucher(db, tenant_id=tenant_id, voucher=voucher)
+    await on_voucher_posted(db, tenant_id, voucher, feature_flags=feature_flags, created_by=user_id)
+    await db.flush()
+    return list(warnings)
+
+
+async def convert_optional_to_books(
+    db: AsyncSession,
+    tenant_id: int,
+    voucher_id: int,
+    *,
+    feature_flags: Any = None,
+    user_id: int | None = None,
+) -> Voucher:
+    voucher = await _lock_voucher_row(db, tenant_id, voucher_id)
     if not voucher.is_optional and (voucher.voucher_type or "").upper() != "OPTIONAL":
         raise HTTPException(status_code=400, detail="Not an optional voucher")
     voucher.include_in_books = True
     voucher.is_optional = True
-    if (voucher.status or "").upper() == "POSTED" and not voucher.books_applied:
-        await apply_voucher_line_balances(db, tenant_id, voucher, reverse=False)
+    if (
+        (voucher.status or "").upper() == "POSTED"
+        and not voucher.books_applied
+        and voucher_should_affect_books(voucher)
+    ):
+        await post_held_voucher_to_books(db, tenant_id, voucher, feature_flags=feature_flags, user_id=user_id)
     return voucher
 
 
-async def convert_memorandum_to_regular(db: AsyncSession, tenant_id: int, voucher_id: int) -> Voucher:
-    voucher = await db.get(Voucher, voucher_id)
-    if not voucher or voucher.tenant_id != tenant_id:
-        raise HTTPException(status_code=404, detail="Voucher not found")
+async def convert_memorandum_to_regular(
+    db: AsyncSession,
+    tenant_id: int,
+    voucher_id: int,
+    *,
+    feature_flags: Any = None,
+    user_id: int | None = None,
+) -> Voucher:
+    voucher = await _lock_voucher_row(db, tenant_id, voucher_id)
+    vtype = (voucher.voucher_type or "").upper()
+    if vtype == "STOCK_TRANSFER" or getattr(voucher, "is_stock_transfer", False):
+        raise HTTPException(status_code=400, detail="Stock transfer vouchers cannot be converted")
+    if not voucher.is_memorandum and vtype != "MEMORANDUM":
+        raise HTTPException(status_code=400, detail="Not a memorandum voucher")
     voucher.is_memorandum = False
     voucher.include_in_books = True
-    if (voucher.voucher_type or "").upper() == "MEMORANDUM":
+    if vtype == "MEMORANDUM":
         voucher.voucher_type = "JOURNAL"
-    if (voucher.status or "").upper() == "POSTED" and not voucher.books_applied:
-        await apply_voucher_line_balances(db, tenant_id, voucher, reverse=False)
+    if (
+        (voucher.status or "").upper() == "POSTED"
+        and not voucher.books_applied
+        and voucher_should_affect_books(voucher)
+    ):
+        await post_held_voucher_to_books(db, tenant_id, voucher, feature_flags=feature_flags, user_id=user_id)
     return voucher
 
 
@@ -609,29 +759,46 @@ async def activate_due_post_dated(
     tenant_id: int,
     *,
     as_of: date | None = None,
+    feature_flags: Any = None,
+    user_id: int | None = None,
 ) -> list[int]:
-    """Clear is_post_dated for vouchers whose date has arrived; apply books if already POSTED."""
+    """Clear is_post_dated for vouchers whose date has arrived; put POSTED ones into the books.
+
+    Each voucher is locked and handled in its own savepoint. A voucher that cannot be booked
+    (closed period, duplicate, unbalanced) stays post-dated and is logged, the rest continue.
+    """
     as_of = as_of or date.today()
-    rows = list(
+    ids = list(
         (
             await db.execute(
-                select(Voucher).where(
+                select(Voucher.id)
+                .where(
                     Voucher.tenant_id == tenant_id,
                     Voucher.is_post_dated.is_(True),
                     Voucher.voucher_date <= as_of,
                     Voucher.status.in_(("DRAFT", "APPROVED", "POSTED", "SUBMITTED", "CHECKED", "RECOMMENDED")),
                 )
+                .order_by(Voucher.id)
             )
-        )
-        .scalars()
-        .all()
+        ).scalars().all()
     )
     activated = []
-    for v in rows:
-        v.is_post_dated = False
-        if (v.status or "").upper() == "POSTED" and not v.books_applied and voucher_should_affect_books(v, as_of=as_of):
-            await apply_voucher_line_balances(db, tenant_id, v, reverse=False)
-        activated.append(v.id)
+    for vid in ids:
+        try:
+            async with db.begin_nested():
+                v = await _lock_voucher_row(db, tenant_id, vid)
+                if not v.is_post_dated:
+                    continue
+                v.is_post_dated = False
+                if (
+                    (v.status or "").upper() == "POSTED"
+                    and not v.books_applied
+                    and voucher_should_affect_books(v, as_of=as_of)
+                ):
+                    await post_held_voucher_to_books(db, tenant_id, v, feature_flags=feature_flags, user_id=user_id)
+            activated.append(vid)
+        except Exception:
+            logger.exception("post-dated activation skipped tenant=%s voucher=%s", tenant_id, vid)
     await db.flush()
     return activated
 
@@ -658,6 +825,13 @@ async def generate_from_recurring_template(
     if not lines_in:
         raise HTTPException(status_code=400, detail=f"Template {template.id} has no lines")
     await assert_voucher_line_refs(db, tenant_id, lines_in)
+    from app.modules.finance.posting_core import assert_dict_lines_balanced
+
+    # Every generated line shares one currency and rate, so balanced amounts mean balanced base amounts.
+    assert_dict_lines_balanced(
+        [{"entry_type": ln.get("entry_type") or "DEBIT", "amount": ln.get("amount")} for ln in lines_in],
+        label=f"Recurring template {template.id}",
+    )
 
     voucher_number, series_seq, series_key, fy = await allocate_series_voucher_number(
         db,
@@ -690,6 +864,9 @@ async def generate_from_recurring_template(
     )
     db.add(voucher)
     await db.flush()
+    rate = _d(voucher.exchange_rate)
+    if rate <= ZERO:
+        rate = Decimal("1")
     for ln in lines_in:
         db.add(
             VoucherLine(
@@ -699,7 +876,7 @@ async def generate_from_recurring_template(
                 cost_center_id=ln.get("cost_center_id"),
                 entry_type=str(ln.get("entry_type") or "DEBIT").upper(),
                 amount=str(_money(_d(ln.get("amount")))),
-                base_amount=str(_money(_d(ln.get("amount")))),
+                base_amount=str(_money(_d(ln.get("amount")) * rate)),
                 currency=voucher.currency,
                 exchange_rate=str(voucher.exchange_rate),
                 notes=ln.get("notes"),

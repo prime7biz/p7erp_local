@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Any, Literal
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.finance import Voucher, VoucherLine
@@ -155,6 +155,46 @@ async def create_bill_from_voucher_line(
     return bill
 
 
+async def voucher_unallocated_for_party(
+    db: AsyncSession,
+    tenant_id: int,
+    voucher: Voucher,
+    party_ledger_id: int,
+) -> Decimal:
+    """How much of this voucher is still free to settle bills of one party.
+
+    Capacity is the voucher's amount on the party's ledger account (or, when the voucher does
+    not touch that account, its total debits) minus what it already settled for that party.
+    """
+    pl = await db.get(PartyLedger, party_ledger_id)
+    lines = list(
+        (
+            await db.execute(
+                select(VoucherLine).where(VoucherLine.voucher_id == voucher.id, VoucherLine.tenant_id == tenant_id)
+            )
+        ).scalars().all()
+    )
+    party_lines = [ln for ln in lines if pl is not None and ln.account_id == pl.ledger_account_id]
+    if party_lines:
+        dr = sum((_d(ln.amount) for ln in party_lines if (ln.entry_type or "").upper() == "DEBIT"), ZERO)
+        cr = sum((_d(ln.amount) for ln in party_lines if (ln.entry_type or "").upper() != "DEBIT"), ZERO)
+        capacity = max(dr, cr)
+    else:
+        capacity = sum((_d(ln.amount) for ln in lines if (ln.entry_type or "").upper() == "DEBIT"), ZERO)
+    used = (
+        await db.execute(
+            select(func.coalesce(func.sum(PartyLedgerBillAllocation.allocated_amount), 0))
+            .join(PartyLedgerBill, PartyLedgerBill.id == PartyLedgerBillAllocation.bill_id)
+            .where(
+                PartyLedgerBillAllocation.tenant_id == tenant_id,
+                PartyLedgerBillAllocation.voucher_id == voucher.id,
+                PartyLedgerBill.party_ledger_id == party_ledger_id,
+            )
+        )
+    ).scalar_one()
+    return _money(max(capacity - _d(used), ZERO))
+
+
 async def allocate_to_bill(
     db: AsyncSession,
     tenant_id: int,
@@ -167,17 +207,36 @@ async def allocate_to_bill(
     notes: str | None = None,
     created_by: int | None = None,
 ) -> PartyLedgerBillAllocation:
-    bill = await db.get(PartyLedgerBill, bill_id)
-    if not bill or bill.tenant_id != tenant_id:
+    # Write pending changes first so the locked re-reads below cannot discard them.
+    await db.flush()
+    # Lock order voucher -> bill (same as posting) so concurrent allocations serialize.
+    voucher = (
+        await db.execute(
+            select(Voucher)
+            .where(Voucher.id == voucher_id, Voucher.tenant_id == tenant_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if voucher is None:
+        raise HTTPException(status_code=404, detail="Voucher not found")
+    if (voucher.status or "").upper() != "POSTED":
+        raise HTTPException(status_code=400, detail="Only posted vouchers can settle bills")
+
+    bill = (
+        await db.execute(
+            select(PartyLedgerBill)
+            .where(PartyLedgerBill.id == bill_id, PartyLedgerBill.tenant_id == tenant_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if bill is None:
         raise HTTPException(status_code=404, detail="Bill not found")
     if bill.status == "CANCELLED":
         raise HTTPException(status_code=400, detail="Cannot allocate to a cancelled bill")
     if bill.status == "SETTLED" or _d(bill.pending_amount) <= ZERO:
         raise HTTPException(status_code=400, detail="Bill is already settled")
-
-    voucher = await db.get(Voucher, voucher_id)
-    if not voucher or voucher.tenant_id != tenant_id:
-        raise HTTPException(status_code=404, detail="Voucher not found")
 
     amt = _money(_d(allocated_amount))
     if amt <= ZERO:
@@ -186,6 +245,12 @@ async def allocate_to_bill(
         raise HTTPException(
             status_code=400,
             detail=f"allocated_amount {amt} exceeds pending {bill.pending_amount}",
+        )
+    remainder = await voucher_unallocated_for_party(db, tenant_id, voucher, bill.party_ledger_id)
+    if amt > remainder:
+        raise HTTPException(
+            status_code=400,
+            detail=f"allocated_amount {amt} exceeds the voucher's unallocated amount {remainder}",
         )
 
     existing = (
@@ -253,6 +318,11 @@ async def auto_allocate_payment(
     PAYMENT (money out) settles CR (AP) bills.
     """
     remaining = _money(_d(payment_amount))
+    if remaining <= ZERO:
+        return []
+    if (payment_voucher.status or "").upper() != "POSTED":
+        raise HTTPException(status_code=400, detail="Only posted vouchers can settle bills")
+    remaining = min(remaining, await voucher_unallocated_for_party(db, tenant_id, payment_voucher, party_ledger_id))
     if remaining <= ZERO:
         return []
 

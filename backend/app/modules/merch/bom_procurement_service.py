@@ -17,6 +17,7 @@ from app.models import (
     Vendor,
     Warehouse,
 )
+from app.modules.inventory.qty_format import format_qty, quantize_qty, to_qty_decimal
 
 
 async def has_po_lines_for_bom_line(db: AsyncSession, tenant_id: int, bom_line_id: int) -> bool:
@@ -242,9 +243,7 @@ async def create_po_from_bom_line(
     db.add(po)
     await db.flush()
 
-    qty_str = f"{quantity:.4g}".strip()
-    if qty_str == "0":
-        qty_str = "0"
+    qty_str = format_qty(quantity)
 
     poi = PurchaseOrderItem(
         tenant_id=tenant_id,
@@ -320,12 +319,11 @@ async def bulk_create_pos_by_vendor(
         pois: list[PurchaseOrderItem] = []
         for line in grp:
             already = await total_po_qty_for_line(db, tenant_id, line.id)
-            need = float(line.required_gross_qty or 0)
-            remaining = max(0.0, need - already)
+            remaining = quantize_qty(to_qty_decimal(line.required_gross_qty) - to_qty_decimal(already))
             if remaining <= 0:
                 continue
             price = str(line.bom_expected_unit_price) if line.bom_expected_unit_price is not None else "0"
-            qty_str = f"{remaining:.4g}"
+            qty_str = format_qty(remaining)
             poi = PurchaseOrderItem(
                 tenant_id=tenant_id,
                 purchase_order_id=po.id,

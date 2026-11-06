@@ -276,42 +276,23 @@ async def create_tds_deduction_record(
     return row
 
 
-async def maybe_auto_tds_on_payment_voucher(
-    db: AsyncSession,
-    tenant_id: int,
-    voucher: Voucher,
-    *,
-    feature_flags: Any = None,
-    created_by: int | None = None,
-    tds_payable_account_id: int | None = None,
-) -> TdsDeduction | None:
-    """On PAYMENT post: if party has TDS section and amount > threshold, create deduction + liability."""
-    from app.common.tenant_feature_keys import is_tds_system_enabled
+TDS_LINE_MARKER = "[TDS]"
 
-    if not is_tds_system_enabled(feature_flags):
-        return None
-    if (voucher.voucher_type or "").upper() != "PAYMENT":
-        return None
 
-    # Avoid duplicate
-    existing = (
-        await db.execute(
-            select(TdsDeduction).where(
-                TdsDeduction.tenant_id == tenant_id,
-                TdsDeduction.voucher_id == voucher.id,
-            )
-        )
-    ).scalars().first()
-    if existing:
-        return existing
+def _tds_payable_account_id(feature_flags: Any, override: int | None = None) -> int | None:
+    if override:
+        return override
+    if isinstance(feature_flags, dict):
+        settings = feature_flags.get("tds_settings") or {}
+        if isinstance(settings, dict) and settings.get("tds_payable_account_id"):
+            return int(settings["tds_payable_account_id"])
+    return None
 
-    lines = list(
-        (await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id))).scalars().all()
-    )
-    # Find party AP line (DEBIT on vendor AP for payment)
-    party = None
-    payment_amount = ZERO
-    vendor_ap_id = None
+
+async def _tds_party_line(
+    db: AsyncSession, tenant_id: int, lines: list[VoucherLine]
+) -> tuple[PartyLedger | None, VoucherLine | None]:
+    """The DEBIT line on a vendor party account that has a TDS section."""
     for ln in lines:
         if (ln.entry_type or "").upper() != "DEBIT":
             continue
@@ -325,43 +306,187 @@ async def maybe_auto_tds_on_payment_voucher(
             )
         ).scalars().first()
         if pl and pl.tds_section_id:
-            party = pl
-            payment_amount = _money(_d(ln.amount))
-            vendor_ap_id = ln.account_id
-            break
-    if not party or not vendor_ap_id:
+            return pl, ln
+    return None, None
+
+
+async def _deduction_for_voucher(db: AsyncSession, tenant_id: int, voucher_id: int) -> TdsDeduction | None:
+    return (
+        await db.execute(
+            select(TdsDeduction).where(TdsDeduction.tenant_id == tenant_id, TdsDeduction.voucher_id == voucher_id)
+        )
+    ).scalars().first()
+
+
+async def _load_lines(db: AsyncSession, voucher_id: int) -> list[VoucherLine]:
+    return list(
+        (await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher_id))).scalars().all()
+    )
+
+
+async def split_tds_into_payment_voucher(
+    db: AsyncSession,
+    tenant_id: int,
+    voucher: Voucher,
+    *,
+    feature_flags: Any = None,
+    created_by: int | None = None,
+) -> TdsDeduction | None:
+    """Before a PAYMENT is posted: withhold TDS inside the payment itself.
+
+    Dr Vendor (gross) / Cr Bank (gross - tds) / Cr TDS payable (tds). The vendor's payable is
+    reduced once, by the gross amount. Only when ``tds_split_in_payment`` is on.
+    """
+    from app.common.tenant_feature_keys import is_tds_split_in_payment_enabled, is_tds_system_enabled
+    from app.modules.finance.posting_core import line_base_amount, to_decimal
+    from app.modules.finance.voucher_controls import _is_cash_or_bank
+
+    if not (is_tds_system_enabled(feature_flags) and is_tds_split_in_payment_enabled(feature_flags)):
+        return None
+    if (voucher.voucher_type or "").upper() != "PAYMENT":
+        return None
+    payable_id = _tds_payable_account_id(feature_flags)
+    if not payable_id:
+        return None
+    payable = await db.get(ChartOfAccount, payable_id)
+    if not payable or payable.tenant_id != tenant_id:
+        return None
+
+    lines = await _load_lines(db, voucher.id)
+    party, party_line = await _tds_party_line(db, tenant_id, lines)
+    if not party or not party_line:
+        return None
+    section = await get_tds_section(db, tenant_id, section_id=party.tds_section_id)
+    if not section:
+        return None
+    existing = await _deduction_for_voucher(db, tenant_id, voucher.id)
+    tds_line = next((ln for ln in lines if (ln.notes or "").startswith(TDS_LINE_MARKER)), None)
+    if tds_line is not None:
+        # Already split (re-post after cancel-posting): only make sure the deduction record exists.
+        if existing is None:
+            existing = await create_tds_deduction_record(
+                db,
+                tenant_id,
+                party_ledger_id=party.id,
+                tds_section_id=section.id,
+                taxable_amount=_money(_d(party_line.amount)),
+                tds_amount=_money(_d(tds_line.amount)),
+                voucher_id=voucher.id,
+                deduction_date=voucher.voucher_date,
+                created_by=created_by,
+                notes="Auto TDS withheld inside payment",
+            )
+            existing.tds_liability_voucher_id = voucher.id
+        return existing
+    if existing is not None:
+        return existing
+
+    calc = calculate_tds_amount(_money(_d(party_line.amount)), section)
+    tds = calc["tds_amount"]
+    if not calc["applicable"] or tds <= ZERO:
+        return None
+
+    credit_lines = [
+        ln for ln in lines if (ln.entry_type or "").upper() == "CREDIT" and ln.account_id != party_line.account_id
+    ]
+    if not credit_lines:
+        return None
+    from app.models.finance import AccountGroup
+
+    acct_rows = (
+        await db.execute(
+            select(ChartOfAccount, AccountGroup)
+            .join(AccountGroup, ChartOfAccount.group_id == AccountGroup.id)
+            .where(ChartOfAccount.tenant_id == tenant_id, ChartOfAccount.id.in_({ln.account_id for ln in credit_lines}))
+        )
+    ).all()
+    cash_bank_ids = {a.id for a, g in acct_rows if _is_cash_or_bank(a, g)}
+    candidates = [ln for ln in credit_lines if ln.account_id in cash_bank_ids] or credit_lines
+    target = max(candidates, key=lambda ln: _d(ln.amount))
+    if _d(target.amount) <= tds:
+        return None
+
+    rate = to_decimal(target.exchange_rate)
+    if rate <= ZERO:
+        rate = Decimal("1")
+    target_base = line_base_amount(target)
+    target.amount = _money(_d(target.amount) - tds)
+    target.base_amount = (target_base - tds * rate).quantize(Decimal("0.0001"))
+    db.add(
+        VoucherLine(
+            tenant_id=tenant_id,
+            voucher_id=voucher.id,
+            account_id=payable.id,
+            entry_type="CREDIT",
+            amount=tds,
+            base_amount=(tds * rate).quantize(Decimal("0.0001")),
+            currency=target.currency,
+            exchange_rate=target.exchange_rate,
+            notes=f"{TDS_LINE_MARKER} {section.section_code} withheld on {calc['taxable_amount']}",
+        )
+    )
+    deduction = await create_tds_deduction_record(
+        db,
+        tenant_id,
+        party_ledger_id=party.id,
+        tds_section_id=section.id,
+        taxable_amount=calc["taxable_amount"],
+        tds_amount=tds,
+        voucher_id=voucher.id,
+        deduction_date=voucher.voucher_date,
+        created_by=created_by,
+        notes="Auto TDS withheld inside payment",
+    )
+    deduction.tds_liability_voucher_id = voucher.id
+    voucher.description = (
+        f"{voucher.description} | TDS {tds}" if voucher.description else f"TDS {tds} ({section.section_code})"
+    )
+    await db.flush()
+    return deduction
+
+
+async def maybe_auto_tds_on_payment_voucher(
+    db: AsyncSession,
+    tenant_id: int,
+    voucher: Voucher,
+    *,
+    feature_flags: Any = None,
+    created_by: int | None = None,
+    tds_payable_account_id: int | None = None,
+) -> TdsDeduction | None:
+    """After a PAYMENT posts: record the TDS deduction when it was not withheld inside the payment.
+
+    No ledger entry is made here. A separate "Dr Vendor / Cr TDS payable" journal reduced the
+    vendor payable a second time (the payment already debited it in full), so the liability is
+    only booked by ``split_tds_into_payment_voucher`` (flag ``tds_split_in_payment``).
+    """
+    from app.common.tenant_feature_keys import is_tds_system_enabled
+
+    if not is_tds_system_enabled(feature_flags):
+        return None
+    if (voucher.voucher_type or "").upper() != "PAYMENT":
+        return None
+
+    existing = await _deduction_for_voucher(db, tenant_id, voucher.id)
+    if existing:
+        return existing
+
+    lines = await _load_lines(db, voucher.id)
+    if any((ln.notes or "").startswith(TDS_LINE_MARKER) for ln in lines):
+        return None
+    party, party_line = await _tds_party_line(db, tenant_id, lines)
+    if not party or not party_line:
         return None
 
     section = await get_tds_section(db, tenant_id, section_id=party.tds_section_id)
     if not section:
         return None
-    calc = calculate_tds_amount(payment_amount, section)
+    calc = calculate_tds_amount(_money(_d(party_line.amount)), section)
     if not calc["applicable"] or calc["tds_amount"] <= ZERO:
         return None
 
-    # Resolve TDS payable account from feature_flags.tds_settings or tax payable style
-    payable_id = tds_payable_account_id
-    if not payable_id and isinstance(feature_flags, dict):
-        settings = feature_flags.get("tds_settings") or {}
-        if isinstance(settings, dict) and settings.get("tds_payable_account_id"):
-            payable_id = int(settings["tds_payable_account_id"])
-    if not payable_id:
-        logger.info("TDS applicable but tds_payable_account_id not configured tenant=%s", tenant_id)
-        # Still create deduction record without liability voucher
-        return await create_tds_deduction_record(
-            db,
-            tenant_id,
-            party_ledger_id=party.id,
-            tds_section_id=section.id,
-            taxable_amount=calc["taxable_amount"],
-            tds_amount=calc["tds_amount"],
-            voucher_id=voucher.id,
-            deduction_date=voucher.voucher_date,
-            created_by=created_by,
-            notes="Auto TDS (liability voucher skipped — configure tds_payable_account_id)",
-        )
-
-    deduction = await create_tds_deduction_record(
+    logger.info("TDS applicable on payment %s but not withheld inside it (tenant=%s)", voucher.id, tenant_id)
+    return await create_tds_deduction_record(
         db,
         tenant_id,
         party_ledger_id=party.id,
@@ -371,24 +496,51 @@ async def maybe_auto_tds_on_payment_voucher(
         voucher_id=voucher.id,
         deduction_date=voucher.voucher_date,
         created_by=created_by,
-        notes="Auto TDS on payment post",
+        notes=(
+            "Auto TDS: liability not booked. Enable tds_split_in_payment and set "
+            "tds_settings.tds_payable_account_id to withhold TDS inside the payment."
+        ),
     )
-    await create_tds_liability_voucher(
-        db,
-        tenant_id,
-        deduction=deduction,
-        vendor_ap_account_id=vendor_ap_id,
-        tds_payable_account_id=payable_id,
-        voucher_date=voucher.voucher_date,
-        created_by=created_by,
-        include_bank_net=False,
+
+
+async def on_payment_voucher_cancelled(db: AsyncSession, tenant_id: int, voucher: Voucher) -> None:
+    """Undo auto TDS when its payment is cancelled or reversed.
+
+    Removes the PENDING deduction record and reverses a separate TDS liability journal made by
+    older versions. Raises 409 once the TDS has been deposited or certified.
+    """
+    from app.modules.finance.advanced_voucher_service import voucher_book_impact_applied
+    from app.modules.finance.posting_core import apply_voucher_to_books
+
+    rows = list(
+        (
+            await db.execute(
+                select(TdsDeduction).where(TdsDeduction.tenant_id == tenant_id, TdsDeduction.voucher_id == voucher.id)
+            )
+        ).scalars().all()
     )
-    if voucher.description:
-        voucher.description = f"{voucher.description} | TDS {calc['tds_amount']}"
-    else:
-        voucher.description = f"TDS {calc['tds_amount']} ({section.section_code})"
+    for ded in rows:
+        if ded.status != "PENDING":
+            raise HTTPException(
+                status_code=409,
+                detail=f"TDS on this payment is already {ded.status.lower()}; undo that before cancelling the payment.",
+            )
+        journal_id = ded.tds_liability_voucher_id
+        if journal_id and journal_id != voucher.id:
+            journal = (
+                await db.execute(
+                    select(Voucher)
+                    .where(Voucher.id == journal_id, Voucher.tenant_id == tenant_id)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if journal is not None and journal.status == "POSTED":
+                if voucher_book_impact_applied(journal):
+                    await apply_voucher_to_books(db, tenant_id, journal, reverse=True)
+                journal.status = "CANCELLED"
+                journal.description = f"{journal.description or ''} (cancelled with payment {voucher.voucher_number})".strip()
+        await db.delete(ded)
     await db.flush()
-    return deduction
 
 
 def quarter_date_range(year: int, quarter: int) -> tuple[date, date]:

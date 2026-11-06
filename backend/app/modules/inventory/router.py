@@ -69,6 +69,8 @@ from app.modules.inventory.document_qr_service import (
     verify_inventory_document,
 )
 from app.modules.inventory import stock_snapshot_service
+from app.modules.inventory.qty_format import ZERO as QTY_ZERO, format_qty, to_qty_decimal
+from app.modules.inventory.stock_locks import lock_stock_items
 from app.models import (
     Bom,
     BomItem,
@@ -393,6 +395,17 @@ async def _sum_accepted_for_po_line_excluding_grn(
     purchase_order_line_id: int,
     exclude_grn_id: int | None,
 ) -> float:
+    return float(
+        await _sum_accepted_for_po_line_excluding_grn_dec(db, tenant_id, purchase_order_line_id, exclude_grn_id)
+    )
+
+
+async def _sum_accepted_for_po_line_excluding_grn_dec(
+    db: AsyncSession,
+    tenant_id: int,
+    purchase_order_line_id: int,
+    exclude_grn_id: int | None,
+) -> Decimal:
     stmt = (
         select(GoodsReceivingItem.accepted_qty, GoodsReceivingItem.received_qty, GoodsReceivingItem.quantity)
         .join(GoodsReceiving, GoodsReceiving.id == GoodsReceivingItem.goods_receiving_id)
@@ -405,10 +418,9 @@ async def _sum_accepted_for_po_line_excluding_grn(
     )
     if exclude_grn_id is not None:
         stmt = stmt.where(GoodsReceiving.id != exclude_grn_id)
-    total = 0.0
+    total = QTY_ZERO
     for acc, recv, qty in (await db.execute(stmt)).all():
-        q = acc or recv or qty
-        total += _to_float(str(q) if q is not None else "0")
+        total += to_qty_decimal(acc or recv or qty)
     return total
 
 
@@ -3062,10 +3074,12 @@ async def create_goods_receiving(
             wh_id = p.warehouse_id or body.default_warehouse_id
             if not wh_id:
                 continue
-            prev = await _sum_accepted_for_po_line_excluding_grn(db, tenant.id, p.id, None)
-            ord_q = _to_float(p.quantity)
-            pending = max(0.0, ord_q - prev)
-            base_qty = f"{pending:.4g}" if pending > 0 else decimal_to_money_response(p.quantity)
+            prev = await _sum_accepted_for_po_line_excluding_grn_dec(db, tenant.id, p.id, None)
+            pending = to_qty_decimal(p.quantity) - prev
+            if pending <= QTY_ZERO:
+                # Fully received line: prefilling it again would invite over-receipt.
+                continue
+            base_qty = format_qty(pending)
             unit_price = decimal_to_money_response(p.unit_price) if p.unit_price is not None else None
             lines.append(
                 GoodsReceivingItemBody(
@@ -3093,7 +3107,7 @@ async def create_goods_receiving(
         acc = validate_non_negative_qty_str(acc, "accepted_qty")
         if _to_float(acc) - _to_float(recv) > 1e-6:
             raise HTTPException(status_code=400, detail="accepted_qty cannot exceed received_qty")
-        rej = f"{max(0.0, _to_float(recv) - _to_float(acc)):.4g}"
+        rej = format_qty(max(QTY_ZERO, to_qty_decimal(recv) - to_qty_decimal(acc)))
         up = d.get("unit_price")
         acc_val = None
         if up is not None and str(up).strip():
@@ -3114,8 +3128,9 @@ async def create_goods_receiving(
         prev_snap = None
         pend_snap = None
         if poi:
-            prev_snap = f"{await _sum_accepted_for_po_line_excluding_grn(db, tenant.id, poi.id, None):.4g}"
-            pend_snap = f"{max(0.0, _to_float(poi.quantity) - _to_float(prev_snap)):.4g}"
+            prev_dec = await _sum_accepted_for_po_line_excluding_grn_dec(db, tenant.id, poi.id, None)
+            prev_snap = format_qty(prev_dec)
+            pend_snap = format_qty(max(QTY_ZERO, to_qty_decimal(poi.quantity) - prev_dec))
         db.add(
             GoodsReceivingItem(
                 tenant_id=tenant.id,
@@ -3204,7 +3219,7 @@ async def _apply_grn_receive_goods(
         if _to_float(recv_s) + 1e-9 < _to_float(acc_s):
             raise HTTPException(status_code=400, detail="accepted_qty cannot exceed received_qty")
         if not qc_on:
-            line.rejected_qty = f"{max(0.0, _to_float(recv_s) - _to_float(acc_s)):.4g}"
+            line.rejected_qty = format_qty(max(QTY_ZERO, to_qty_decimal(recv_s) - to_qty_decimal(acc_s)))
             line.received_qty = recv_s
             line.accepted_qty = acc_s
             line.quantity = acc_s
@@ -4199,8 +4214,7 @@ async def _lock_stock_items(db: AsyncSession, tenant_id: int, item_ids: Iterable
     Serializes concurrent issues of the same item so two documents cannot both
     pass the on-hand check and drive stock negative.
     """
-    for iid in sorted({int(i) for i in item_ids if i}):
-        await db.execute(select(func.pg_advisory_xact_lock(int(tenant_id), iid)))
+    await lock_stock_items(db, tenant_id, item_ids)
 
 
 @router.post("/delivery-challans", response_model=DeliveryChallanOut)
@@ -6348,8 +6362,16 @@ async def post_warehouse_transfer(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = await db.get(WarehouseTransfer, transfer_id)
-    if not row or row.tenant_id != tenant.id:
+    # Row lock: a second concurrent "post" waits here, then sees POSTED and is rejected.
+    row = (
+        await db.execute(
+            select(WarehouseTransfer)
+            .where(WarehouseTransfer.id == transfer_id, WarehouseTransfer.tenant_id == tenant.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if not row:
         raise HTTPException(status_code=404, detail="Transfer not found")
     if row.status != "DRAFT":
         raise HTTPException(status_code=400, detail="Only draft transfer can be posted")
@@ -6360,6 +6382,7 @@ async def post_warehouse_transfer(
     if not lines:
         raise HTTPException(status_code=400, detail="Transfer has no lines")
 
+    await _lock_stock_items(db, tenant.id, (ln.item_id for ln in lines))
     allow_neg = await tenant_allows_negative_stock(db, tenant.id)
     for line in lines:
         req = _to_float(line.quantity)
@@ -6486,8 +6509,15 @@ async def post_stock_adjustment(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = await db.get(StockAdjustment, adjustment_id)
-    if not row or row.tenant_id != tenant.id:
+    row = (
+        await db.execute(
+            select(StockAdjustment)
+            .where(StockAdjustment.id == adjustment_id, StockAdjustment.tenant_id == tenant.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if not row:
         raise HTTPException(status_code=404, detail="Adjustment not found")
     if row.status != "DRAFT":
         raise HTTPException(status_code=400, detail="Only draft adjustment can be posted")
@@ -6496,6 +6526,7 @@ async def post_stock_adjustment(
     if qty_f == 0:
         raise HTTPException(status_code=400, detail="Quantity cannot be zero")
     mv_date = row.adjustment_date or date.today()
+    await _lock_stock_items(db, tenant.id, [row.item_id])
     if qty_f < 0:
         allow_neg = await tenant_allows_negative_stock(db, tenant.id)
         available = await _on_hand_qty(db, tenant.id, row.item_id, row.warehouse_id)
@@ -6602,7 +6633,7 @@ def _phys_session_out(row: PhysicalInventorySession, lines: list[PhysicalInvento
                 id=ln.id,
                 session_id=ln.session_id,
                 item_id=ln.item_id,
-                expected_qty=ln.expected_qty,
+                expected_qty=decimal_to_money_response(ln.expected_qty),
                 counted_qty=ln.counted_qty,
             )
             for ln in lines
@@ -6703,8 +6734,15 @@ async def post_physical_inventory_session(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = await db.get(PhysicalInventorySession, session_id)
-    if not row or row.tenant_id != tenant.id:
+    row = (
+        await db.execute(
+            select(PhysicalInventorySession)
+            .where(PhysicalInventorySession.id == session_id, PhysicalInventorySession.tenant_id == tenant.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if not row:
         raise HTTPException(status_code=404, detail="Physical count session not found")
     if row.status != "DRAFT":
         raise HTTPException(status_code=400, detail="Only draft session can be posted")
@@ -6714,6 +6752,7 @@ async def post_physical_inventory_session(
     lines = list(lines_result.scalars().all())
     if not lines:
         raise HTTPException(status_code=400, detail="Session has no lines")
+    await _lock_stock_items(db, tenant.id, (ln.item_id for ln in lines))
     mv_date = row.count_date or date.today()
     allow_neg = await tenant_allows_negative_stock(db, tenant.id)
     for line in lines:

@@ -144,9 +144,17 @@ async def consume_consignment(
     if qty <= ZERO:
         raise HTTPException(status_code=400, detail="qty must be positive")
 
+    # FOR UPDATE + populate_existing: a concurrent consumption waits, then re-reads remaining_qty.
     row: ConsignmentStock | None = None
     if consignment_id:
-        row = await db.get(ConsignmentStock, consignment_id)
+        row = (
+            await db.execute(
+                select(ConsignmentStock)
+                .where(ConsignmentStock.id == consignment_id, ConsignmentStock.tenant_id == tenant.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
     elif item_id and warehouse_id:
         row = (
             await db.execute(
@@ -159,6 +167,8 @@ async def consume_consignment(
                 )
                 .order_by(ConsignmentStock.id)
                 .limit(1)
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
         ).scalar_one_or_none()
 

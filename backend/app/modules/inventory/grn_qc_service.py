@@ -24,6 +24,7 @@ from app.models.inventory import (
     Warehouse,
 )
 from app.modules.inventory.stock_batch_service import create_batch_on_grn
+from app.modules.inventory.stock_locks import lock_stock_items
 from app.modules.inventory.stock_valuation_service import refresh_item_stock_caches
 from app.services.fifo_inventory import finalize_movement_fifo
 
@@ -248,6 +249,9 @@ async def create_inspection(
                 GrnQualityInspection.grn_id == grn_id,
                 GrnQualityInspection.grn_item_id == grn_item_id,
             )
+            # Row lock: a second concurrent submit waits, then sees COMPLETED and is rejected.
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
     ).scalar_one_or_none()
     if not insp:
@@ -289,6 +293,7 @@ async def create_inspection(
     if rej > ZERO and not line.rejection_reason:
         line.rejection_reason = notes or f"QC {result}"
 
+    await lock_stock_items(db, tenant.id, [line.item_id])
     await move_stock_after_qc(db, tenant, insp)
     await db.flush()
     return insp

@@ -406,11 +406,31 @@ async def activate_utilization(
     _: None = Depends(require_internal_permission("facility.utilizations.approve")),
 ):
     _require_facility_enabled()
-    util = await db.get(FacilityUtilization, utilization_id)
-    if not util or util.tenant_id != tenant.id:
+    util = (
+        await db.execute(
+            select(FacilityUtilization)
+            .where(FacilityUtilization.id == utilization_id, FacilityUtilization.tenant_id == tenant.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if not util:
         raise HTTPException(status_code=404, detail="Not found")
     if util.status != "draft":
         raise HTTPException(status_code=400, detail="Utilization not in draft")
+    if util.disbursement_voucher_id:
+        from app.models.finance import Voucher
+
+        existing_v = await db.get(Voucher, util.disbursement_voucher_id)
+        if existing_v is not None and existing_v.tenant_id == tenant.id and existing_v.status not in {
+            "CANCELLED",
+            "REJECTED",
+            "REVERSED",
+        }:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Already activated: disbursement voucher {existing_v.voucher_number} exists ({existing_v.status}).",
+            )
     fac = await db.get(Facility, util.facility_id)
     if not fac:
         raise HTTPException(status_code=400, detail="Facility missing")

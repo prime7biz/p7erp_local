@@ -64,7 +64,7 @@ async def fund_flow_report(
 ):
     _ensure_tenant(user, tenant)
     _require_mis(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_MIS_REPORT_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_MIS_REPORT_VIEW)
     if to_date is None:
         to_date = date.today()
     if from_date is None:
@@ -83,7 +83,7 @@ async def ratio_analysis_report(
 ):
     _ensure_tenant(user, tenant)
     _require_mis(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_MIS_REPORT_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_MIS_REPORT_VIEW)
     return await calculate_ratios(db, tenant.id, as_of_date=as_of_date or date.today())
 
 
@@ -97,7 +97,7 @@ async def ratio_analysis_trend(
 ):
     _ensure_tenant(user, tenant)
     _require_mis(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_MIS_REPORT_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_MIS_REPORT_VIEW)
     return await ratio_trend(db, tenant.id, ratio_name=ratio_name, months=months)
 
 
@@ -111,7 +111,7 @@ async def comparative_bs(
 ):
     _ensure_tenant(user, tenant)
     _require_mis(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_MIS_REPORT_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_MIS_REPORT_VIEW)
     return await generate_comparative_balance_sheet(db, tenant.id, year1=year1, year2=year2)
 
 
@@ -126,7 +126,7 @@ async def comparative_pl(
     """Comparative P&L (path uses comparative-pl; alias also registered)."""
     _ensure_tenant(user, tenant)
     _require_mis(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_MIS_REPORT_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_MIS_REPORT_VIEW)
     return await generate_comparative_pl(db, tenant.id, year1=year1, year2=year2)
 
 
@@ -150,7 +150,7 @@ async def cash_scenario(
 ):
     _ensure_tenant(user, tenant)
     _require_mis(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_SCENARIO_ANALYSIS_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_SCENARIO_ANALYSIS_VIEW)
     return await scenario_analysis(db, tenant.id)
 
 
@@ -163,7 +163,7 @@ async def cash_sensitivity(
 ):
     _ensure_tenant(user, tenant)
     _require_mis(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_SCENARIO_ANALYSIS_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_SCENARIO_ANALYSIS_VIEW)
     return await sensitivity_analysis(
         db, tenant.id, variable=body.variable, change_percent=body.change_percent
     )
@@ -177,7 +177,7 @@ async def cash_break_even(
 ):
     _ensure_tenant(user, tenant)
     _require_mis(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_SCENARIO_ANALYSIS_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_SCENARIO_ANALYSIS_VIEW)
     return await break_even_analysis(db, tenant.id)
 
 
@@ -189,7 +189,7 @@ async def cash_runway_api(
 ):
     _ensure_tenant(user, tenant)
     _require_mis(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_SCENARIO_ANALYSIS_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_SCENARIO_ANALYSIS_VIEW)
     return await cash_runway(db, tenant.id)
 
 
@@ -234,5 +234,5 @@ async def mis_export_meta(
     """Export is JSON payload for frontend CSV/PDF helpers (permission gate)."""
     _ensure_tenant(user, tenant)
     _require_mis(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_MIS_REPORT_EXPORT)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_MIS_REPORT_EXPORT)
     return {"ok": True, "report_type": report_type, "format": "use_client_csv_pdf"}

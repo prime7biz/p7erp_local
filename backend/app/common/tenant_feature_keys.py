@@ -75,6 +75,12 @@ VOUCHER_CLASS_ENABLED = "voucher_class_enabled"
 # Sprint 5 statutory compliance (default off).
 TDS_SYSTEM_ENABLED = "tds_system_enabled"
 STATUTORY_PAYROLL_ENABLED = "statutory_payroll_enabled"
+# When true (default off), posting a PAYMENT with auto TDS splits it inside the payment:
+# Dr Vendor (gross) / Cr Bank (net) / Cr TDS payable (tds).
+TDS_SPLIT_IN_PAYMENT = "tds_split_in_payment"
+# When true (default off), payroll posting books gross salary: Dr Salary expense (gross + employer
+# contributions) / Cr PF, ESI, PT and other deduction liabilities / Cr Salary payable (net).
+PAYROLL_GROSS_POSTING = "payroll_gross_posting"
 
 # Sprint H1 compliance / OCR / AI / documents (all default off).
 COMPLIANCE_TRACKING_ENABLED = "compliance_tracking_enabled"
@@ -394,6 +400,14 @@ def is_voucher_class_enabled(feature_flags: Any) -> bool:
 
 def is_tds_system_enabled(feature_flags: Any) -> bool:
     return _flag_true(feature_flags, TDS_SYSTEM_ENABLED)
+
+
+def is_tds_split_in_payment_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, TDS_SPLIT_IN_PAYMENT)
+
+
+def is_payroll_gross_posting_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, PAYROLL_GROSS_POSTING)
 
 
 def is_statutory_payroll_enabled(feature_flags: Any) -> bool:

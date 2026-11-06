@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from datetime import date
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -154,6 +155,17 @@ async def process_facility_voucher_posted(
             return
         if line.payment_voucher_id == voucher.id:
             return
+        already = (
+            await db.execute(
+                select(RepaymentAllocation.id).where(
+                    RepaymentAllocation.tenant_id == tenant_id,
+                    RepaymentAllocation.repayment_schedule_line_id == line.id,
+                    RepaymentAllocation.voucher_id == voucher.id,
+                )
+            )
+        ).scalars().first()
+        if already is not None:
+            return
         util = await db.get(FacilityUtilization, line.facility_utilization_id)
         if not util:
             return
@@ -178,11 +190,13 @@ async def process_facility_voucher_posted(
             if payable_id and aid == payable_id:
                 interest_part += amt
         total_paid = principal_part + interest_part
+        # A second partial payment adds to what was already paid on this installment.
+        cumulative_paid = Decimal(str(line.paid_amount or 0)) + Decimal(str(total_paid))
         line.payment_voucher_id = voucher.id
-        line.paid_amount = total_paid
+        line.paid_amount = cumulative_paid
         line.paid_date = voucher.voucher_date
-        emi_due = float(line.emi_amount or 0)
-        if total_paid + 0.01 >= emi_due:
+        emi_due = Decimal(str(line.emi_amount or 0))
+        if cumulative_paid + Decimal("0.01") >= emi_due:
             line.status = "paid"
         else:
             line.status = "partially_paid"

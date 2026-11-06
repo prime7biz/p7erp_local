@@ -104,7 +104,7 @@ async def list_tds_sections(
 ):
     _ensure_tenant(user, tenant)
     _require_tds(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_TDS_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_TDS_VIEW)
     rows = list(
         (
             await db.execute(
@@ -126,7 +126,7 @@ async def create_tds_section(
 ):
     _ensure_tenant(user, tenant)
     _require_tds(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_TDS_CREATE)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_TDS_CREATE)
     row = TdsSection(
         tenant_id=tenant.id,
         section_code=body.section_code.strip().upper(),
@@ -157,7 +157,7 @@ async def update_tds_section(
 ):
     _ensure_tenant(user, tenant)
     _require_tds(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_TDS_EDIT)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_TDS_EDIT)
     row = await db.get(TdsSection, section_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="TDS section not found")
@@ -186,7 +186,7 @@ async def calc_tds(
 ):
     _ensure_tenant(user, tenant)
     _require_tds(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_TDS_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_TDS_VIEW)
     return await calculate_tds_on_payment(
         db,
         tenant.id,
@@ -207,7 +207,7 @@ async def list_deductions(
 ):
     _ensure_tenant(user, tenant)
     _require_tds(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_TDS_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_TDS_VIEW)
     q = select(TdsDeduction).where(TdsDeduction.tenant_id == tenant.id).order_by(TdsDeduction.id.desc())
     if party_ledger_id:
         q = q.where(TdsDeduction.party_ledger_id == party_ledger_id)
@@ -226,7 +226,7 @@ async def create_deduction(
 ):
     _ensure_tenant(user, tenant)
     _require_tds(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_TDS_CREATE)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_TDS_CREATE)
     row = await create_tds_deduction_record(
         db,
         tenant.id,
@@ -267,7 +267,7 @@ async def patch_deduction_status(
 ):
     _ensure_tenant(user, tenant)
     _require_tds(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_TDS_EDIT)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_TDS_EDIT)
     row = await db.get(TdsDeduction, deduction_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Deduction not found")
@@ -291,7 +291,7 @@ async def assign_party_tds_section(
 ):
     _ensure_tenant(user, tenant)
     _require_tds(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_TDS_EDIT)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_TDS_EDIT)
     ledger = await db.get(PartyLedger, ledger_id)
     if not ledger or ledger.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Party ledger not found")
@@ -315,7 +315,7 @@ async def tds_return(
 ):
     _ensure_tenant(user, tenant)
     _require_tds(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_TDS_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_TDS_VIEW)
     return await generate_tds_return(db, tenant.id, year=year, quarter=quarter, form=form)
 
 
@@ -330,7 +330,7 @@ async def tds_return_export(
 ):
     _ensure_tenant(user, tenant)
     _require_tds(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_TDS_RETURN_EXPORT)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_TDS_RETURN_EXPORT)
     data = await generate_tds_return(db, tenant.id, year=year, quarter=quarter, form=form)
     # Excel-friendly flat rows (frontend can CSV; API returns structured JSON)
     return {"format": "json", "filename": f"Form_{form}_Q{quarter}_{year}.json", **data}
@@ -344,7 +344,7 @@ async def get_tds_settings(
 ):
     _ensure_tenant(user, tenant)
     _require_tds(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_TDS_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_TDS_VIEW)
     flags = tenant.feature_flags if isinstance(tenant.feature_flags, dict) else {}
     settings = flags.get("tds_settings") if isinstance(flags.get("tds_settings"), dict) else {}
     return {"tds_payable_account_id": settings.get("tds_payable_account_id")}
@@ -359,7 +359,7 @@ async def put_tds_settings(
 ):
     _ensure_tenant(user, tenant)
     _require_tds(tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_TDS_EDIT)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_TDS_EDIT)
     flags = dict(tenant.feature_flags) if isinstance(tenant.feature_flags, dict) else {}
     settings = dict(flags.get("tds_settings") or {}) if isinstance(flags.get("tds_settings"), dict) else {}
     settings["tds_payable_account_id"] = body.tds_payable_account_id

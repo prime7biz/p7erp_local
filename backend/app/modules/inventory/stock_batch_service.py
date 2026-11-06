@@ -154,7 +154,8 @@ async def issue_batch_fifo(
     else:
         q = q.order_by(StockBatch.created_at.asc(), StockBatch.id.asc())
 
-    batches = list((await db.execute(q)).scalars().all())
+    # FOR UPDATE: concurrent issues of the same batch wait instead of both taking its qty.
+    batches = list((await db.execute(q.with_for_update())).scalars().all())
     available = sum((_d(b.current_qty) for b in batches), ZERO)
     if available + Decimal("0.0001") < need:
         raise HTTPException(
@@ -199,8 +200,14 @@ async def transfer_batch_qty(
     qty: Decimal,
 ) -> StockBatch:
     """Move qty from a batch to another godown (same batch number, new/existing destination row)."""
-    src = await db.get(StockBatch, batch_id)
-    if not src or src.tenant_id != tenant_id:
+    src = (
+        await db.execute(
+            select(StockBatch)
+            .where(StockBatch.id == batch_id, StockBatch.tenant_id == tenant_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if not src:
         raise HTTPException(status_code=404, detail="Batch not found")
     take = _money(_d(qty))
     if take <= ZERO or take > _d(src.current_qty):

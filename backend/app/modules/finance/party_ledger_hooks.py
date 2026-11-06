@@ -61,6 +61,23 @@ async def on_voucher_posted(
     created_by: int | None = None,
 ) -> None:
     """Create party bills for lines on party ledger accounts; FIFO-allocate receipts/payments."""
+    from app.modules.finance.advanced_voucher_service import (
+        apply_posted_note_to_party_bills,
+        is_party_note_voucher,
+    )
+
+    # CN/DN against a specific bill: one dedicated path (not tied to the party ledger flag,
+    # same as before) so the generic per-line bill below cannot reduce the outstanding again.
+    if is_party_note_voucher(voucher):
+        try:
+            async with db.begin_nested():
+                await apply_posted_note_to_party_bills(db, tenant_id, voucher, created_by=created_by)
+        except Exception:
+            logger.exception(
+                "party_ledger note posting failed tenant=%s voucher=%s", tenant_id, getattr(voucher, "id", None)
+            )
+        return
+
     if feature_flags is None:
         tenant = await db.get(Tenant, tenant_id)
         feature_flags = tenant.feature_flags if tenant else None
@@ -207,10 +224,12 @@ async def on_voucher_cancelled(
     *,
     feature_flags: Any = None,
 ) -> None:
+    from app.modules.finance.advanced_voucher_service import is_party_note_voucher
+
     if feature_flags is None:
         tenant = await db.get(Tenant, tenant_id)
         feature_flags = tenant.feature_flags if tenant else None
-    if not is_party_ledger_enabled(feature_flags):
+    if not is_party_ledger_enabled(feature_flags) and not is_party_note_voucher(voucher):
         return
     try:
         async with db.begin_nested():

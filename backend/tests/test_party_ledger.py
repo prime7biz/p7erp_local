@@ -243,6 +243,16 @@ async def test_sale_bill_receipt_fifo_and_manual(db_session_integration):
     )
     db.add(recv2)
     await db.flush()
+    db.add(
+        VoucherLine(
+            tenant_id=tenant.id,
+            voucher_id=recv2.id,
+            account_id=pl.ledger_account_id,
+            entry_type="CREDIT",
+            amount="30.00",
+        )
+    )
+    await db.flush()
     await allocate_to_bill(
         db,
         tenant.id,
@@ -295,6 +305,16 @@ async def test_purchase_payment_fifo(db_session_integration):
         status="POSTED",
     )
     db.add(pay)
+    await db.flush()
+    db.add(
+        VoucherLine(
+            tenant_id=tenant.id,
+            voucher_id=pay.id,
+            account_id=pl.ledger_account_id,
+            entry_type="DEBIT",
+            amount="200.00",
+        )
+    )
     await db.flush()
     await auto_allocate_payment(
         db, tenant.id, pl.id, pay, Decimal("200.00"), allocation_method="FIFO", target_amount_type="CR"

@@ -255,6 +255,33 @@
   width: 90%;
   border-bottom: 1px solid #94a3b8;
   height: 40px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.vp-sig-image {
+  max-width: 100%;
+  max-height: 38px;
+  object-fit: contain;
+}
+
+.vp-sig-name {
+  display: block;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.vp-sig-designation,
+.vp-sig-date {
+  display: block;
+  font-size: 9px;
+  color: #64748b;
+}
+
+.vp-sig-role {
+  display: block;
+  margin-top: 2px;
 }
 
 /* ─── Footer ─── */
@@ -286,6 +313,7 @@
 .vp-template-compact .vp-td { padding: 4px 8px; }
 .vp-template-compact .vp-signatures { margin-top: 24px; }
 .vp-template-compact .vp-sig-line { height: 28px; }
+.vp-template-compact .vp-sig-image { max-height: 26px; }
 
 /* ─── Template: audit ─── */
 .vp-template-audit {

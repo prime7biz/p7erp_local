@@ -10,9 +10,11 @@ import {
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { SecureImage } from "@/components/SecureImage";
+import { SignatureBlocks } from "@/components/print/SignatureBlocks";
 import { logApiError } from "@/utils/logApiError";
 import { inventoryPrintVerifyUrl } from "@/utils/verifyPrintUrl";
 import "@/styles/quotation-print.css";
+import "@/styles/voucher-print.css";
 
 export function GoodsReceivingPrintPage() {
   const { id } = useParams<{ id: string }>();
@@ -203,6 +205,13 @@ export function GoodsReceivingPrintPage() {
               ))}
             </tbody>
           </table>
+        </section>
+
+        <section className="qp-section">
+          <SignatureBlocks
+            signatories={printPayload?.signatories}
+            fallbackLabels={["Prepared", "Checked", "Security", "Approved"]}
+          />
         </section>
 
         <footer className="qp-footer">

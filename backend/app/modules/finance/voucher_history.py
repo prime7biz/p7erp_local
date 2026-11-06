@@ -123,6 +123,45 @@ async def record_voucher_event(
         logger.exception("voucher_history_write_failed tenant=%s voucher=%s event=%s", tenant_id, voucher_id, event)
 
 
+SIGNED_STAGES = ("CHECKED", "RECOMMENDED", "APPROVED", "POSTED")
+_RESET_STATUSES = ("DRAFT", "REJECTED", "CANCELLED")
+
+
+async def voucher_stage_signers(
+    db: AsyncSession, *, tenant_id: int, voucher_id: int
+) -> dict[str, tuple[int | None, Any]]:
+    """Who completed each approval stage in the voucher's current approval cycle.
+
+    Returns {stage: (user_id, at)} for stages in SIGNED_STAGES. A rejection / return to draft
+    starts a new cycle, so earlier stage signatures are dropped; cancelling a posting drops POSTED.
+    """
+    rows = (
+        await db.execute(
+            select(AuditLog)
+            .where(AuditLog.tenant_id == tenant_id, AuditLog.resource == voucher_resource(voucher_id))
+            .order_by(AuditLog.created_at.asc(), AuditLog.id.asc())
+        )
+    ).scalars().all()
+    signers: dict[str, tuple[int | None, Any]] = {}
+    for log in rows:
+        event = (log.action or "").removeprefix("voucher.")
+        try:
+            details = json.loads(log.details) if log.details else {}
+        except (TypeError, ValueError):
+            continue
+        to_status = (details.get("to_status") or "").upper()
+        if event == "cancel_posting":
+            signers.pop("POSTED", None)
+            continue
+        if event not in ("status", "created"):
+            continue
+        if to_status in _RESET_STATUSES:
+            signers.clear()
+        elif to_status in SIGNED_STAGES:
+            signers[to_status] = (log.user_id, log.created_at)
+    return signers
+
+
 async def list_voucher_events(db: AsyncSession, *, tenant_id: int, voucher_id: int, limit: int = 200) -> list[dict[str, Any]]:
     rows = (
         await db.execute(

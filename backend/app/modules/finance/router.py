@@ -45,7 +45,9 @@ from app.modules.finance.voucher_history import (
     lines_snapshot,
     list_voucher_events,
     record_voucher_event,
+    voucher_stage_signers,
 )
+from app.common.signatories import SignatoryEntry, build_signatories
 from app.common.codegen import next_tenant_code
 from app.modules.finance.voucher_controls import (
     allocate_series_voucher_number,
@@ -5962,7 +5964,25 @@ async def voucher_print(
     verification_url = (
         f"/api/v1/finance/vouchers/verify/{voucher.verification_id}" if voucher.verification_id else None
     )
+    stage_signers = await voucher_stage_signers(db, tenant_id=tenant.id, voucher_id=voucher.id)
+
+    def _stage(label: str, stage: str) -> SignatoryEntry:
+        uid, at = stage_signers.get(stage, (None, None))
+        return SignatoryEntry(label, uid, at)
+
+    signatories = await build_signatories(
+        db,
+        tenant.id,
+        [
+            SignatoryEntry("Prepared By", voucher.created_by, voucher.created_at),
+            _stage("Checked By", "CHECKED"),
+            _stage("Recommended By", "RECOMMENDED"),
+            _stage("Approved By", "APPROVED"),
+            _stage("Posted By", "POSTED"),
+        ],
+    )
     return {
+        "signatories": signatories,
         "voucher": {
             "id": voucher.id,
             "voucher_number": voucher.voucher_number,

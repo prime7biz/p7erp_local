@@ -1,6 +1,7 @@
 import { QRCodeSVG } from "qrcode.react";
 import "@/styles/voucher-print.css";
 import type { InventoryDocumentPrintPayload } from "@/api/client";
+import { SignatureBlocks } from "@/components/print/SignatureBlocks";
 import { inventoryPrintVerifyUrl } from "@/utils/verifyPrintUrl";
 
 type Props = {
@@ -101,14 +102,10 @@ export function InventoryDocumentPrintSheets({ data, copyCount, template }: Prop
             </table>
           ) : null}
 
-          <div className="vp-signatures">
-            {["Prepared", "Checked", "Security", "Approved"].map((label) => (
-              <div key={label} className="vp-sig-block">
-                <div className="vp-sig-line" />
-                <span>{label}</span>
-              </div>
-            ))}
-          </div>
+          <SignatureBlocks
+            signatories={data.signatories}
+            fallbackLabels={["Prepared", "Checked", "Security", "Approved"]}
+          />
 
           <div className="vp-footer">
             <p className="vp-verification-info">

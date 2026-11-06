@@ -58,6 +58,7 @@ from app.config import get_settings
 from app.database import get_db, safe_async_session_rollback
 from app.modules.inventory.document_qr_service import (
     backfill_signatures_for_tenant,
+    inventory_doc_signatories,
     list_gl_postings_for_inventory_doc,
     sign_delivery_challan,
     sign_gate_pass,
@@ -3379,6 +3380,7 @@ async def _apply_grn_receive_goods(
                 if pst in ("DRAFT", "APPROVED", "PARTIALLY_RECEIVED"):
                     po.status = "PARTIALLY_RECEIVED"
     await post_grn_receipt_gl_journal(db, tenant.id, user.id, row, items)
+    row.signed_by_user_id = user.id
     sign_goods_receiving(row, items)
     await db.commit()
     await db.refresh(row)
@@ -3604,6 +3606,7 @@ async def goods_receiving_print_data(
         "notes": row.notes,
         "acknowledgement_issued": bool(getattr(row, "acknowledgement_issued", False)),
         "verification_path": verification_path,
+        "signatories": await inventory_doc_signatories(db, tenant.id, row),
         "print_meta": {
             "generated_at": datetime.utcnow().isoformat(),
             "copy_labels": ["Original", "Duplicate", "Triplicate"],
@@ -4386,6 +4389,7 @@ async def update_delivery_challan_status(
                 ).all()
             )
         )
+        row.signed_by_user_id = user.id
         sign_delivery_challan(row, lines, oids_for_sign)
 
     row.status = next_status
@@ -4489,7 +4493,13 @@ async def update_enhanced_gate_pass_status(
             raise HTTPException(status_code=400, detail="Invalid status")
         prev_status = (row.status or "").upper()
         row.status = next_status
+        if next_status == "APPROVED" and prev_status != "APPROVED":
+            row.signed_by_user_id = user.id
+        elif next_status in ("DRAFT", "REJECTED"):
+            row.signed_by_user_id = None
         if next_status == "RELEASED" and prev_status != "RELEASED":
+            if row.signed_by_user_id is None:
+                row.signed_by_user_id = user.id
             sign_gate_pass(row)
     if "guard_acknowledged" in body:
         row.guard_acknowledged = bool(body["guard_acknowledged"])
@@ -4835,6 +4845,7 @@ async def create_and_post_production_material_issue(
         .scalars()
         .all()
     )
+    pmi.signed_by_user_id = user.id
     sign_production_material_issue(pmi, pm_lines)
     await maybe_post_production_material_issue_wip(
         db, tenant=tenant, user_id=user.id, issue=pmi, auto_post=True
@@ -5044,6 +5055,7 @@ async def issue_process_order(
         .scalars()
         .all()
     )
+    row.signed_by_user_id = user.id
     sign_process_order(row, cost_lines)
     await db.commit()
     await db.refresh(row)
@@ -5172,6 +5184,8 @@ async def receive_process_order(
         .scalars()
         .all()
     )
+    if row.signed_by_user_id is None:
+        row.signed_by_user_id = user.id
     sign_process_order(row, cost_lines)
     await db.commit()
     await db.refresh(row)
@@ -5244,6 +5258,7 @@ async def approve_process_order(
         .scalars()
         .all()
     )
+    row.signed_by_user_id = user.id
     sign_process_order(row, cost_lines)
     await db.commit()
     await db.refresh(row)
@@ -6392,6 +6407,7 @@ async def post_warehouse_transfer(
         db.add(in_mv)
         await db.flush()
         await finalize_movement_fifo(db, tenant.id, in_mv, in_unit_cost=uc)
+    row.signed_by_user_id = user.id
     sign_warehouse_transfer(row, lines)
     row.status = "POSTED"
     await db.commit()
@@ -6996,6 +7012,7 @@ async def delivery_challan_print_data(
             for ln in lines
         ],
         "verification_path": verification_path,
+        "signatories": await inventory_doc_signatories(db, tenant.id, row),
         "print_meta": {
             "generated_at": datetime.utcnow().isoformat(),
             "title": "Delivery Challan",
@@ -7074,6 +7091,7 @@ async def gate_pass_print_data(
         },
         "lines": [],
         "verification_path": verification_path,
+        "signatories": await inventory_doc_signatories(db, tenant.id, row),
         "print_meta": {
             "generated_at": datetime.utcnow().isoformat(),
             "title": "Gate Pass",
@@ -7195,6 +7213,7 @@ async def pmi_print_data(
             for ln in lines
         ],
         "verification_path": verification_path,
+        "signatories": await inventory_doc_signatories(db, tenant.id, row),
         "print_meta": {
             "generated_at": datetime.utcnow().isoformat(),
             "title": "Production Material Issue",
@@ -7271,6 +7290,7 @@ async def process_order_print_data(
             for cl in cost_lines
         ],
         "verification_path": verification_path,
+        "signatories": await inventory_doc_signatories(db, tenant.id, row),
         "print_meta": {
             "generated_at": datetime.utcnow().isoformat(),
             "title": "Process Order",
@@ -7347,6 +7367,7 @@ async def warehouse_transfer_print_data(
             for ln in lines
         ],
         "verification_path": verification_path,
+        "signatories": await inventory_doc_signatories(db, tenant.id, row),
         "print_meta": {
             "generated_at": datetime.utcnow().isoformat(),
             "title": "Warehouse Transfer",

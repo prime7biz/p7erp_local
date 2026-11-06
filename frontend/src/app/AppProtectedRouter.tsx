@@ -235,6 +235,9 @@ const AccountingPeriodsPage = lazy(() =>
 );
 const PaymentAdvicePage = lazy(() => import("@/pages/app/PaymentAdvicePage").then((m) => ({ default: m.PaymentAdvicePage })));
 const AllApprovalsPage = lazy(() => import("@/pages/app/AllApprovalsPage").then((m) => ({ default: m.AllApprovalsPage })));
+const MySignaturePage = lazy(() =>
+  import("@/pages/settings/MySignaturePage").then((m) => ({ default: m.MySignaturePage })),
+);
 const QuotationPrintPage = lazy(() =>
   import("@/pages/print/QuotationPrintPage").then((m) => ({ default: m.QuotationPrintPage })),
 );
@@ -1158,6 +1161,7 @@ export function AppProtectedRouter() {
           <Route path="hr/reports" element={<HrReportsDashboardPage />} />
         </Route>
         <Route path="approvals" element={<AllApprovalsPage />} />
+        <Route path="my-signature" element={<MySignaturePage />} />
         <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.settings} />}>
           <Route path="settings" element={<SettingsLayout />}>
             <Route index element={<SettingsOverviewPage />} />

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api, type StockBatchRow, type StockItemListRow, type WarehouseResponse } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
+import { getWarehousesCached } from "@/lib/masterData";
 
 type ItemRow = { stock_item_id: string; qty: string; batch_id: string };
 
@@ -22,7 +23,7 @@ export function StockTransferCreatePage() {
   const [rows, setRows] = useState<ItemRow[]>([{ stock_item_id: "", qty: "", batch_id: "" }]);
 
   useEffect(() => {
-    void Promise.all([api.listWarehouses(), api.listStockItemsEnhanced({ page_size: 200 })])
+    void Promise.all([getWarehousesCached(), api.listStockItemsEnhanced({ page_size: 200 })])
       .then(([wh, stockRes]) => {
         setGodowns(wh);
         setItems(stockRes.items ?? []);

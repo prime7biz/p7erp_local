@@ -18,6 +18,7 @@ import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { exportPagedCsv } from "@/lib/exportPagedCsv";
 import { todayLocalISO } from "@/lib/dates";
 import { logApiError } from "@/utils/logApiError";
+import { getWarehousesCached } from "@/lib/masterData";
 
 type SortKey = "item" | "warehouse" | "in" | "out" | "on_hand";
 
@@ -50,7 +51,7 @@ export function StockSummaryPage() {
 
   const loadWarehouses = useCallback(async () => {
     try {
-      const wh = await api.listWarehouses();
+      const wh = await getWarehousesCached();
       setWarehouses(wh);
     } catch (e) {
       logApiError("StockSummaryPage.listWarehouses", e);

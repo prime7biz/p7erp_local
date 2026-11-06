@@ -6,6 +6,7 @@ import {
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
+import { getInventoryItemsCached } from "@/lib/masterData";
 
 export function KitBuilderPage() {
   const [kits, setKits] = useState<ItemKitResponse[]>([]);
@@ -21,7 +22,7 @@ export function KitBuilderPage() {
   const load = useCallback(async () => {
     setError("");
     try {
-      const [k, it] = await Promise.all([api.listItemKits(), api.listInventoryItems()]);
+      const [k, it] = await Promise.all([api.listItemKits(), getInventoryItemsCached()]);
       setKits(k);
       setItems(it);
       if (!compItemId && it[0]) setCompItemId(it[0].id);

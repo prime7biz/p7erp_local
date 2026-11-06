@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ExternalAccessInviteModal } from "@/components/external-access/ExternalAccessInviteModal";
 import { ExternalAccessStatusBadge } from "@/components/external-access/ExternalAccessStatusBadge";
 import { listPageErrorClass, listTableHeadCellClass, listTableRowClass } from "@/components/app/listPageLayout";
+import { getCustomersCached } from "@/lib/masterData";
 
 const CUSTOMER_ROLE_OPTIONS: { value: string; label: string }[] = [
   { value: "customer_viewer", label: "customer_viewer" },
@@ -35,7 +36,7 @@ export function ExternalCustomerAccessPage() {
   async function loadCustomers() {
     setCustomersLoading(true);
     try {
-      const list = await api.listCustomers();
+      const list = await getCustomersCached();
       setCustomers(list);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to load customers");

@@ -16,6 +16,7 @@ import { useListViewPreference } from "@/hooks/useInventoryListView";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { fetchInventoryItemPage, hydrateInventoryItem } from "@/lib/remoteSelectFetchers";
 import { logApiError } from "@/utils/logApiError";
+import { getWarehousesCached } from "@/lib/masterData";
 
 const PAGE_SIZE = 50;
 
@@ -61,7 +62,7 @@ export function StockLedgerPage() {
           limit: PAGE_SIZE,
           offset,
         }),
-        api.listWarehouses(),
+        getWarehousesCached(),
       ]);
       if (!latest.isCurrent(token)) return;
       setRows(ledgerRes.items);

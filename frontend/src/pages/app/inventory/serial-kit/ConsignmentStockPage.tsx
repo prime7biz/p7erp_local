@@ -9,6 +9,7 @@ import {
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
+import { getInventoryItemsCached, getVendorsCached, getWarehousesCached } from "@/lib/masterData";
 
 export function ConsignmentStockPage() {
   const [rows, setRows] = useState<ConsignmentStockRow[]>([]);
@@ -29,9 +30,9 @@ export function ConsignmentStockPage() {
     try {
       const [c, v, it, wh] = await Promise.all([
         api.listConsignmentStock(),
-        api.listVendors(),
-        api.listInventoryItems(),
-        api.listWarehouses(),
+        getVendorsCached(),
+        getInventoryItemsCached(),
+        getWarehousesCached(),
       ]);
       setRows(c);
       setVendors(v);

@@ -18,6 +18,7 @@ import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
 import { addMoney, subtractMoney, sumMoneyBy } from "@/lib/money";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { getVendorsCached } from "@/lib/masterData";
 
 const STATUS_OPTIONS = ["DRAFT", "OPEN", "AMENDED", "CLOSED"] as const;
 
@@ -143,7 +144,7 @@ export function BtbLcsPage() {
         }),
         api.listBtbLcs(),
         api.listMasterContracts(),
-        api.listVendors(),
+        getVendorsCached(),
         api.listProformaInvoices({ direction: "EXPORT" }),
         api.listProformaInvoices({ direction: "IMPORT" }),
         api.listPurchaseOrders(),

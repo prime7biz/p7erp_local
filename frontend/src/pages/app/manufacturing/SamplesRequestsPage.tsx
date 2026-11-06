@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { todayLocalISO } from "@/lib/dates";
 import { logApiError } from "@/utils/logApiError";
+import { getInventoryItemsCached } from "@/lib/masterData";
 
 function todayIso() {
   return todayLocalISO();
@@ -39,7 +40,7 @@ export function SamplesRequestsPage() {
       const [sampleRows, orderRows, itemRows, userRows] = await Promise.all([
         api.listMfgSampleRequests({ status_filter: statusFilter || undefined }),
         api.listOrders(),
-        api.listInventoryItems(),
+        getInventoryItemsCached(),
         api.listUsers(),
       ]);
       if (!latest.isCurrent(token)) return;

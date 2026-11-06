@@ -10,6 +10,7 @@ import { useAuth } from "@/context/AuthContext";
 import { SecureImage } from "@/components/SecureImage";
 import { logApiError } from "@/utils/logApiError";
 import "@/styles/quotation-print.css";
+import { getInventoryItemsCached } from "@/lib/masterData";
 
 export function PurchaseOrderPrintPage() {
   const { id } = useParams<{ id: string }>();
@@ -36,7 +37,7 @@ export function PurchaseOrderPrintPage() {
       try {
         const [p, inv, cfg] = await Promise.all([
           api.getPurchaseOrder(poId),
-          api.listInventoryItems(),
+          getInventoryItemsCached(),
           api.getSettingsConfig().catch((e) => {
             logApiError("PurchaseOrderPrintPage.getSettingsConfig", e);
             return null;

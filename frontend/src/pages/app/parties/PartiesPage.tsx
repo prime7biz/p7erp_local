@@ -9,6 +9,7 @@ import {
   type IntermediaryResponse,
   type IntermediaryUpdate,
 } from "@/api/client";
+import { getCustomersCached } from "@/lib/masterData";
 
 type PartiesTab = "buying_houses" | "agents" | "links";
 
@@ -60,7 +61,7 @@ export function PartiesPage() {
         api.listIntermediaries({ kind: "BUYING_HOUSE" }),
         api.listIntermediaries({ kind: "AGENT" }),
         api.listCustomerIntermediaryLinks(),
-        api.listCustomers(),
+        getCustomersCached(),
       ]);
       setBuyingHouses(buyingHouseRows);
       setAgents(agentRows);

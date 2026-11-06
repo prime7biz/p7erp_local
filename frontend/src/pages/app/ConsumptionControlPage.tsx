@@ -15,6 +15,7 @@ import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
+import { getWarehousesCached } from "@/lib/masterData";
 
 function formatMoney(n: number | null | undefined) {
   if (n == null || Number.isNaN(n)) return "—";
@@ -84,7 +85,7 @@ export function ConsumptionControlPage() {
       const rows = await api.listOrders({ limit: 100 });
       setOrders(rows);
       setSelectedOrderId((prev) => (!prev && rows[0] ? rows[0].id : prev));
-      const whRows = await api.listWarehouses();
+      const whRows = await getWarehousesCached();
       setWarehouses(whRows);
       setIssueWarehouseId((prev) => (!prev && whRows[0] ? whRows[0].id : prev));
       const [overview, pendingCrRows, stockRows] = await Promise.all([

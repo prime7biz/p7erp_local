@@ -4,6 +4,7 @@ import { api, type PartyLedgerCreate } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
+import { getCustomersCached, getVendorsCached } from "@/lib/masterData";
 
 type PartyOption = { id: number; label: string };
 
@@ -27,11 +28,11 @@ export function PartyLedgerCreatePage() {
     async function loadParties() {
       try {
         if (partyType === "CUSTOMER") {
-          const rows = await api.listCustomers();
+          const rows = await getCustomersCached();
           if (cancelled) return;
           setParties(rows.map((c) => ({ id: c.id, label: `${c.customer_code} — ${c.name}` })));
         } else {
-          const rows = await api.listVendors();
+          const rows = await getVendorsCached();
           if (cancelled) return;
           setParties(rows.map((v) => ({ id: v.id, label: `${v.vendor_code} — ${v.name}` })));
         }

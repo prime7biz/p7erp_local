@@ -15,6 +15,7 @@ import type { CustomerApprovalChain, MaterialReadinessChain, PipelineOrderRow } 
 import { logApiError } from "@/utils/logApiError";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { todayLocalISO } from "@/lib/dates";
+import { getInventoryItemsCached } from "@/lib/masterData";
 
 function todayIso() {
   return todayLocalISO();
@@ -111,7 +112,7 @@ export function ProductionPlanningPage() {
     setHistError("");
     try {
       const [itemRows, planRows, woRows] = await Promise.all([
-        api.listInventoryItems(),
+        getInventoryItemsCached(),
         api.listMfgProductionPlans(),
         api.listMfgWorkOrders().catch((e) => {
           logApiError("ProductionPlanningPage.listMfgWorkOrders", e);

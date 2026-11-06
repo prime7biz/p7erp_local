@@ -24,6 +24,7 @@ import {
 } from "@/components/inventory/InventoryMobileList";
 import { useListViewPreference } from "@/hooks/useInventoryListView";
 import { fetchInventoryItemPage, hydrateInventoryItem } from "@/lib/remoteSelectFetchers";
+import { getWarehousesCached } from "@/lib/masterData";
 
 export function WarehouseTransfersPage() {
   const [rows, setRows] = useState<WarehouseTransferResponse[]>([]);
@@ -56,7 +57,7 @@ export function WarehouseTransfersPage() {
     try {
       const [tr, wh] = await Promise.all([
         api.listWarehouseTransfers(),
-        api.listWarehouses(),
+        getWarehousesCached(),
       ]);
       setRows(tr);
       setItemLabels((prev) => {

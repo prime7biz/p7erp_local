@@ -17,6 +17,7 @@ import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { REQUISITION_STATUS_LABEL } from "./requisitionStatus";
 import { RequisitionStatusBadge } from "./RequisitionStatusBadge";
+import { getWarehousesCached } from "@/lib/masterData";
 
 const CTL = "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm";
 
@@ -66,7 +67,7 @@ export function RequisitionsPage() {
 
   useEffect(() => {
     if (!showCreate || items.length) return;
-    void Promise.all([api.listInventoryItemsPaginated({ page: 1, page_size: 500 }), api.listWarehouses()])
+    void Promise.all([api.listInventoryItemsPaginated({ page: 1, page_size: 500 }), getWarehousesCached()])
       .then(([itm, wh]) => {
         setItems(itm.items);
         setWarehouses(wh);

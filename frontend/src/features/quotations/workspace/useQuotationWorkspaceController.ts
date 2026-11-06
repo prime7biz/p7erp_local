@@ -29,6 +29,7 @@ import {
   QUOTATION_MANUFACTURING_HOURS_PER_DAY,
   toSafeNumber,
 } from "./mappers/quotationNumeric";
+import { getCustomersCached } from "@/lib/masterData";
 
 export function useQuotationWorkspaceController(id?: string) {
   const navigate = useNavigate();
@@ -81,7 +82,7 @@ export function useQuotationWorkspaceController(id?: string) {
           api.listItemCategories(),
           api.listCostingItems(),
           api.listItemUnits(),
-          isNew ? api.listCustomers() : Promise.resolve([] as CustomerResponse[]),
+          isNew ? getCustomersCached() : Promise.resolve([] as CustomerResponse[]),
           isNew ? api.listInquiries() : Promise.resolve([] as InquiryResponse[]),
           isNew ? api.listCustomerIntermediaryLinks() : Promise.resolve([] as CustomerIntermediaryLinkResponse[]),
           api.getSettingsConfig(),

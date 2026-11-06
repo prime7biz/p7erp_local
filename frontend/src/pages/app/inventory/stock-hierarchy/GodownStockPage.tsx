@@ -10,6 +10,7 @@ import {
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
+import { getWarehousesCached } from "@/lib/masterData";
 
 export function GodownStockPage() {
   const [matrix, setMatrix] = useState<StockByGodownMatrixResponse | null>(null);
@@ -45,7 +46,7 @@ export function GodownStockPage() {
   }, [latest, groupId, godownId]);
 
   useEffect(() => {
-    void Promise.all([api.listStockGroups(), api.listWarehouses()])
+    void Promise.all([api.listStockGroups(), getWarehousesCached()])
       .then(([g, w]) => {
         setGroups(g);
         setWarehouses(w.filter((x) => x.is_active));

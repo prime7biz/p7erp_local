@@ -11,6 +11,7 @@ import { RowActionsMenu } from "@/components/app/RowActionsMenu";
 import { useListPagination } from "@/hooks/useListPagination";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
 import { logApiError } from "@/utils/logApiError";
+import { tenantKey } from "@/lib/queryKeys";
 import {
   listPageErrorClass,
   listPageFilterPanelClass,
@@ -86,12 +87,12 @@ export function CustomersPage() {
   const [searchInput, setSearchInput] = useState(q);
 
   const { data: facets } = useQuery({
-    queryKey: ["customers", "facets"],
+    queryKey: tenantKey("customers", "facets"),
     queryFn: () => api.getCustomerFacets(),
   });
 
   const { data, isLoading: loading, error: queryError, refetch } = useQuery({
-    queryKey: [
+    queryKey: tenantKey(
       "customers",
       "list",
       q,
@@ -103,7 +104,7 @@ export function CustomersPage() {
       staleOnly,
       incompleteOnly,
       highDupeOnly,
-    ],
+    ),
     queryFn: () =>
       api.listCustomersPaginated({
         q: q.trim() || undefined,

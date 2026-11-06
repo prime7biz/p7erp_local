@@ -22,6 +22,7 @@ import { PrintPreviewModal } from "@/components/print/PrintPreviewModal";
 import { useListViewPreference } from "@/hooks/useInventoryListView";
 import { logApiError } from "@/utils/logApiError";
 import { fetchInventoryItemPage, hydrateInventoryItem } from "@/lib/remoteSelectFetchers";
+import { getWarehousesCached } from "@/lib/masterData";
 
 const PROCESS_TYPES = ["KNITTING", "DYEING", "FINISHING", "CUTTING", "WASHING", "PRINTING"];
 
@@ -113,7 +114,7 @@ export function ProcessOrdersPage() {
     try {
       const [poRows, whs, vnd] = await Promise.all([
         api.listProcessOrders(),
-        api.listWarehouses(),
+        getWarehousesCached(),
         api.listVendorsPaginated({ is_active: true, page: 1, page_size: 500 }),
       ]);
       const [overview, pendingCrRows, stockRows] = await Promise.all([

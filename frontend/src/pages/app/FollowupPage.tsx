@@ -21,6 +21,7 @@ import { logApiError } from "@/utils/logApiError";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { addDaysLocalISO, toLocalISODate, todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { getCustomersCached } from "@/lib/masterData";
 
 const TNA_PHASES = [
   "pre_order",
@@ -322,7 +323,7 @@ export function FollowupPage() {
         api.listFollowupActions(params),
         api.getFollowupActionsOverdue(),
         api.listOrders({ limit: 200, offset: 0 }),
-        api.listCustomers(),
+        getCustomersCached(),
         api.listUsers(),
         api.listFollowupTemplates({ is_active: true }), // active only for Generate TNA modal
         api.getUnifiedTnaSummary(filterOrderId != null ? { order_id: filterOrderId } : undefined).catch((e) => {

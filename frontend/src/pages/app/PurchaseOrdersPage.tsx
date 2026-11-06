@@ -42,6 +42,7 @@ import {
 } from "@/components/app/listPageLayout";
 import { useListPagination } from "@/hooks/useListPagination";
 import { cn } from "@/lib/utils";
+import { getWarehousesCached } from "@/lib/masterData";
 
 export function PurchaseOrdersPage() {
   const navigate = useNavigate();
@@ -168,7 +169,7 @@ export function PurchaseOrdersPage() {
           page_size: pageSize,
         }),
         api.listInventoryItemsPaginated({ page: 1, page_size: 500 }),
-        api.listWarehouses(),
+        getWarehousesCached(),
         api.listVendorsPaginated({ is_active: true, page: 1, page_size: 500 }),
       ]);
       if (!latest.isCurrent(token)) return;

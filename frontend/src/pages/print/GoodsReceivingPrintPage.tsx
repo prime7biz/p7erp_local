@@ -15,6 +15,7 @@ import { logApiError } from "@/utils/logApiError";
 import { inventoryPrintVerifyUrl } from "@/utils/verifyPrintUrl";
 import "@/styles/quotation-print.css";
 import "@/styles/voucher-print.css";
+import { getInventoryItemsCached } from "@/lib/masterData";
 
 export function GoodsReceivingPrintPage() {
   const { id } = useParams<{ id: string }>();
@@ -44,7 +45,7 @@ export function GoodsReceivingPrintPage() {
       try {
         const [g, inv, cfg, pd] = await Promise.all([
           api.getGoodsReceiving(grnId),
-          api.listInventoryItems(),
+          getInventoryItemsCached(),
           api.getSettingsConfig().catch((e) => {
             logApiError("GoodsReceivingPrintPage.getSettingsConfig", e);
             return null;

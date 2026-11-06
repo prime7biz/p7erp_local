@@ -40,6 +40,7 @@ import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContai
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { useListPagination } from "@/hooks/useListPagination";
 import { cn } from "@/lib/utils";
+import { getWarehousesCached } from "@/lib/masterData";
 
 type TabId = "masters" | "groups" | "units" | "warehouses" | "items";
 
@@ -153,7 +154,7 @@ export function InventoryItemsPage() {
         api.listInventoryItemCategories({ limit: 500 }),
         api.listInventoryItemSubcategories({ limit: 500 }),
         api.listInventoryItemUnits({ limit: 500 }),
-        api.listWarehouses(),
+        getWarehousesCached(),
         api.listStockGroups(),
         api.listInventoryItemsPaginated({
           page: itemPage,

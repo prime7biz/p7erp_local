@@ -19,6 +19,7 @@ import {
 } from "@/components/inventory/InventoryMobileList";
 import { useListViewPreference } from "@/hooks/useInventoryListView";
 import { fetchInventoryItemPage, hydrateInventoryItem } from "@/lib/remoteSelectFetchers";
+import { getWarehousesCached } from "@/lib/masterData";
 
 const REASONS = ["COUNT", "DAMAGE", "SYSTEM", "OTHER"] as const;
 
@@ -46,7 +47,7 @@ export function StockAdjustmentsPage() {
     try {
       const [adj, wh] = await Promise.all([
         api.listStockAdjustments(),
-        api.listWarehouses(),
+        getWarehousesCached(),
       ]);
       setRows(adj);
       setItemLabels((prev) => {

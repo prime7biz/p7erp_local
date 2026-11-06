@@ -19,6 +19,7 @@ import { RowActionsMenu, type RowActionItem } from "@/components/app/RowActionsM
 import { ledgerActivityHref, voucherHref, yearStart } from "@/lib/financeDrilldown";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 const CHECKS: { key: ExceptionCheckKey; title: string; hint: string }[] = [
   { key: "grn_not_billed", title: "Goods received, not billed", hint: "GRNs received with no vendor bill yet (Tally: Purchase Bills to Come)." },
@@ -63,23 +64,29 @@ export function ExceptionReportsPage() {
     }
   }, []);
 
+  const rowsRequest = useLatestRequest();
   const loadRows = useCallback(async (key: ExceptionCheckKey) => {
+    const token = rowsRequest.begin();
     setLoading(true);
     setError("");
     try {
-      if (key === "grn_not_billed") setData({ key, rows: (await api.getExceptionGrnNotBilled({ limit: 200 })).rows });
-      else if (key === "challan_not_invoiced") setData({ key, rows: (await api.getExceptionChallanNotInvoiced({ limit: 200 })).rows });
-      else if (key === "negative_cash_bank") setData({ key, rows: (await api.getExceptionNegativeCashBank()).rows });
-      else if (key === "negative_stock") setData({ key, rows: (await api.getExceptionNegativeStock()).rows });
-      else setData({ key, rows: (await api.getExceptionOverdueBills()).rows });
+      let next: Rows;
+      if (key === "grn_not_billed") next = { key, rows: (await api.getExceptionGrnNotBilled({ limit: 200 })).rows };
+      else if (key === "challan_not_invoiced") next = { key, rows: (await api.getExceptionChallanNotInvoiced({ limit: 200 })).rows };
+      else if (key === "negative_cash_bank") next = { key, rows: (await api.getExceptionNegativeCashBank()).rows };
+      else if (key === "negative_stock") next = { key, rows: (await api.getExceptionNegativeStock()).rows };
+      else next = { key, rows: (await api.getExceptionOverdueBills()).rows };
+      if (!rowsRequest.isCurrent(token)) return;
+      setData(next);
     } catch (e) {
       logApiError("ExceptionReportsPage.rows", e);
+      if (!rowsRequest.isCurrent(token)) return;
       setError((e as Error).message);
       setData(null);
     } finally {
-      setLoading(false);
+      if (rowsRequest.isCurrent(token)) setLoading(false);
     }
-  }, []);
+  }, [rowsRequest]);
 
   useEffect(() => {
     void loadSummary();

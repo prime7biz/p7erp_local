@@ -20,6 +20,7 @@ export function UtilizationCreatePage() {
   const [err, setErr] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
     const t = window.setTimeout(() => {
       void (async () => {
         try {
@@ -32,13 +33,16 @@ export function UtilizationCreatePage() {
             moratorium_months: Number(moratorium) || 0,
             interest_type: policy === "flat_interest" ? "flat" : "reducing_balance",
           });
-          setPreview(p);
+          if (!cancelled) setPreview(p);
         } catch (e) {
           logApiError("UtilizationCreatePage.preview", e);
         }
       })();
     }, 400);
-    return () => window.clearTimeout(t);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
   }, [principal, numInst, policy, rate, moratorium, freq]);
 
   async function submit(e: FormEvent) {

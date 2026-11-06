@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type BtbLcRow, type OutstandingBillResponse } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { toLocalISODate } from "@/lib/dates";
+import { addMoney, subtractMoney } from "@/lib/money";
 
 type DayCell = { date: string; inflow: number; outflow: number; labels: string[] };
 
@@ -62,7 +64,7 @@ export function CashflowCalendarPage() {
     const days = monthDays(year, month);
     const map = new Map<string, DayCell>();
     for (const d of days) {
-      const key = d.toISOString().slice(0, 10);
+      const key = toLocalISODate(d);
       map.set(key, { date: key, inflow: 0, outflow: 0, labels: [] });
     }
     for (const bill of bills) {
@@ -70,12 +72,12 @@ export function CashflowCalendarPage() {
       const key = bill.due_date.slice(0, 10);
       const c = map.get(key);
       if (!c) continue;
-      const amt = Math.max(0, Number(bill.amount ?? 0) - Number(bill.paid_amount ?? 0));
+      const amt = Math.max(0, subtractMoney(bill.amount, bill.paid_amount));
       if (bill.bill_type === "RECEIVABLE") {
-        c.inflow += amt;
+        c.inflow = addMoney(c.inflow, amt);
         c.labels.push(`AR ${bill.bill_no}`);
       } else {
-        c.outflow += amt;
+        c.outflow = addMoney(c.outflow, amt);
         c.labels.push(`AP ${bill.bill_no}`);
       }
     }
@@ -84,8 +86,7 @@ export function CashflowCalendarPage() {
       const key = lc.maturity_date.slice(0, 10);
       const c = map.get(key);
       if (!c) continue;
-      const amt = Number(lc.maturity_amount ?? lc.amount ?? 0);
-      c.outflow += amt;
+      c.outflow = addMoney(c.outflow, lc.maturity_amount ?? lc.amount);
       c.labels.push(`LC mat. ${lc.reference ?? lc.id}`);
     }
     return Array.from(map.values());
@@ -170,14 +171,14 @@ export function CashflowCalendarPage() {
             const pad = first.getDay();
             const blanks = Array.from({ length: pad }, (_, i) => <div key={`b-${i}`} className="min-h-[4rem]" />);
             const dayNodes = cells.map((c) => {
-              const net = c.inflow - c.outflow;
-              const dt = new Date(c.date);
+              const net = subtractMoney(c.inflow, c.outflow);
+              const dayOfMonth = Number(c.date.slice(8, 10));
               return (
                 <div
                   key={c.date}
                   className="min-h-[4rem] rounded border border-border bg-surface-raised p-1"
                 >
-                  <div className="font-medium">{dt.getDate()}</div>
+                  <div className="font-medium">{dayOfMonth}</div>
                   {c.inflow > 0 && <div className="text-emerald-700">+{c.inflow.toFixed(0)}</div>}
                   {c.outflow > 0 && <div className="text-amber-800">−{c.outflow.toFixed(0)}</div>}
                   {c.labels.length > 0 && (

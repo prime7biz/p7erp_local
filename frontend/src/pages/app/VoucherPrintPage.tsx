@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { api, type VoucherPrintResponse } from "@/api/client";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { PrintOnlyPortal } from "@/components/print/PrintOnlyPortal";
 import { VoucherPrintSheets } from "@/components/print/VoucherPrintSheets";
 import { voucherPrintVerificationUrl } from "@/utils/verifyPrintUrl";
@@ -18,14 +19,20 @@ export function VoucherPrintPage() {
 
   const verificationUrl = useMemo(() => voucherPrintVerificationUrl(data), [data]);
 
-  async function loadById(id: number) {
-    setError("");
-    try {
-      setData(await api.getVoucherPrint(id));
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }
+  const latest = useLatestRequest();
+  const loadById = useCallback(
+    async (id: number) => {
+      const token = latest.begin();
+      setError("");
+      try {
+        const res = await api.getVoucherPrint(id);
+        if (latest.isCurrent(token)) setData(res);
+      } catch (err) {
+        if (latest.isCurrent(token)) setError((err as Error).message);
+      }
+    },
+    [latest],
+  );
 
   useEffect(() => {
     const id = Number(queryVoucherId);
@@ -33,7 +40,7 @@ export function VoucherPrintPage() {
       setVoucherId(String(id));
       void loadById(id);
     }
-  }, [queryVoucherId]);
+  }, [queryVoucherId, loadById]);
 
   return (
     <div className="vp-root">

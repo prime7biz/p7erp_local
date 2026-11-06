@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   api,
   FINANCE_COST_NATURE_CODES,
@@ -12,6 +12,7 @@ import { listPageRootClass } from "@/components/app/listPageLayout";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
 import { logApiError } from "@/utils/logApiError";
 import { downloadCsv } from "@/lib/reportExport";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 const defaultForm: ChartOfAccountCreate = {
   account_number: "",
@@ -49,29 +50,30 @@ export function ChartOfAccountsPage() {
   const [openActionsId, setOpenActionsId] = useState<number | string | null>(null);
   const [form, setForm] = useState<ChartOfAccountCreate>({ ...defaultForm });
 
-  async function load() {
+  const latest = useLatestRequest();
+  const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     try {
       const [g, a] = await Promise.all([api.listAccountGroups(), api.listChartOfAccounts({ active_only: !showInactive })]);
+      if (!latest.isCurrent(token)) return;
       setGroups(g);
       setRows(a);
-      if (!form.group_id && g.length > 0) {
-        const firstGroup = g[0];
-        if (firstGroup) {
-          setForm((p) => ({ ...p, group_id: firstGroup.id }));
-        }
+      const firstGroup = g[0];
+      if (firstGroup) {
+        setForm((p) => (p.group_id ? p : { ...p, group_id: firstGroup.id }));
       }
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }
+  }, [latest, showInactive]);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showInactive]);
+  }, [load]);
 
   useEffect(() => {
     if (showCoaConfig) {

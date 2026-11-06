@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type AccountGroupResponse, type ChartOfAccountResponse, type DayBookResponse } from "@/api/client";
 import { voucherHref } from "@/lib/financeDrilldown";
 import { downloadCsv, downloadXlsx, printCurrentPage } from "@/lib/reportExport";
 import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { logApiError } from "@/utils/logApiError";
 
 export function DayBookPage() {
   const [fromDate, setFromDate] = useState(startOfMonthLocalISO());
@@ -20,23 +22,26 @@ export function DayBookPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  async function load() {
+  const latest = useLatestRequest();
+  const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       setError("");
-      setData(
-        await api.getDayBook({
-          from_date: fromDate,
-          to_date: toDate,
-          voucher_type: voucherType || undefined,
-          group_id: groupId || undefined,
-          account_id: accountId || undefined,
-          party_name: partyName.trim() || undefined,
-        }),
-      );
+      const res = await api.getDayBook({
+        from_date: fromDate,
+        to_date: toDate,
+        voucher_type: voucherType || undefined,
+        group_id: groupId || undefined,
+        account_id: accountId || undefined,
+        party_name: partyName.trim() || undefined,
+      });
+      if (!latest.isCurrent(token)) return;
+      setData(res);
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }
+  }, [latest, fromDate, toDate, voucherType, groupId, accountId, partyName]);
 
   async function loadMeta() {
     try {
@@ -48,7 +53,8 @@ export function DayBookPage() {
       setVoucherTypes(types);
       setGroups(accountGroups);
       setAccounts(chartAccounts);
-    } catch {
+    } catch (e) {
+      logApiError("DayBookPage.loadMeta", e);
       // Keep day book usable even if metadata call fails.
       setVoucherTypes([]);
       setGroups([]);
@@ -62,8 +68,7 @@ export function DayBookPage() {
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromDate, toDate, voucherType, groupId, accountId, partyName]);
+  }, [load]);
 
   useEffect(() => {
     if (!success) return;

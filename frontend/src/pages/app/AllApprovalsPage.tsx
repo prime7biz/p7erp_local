@@ -13,6 +13,8 @@ import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { resolveRole } from "@/lib/roles";
 import { useAuth } from "@/context/AuthContext";
 import { logApiError } from "@/utils/logApiError";
+import { sumMoneyBy } from "@/lib/money";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import {
   OPS_DOC_LABEL,
   OPS_REASON_ACTIONS,
@@ -118,7 +120,9 @@ export function AllApprovalsPage() {
   const canApproveHr = canApproveOrProcess || resolveRole(me?.role_name).isHr;
   const requisitionsEnabled = me?.feature_flags?.procurement_cs_enabled === true;
 
+  const latest = useLatestRequest();
   const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     setSuccess("");
@@ -169,7 +173,7 @@ export function AllApprovalsPage() {
         number: v.voucher_number,
         date: v.voucher_date,
         status: v.status,
-        amount: v.lines.filter((l) => l.entry_type === "DEBIT").reduce((sum, l) => sum + Number(l.amount || 0), 0),
+        amount: sumMoneyBy(v.lines.filter((l) => l.entry_type === "DEBIT"), (l) => l.amount),
         details: `${v.voucher_type}${v.reference ? ` | Ref: ${v.reference}` : ""}`,
         actions: voucherActionMap[v.id] ?? [],
       }));
@@ -210,6 +214,7 @@ export function AllApprovalsPage() {
         actions: mapPeriodActions(p, canApproveOrProcess),
       }));
 
+      if (!latest.isCurrent(token)) return;
       setRows([
         ...voucherRows.map((r) => ({ ...r, href: `/app/accounts/vouchers/${r.id}` })),
         ...runRows,
@@ -218,11 +223,12 @@ export function AllApprovalsPage() {
         ...opsRows,
       ]);
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [canApproveOrProcess, canExecute, canApproveHr, requisitionsEnabled]);
+  }, [latest, canApproveOrProcess, canExecute, canApproveHr, requisitionsEnabled]);
 
   useEffect(() => {
     void load();

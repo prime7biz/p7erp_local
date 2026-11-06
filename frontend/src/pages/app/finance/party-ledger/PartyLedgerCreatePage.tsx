@@ -23,22 +23,28 @@ export function PartyLedgerCreatePage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     async function loadParties() {
       try {
         if (partyType === "CUSTOMER") {
           const rows = await api.listCustomers();
+          if (cancelled) return;
           setParties(rows.map((c) => ({ id: c.id, label: `${c.customer_code} — ${c.name}` })));
         } else {
           const rows = await api.listVendors();
+          if (cancelled) return;
           setParties(rows.map((v) => ({ id: v.id, label: `${v.vendor_code} — ${v.name}` })));
         }
         setPartyId("");
       } catch (e) {
         logApiError("PartyLedgerCreatePage.loadParties", e);
-        setError((e as Error).message);
+        if (!cancelled) setError((e as Error).message);
       }
     }
     void loadParties();
+    return () => {
+      cancelled = true;
+    };
   }, [partyType]);
 
   async function submit(e: FormEvent) {

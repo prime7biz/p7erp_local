@@ -1,6 +1,7 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api, type FxReceiptCreate, type FxReceiptResponse, type FxUnsettledSummaryResponse } from "@/api/client";
 import { todayLocalISO } from "@/lib/dates";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 export function FxReceiptsPage() {
   const [rows, setRows] = useState<FxReceiptResponse[]>([]);
@@ -19,24 +20,27 @@ export function FxReceiptsPage() {
     notes: "",
   });
 
-  async function load() {
+  const latest = useLatestRequest();
+  const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
       const [fx, s] = await Promise.all([api.listFxReceipts(statusFilter ? { status_filter: statusFilter } : undefined), api.getFxUnsettledSummary()]);
+      if (!latest.isCurrent(token)) return;
       setRows(fx);
       setSummary(s);
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }
+  }, [latest, statusFilter]);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  }, [load]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();

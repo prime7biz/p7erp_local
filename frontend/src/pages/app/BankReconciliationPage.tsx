@@ -12,6 +12,8 @@ import {
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { todayLocalISO } from "@/lib/dates";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { logApiError } from "@/utils/logApiError";
 
 export function BankReconciliationPage() {
   const { me } = useAuth();
@@ -58,11 +60,14 @@ export function BankReconciliationPage() {
     setMatchLogs(logs);
   }, []);
 
+  const latest = useLatestRequest();
   const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       setSuccess("");
       setError("");
       const bankList = await api.listBankAccounts();
+      if (!latest.isCurrent(token)) return;
       setAccounts(bankList);
       const effectiveBankId = form.bank_account_id || bankList[0]?.id;
       if (effectiveBankId) {
@@ -71,6 +76,7 @@ export function BankReconciliationPage() {
           api.listBankReconciliations({ bank_account_id: effectiveBankId }),
           api.listPaymentRuns(),
         ]);
+        if (!latest.isCurrent(token)) return;
         setRows(recs);
         setPaymentRuns(runs.filter((r) => r.status === "EXECUTED" && r.bank_account_id === effectiveBankId));
         if (recs.length > 0) {
@@ -92,9 +98,10 @@ export function BankReconciliationPage() {
         setMatchLogs([]);
       }
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }, [form.bank_account_id, loadReconDetails]);
+  }, [latest, form.bank_account_id, loadReconDetails]);
 
   useEffect(() => {
     void load();
@@ -108,7 +115,8 @@ export function BankReconciliationPage() {
         const mine = users.find((u) => u.id === me.user_id);
         const role = (mine?.role_name ?? "").toLowerCase();
         setCanFinalize(role === "admin" || role === "manager");
-      } catch {
+      } catch (e) {
+        logApiError("BankReconciliationPage.loadPermission", e);
         setCanFinalize(false);
       }
     };

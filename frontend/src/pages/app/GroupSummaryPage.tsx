@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type AccountGroupResponse, type ChartOfAccountResponse, type TrialBalanceResponse } from "@/api/client";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { todayLocalISO } from "@/lib/dates";
+import { addMoney, subtractMoney } from "@/lib/money";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { logApiError } from "@/utils/logApiError";
 
 export function GroupSummaryPage() {
   const [asOfDate, setAsOfDate] = useState(todayLocalISO());
@@ -14,21 +17,27 @@ export function GroupSummaryPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  async function load() {
+  const latest = useLatestRequest();
+  const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       setError("");
-      setData(await api.getTrialBalance({ as_of_date: asOfDate, group_id: groupId || undefined, account_id: accountId || undefined }));
+      const res = await api.getTrialBalance({ as_of_date: asOfDate, group_id: groupId || undefined, account_id: accountId || undefined });
+      if (!latest.isCurrent(token)) return;
+      setData(res);
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }
+  }, [latest, asOfDate, groupId, accountId]);
 
   async function loadMeta() {
     try {
       const [accountGroups, chartAccounts] = await Promise.all([api.listAccountGroups(), api.listChartOfAccounts({ active_only: true })]);
       setGroups(accountGroups);
       setAccounts(chartAccounts);
-    } catch {
+    } catch (e) {
+      logApiError("GroupSummaryPage.loadMeta", e);
       setGroups([]);
       setAccounts([]);
     }
@@ -40,8 +49,7 @@ export function GroupSummaryPage() {
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [asOfDate, groupId, accountId]);
+  }, [load]);
 
   useEffect(() => {
     if (!success) return;
@@ -53,8 +61,8 @@ export function GroupSummaryPage() {
     const map = new Map<string, { debit: number; credit: number }>();
     for (const r of data?.rows ?? []) {
       const prev = map.get(r.group_name) ?? { debit: 0, credit: 0 };
-      prev.debit += r.debit;
-      prev.credit += r.credit;
+      prev.debit = addMoney(prev.debit, r.debit);
+      prev.credit = addMoney(prev.credit, r.credit);
       map.set(r.group_name, prev);
     }
     return Array.from(map.entries()).map(([group_name, v]) => ({ group_name, ...v }));
@@ -62,7 +70,7 @@ export function GroupSummaryPage() {
 
   function exportCsv() {
     const headers = ["group_name", "debit", "credit", "net"];
-    const lines = summary.map((r) => [r.group_name.replaceAll(",", " "), String(r.debit), String(r.credit), String(r.debit - r.credit)].join(","));
+    const lines = summary.map((r) => [r.group_name.replaceAll(",", " "), String(r.debit), String(r.credit), String(subtractMoney(r.debit, r.credit))].join(","));
     const csv = [headers.join(","), ...lines].join("\n");
     downloadCsv(csv, "group_summary_report");
     setSuccess("Group Summary exported successfully.");
@@ -125,7 +133,7 @@ export function GroupSummaryPage() {
                 <td className={compactView ? "px-2 py-1" : "px-3 py-2"}>{r.group_name}</td>
                 <td className={`${compactView ? "px-2 py-1" : "px-3 py-2"} text-right`}>{r.debit.toLocaleString()}</td>
                 <td className={`${compactView ? "px-2 py-1" : "px-3 py-2"} text-right`}>{r.credit.toLocaleString()}</td>
-                <td className={`${compactView ? "px-2 py-1" : "px-3 py-2"} text-right`}>{(r.debit - r.credit).toLocaleString()}</td>
+                <td className={`${compactView ? "px-2 py-1" : "px-3 py-2"} text-right`}>{subtractMoney(r.debit, r.credit).toLocaleString()}</td>
               </tr>
             ))}
           </tbody>

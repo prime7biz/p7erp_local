@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type GstReturnPayload } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { downloadCsv } from "@/lib/reportExport";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 type Tab = "gstr1" | "gstr2" | "gstr3b" | "itc";
 
@@ -24,28 +25,37 @@ export function GstReturnsPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function load() {
+  const latest = useLatestRequest();
+  const load = useCallback(async () => {
+    const token = latest.begin();
     const { from, to } = monthBounds(ym);
     setLoading(true);
     setError("");
     try {
-      if (tab === "gstr1") setData(await api.getGstr1({ from_date: from, to_date: to }));
-      else if (tab === "gstr2") setData(await api.getGstr2({ from_date: from, to_date: to }));
-      else if (tab === "gstr3b") setData(await api.getGstr3b({ from_date: from, to_date: to }));
-      else setData(await api.getGstItcSummary({ from_date: from, to_date: to }));
+      const range = { from_date: from, to_date: to };
+      const res =
+        tab === "gstr1"
+          ? await api.getGstr1(range)
+          : tab === "gstr2"
+            ? await api.getGstr2(range)
+            : tab === "gstr3b"
+              ? await api.getGstr3b(range)
+              : await api.getGstItcSummary(range);
+      if (!latest.isCurrent(token)) return;
+      setData(res);
     } catch (e) {
       logApiError("GstReturnsPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
       setData(null);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }
+  }, [latest, tab, ym]);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, ym]);
+  }, [load]);
 
   async function exportJson() {
     const { from, to } = monthBounds(ym);

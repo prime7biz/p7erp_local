@@ -9,6 +9,7 @@ import {
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
+import { addMoney } from "@/lib/money";
 
 export function CreditNoteCreatePage() {
   const navigate = useNavigate();
@@ -49,19 +50,25 @@ export function CreditNoteCreatePage() {
       setBills([]);
       return;
     }
+    let cancelled = false;
     void api
       .listPartyLedgerPendingBills(Number(form.party_ledger_id))
-      .then(setBills)
+      .then((rows) => {
+        if (!cancelled) setBills(rows);
+      })
       .catch((e) => {
         logApiError("CreditNoteCreatePage.bills", e);
-        setBills([]);
+        if (!cancelled) setBills([]);
       });
+    return () => {
+      cancelled = true;
+    };
   }, [form.party_ledger_id]);
 
   const preview = useMemo(() => {
     const amount = Number(form.amount) || 0;
     const tax = Number(form.tax_amount) || 0;
-    return { amount, tax, total: amount + tax };
+    return { amount, tax, total: addMoney(amount, tax) };
   }, [form.amount, form.tax_amount]);
 
   async function onSubmit(e: FormEvent) {

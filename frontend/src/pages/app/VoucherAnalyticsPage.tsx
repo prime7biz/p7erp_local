@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   api,
   type VoucherReportMonthlyResponse,
@@ -7,6 +7,8 @@ import {
 } from "@/api/client";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { logApiError } from "@/utils/logApiError";
 
 export function VoucherAnalyticsPage() {
   const [fromDate, setFromDate] = useState(startOfMonthLocalISO());
@@ -21,7 +23,9 @@ export function VoucherAnalyticsPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  async function load() {
+  const latest = useLatestRequest();
+  const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       setError("");
       const [s, m, t] = await Promise.all([
@@ -44,25 +48,27 @@ export function VoucherAnalyticsPage() {
           status_filter: statusFilter || undefined,
         }),
       ]);
+      if (!latest.isCurrent(token)) return;
       setSummary(s);
       setMonthly(m);
       setTopPreparers(t);
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }
+  }, [latest, fromDate, toDate, voucherType, statusFilter]);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromDate, toDate, voucherType, statusFilter]);
+  }, [load]);
 
   async function loadMeta() {
     try {
       const [types, sts] = await Promise.all([api.getVoucherTypesMeta(), api.getVoucherStatusesMeta()]);
       setVoucherTypes(types);
       setStatuses(sts);
-    } catch {
+    } catch (e) {
+      logApiError("VoucherAnalyticsPage.loadMeta", e);
       setVoucherTypes([]);
       setStatuses([]);
     }

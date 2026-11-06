@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, type ChartOfAccountResponse, type LedgerActivityResponse } from "@/api/client";
 import { dateParam, idParam, voucherHref } from "@/lib/financeDrilldown";
 import { downloadCsv, downloadXlsx, printCurrentPage } from "@/lib/reportExport";
 import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 export function LedgerActivityPage() {
   const [searchParams] = useSearchParams();
@@ -18,38 +19,44 @@ export function LedgerActivityPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  async function loadAccounts() {
-    try {
-      const rows = await api.listChartOfAccounts();
-      setAccounts(rows);
-      if (!selectedAccountId && rows.length > 0) {
-        const firstAccount = rows[0];
-        if (firstAccount) setSelectedAccountId(firstAccount.id);
-      }
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
-  async function loadReport() {
-    try {
-      if (!selectedAccountId) return;
-      setError("");
-      setData(await api.getLedgerActivity({ account_id: selectedAccountId, from_date: fromDate, to_date: toDate }));
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
+  const latest = useLatestRequest();
 
   useEffect(() => {
+    let cancelled = false;
+    async function loadAccounts() {
+      try {
+        const rows = await api.listChartOfAccounts();
+        if (cancelled) return;
+        setAccounts(rows);
+        const firstAccount = rows[0];
+        if (firstAccount) setSelectedAccountId((current) => current || firstAccount.id);
+      } catch (e) {
+        if (!cancelled) setError((e as Error).message);
+      }
+    }
     void loadAccounts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
+  const loadReport = useCallback(async () => {
+    if (!selectedAccountId) return;
+    const token = latest.begin();
+    try {
+      setError("");
+      const res = await api.getLedgerActivity({ account_id: selectedAccountId, from_date: fromDate, to_date: toDate });
+      if (!latest.isCurrent(token)) return;
+      setData(res);
+    } catch (e) {
+      if (!latest.isCurrent(token)) return;
+      setError((e as Error).message);
+    }
+  }, [latest, selectedAccountId, fromDate, toDate]);
+
   useEffect(() => {
-    if (selectedAccountId) void loadReport();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedAccountId, fromDate, toDate]);
+    void loadReport();
+  }, [loadReport]);
 
   useEffect(() => {
     if (!success) return;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -9,6 +9,7 @@ import {
   type TradeCaseRow,
 } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 type Mode = "style" | "lc" | "variance" | "trade_case";
 
@@ -24,29 +25,33 @@ export function ProfitabilityPage({ defaultMode = "style" }: { defaultMode?: Mod
   const [data, setData] = useState<ProfitabilityResponse | null>(null);
   const [tradeMargin, setTradeMargin] = useState<TradeCaseMarginResponse | null>(null);
 
-  async function loadQuickOptions() {
+  const optionsRequest = useLatestRequest();
+  const loadQuickOptions = useCallback(async () => {
+    const token = optionsRequest.begin();
     setOptionsLoading(true);
     try {
       if (mode === "style") {
-        setStyles(await api.listStyles());
+        const res = await api.listStyles();
+        if (optionsRequest.isCurrent(token)) setStyles(res);
       } else if (mode === "trade_case") {
-        setTradeCases(await api.listTradeCases({ limit: 200 }));
+        const res = await api.listTradeCases({ limit: 200 });
+        if (optionsRequest.isCurrent(token)) setTradeCases(res);
       } else {
-        setOrders(await api.listOrders({ limit: 100 }));
+        const res = await api.listOrders({ limit: 100 });
+        if (optionsRequest.isCurrent(token)) setOrders(res);
       }
     } catch (e) {
       logApiError("ProfitabilityPage.loadQuickOptions", e);
     } finally {
-      setOptionsLoading(false);
+      if (optionsRequest.isCurrent(token)) setOptionsLoading(false);
     }
-  }
+  }, [optionsRequest, mode]);
 
   useEffect(() => {
     setData(null);
     setTradeMargin(null);
     void loadQuickOptions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+  }, [loadQuickOptions]);
 
   async function run() {
     setLoading(true);

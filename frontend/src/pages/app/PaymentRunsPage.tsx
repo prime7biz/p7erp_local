@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -9,6 +9,9 @@ import {
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { todayLocalISO } from "@/lib/dates";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { logApiError } from "@/utils/logApiError";
+import { addMoney, subtractMoney, toMoneyString } from "@/lib/money";
 
 const RUN_STATUSES = ["DRAFT", "APPROVED", "PROCESSED", "EXECUTED"] as const;
 
@@ -42,7 +45,9 @@ export function PaymentRunsPage() {
     items: [],
   });
 
-  async function load() {
+  const latest = useLatestRequest();
+  const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       setSuccess("");
       setError("");
@@ -51,18 +56,19 @@ export function PaymentRunsPage() {
         api.listOutstandingBills({ bill_type: "PAYABLE" }),
         api.listPaymentRuns(runStatusFilter ? { status_filter: runStatusFilter } : undefined),
       ]);
+      if (!latest.isCurrent(token)) return;
       setBankAccounts(banks);
       setPayables(bills.filter((b) => b.status === "OPEN" || b.status === "PARTIAL"));
       setRows(runs);
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }
+  }, [latest, runStatusFilter]);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runStatusFilter]);
+  }, [load]);
 
   useEffect(() => {
     const loadRole = async () => {
@@ -71,7 +77,8 @@ export function PaymentRunsPage() {
         const users = await api.listUsers();
         const mine = users.find((u) => u.id === me.user_id);
         setMyRole((mine?.role_name ?? "").trim().toLowerCase());
-      } catch {
+      } catch (e) {
+        logApiError("PaymentRunsPage.loadRole", e);
         setMyRole("");
       }
     };
@@ -85,17 +92,17 @@ export function PaymentRunsPage() {
     return payables
       .filter((b) => selectedBillIds.includes(b.id))
       .map((b) => {
-        const outstanding = Math.max(Number(b.amount) - Number(b.paid_amount), 0);
+        const outstanding = Math.max(subtractMoney(b.amount, b.paid_amount), 0);
         const sourceCurrency = (b.currency || baseCurrency).toUpperCase();
         const fxRate = sourceCurrency === baseCurrency.toUpperCase() ? 1 : fxRates[sourceCurrency] || 0;
         const baseAmount = outstanding * fxRate;
         return {
           bill_id: b.id,
           party_name: b.party_name,
-          amount: String(outstanding),
+          amount: toMoneyString(outstanding),
           source_currency: sourceCurrency,
           fx_rate_to_base: String(fxRate),
-          base_amount: String(baseAmount),
+          base_amount: toMoneyString(baseAmount),
           reference: b.bill_no,
         };
       });
@@ -105,11 +112,11 @@ export function PaymentRunsPage() {
     let sourceTotal = 0;
     let baseTotal = 0;
     for (const b of payables.filter((bill) => selectedBillIds.includes(bill.id))) {
-      const outstanding = Math.max(Number(b.amount) - Number(b.paid_amount), 0);
-      sourceTotal += outstanding;
+      const outstanding = Math.max(subtractMoney(b.amount, b.paid_amount), 0);
+      sourceTotal = addMoney(sourceTotal, outstanding);
       const srcCurrency = (b.currency || baseCurrency).toUpperCase();
       const rate = srcCurrency === baseCurrency.toUpperCase() ? 1 : fxRates[srcCurrency] || 0;
-      baseTotal += outstanding * rate;
+      baseTotal = addMoney(baseTotal, outstanding * rate);
     }
     return { sourceTotal, baseTotal };
   }, [payables, selectedBillIds, fxRates, baseCurrency]);
@@ -271,7 +278,7 @@ export function PaymentRunsPage() {
               </thead>
               <tbody>
                 {filteredPayables.map((b) => {
-                  const outstanding = Math.max(Number(b.amount) - Number(b.paid_amount), 0);
+                  const outstanding = Math.max(subtractMoney(b.amount, b.paid_amount), 0);
                   const sourceCurrency = (b.currency || baseCurrency).toUpperCase();
                   const fx = sourceCurrency === baseCurrency.toUpperCase() ? 1 : fxRates[sourceCurrency] || 0;
                   const baseEquivalent = outstanding * fx;

@@ -1,8 +1,9 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type TdsDeductionResponse, type TdsReturnResponse } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 
 export function TdsReportsPage() {
   const now = new Date();
@@ -15,39 +16,46 @@ export function TdsReportsPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function loadReturn() {
+  const returnRequest = useLatestRequest();
+  const loadReturn = useCallback(async () => {
+    const token = returnRequest.begin();
     setLoading(true);
     setError("");
     try {
-      setReturnData(await api.getTdsReturn({ year, quarter, form }));
+      const res = await api.getTdsReturn({ year, quarter, form });
+      if (!returnRequest.isCurrent(token)) return;
+      setReturnData(res);
     } catch (e) {
       logApiError("TdsReportsPage.loadReturn", e);
+      if (!returnRequest.isCurrent(token)) return;
       setError((e as Error).message);
       setReturnData(null);
     } finally {
-      setLoading(false);
+      if (returnRequest.isCurrent(token)) setLoading(false);
     }
-  }
+  }, [returnRequest, year, quarter, form]);
 
-  async function loadDeductions() {
+  const deductionsRequest = useLatestRequest();
+  const loadDeductions = useCallback(async () => {
+    const token = deductionsRequest.begin();
     try {
       const res = await api.listTdsDeductions({ status: statusFilter || undefined });
+      if (!deductionsRequest.isCurrent(token)) return;
       setDeductions(res.rows);
     } catch (e) {
       logApiError("TdsReportsPage.loadDeductions", e);
+      if (!deductionsRequest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }
+  }, [deductionsRequest, statusFilter]);
 
   useEffect(() => {
     void loadReturn();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, quarter, form]);
+  }, [loadReturn]);
 
   useEffect(() => {
     void loadDeductions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  }, [loadDeductions]);
 
   function onFilterSubmit(e: FormEvent) {
     e.preventDefault();

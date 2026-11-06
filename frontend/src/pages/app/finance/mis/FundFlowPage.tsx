@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type FundFlowResponse } from "@/api/client";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { logApiError } from "@/utils/logApiError";
@@ -16,23 +17,27 @@ export function FundFlowPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function load() {
+  const latest = useLatestRequest();
+  const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       setError("");
       setLoading(true);
-      setData(await api.getFundFlowReport({ from_date: fromDate, to_date: toDate }));
+      const res = await api.getFundFlowReport({ from_date: fromDate, to_date: toDate });
+      if (!latest.isCurrent(token)) return;
+      setData(res);
     } catch (e) {
       logApiError("FundFlowPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }
+  }, [latest, fromDate, toDate]);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromDate, toDate]);
+  }, [load]);
 
   function exportCsv() {
     if (!data) return;

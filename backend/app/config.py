@@ -221,6 +221,10 @@ class Settings(BaseSettings):
     # Max audit rows written at the same time (each write uses one DB connection).
     audit_log_max_concurrency: int = 4
 
+    # Business calendar: "today" for default voucher / payroll / leave dates when the tenant has no
+    # timezone of its own (tenants.timezone). Storage timestamps stay UTC.
+    app_timezone: str = "Asia/Dhaka"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

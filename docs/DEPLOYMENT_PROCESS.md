@@ -18,6 +18,13 @@
 
 Workflow file: `.github/workflows/deploy.yml` (build/push only — no GitHub SSH to production).
 
+**Test gate before images are pushed:** the **Deploy** and **Docker Hub Build** workflows first run
+the same backend + frontend tests as **CI** (shared file `.github/workflows/tests.yml`, shown on
+GitHub as `Tests / Backend Tests (Python)` and `Tests / Frontend Tests (Node.js)`). The image
+build/push job (`needs: tests`) only starts when both pass, so a failing test means **no new
+image on Docker Hub** for that commit or tag. This adds about 4–5 minutes before images appear.
+Workflow names (**CI**, **Deploy**, **Docker Hub Build**) and build job names are unchanged.
+
 ---
 
 ## Phase 0 — Pre-flight (local, before commit)
@@ -116,6 +123,56 @@ cd /home/primeadmin/p7erp_local
 git pull --ff-only origin main
 DEPLOY_PATH=/home/primeadmin/p7erp_local bash scripts/deploy_production_remote.sh vX.Y.Z
 ```
+
+---
+
+## Backend runs as a non-root user (`RUN_AS_NON_ROOT`)
+
+The backend image has an unprivileged user **`app` (uid/gid 10001)**. The `backend`, `worker`
+and `beat` containers start as root only long enough for `backend/docker-entrypoint.sh` to:
+
+1. check that `/app/media` (uploads + the beat schedule file `celerybeat-schedule`) and
+   `/app/backups` belong to `app`, and `chown` them **only if something is not** (files written
+   by older root-only images);
+2. switch to `app` and start the normal command (`alembic upgrade head && uvicorn ...`,
+   `celery worker`, `celery beat`).
+
+| Setting | Default | Meaning |
+|---------|---------|---------|
+| `RUN_AS_NON_ROOT` | `true` in `docker-compose.prod.yml`, `false` in `docker-compose.yml` (dev) | `false` = run as root like before |
+
+**First deploy with this change:** nothing to do by hand. On the first start the entrypoint logs
+`docker-entrypoint: fixing ownership of /app/media ...` and fixes the `backend_media` volume once
+(about 1 second per ~20,000 files in testing). Later restarts only check (no change, ~1 s).
+No extra downtime beyond the normal container restart.
+
+If a folder still is not writable (for example a read-only mount), the entrypoint logs
+`WARNING: falling back to root` and runs as root, so uploads and beat keep working.
+Check after deploy:
+
+```bash
+cd /home/primeadmin/p7erp_local
+docker compose -f docker-compose.prod.yml logs backend worker beat | grep docker-entrypoint
+docker compose -f docker-compose.prod.yml top backend      # UID column should show 10001
+```
+
+**Manual fallback** (only if the logs show a WARNING): fix ownership once, then restart.
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm --no-deps -u root --entrypoint chown backend -R 10001:10001 /app/media
+docker compose -f docker-compose.prod.yml up -d backend worker beat
+```
+
+(Same as `chown -R 10001:10001 /var/lib/docker/volumes/p7erp_local_backend_media/_data` on the host.)
+
+**`docker compose exec` still enters as root.** Scripts that write files under `/app/media`
+should run as the app user so new files are not root-owned:
+`docker compose -f docker-compose.prod.yml exec -u app backend python scripts/<script>.py`.
+(Root-owned files are fixed again on the next container start anyway.)
+
+**Rollback:** add `RUN_AS_NON_ROOT=false` to the server `.env` and run
+`docker compose -f docker-compose.prod.yml up -d backend worker beat` (back to root; files owned
+by 10001 are still readable/writable by root), or redeploy the previous image tag.
 
 ---
 

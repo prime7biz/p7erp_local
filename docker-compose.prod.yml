@@ -87,6 +87,11 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       TENANT_STRATEGY: ${TENANT_STRATEGY:-header}
       CORS_ORIGINS: ${CORS_ORIGINS}
+      # Portal refresh token in an HttpOnly cookie. Off by default; rollout in docs/FRONTEND_SECURITY_HEADERS.md.
+      AUTH_REFRESH_COOKIE_ENABLED: ${AUTH_REFRESH_COOKIE_ENABLED:-false}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
+      AUTH_COOKIE_SAMESITE: ${AUTH_COOKIE_SAMESITE:-strict}
+      AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       GEMINI_ENABLED: ${GEMINI_ENABLED:-false}

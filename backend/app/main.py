@@ -125,6 +125,12 @@ elif _configured_cors:
 else:
     origins = []
 
+# Cookies (HttpOnly refresh token) may only be sent cross-origin to explicitly listed origins.
+# With "*" every website would be allowed to make credentialed calls, so credentials are turned off.
+_cors_allow_credentials = "*" not in origins
+if not _cors_allow_credentials:
+    logger.warning("CORS_ORIGINS contains '*': credentialed CORS is disabled. List explicit origins instead.")
+
 
 async def _every(name: str, job, *, first_delay: float, interval: float) -> None:
     """In-process scheduler loop: run ``job`` after ``first_delay`` s, then every ``interval`` s."""
@@ -231,7 +237,7 @@ mount_mcp(app)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,
+    allow_credentials=_cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["X-Total-Count"],

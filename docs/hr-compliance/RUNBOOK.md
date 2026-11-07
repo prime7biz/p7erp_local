@@ -40,6 +40,9 @@ Both are passed through `docker-compose.prod.yml`. Nothing else is required to s
 > `docker compose exec backend python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`,
 > put it in the live `.env`, and keep a copy in the company's password vault. Files are stored under
 > `MEDIA_ROOT/<tenant_id>/hr_secure/` (the `backend_media` volume), which must be included in backups.
+>
+> The QR signatures on printed ID cards and gate passes are also derived from `JWT_SECRET`. Rotating it invalidates
+> every printed QR: reprint ID cards (Employees → **Print all ID cards**) and reissue active gate passes afterwards.
 
 ## 3. Migrations
 

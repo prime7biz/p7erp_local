@@ -22,7 +22,7 @@ from app.models.hr import Employee
 from app.models.hr_attendance import OvertimeEntry
 from app.models.hr_leave import LeaveBalance, LeaveType
 from app.models.hr_lifecycle import HrClearanceItem, HrFinalSettlement, HrSeparation
-from app.models.hr_payroll import EmployeeAdvance, PayrollPeriod, PayrollRun, PayrollRunLine
+from app.models.hr_payroll import BonusDeclaration, EmployeeAdvance, PayrollPeriod, PayrollRun, PayrollRunLine
 from app.modules.hr_localization import bd_calculations as calc
 from app.modules.hr_localization.employee_pay import pay_snapshot
 from app.modules.hr_localization.payroll_extras import DEAD_RUN_STATUSES, SOURCES
@@ -33,6 +33,14 @@ ZERO = Decimal("0")
 
 def _money(v: Any) -> Decimal:
     return calc.money(Decimal(str(v or 0)))
+
+
+def _bonus_cutoff(criteria: Any) -> date:
+    """Service cut-off of a festival bonus allocation; unknown or unreadable means not payable on exit."""
+    try:
+        return date.fromisoformat(str((criteria or {}).get("cutoff_date")))
+    except (TypeError, ValueError, AttributeError):
+        return date.max
 
 
 @dataclass
@@ -135,27 +143,28 @@ async def compute_settlement(
         select(PayrollRunLine.id).join(PayrollRun, PayrollRun.id == PayrollRunLine.run_id).where(PayrollRun.status.in_(DEAD_RUN_STATUSES))
     )
     # Only what was earned while employed: work up to the last working day, production periods that
-    # started by then, festival bonus approved by the effective date.
+    # ended by then, festival bonus whose service cut-off is on or before the last working day.
     within_service = {
         "festival_work": lambda m: m.work_date <= lwd,
         "allowance": lambda m: m.work_date <= lwd,
-        "production_bonus": lambda m: m.period_start <= lwd,
-        "festival_bonus": lambda m: or_(
-            m.approved_at.is_(None), m.approved_at < datetime.combine(sep.effective_date + timedelta(days=1), datetime.min.time())
-        ),
+        "production_bonus": lambda m: m.period_end <= lwd,
+        "festival_bonus": lambda m: m.approved_at < datetime.combine(sep.effective_date + timedelta(days=1), datetime.min.time()),
     }
     for key, model in SOURCES.items():
         amount_col = model.compensation_amount if key == "festival_work" else model.amount
-        rows = (
-            await db.execute(
-                select(model.id, amount_col).where(
-                    model.tenant_id == tenant.id, model.employee_id == emp.id, model.status == "APPROVED",
-                    within_service[key](model),
-                    or_(model.final_settlement_id.is_(None), model.final_settlement_id == (settlement_id or -1)),
-                    or_(model.payroll_run_line_id.is_(None), model.payroll_run_line_id.in_(dead_lines)),
-                )
-            )
-        ).all()
+        stmt = select(model.id, amount_col).where(
+            model.tenant_id == tenant.id, model.employee_id == emp.id, model.status == "APPROVED",
+            within_service[key](model),
+            or_(model.final_settlement_id.is_(None), model.final_settlement_id == (settlement_id or -1)),
+            or_(model.payroll_run_line_id.is_(None), model.payroll_run_line_id.in_(dead_lines)),
+        )
+        if key == "festival_bonus":
+            stmt = stmt.add_columns(BonusDeclaration.eligibility_criteria).join(
+                BonusDeclaration, BonusDeclaration.id == model.bonus_declaration_id
+            ).where(BonusDeclaration.tenant_id == tenant.id)
+            rows = [(i, a) for i, a, crit in (await db.execute(stmt)).all() if _bonus_cutoff(crit) <= lwd]
+        else:
+            rows = (await db.execute(stmt)).all()
         if rows:
             extra_ids[key] = [i for i, _a in rows]
             allowances += sum((Decimal(str(a)) for _i, a in rows), ZERO)

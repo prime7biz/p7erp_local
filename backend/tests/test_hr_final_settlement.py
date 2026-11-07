@@ -7,7 +7,7 @@ Run: docker compose exec backend pytest tests/test_hr_final_settlement.py -q
 from __future__ import annotations
 
 import asyncio
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 import pytest
@@ -18,9 +18,16 @@ from app.common.business_date import today_local
 from app.models import Tenant, User
 from app.models.finance import AccountingPeriod, Voucher, VoucherLine
 from app.models.hr import Employee
-from app.models.hr_allowance import HrAllowanceEntry, HrAllowanceRule
+from app.models.hr_allowance import (
+    HrAllowanceEntry,
+    HrAllowanceRule,
+    HrBonusAllocationLine,
+    HrProductionBonusEntry,
+    HrProductionBonusScheme,
+)
 from app.models.hr_leave import LeaveBalance, LeaveType
 from app.models.hr_payroll import (
+    BonusDeclaration,
     EmployeeAdvance,
     PayrollAccountingConfig,
     PayrollEmployeeStructureAssignment,
@@ -145,15 +152,38 @@ async def test_extras_after_last_working_day_are_not_claimed(db_session_integrat
     tenant, user, _role, emp, _a, extra = await _seed(db)
     later = HrAllowanceEntry(tenant_id=tenant.id, employee_id=emp.id, work_date=date(2026, 11, 3), rule_id=extra.rule_id,
                              amount=Decimal("70"), status="APPROVED")
-    db.add(later)
+    scheme = HrProductionBonusScheme(tenant_id=tenant.id, code="PB", name="Piece", basis="PIECE", params={"rate_per_piece": "1"},
+                                     effective_from=date(2026, 1, 1), status="APPROVED")
+    db.add_all([later, scheme])
+    await db.flush()
+    done = HrProductionBonusEntry(tenant_id=tenant.id, employee_id=emp.id, scheme_id=scheme.id, period_code="2026-10",
+                                  period_start=date(2026, 10, 1), period_end=date(2026, 10, 31), source_ref="t",
+                                  amount=Decimal("100"), status="APPROVED")
+    spanning = HrProductionBonusEntry(tenant_id=tenant.id, employee_id=emp.id, scheme_id=scheme.id, period_code="2026-W44",
+                                      period_start=date(2026, 10, 28), period_end=date(2026, 11, 3), source_ref="t",
+                                      amount=Decimal("40"), status="APPROVED")
+    past = BonusDeclaration(tenant_id=tenant.id, bonus_type="FESTIVAL", period_code="EID-1", title="Eid 1", status="APPROVED",
+                            eligibility_criteria={"cutoff_date": "2026-06-01"})
+    future = BonusDeclaration(tenant_id=tenant.id, bonus_type="FESTIVAL", period_code="EID-2", title="Eid 2", status="APPROVED",
+                              eligibility_criteria={"cutoff_date": "2026-12-01"})
+    db.add_all([done, spanning, past, future])
+    await db.flush()
+    approved = datetime(2026, 10, 1)
+    paid_bonus = HrBonusAllocationLine(tenant_id=tenant.id, bonus_declaration_id=past.id, employee_id=emp.id, eligible=True,
+                                       basis_amount=Decimal("9000"), amount=Decimal("9000"), status="APPROVED", approved_at=approved)
+    future_bonus = HrBonusAllocationLine(tenant_id=tenant.id, bonus_declaration_id=future.id, employee_id=emp.id, eligible=True,
+                                         basis_amount=Decimal("9000"), amount=Decimal("4500"), status="APPROVED", approved_at=approved)
+    db.add_all([paid_bonus, future_bonus])
     await db.commit()
     async with api_client(db, tenant, user) as c:
         sep = await _separation(c, emp)
         fs = (await c.post(f"{HR}/separations/{sep['id']}/settlement")).json()
-    assert Decimal(fs["allowances_amount"]) == Decimal("50.00")
-    await db.refresh(later)
-    await db.refresh(extra)
-    assert later.final_settlement_id is None and extra.final_settlement_id == fs["id"]
+    # Tiffin 50 (Oct) + production bonus 100 (period ended by the last day) + Eid bonus 9000 (cut-off before exit).
+    assert Decimal(fs["allowances_amount"]) == Decimal("9150.00")
+    for row in (later, extra, done, spanning, paid_bonus, future_bonus):
+        await db.refresh(row)
+    assert extra.final_settlement_id == done.final_settlement_id == paid_bonus.final_settlement_id == fs["id"]
+    assert later.final_settlement_id is None and spanning.final_settlement_id is None and future_bonus.final_settlement_id is None
 
 
 @pytest.mark.asyncio

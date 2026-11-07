@@ -987,7 +987,9 @@ async def _seed_inventory(db, tenant_id: int, slug: str, extra: int) -> dict:
 
 async def _seed(db, *, extra: int = 0) -> dict:
     """Tenant A with a financier principal; tenant B shares the party id and must never leak into A."""
-    slug = uuid.uuid4().hex[:8]
+    # Digit-free: FX receipts also match a BTB LC when str(btb.id) appears in source_ref,
+    # so digits in the slug could make an LC match the wrong receipt.
+    slug = uuid.uuid4().hex[:8].translate(str.maketrans("0123456789", "ghijklmnop"))
     today = date.today()
     role = await _ensure_financier_role(db)
     ta = await _new_tenant(db, slug, "A")

@@ -176,7 +176,14 @@ async def test_clerk_can_save_contact_on_a_legacy_employee_and_audit_lists_only_
     emp = await _reload(db, emp_id)
     assert (emp.address_line, emp.city, emp.country, emp.present_city) == (None, None, None, None)
     audits = (
-        await db.execute(select(AuditLog).where(AuditLog.tenant_id == tenant.id, AuditLog.action == "HR_EMPLOYEE_SENSITIVE_UPDATED"))
+        await db.execute(
+            select(AuditLog)
+            .where(
+                AuditLog.tenant_id == tenant.id,
+                AuditLog.action == "HR_EMPLOYEE_SENSITIVE_UPDATED",
+            )
+            .order_by(AuditLog.id)
+        )
     ).scalars().all()
     # The phone change and the no-op resubmit logged nothing; each address change lists only what changed.
     assert len(audits) == 2

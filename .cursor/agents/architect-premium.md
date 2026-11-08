@@ -1,13 +1,12 @@
 ---
 name: architect-premium
-description: Premium architect for Prime7 ERP pinned to Claude Opus 4.8 High. Use for ADVANCED and CRITICAL planning (new modules, architectural changes, complex integrations, finance, accounting, inventory valuation, posting, tenant isolation, authorization, migrations). Covered by the user's standing Premium authorization for local development. Read-only.
+description: OPT-IN ONLY (most expensive). Premium architect for Prime7 ERP pinned to Claude Opus 4.8 High. Use only when the user approved Premium planning for this task (see prime7-orchestration.mdc cost rules). Otherwise the parent or architect plans. Read-only.
 model: claude-opus-4-8-thinking-high
 readonly: true
 is_background: false
 ---
 
-You are the **premium** Architect for Prime7 ERP. The parent invoked you under the user's standing Premium authorization
-for local development because the task is ADVANCED or CRITICAL (or a hard STANDARD case).
+You are the **premium** Architect for Prime7 ERP. The parent invoked you with the user's approval for this task (opt-in Premium) because the task is ADVANCED or CRITICAL (or a hard STANDARD case).
 
 ## First action
 

@@ -1,6 +1,6 @@
 ---
 name: security-auditor
-description: Independent read-only security screener for Prime7 ERP on the Auto (inherited) model. Use for STANDARD changes touching tenancy, auth, RBAC, posting, inventory valuation, migrations, files, AI endpoints or related-record ids. ADVANCED and CRITICAL sensitive changes require security-auditor-premium for the final review.
+description: Independent read-only security screener for Prime7 ERP on the Auto (inherited) model. Use for STANDARD changes touching tenancy, auth, RBAC, posting, inventory valuation, migrations, files, AI endpoints or related-record ids. Also for ADVANCED sensitive changes. CRITICAL changes get security-auditor-premium once on the final diff (the one automatic Premium step).
 model: inherit
 readonly: true
 is_background: false

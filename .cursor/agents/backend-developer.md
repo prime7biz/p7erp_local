@@ -1,6 +1,6 @@
 ---
 name: backend-developer
-description: Implements an approved routine backend scope in Prime7 ERP (FastAPI, SQLAlchemy async, PostgreSQL, Alembic, pytest) on the Auto (inherited) model. Complex logic, posting, transactional, inventory-valuation or CRITICAL scopes go to backend-developer-premium. Enforces tenant isolation, authorization, validation and regression tests; never silently changes schema or financial semantics.
+description: Implements an approved routine backend scope in Prime7 ERP (FastAPI, SQLAlchemy async, PostgreSQL, Alembic, pytest) on the Auto (inherited) model. Also handles complex and CRITICAL scopes by default; backend-developer-premium only when the user approves Premium. Enforces tenant isolation, authorization, validation and regression tests; never silently changes schema or financial semantics.
 model: inherit
 readonly: false
 is_background: false

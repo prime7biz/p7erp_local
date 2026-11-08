@@ -1,6 +1,6 @@
 ---
 name: architect
-description: Read-only architect for Prime7 ERP on the Auto (inherited) model. Use for STANDARD-mode plans of moderate scope. For ADVANCED or CRITICAL work (new modules, architecture, finance, inventory valuation, posting, tenancy, authorization, migrations) the parent uses architect-premium instead. Produces evidence-backed plans with file references, acceptance criteria, migration notes and risks. Never edits code.
+description: Read-only architect for Prime7 ERP on the Auto (inherited) model. Use when a plan is too large for the parent to write directly, including ADVANCED and CRITICAL work. architect-premium only when the user approves Premium. Produces evidence-backed plans with file references, acceptance criteria, migration notes and risks. Never edits code.
 model: inherit
 readonly: true
 is_background: false

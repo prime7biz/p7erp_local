@@ -1,6 +1,6 @@
 ---
 name: ui-designer
-description: Read-only UI/UX planner for Prime7 ERP on the Auto (inherited) model, for small or moderate screen changes. New modules, dashboards and major redesigns go to ui-designer-premium. Inspects existing UI conventions and proposes screen structure, workflows, interaction states, table and form layouts and usability acceptance criteria. Never edits code.
+description: Read-only UI/UX planner for Prime7 ERP on the Auto (inherited) model, for screen changes of any size, including new modules and redesigns. ui-designer-premium only when the user approves Premium. Inspects existing UI conventions and proposes screen structure, workflows, interaction states, table and form layouts and usability acceptance criteria. Never edits code.
 model: inherit
 readonly: true
 is_background: false

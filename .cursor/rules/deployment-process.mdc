@@ -1,6 +1,6 @@
 ---
-description: Standard production deploy workflow — run when user says deploy, release, or push to live
-alwaysApply: true
+description: Standard production deploy workflow — read and follow end-to-end when the user says deploy, release, or push to live (also for tagging, CI polling, or production rollout questions)
+alwaysApply: false
 ---
 
 # Standard deployment process

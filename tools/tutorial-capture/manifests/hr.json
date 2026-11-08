@@ -1,6 +1,36 @@
 {
   "screenshots": [
     {
+      "name": "hr-emp-ws-personal",
+      "route": "/app/hr/employees/new",
+      "waitMs": 2500,
+      "actions": [
+        { "fill": ["role=textbox[name=/First name/]", "Rahima"] }
+      ]
+    },
+    {
+      "name": "hr-emp-ws-job",
+      "route": "/app/hr/employees/new",
+      "waitMs": 2500,
+      "actions": [{ "click": "role=tab[name=\"Job\"]", "waitMs": 800 }]
+    },
+    {
+      "name": "hr-emp-ws-quick-add",
+      "route": "/app/hr/employees/new",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "role=tab[name=\"Job\"]", "waitMs": 800 },
+        { "click": "role=button[name=\"Add new department\"]", "waitMs": 600 },
+        { "fill": ["role=dialog >> input", "Finishing"] }
+      ]
+    },
+    {
+      "name": "hr-emp-ws-salary",
+      "route": "/app/hr/employees/new",
+      "waitMs": 2500,
+      "actions": [{ "click": "role=tab[name=\"Salary\"]", "waitMs": 1500 }]
+    },
+    {
       "name": "hr-emp-add-form",
       "route": "/app/hr/employees",
       "actions": [

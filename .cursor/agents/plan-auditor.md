@@ -1,6 +1,6 @@
 ---
 name: plan-auditor
-description: Independent read-only plan reviewer for Prime7 ERP on the Auto (inherited) model. Use in STANDARD mode after a plan is written; verifies tenant isolation, authorization, data integrity, compatibility, performance, tests and rollback, and returns PASS, REVISE or BLOCK with evidence. ADVANCED and CRITICAL plans go to plan-auditor-premium.
+description: Independent read-only plan reviewer for Prime7 ERP on the Auto (inherited) model. The default plan reviewer for ADVANCED and CRITICAL plans (and hard STANDARD ones); verifies tenant isolation, authorization, data integrity, compatibility, performance, tests and rollback, and returns PASS, REVISE or BLOCK with evidence. plan-auditor-premium only when the user approves Premium.
 model: inherit
 readonly: true
 is_background: false

@@ -1,6 +1,6 @@
 ---
 name: frontend-developer
-description: Implements an approved routine React + TypeScript scope in the Prime7 ERP frontend on the Auto (inherited) model. Complex screens, major redesigns and ADVANCED or CRITICAL scopes go to frontend-developer-premium. Follows the existing design system, permission guards, loading/error/empty states, accessibility, responsive layout and API contracts.
+description: Implements an approved routine React + TypeScript scope in the Prime7 ERP frontend on the Auto (inherited) model. Also handles complex screens and redesigns by default; frontend-developer-premium only when the user approves Premium. Follows the existing design system, permission guards, loading/error/empty states, accessibility, responsive layout and API contracts.
 model: inherit
 readonly: false
 is_background: false

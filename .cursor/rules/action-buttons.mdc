@@ -1,7 +1,7 @@
 ---
 description: Use a single combined Actions dropdown for table row actions (Edit, Delete, View, etc.)
-globs: frontend/src/pages/**/*.tsx
-alwaysApply: true
+globs: frontend/src/**/*.tsx
+alwaysApply: false
 ---
 
 # Combined action buttons

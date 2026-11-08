@@ -1,6 +1,6 @@
 ---
 name: qa-engineer
-description: Independent read-only QA reviewer for Prime7 ERP on the Auto (inherited) model, for STANDARD changes. Reviews the diff and the test-runner output against the acceptance criteria, checks test adequacy and regressions, and returns PASS, FAIL or BLOCKED. ADVANCED and CRITICAL work goes to qa-engineer-premium. Never runs commands or edits files.
+description: Independent read-only QA reviewer for Prime7 ERP on the Auto (inherited) model, the default QA reviewer for STANDARD, ADVANCED and CRITICAL changes. Reviews the diff and the test output against the acceptance criteria, checks test adequacy and regressions, and returns PASS, FAIL or BLOCKED. qa-engineer-premium only when the user approves Premium. Never runs commands or edits files.
 model: inherit
 readonly: true
 is_background: false

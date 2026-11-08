@@ -237,15 +237,15 @@ HR officers usually do this once, then add new items when the factory grows.
 
 1. Open **HR → Core HR → Departments** (\`/app/hr/departments\`).
 2. Click **Add department**.
-3. Type the **Department code** and **Department name**. Keep **Active** ticked.
+3. Type the **Department name**. Keep **Active** ticked. The code (for example **DEPT-0001**) is assigned automatically ("Code assigned automatically").
 4. Click **Save**.
 
 ### B. Add a designation
 
 1. Open **HR → Core HR → Designations** (\`/app/hr/designations\`).
 2. Click **Add designation**.
-3. Type the **Designation code** and **Designation name** (both required — the screen marks required fields with two stars).
-4. Choose the department in the drop-down (or leave **No department** if the title is used everywhere).
+3. Type the **Designation name** (required — the screen marks required fields with two stars). The code (for example **DESG-0001**) is assigned automatically.
+4. Choose the department in the drop-down (or leave **No department** if the title is used everywhere). If the department is missing, click **+** next to the drop-down, type its name and click **Create** — it is added and selected without leaving the form.
 5. Click **Save**.
 
 ### C. Add a section or line
@@ -263,7 +263,9 @@ HR officers usually do this once, then add new items when the factory grows.
 
 ## Tips
 
-- To change a department or designation, use **Actions → Edit** on its row. Untick **Active** instead of deleting when a name is no longer used.
+- To change a department or designation, use **Actions → Edit** on its row. Untick **Active** instead of deleting when a name is no longer used. Only an edit shows the code box; leave it as it is unless you must rename the code.
+- The designation **description** is printed as the employee's **Job description** (see **Unified employee workspace**), so write the duties there, one per line.
+- Every drop-down with a **+** button (department, designation, section / line) lets you add a missing entry on the spot.
 - **Actions → Delete** is blocked when employees are still linked — this protects old records.
 - Type part of a code or name in **Search code or name** on Sections & Lines to find a line quickly.
 
@@ -273,8 +275,8 @@ HR officers usually do this once, then add new items when the factory grows.
 - **The designation I want is missing on the employee Job tab** → it belongs to another department. Change the department first, or edit the designation and set **No department**.
 - **Delete does nothing / shows an error** → employees are linked. Move them to another department first, or just untick **Active**.`,
       tags: ["HR", "departments", "designations", "sections", "lines", "setup"],
-      keywords: ["department", "designation", "job title", "position", "post", "padobi", "line", "floor", "unit", "section", "org chart"],
-      lastUpdated: "2026-11-06",
+      keywords: ["department", "designation", "job title", "position", "post", "padobi", "line", "floor", "unit", "section", "org chart", "quick add", "auto code", "job description"],
+      lastUpdated: "2026-11-08",
       coverImage: "/tutorials/screens/hr-designations.jpg",
       infographics: [
         {
@@ -327,6 +329,8 @@ The **Employees** list is the master record of every worker and staff member. At
 - The **employee number** is given automatically when you save, for example **EMP-0000001**, then **EMP-0000002**. A number is used once only: it is never given to another person, even after someone leaves or the prefix changes. Change the prefix and digits under **HR → HR Settings → Employee number format**. The same number is printed on the ID card and typed at the **Scan station**.
 - After **Bangladesh setup**, every employee needs a Bangladesh **mobile number** (like 01712345678) and either an **NID** (10, 13 or 17 digits) or a **birth registration number** (17 digits). The same NID or birth registration number cannot be used for two employees.
 - If the person will use **My Leave / My Attendance / My Payslips**, create their login first under **Settings → User Mgmt**.
+
+> **Tip:** If your admin has switched on **Unified employee workspace** (Settings → Configuration), **Add employee** and **Actions → Edit** open one tabbed screen with AI autofill, salary set-up, a checklist and QR-signed letters instead of the dialog below. See **Unified employee workspace: add and edit employees**.
 
 ## Steps
 
@@ -403,7 +407,7 @@ The **Employees** list is the master record of every worker and staff member. At
         "link user",
         "karmi",
       ],
-      lastUpdated: "2026-11-07",
+      lastUpdated: "2026-11-08",
       coverImage: "/tutorials/screens/hr-employees.jpg",
       videos: [
         {
@@ -460,7 +464,7 @@ The **Employees** list is the master record of every worker and staff member. At
         },
       ],
       relatedAppRoutes: ["/app/hr/employees", "/app/settings/users"],
-      relatedArticleIds: ["hr-org-setup", "hr-bd-setup", "hr-ai-onboarding", "hr-ess", "hr-employee-exit", "hr-pay-setup", "hr-overview", "mfg-scan-station"],
+      relatedArticleIds: ["hr-employee-workspace", "hr-org-setup", "hr-bd-setup", "hr-ai-onboarding", "hr-ess", "hr-employee-exit", "hr-pay-setup", "hr-overview", "mfg-scan-station"],
     },
     {
       id: "hr-ai-onboarding",
@@ -472,6 +476,8 @@ The **Employees** list is the master record of every worker and staff member. At
 **AI Onboarding** reads scanned HR papers and fills the new-employee form for you. You always check the fields before anything is saved. Files are only read, not stored.
 
 **Who uses it:** HR officers onboarding many new workers.
+
+> **Tip:** With **Unified employee workspace** switched on, AI Onboarding opens **Add employee** instead: the same upload cards sit at the top of the **Personal** tab and fill the fields automatically (no **Apply** button), without overwriting anything you typed. See **Unified employee workspace: add and edit employees**.
 
 ## Before you start
 
@@ -506,7 +512,7 @@ The employee is created like a normal **Add employee**. Continue on the profile:
 - **Reading fails** → the file is too dark, blurred or not a supported image/PDF. Scan again.`,
       tags: ["HR", "AI", "OCR", "onboarding", "employees"],
       keywords: ["scan CV", "resume", "NID scan", "national ID", "birth certificate", "medical certificate", "OCR", "auto fill", "AI onboard"],
-      lastUpdated: "2026-11-07",
+      lastUpdated: "2026-11-08",
       coverImage: "/tutorials/screens/hr-employees-ai-onboard.jpg",
       images: [
         {
@@ -528,7 +534,117 @@ The employee is created like a normal **Add employee**. Continue on the profile:
         },
       ],
       relatedAppRoutes: ["/app/hr/employees/ai-onboard", "/app/settings/config"],
-      relatedArticleIds: ["hr-add-employee", "hr-overview", "settings-overview"],
+      relatedArticleIds: ["hr-employee-workspace", "hr-add-employee", "hr-overview", "settings-overview"],
+    },
+    {
+      id: "hr-employee-workspace",
+      title: "Unified employee workspace: add and edit employees",
+      summary:
+        "One tabbed screen to add and edit employees: AI autofill, family and both addresses, quick-add drop-downs, salary with the legal minimum check, bank and facilities, a truthful checklist and QR-signed appointment letters.",
+      estimatedMinutes: 8,
+      content: `## Overview
+
+The **unified employee workspace** replaces the small **Add employee** dialog and the separate **AI Onboarding** page with one screen that has the same tabs as the employee profile. Adding and editing work the same way.
+
+**Who uses it:** HR officers (add and maintain), payroll officers (salary and bank), compliance officers (checklist).
+
+## Before you start
+
+- An admin switches it on: **Settings → Configuration → HR compliance / OCR / AI → Unified employee workspace**. While it is off, the old dialog and pages stay exactly as before.
+- What you may change depends on your role: family, religion, nationality, addresses and the bKash tick need the **HR identity** permission; salary, bank and payment method need **payroll manage**; the temporary gate pass needs **gate pass manage**. Fields you cannot see show **Hidden for your role**.
+- AI autofill appears only when at least one document OCR switch is on.
+
+## Steps
+
+### A. Add an employee
+
+1. Open **HR → Core HR → Employees** and click **Add employee** (\`/app/hr/employees/new\`).
+2. **Personal** tab — at the top, **AI autofill** (coloured box): upload the National ID, CV or birth certificate. Matching fields fill in by themselves and glow for a moment. Anything you already typed is kept; the box lists "AI read …" with **Use AI value** / **Keep mine**.
+3. Fill **Basic details**, **Family** (father's, mother's, spouse's name), **Contact & emergency** (tick **This mobile is a bKash number** when it is), **Present address** and **Permanent address**. Tick **Same as present address** to copy it.
+4. **Job** tab — employment type (permanent, temporary, contractual or probation), category, joining date and **Probation (months)**; the confirmation date is calculated for you (**Use …**). Pick department, designation and section / line; if one is missing click **+** next to it to add it without leaving the form.
+5. Tick **Issue a 7-day temporary gate pass** if the person starts before the ID card is printed (needs a mobile number).
+6. **Salary** tab — choose the **Salary structure** and, for workers, the **Bangladesh wage grade**. Leave **Basic salary** empty to use the grade minimum. The green / red box shows basic and gross against the legal minimum; a salary below the grade is refused. Then **Salary paid by** (bank, bKash or cash), the optional bank details and the **Facilities** the person gets (lunch, transport…).
+7. Click **Create employee** in the bar at the bottom (use **Next** / **Back** to move between Personal, Job and Salary). Photo, documents, medical and the other tabs are locked until this first save.
+8. The **Next steps** window shows each step. Download the **ID card**, the **Appointment letter (QR signed)**, the **Job description (QR signed)** and the **Temporary gate pass**. If a step failed (for example salary below the grade), fix it and click **Retry failed steps** — the employee is never created twice.
+
+### B. Complete and edit the profile
+
+1. Open the employee (**Actions → View** or **Edit**). Each tab has its own **Save** button in the bottom bar.
+2. **Salary** tab — **Current salary** shows basic, gross, structure and grade with the history. To change pay, choose the new structure / grade / basic and an **Effective from** date, then **Save new salary**: the old period ends the day before and the new one starts that day.
+3. **Checklist** tab — photo, photo consent, NID / birth registration scan and (when medical tracking is on) the medical exam. Each task shows **Pending** until the real record is saved on the matching tab (click **Open**); it reopens if the record is withdrawn. The medical task needs a medical record with result **Fit** or **Restricted** — a record still marked **Pending** keeps it pending. A compliance manager can **Waive…** a task with a reason.
+
+### C. Signed letters
+
+- **Generate document → Appointment letter** or **Job description** downloads the latest signed version. The job description is the designation's description.
+- After changing the employee's details use **Reissue appointment letter** / **Reissue job description**: a new version with a new QR code is made and older versions stay valid.
+- Anyone can scan the QR code to open the public check page. It shows only the company, document number, date, the employee's initials and code, and **genuine / changed** — never salary, address or ID numbers. The company must have **public document verification** switched on.
+
+## Common problems
+
+- **"Requires … permission 'hr.identity.manage'"** or **'hr.payroll.manage'** → your role cannot set that field; leave it for a manager.
+- **"Basic … is below the … minimum"** / **"Gross … is below …"** → raise the basic salary or pick the right structure for the grade.
+- **"A salary assignment already starts on …"** → choose an effective date after the latest salary period.
+- **"A mobile number is needed for the temporary gate pass"** → fill **Mobile** on the Personal tab.
+- **Generate document is missing** → document generation is off, or your role lacks the documents permission.`,
+      tags: ["HR", "employees", "onboarding", "AI", "salary", "documents", "checklist"],
+      keywords: [
+        "add employee",
+        "employee workspace",
+        "onboarding",
+        "AI autofill",
+        "father name",
+        "permanent address",
+        "bKash",
+        "bank account",
+        "wage grade",
+        "minimum wage",
+        "facilities",
+        "probation",
+        "appointment letter",
+        "job description",
+        "QR verification",
+        "gate pass",
+        "checklist",
+      ],
+      lastUpdated: "2026-11-09",
+      coverImage: "/tutorials/screens/hr-emp-ws-personal.jpg",
+      images: [
+        {
+          src: "/tutorials/screens/hr-emp-ws-personal.jpg",
+          alt: "Add employee workspace on the Personal tab with the AI autofill panel and locked Photo, Documents and Checklist tabs",
+          caption: "Personal tab: AI autofill at the top; record tabs stay locked (padlock) until you create the employee.",
+        },
+        {
+          src: "/tutorials/screens/hr-emp-ws-job.jpg",
+          alt: "Job tab with employment type, probation months, confirmation date and department, designation and section drop-downs with + buttons",
+          caption: "Job tab: probation months calculate the confirmation date; + next to a drop-down adds a missing entry.",
+        },
+        {
+          src: "/tutorials/screens/hr-emp-ws-quick-add.jpg",
+          alt: "Add department dialog opened from the Job tab with the name Finishing and the note Code assigned automatically",
+          caption: "Quick add: type the name, click Create — the new department is selected and your form stays as it was.",
+        },
+        {
+          src: "/tutorials/screens/hr-emp-ws-salary.jpg",
+          alt: "Salary tab with salary structure, Bangladesh wage grade, basic salary, effective date, payment method and bank fields",
+          caption: "Salary tab: structure, wage grade and basic, then how the salary is paid and the facilities.",
+        },
+      ],
+      infographics: [
+        {
+          type: "flow",
+          title: "Add an employee in one screen",
+          steps: [
+            { label: "Personal (+ AI autofill)", href: "/app/hr/employees/new" },
+            { label: "Job" },
+            { label: "Salary" },
+            { label: "Create employee" },
+            { label: "Next steps: ID card, letter, JD, gate pass" },
+          ],
+        },
+      ],
+      relatedAppRoutes: ["/app/hr/employees/new", "/app/hr/employees", "/app/settings/config"],
+      relatedArticleIds: ["hr-add-employee", "hr-ai-onboarding", "hr-org-setup", "hr-pay-setup", "hr-bd-setup"],
     },
     {
       id: "hr-shifts-roster-holidays",

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { api, type HrDocExtractionResponse, type HrEmployeeCreate } from "@/api/client";
 import { FileImportCard } from "@/components/ai-extract/FileImportCard";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
@@ -93,7 +93,14 @@ function DocUploadSection({
   );
 }
 
+/** With the unified workspace on, AI autofill lives in Add employee, so the old page redirects there. */
 export function AiEmployeeOnboardingPage() {
+  const { me } = useAuth();
+  if (me?.feature_flags?.hr_onboarding_workspace_v2 === true) return <Navigate to="/app/hr/employees/new" replace />;
+  return <LegacyAiEmployeeOnboardingPage />;
+}
+
+function LegacyAiEmployeeOnboardingPage() {
   const navigate = useNavigate();
   const { me } = useAuth();
   const flags = me?.feature_flags;

@@ -67,6 +67,10 @@ export default defineConfig(async ({ mode }) => {
       // More reliable file watching with Docker Desktop bind mounts on Windows.
       usePolling: true,
       interval: 1000,
+      // Polling stats every file over the slow Windows bind mount and starves Node's fs threads.
+      // dist/ is build output (never imported in dev); images/videos in public/ change rarely.
+      binaryInterval: 5000,
+      ignored: ["**/dist/**", "**/coverage/**", "**/tsconfig.tsbuildinfo"],
     },
     hmr: isProduction
       ? {

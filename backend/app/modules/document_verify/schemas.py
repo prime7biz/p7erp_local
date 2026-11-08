@@ -20,6 +20,9 @@ class PublicDocumentVerification(BaseModel):
     quantity: str | None = None
     line_count: int | None = None
     signed_at: str | None = None
+    # HR letters only: who the letter is for, without the full name.
+    employee_code: str | None = None
+    employee_initials: str | None = None
 
 
 class PublicProformaVerification(BaseModel):

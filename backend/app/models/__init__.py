@@ -305,6 +305,11 @@ from app.models.hr_lifecycle import (
     HrPayrollDocumentSnapshot,
     HrSeparation,
 )
+from app.models.hr_onboarding import (
+    HrEmployeeOnboardingRun,
+    HrEmployeeOnboardingTask,
+    HrGeneratedEmployeeDocument,
+)
 from app.models.hr_allowance import (
     HrAllowanceEntry,
     HrAllowanceRule,

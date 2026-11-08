@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -143,6 +144,33 @@ class Employee(Base):
     employment_type: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     confirmation_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     exit_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Migration 288 (onboarding fields, all nullable). Legacy address_line / city / country stay in use.
+    father_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    mother_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    spouse_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    religion: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    nationality: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    present_address_line: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    present_city: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    present_district: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    present_postal_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    present_country: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    permanent_address_line: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    permanent_city: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    permanent_district: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    permanent_postal_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    permanent_country: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    emergency_contact_relation: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    mobile_is_bkash: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    salary_payment_method: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    bank_account_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    bank_account_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    bank_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    bank_branch: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    bank_routing_no: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    probation_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # List of facility names printed in the appointment letter.
+    facilities: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     department_id: Mapped[int | None] = mapped_column(
         ForeignKey("hr_departments.id", ondelete="SET NULL"), nullable=True, index=True
     )

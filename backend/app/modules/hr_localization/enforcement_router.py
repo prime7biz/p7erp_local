@@ -18,7 +18,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,7 +40,6 @@ from app.models.hr_bd import (
     HrBdFestivalWorkEntry,
     HrBdLeaveAccrualEntry,
     HrBdMaternityCase,
-    HrBdRuleSet,
     HrBdServiceBenefitCase,
     HrBdWageScheduleRate,
 )
@@ -61,6 +60,7 @@ from app.modules.hr_localization.rules_router import (
     require_manager_admin,
 )
 from app.modules.hr_localization.rules_service import effective_rates, effective_rules, lock_tenant
+from app.modules.hr_payroll import compensation_service as comp
 
 router = APIRouter(prefix="/hr/localization/bd-rmg", tags=["hr-localization"])
 
@@ -170,35 +170,12 @@ async def create_wage_assignment(
     _ensure_tenant(user, tenant)
     tenant_id, user_id = tenant.id, user.id
     await _perm(db, user, tenant_id, PERMISSION_HR_PAYROLL_MANAGE)
-    await _lock_employee(db, tenant_id, body.employee_id)
-    rate = await db.get(HrBdWageScheduleRate, body.wage_rate_id)
-    if rate is None or rate.tenant_id != tenant_id:
-        raise HTTPException(status_code=404, detail="Wage rate not found")
-    rs = await db.get(HrBdRuleSet, rate.rule_set_id)
-    if rs is None or rs.tenant_id != tenant_id or rs.status != "APPROVED":
-        raise HTTPException(status_code=409, detail="The wage rate belongs to a rule set that is not approved")
-    if body.effective_from < rate.effective_from:
-        raise HTTPException(status_code=400, detail="effective_from is before the wage rate's effective date")
-    clash = (
-        await db.execute(
-            select(HrBdEmployeeWageAssignment.id).where(
-                HrBdEmployeeWageAssignment.tenant_id == tenant_id,
-                HrBdEmployeeWageAssignment.employee_id == body.employee_id,
-                or_(
-                    HrBdEmployeeWageAssignment.effective_to.is_(None),
-                    HrBdEmployeeWageAssignment.effective_to >= body.effective_from,
-                ),
-            )
-        )
-    ).first()
-    if clash:
-        raise HTTPException(status_code=409, detail="Employee already has a wage grade covering this date; end it first")
-    row = HrBdEmployeeWageAssignment(
-        tenant_id=tenant_id, employee_id=body.employee_id, wage_rate_id=rate.id,
+    await comp.lock_employee(db, tenant_id, body.employee_id)
+    rate = await comp.approved_wage_rate(db, tenant_id, body.wage_rate_id, body.effective_from)
+    row = await comp.insert_wage_assignment(
+        db, tenant_id=tenant_id, employee_id=body.employee_id, rate=rate,
         effective_from=body.effective_from, created_by=user_id,
     )
-    db.add(row)
-    await db.flush()
     await _audit(db, tenant_id, user_id, "HR_BD_WAGE_GRADE_ASSIGNED", f"hr.employee:{body.employee_id}", f"{rate.rate_code} from {body.effective_from}")
     await _commit_or_conflict(db, "Employee already has a wage grade starting on that date")
     await db.refresh(row)
@@ -215,12 +192,9 @@ async def end_wage_assignment(
 ):
     _ensure_tenant(user, tenant)
     await _perm(db, user, tenant.id, PERMISSION_HR_PAYROLL_MANAGE)
-    row = await _locked(db, HrBdEmployeeWageAssignment, tenant.id, assignment_id, "Wage assignment")
-    if row.effective_to is not None:
-        raise HTTPException(status_code=409, detail="Wage assignment already ended")
-    if body.effective_to < row.effective_from:
-        raise HTTPException(status_code=400, detail="effective_to must be on or after effective_from")
-    row.effective_to, row.ended_by, row.ended_at = body.effective_to, user.id, datetime.utcnow()
+    row = await comp.close_wage_assignment(
+        db, tenant_id=tenant.id, assignment_id=assignment_id, effective_to=body.effective_to, ended_by=user.id
+    )
     await _audit(db, tenant.id, user.id, "HR_BD_WAGE_GRADE_ENDED", f"hr.employee:{row.employee_id}", str(body.effective_to))
     await db.commit()
     await db.refresh(row)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import io
 from datetime import date
 
@@ -15,14 +16,23 @@ from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.codegen import next_tenant_code
 from app.common.permissions import (
     HR_SETUP_BYPASS_ROLES,
+    PERMISSION_HR_COMPLIANCE_MANAGE,
+    PERMISSION_HR_COMPLIANCE_VIEW,
     PERMISSION_HR_DOCUMENTS_GENERATE,
+    PERMISSION_HR_DOCUMENTS_VIEW,
+    PERMISSION_HR_GATE_PASS_MANAGE,
     PERMISSION_HR_PAYROLL_MANAGE,
     assert_hr_manager_or_permission,
     assert_soft_permission_allowed,
     internal_permission_granted,
+    soft_permission_denied,
 )
 from app.common.tenant import require_tenant
-from app.common.tenant_feature_keys import is_age_verification_required, is_auto_document_generation_enabled
+from app.common.tenant_feature_keys import (
+    is_age_verification_required,
+    is_auto_document_generation_enabled,
+    is_hr_onboarding_workspace_v2_enabled,
+)
 from app.database import get_db, safe_async_session_rollback
 from app.modules.hr_compliance.service import assert_dob_allowed
 from app.modules.hr import hr_document_generator_service as hr_pdf
@@ -43,15 +53,16 @@ from app.models import (
     Tenant,
     User,
 )
+from app.modules.audit.service import log_action
+from app.models.hr_onboarding import HrGeneratedEmployeeDocument
+from app.modules.hr import employee_service, generated_documents
 from app.modules.hr import service as hr_domain
+from app.modules.hr.compensation_router import employee_pay_snapshot
 from app.modules.hr.employee_identity import (
     assert_identity_complete,
     assert_identity_unique,
     identity_required,
     next_employee_code,
-    normalize_digits,
-    normalize_mobile,
-    validate_identity_values,
 )
 from app.modules.hr.schemas import (
     DepartmentCreate,
@@ -111,17 +122,7 @@ async def _next_employee_code(db: AsyncSession, tenant_id: int, feature_flags=No
     return await next_employee_code(db, tenant_id, feature_flags)
 
 
-def _identity_inputs(tenant: Tenant, national_id, birth_registration_no, phone):
-    """Normalized (national_id, birth_registration_no, phone); validated under Bangladesh identity rules."""
-    if not identity_required(tenant.feature_flags):
-        return (
-            national_id.strip() if national_id else None,
-            birth_registration_no.strip() if birth_registration_no else None,
-            phone.strip() if phone else None,
-        )
-    nid, brn, mobile = normalize_digits(national_id), normalize_digits(birth_registration_no), normalize_mobile(phone)
-    validate_identity_values(national_id=nid, birth_registration_no=brn, phone=mobile)
-    return nid, brn, mobile
+_identity_inputs = employee_service.identity_inputs
 
 
 def _department_to_response(row: Department) -> DepartmentResponse:
@@ -151,143 +152,27 @@ def _designation_to_response(row: Designation) -> DesignationResponse:
     )
 
 
-EMPLOYEE_SENSITIVE_FIELDS = ("date_of_birth", "address_line", "national_id", "birth_registration_no")
+EMPLOYEE_SENSITIVE_FIELDS = employee_service.LEGACY_SENSITIVE_FIELDS
 
 
 async def _can_view_employee_sensitive(db: AsyncSession, user: User, tenant_id: int) -> bool:
     """Manager-type roles and roles granted HR module access see national ID, DOB and address."""
-    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
-    if (role.name if role else "").strip().lower() in HR_SETUP_BYPASS_ROLES:
-        return True
-    return internal_permission_granted(role=role, permission_key="hr.access") or internal_permission_granted(
-        role=role, permission_key=PERMISSION_HR_PAYROLL_MANAGE
-    )
+    return (await employee_service.employee_field_access(db, user, tenant_id)).can_view_sensitive
 
 
 EMPLOYEE_DUPLICATE_DETAIL = "Employee code or attendance device PIN already exists"
 
-
-def _clean_device_pin(value: str | None) -> str | None:
-    return (value or "").strip() or None
-
-
-def _employee_to_response(row: Employee, *, mask_sensitive: bool = False) -> EmployeeResponse:
-    out = _employee_to_response_full(row)
-    if mask_sensitive:
-        out = out.model_copy(update={f: None for f in EMPLOYEE_SENSITIVE_FIELDS})
-    return out
+_clean_device_pin = employee_service.clean_device_pin
+_get_department_or_404 = employee_service.get_department_or_404
+_get_designation_or_404 = employee_service.get_designation_or_404
+_get_employee_or_404 = employee_service.get_employee_or_404
+_validate_fk_values = employee_service.validate_fk_values
 
 
-def _employee_to_response_full(row: Employee) -> EmployeeResponse:
-    return EmployeeResponse(
-        id=row.id,
-        tenant_id=row.tenant_id,
-        employee_code=row.employee_code,
-        first_name=row.first_name,
-        last_name=row.last_name,
-        email=row.email,
-        phone=row.phone,
-        joining_date=row.joining_date,
-        date_of_birth=row.date_of_birth,
-        gender=row.gender,
-        marital_status=row.marital_status,
-        blood_group=row.blood_group,
-        emergency_contact_name=row.emergency_contact_name,
-        emergency_contact_phone=row.emergency_contact_phone,
-        address_line=row.address_line,
-        city=row.city,
-        country=row.country,
-        national_id=row.national_id,
-        employment_type=row.employment_type,
-        confirmation_date=row.confirmation_date,
-        exit_date=row.exit_date,
-        department_id=row.department_id,
-        designation_id=row.designation_id,
-        section_id=row.section_id,
-        employee_category=row.employee_category,
-        reporting_manager_id=row.reporting_manager_id,
-        user_id=row.user_id,
-        is_active=row.is_active,
-        created_at=row.created_at.isoformat(),
-        updated_at=row.updated_at.isoformat(),
-        attendance_device_pin=row.attendance_device_pin,
-        birth_registration_no=row.birth_registration_no,
-        has_photo=bool(row.photo_path),
-    )
-
-
-async def _get_department_or_404(db: AsyncSession, tenant_id: int, department_id: int) -> Department:
-    row = await db.get(Department, department_id)
-    if not row or row.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Department not found")
-    return row
-
-
-async def _get_designation_or_404(db: AsyncSession, tenant_id: int, designation_id: int) -> Designation:
-    row = await db.get(Designation, designation_id)
-    if not row or row.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Designation not found")
-    return row
-
-
-async def _get_employee_or_404(db: AsyncSession, tenant_id: int, employee_id: int) -> Employee:
-    row = await db.get(Employee, employee_id)
-    if not row or row.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
-    return row
-
-
-async def _validate_fk_values(
-    db: AsyncSession,
-    tenant_id: int,
-    department_id: int | None,
-    designation_id: int | None,
-    reporting_manager_id: int | None,
-    user_id: int | None = None,
-    employee_id: int | None = None,
-    section_id: int | None = None,
-) -> None:
-    if department_id is not None:
-        await _get_department_or_404(db, tenant_id, department_id)
-    if designation_id is not None:
-        await _get_designation_or_404(db, tenant_id, designation_id)
-    if section_id is not None:
-        sec = await db.get(HrSection, section_id)
-        if not sec or sec.tenant_id != tenant_id:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Section not found")
-    if reporting_manager_id is not None:
-        manager = await _get_employee_or_404(db, tenant_id, reporting_manager_id)
-        if employee_id is not None and manager.id == employee_id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Employee cannot report to self")
-        if employee_id is not None:
-            # Guard against manager-cycle chains like A->B->C->A.
-            cursor_id = manager.reporting_manager_id
-            while cursor_id is not None:
-                parent = await _get_employee_or_404(db, tenant_id, cursor_id)
-                if parent.id == employee_id:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Reporting manager creates a cycle in hierarchy",
-                    )
-                cursor_id = parent.reporting_manager_id
-    if user_id is not None:
-        linked_user = await db.get(User, user_id)
-        if not linked_user or linked_user.tenant_id != tenant_id:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Linked user not found in tenant")
-        existing_link = (
-            await db.execute(
-                select(Employee.id).where(
-                    Employee.tenant_id == tenant_id,
-                    Employee.user_id == user_id,
-                    Employee.id != (employee_id or 0),
-                )
-            )
-        ).first()
-        if existing_link:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This user is already linked to another employee",
-            )
+def _employee_to_response(
+    row: Employee, access: employee_service.EmployeeFieldAccess = employee_service.FULL_ACCESS
+) -> EmployeeResponse:
+    return employee_service.employee_to_response(row, access)
 
 
 @router.get("/departments", response_model=list[DepartmentResponse])
@@ -546,8 +431,38 @@ async def list_employees(
         )
     stmt = stmt.order_by(Employee.employee_code).offset(offset).limit(limit)
     result = await db.execute(stmt)
-    mask = not await _can_view_employee_sensitive(db, user, tenant.id)
-    return [_employee_to_response(r, mask_sensitive=mask) for r in result.scalars().all()]
+    access = await employee_service.employee_field_access(db, user, tenant.id)
+    return [_employee_to_response(r, access) for r in result.scalars().all()]
+
+
+@router.get("/employee-access")
+async def employee_access(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """What the caller may see / change on the employee workspace (UI hints; the API enforces it)."""
+    _ensure_user_tenant(user, tenant)
+    access = await employee_service.employee_field_access(db, user, tenant.id)
+    role = await get_user_role_scoped_to_tenant(db, user, tenant.id)
+    manager = (role.name if role else "").strip().lower() in HR_SETUP_BYPASS_ROLES
+
+    def granted(key: str) -> bool:
+        return manager or internal_permission_granted(role=role, permission_key=key)
+
+    def not_denied(key: str) -> bool:
+        return manager or not soft_permission_denied(role=role, permission_key=key)
+
+    return {
+        "can_view_sensitive": access.can_view_sensitive,
+        "can_manage_identity": access.can_manage_identity,
+        "can_manage_payroll": access.can_manage_payroll,
+        "can_manage_gate_pass": granted(PERMISSION_HR_GATE_PASS_MANAGE),
+        "can_generate_documents": not_denied(PERMISSION_HR_DOCUMENTS_GENERATE),
+        "can_view_compliance": not_denied(PERMISSION_HR_COMPLIANCE_VIEW),
+        "can_manage_compliance": granted(PERMISSION_HR_COMPLIANCE_MANAGE),
+        "masked_fields": access.masked_fields(),
+    }
 
 
 # Must stay above "/employees/{employee_id}", otherwise "export" is parsed as an employee id (422).
@@ -576,8 +491,9 @@ async def get_employee(
 ):
     _ensure_user_tenant(user, tenant)
     row = await _get_employee_or_404(db, tenant.id, employee_id)
-    mask = not await _can_view_employee_sensitive(db, user, tenant.id)
-    return _employee_to_response(row, mask_sensitive=mask)
+    access = await employee_service.employee_field_access(db, user, tenant.id)
+    snapshot = await employee_pay_snapshot(db, tenant, row) if access.can_manage_payroll else None
+    return employee_service.employee_to_response(row, access, pay_snapshot=snapshot)
 
 
 @router.post("/employees", response_model=EmployeeResponse, status_code=status.HTTP_201_CREATED)
@@ -588,62 +504,19 @@ async def create_employee(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
-    if body.user_id is not None:
-        await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_MANAGE)
-    assert_dob_allowed(body.date_of_birth, required=is_age_verification_required(tenant.feature_flags))
-    national_id, birth_reg, phone = _identity_inputs(tenant, body.national_id, body.birth_registration_no, body.phone)
-    if identity_required(tenant.feature_flags):
-        assert_identity_complete(national_id=national_id, birth_registration_no=birth_reg, phone=phone)
-        await assert_identity_unique(db, tenant.id, national_id=national_id, birth_registration_no=birth_reg)
-    employee_code = await _next_employee_code(db, tenant.id, tenant.feature_flags)
-    await _validate_fk_values(
-        db,
-        tenant.id,
-        body.department_id,
-        body.designation_id,
-        body.reporting_manager_id,
-        user_id=body.user_id,
-        section_id=body.section_id,
-    )
-    row = Employee(
-        tenant_id=tenant.id,
-        employee_code=employee_code,
-        first_name=body.first_name.strip(),
-        last_name=body.last_name.strip() if body.last_name else None,
-        email=body.email.strip() if body.email else None,
-        phone=phone,
-        joining_date=body.joining_date,
-        date_of_birth=body.date_of_birth,
-        gender=body.gender.strip() if body.gender else None,
-        marital_status=body.marital_status.strip() if body.marital_status else None,
-        blood_group=body.blood_group.strip() if body.blood_group else None,
-        emergency_contact_name=body.emergency_contact_name.strip() if body.emergency_contact_name else None,
-        emergency_contact_phone=body.emergency_contact_phone.strip() if body.emergency_contact_phone else None,
-        address_line=body.address_line.strip() if body.address_line else None,
-        city=body.city.strip() if body.city else None,
-        country=body.country.strip() if body.country else None,
-        national_id=national_id,
-        birth_registration_no=birth_reg,
-        employment_type=body.employment_type.strip() if body.employment_type else None,
-        confirmation_date=body.confirmation_date,
-        exit_date=body.exit_date,
-        department_id=body.department_id,
-        designation_id=body.designation_id,
-        section_id=body.section_id,
-        employee_category=body.employee_category.strip() if body.employee_category else None,
-        reporting_manager_id=body.reporting_manager_id,
-        user_id=body.user_id,
-        is_active=body.is_active,
-        attendance_device_pin=_clean_device_pin(body.attendance_device_pin),
-    )
-    db.add(row)
+    access = await employee_service.employee_field_access(db, user, tenant.id)
     try:
+        row = await employee_service.build_employee(db, tenant=tenant, user=user, body=body, access=access)
+        await log_action(
+            db, tenant_id=tenant.id, user_id=user.id, action="HR_EMPLOYEE_CREATED",
+            resource=f"hr.employee:{row.id}", details=row.employee_code,
+        )
         await db.commit()
     except IntegrityError:
         await safe_async_session_rollback(db)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=EMPLOYEE_DUPLICATE_DETAIL)
     await db.refresh(row)
-    return _employee_to_response(row)
+    return _employee_to_response(row, access)
 
 
 @router.patch("/employees/{employee_id}", response_model=EmployeeResponse)
@@ -663,11 +536,14 @@ async def update_employee(
     # Activation has its own manager-only endpoints, so a plain edit must not flip it.
     if "is_active" in payload and bool(payload["is_active"]) != bool(row.is_active):
         await _require_manager_or_admin(db, user, tenant.id)
-    can_view_sensitive = await _can_view_employee_sensitive(db, user, tenant.id)
-    if not can_view_sensitive:
-        # These fields are masked for this caller, so a resubmitted form must not overwrite them.
-        for field in EMPLOYEE_SENSITIVE_FIELDS:
-            payload.pop(field, None)
+    access = await employee_service.employee_field_access(db, user, tenant.id)
+    # Masked fields come back as null in a resubmitted form and must not overwrite real data.
+    employee_service.drop_masked_resubmits(access, payload)
+    employee_service.assert_protected_writes_allowed(access, payload, row)
+    sensitive_before = {
+        f: getattr(row, f)
+        for f in (*employee_service.IDENTITY_PROFILE_FIELDS, *employee_service.PAYMENT_FIELDS, *EMPLOYEE_SENSITIVE_FIELDS)
+    }
     if "date_of_birth" in payload:
         assert_dob_allowed(
             payload.get("date_of_birth"),
@@ -756,13 +632,20 @@ async def update_employee(
         row.is_active = bool(payload["is_active"])
     if "attendance_device_pin" in payload:
         row.attendance_device_pin = _clean_device_pin(payload["attendance_device_pin"])
+    employee_service.apply_onboarding_fields(row, payload)
+    sensitive_changed = sorted(f for f, before in sensitive_before.items() if getattr(row, f) != before)
     try:
+        if sensitive_changed:
+            await log_action(
+                db, tenant_id=tenant.id, user_id=user.id, action="HR_EMPLOYEE_SENSITIVE_UPDATED",
+                resource=f"hr.employee:{row.id}", details=",".join(sensitive_changed)[:500],
+            )
         await db.commit()
     except IntegrityError:
         await safe_async_session_rollback(db)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=EMPLOYEE_DUPLICATE_DETAIL)
     await db.refresh(row)
-    return _employee_to_response(row, mask_sensitive=not can_view_sensitive)
+    return _employee_to_response(row, access)
 
 
 @router.post("/employees/{employee_id}/activate", response_model=EmployeeResponse)
@@ -1163,30 +1046,152 @@ async def _record_id_card_issues(db: AsyncSession, tenant_id: int, user_id: int,
         )
 
 
+GENERATION_REQUEST_PATTERN = r"^[A-Za-z0-9_-]+$"
+
+
+def _signed_pdf_response(row: HrGeneratedEmployeeDocument, pdf: bytes, *, outdated: bool = False) -> Response:
+    filename = f"{row.document_type.lower().replace('_', '-')}-v{row.document_version}.pdf"
+    return Response(
+        pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "X-Verification-Id": row.verification_id,
+            "X-Document-Version": str(row.document_version),
+            "X-Document-Outdated": "true" if outdated else "false",
+            "Access-Control-Expose-Headers": "X-Verification-Id, X-Document-Version, X-Document-Outdated",
+        },
+    )
+
+
+async def _issue_signed_document(
+    db: AsyncSession,
+    tenant: Tenant,
+    user: User,
+    employee_id: int,
+    document_type: str,
+    reissue: bool,
+    request_id: str | None,
+) -> Response:
+    _ensure_user_tenant(user, tenant)
+    _require_doc_gen(tenant)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_DOCUMENTS_GENERATE)
+    access = await employee_service.employee_field_access(db, user, tenant.id)
+    tenant_id, user_id = tenant.id, user.id
+    try:
+        row, created, outdated = await generated_documents.issue_document(
+            db, tenant=tenant, user_id=user_id, employee_id=employee_id, document_type=document_type,
+            access=access, reissue=reissue, request_id=request_id,
+        )
+        if created:
+            await log_action(
+                db, tenant_id=tenant_id, user_id=user_id, action="HR_DOCUMENT_ISSUED",
+                resource=f"hr.employee:{employee_id}:generated-document:{row.id}",
+                details=f"{document_type} v{row.document_version} {row.verification_id}",
+            )
+        await db.commit()
+    except IntegrityError:
+        await safe_async_session_rollback(db)
+        raise HTTPException(status_code=409, detail="The document was issued at the same time; try again")
+    pdf = await asyncio.to_thread(generated_documents.render_pdf, row)
+    return _signed_pdf_response(row, pdf, outdated=outdated)
+
+
 @router.post("/employees/{employee_id}/documents/appointment-letter")
 async def generate_appointment_letter(
     employee_id: int,
+    reissue: bool = Query(default=False),
+    request_id: str | None = Query(default=None, min_length=8, max_length=64, pattern=GENERATION_REQUEST_PATTERN),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Signed, versioned letter (QR -> public verification) for tenants on the unified workspace;
+    the original unsigned letter otherwise, so switching the flag off restores the old behaviour."""
+    if is_hr_onboarding_workspace_v2_enabled(tenant.feature_flags):
+        return await _issue_signed_document(db, tenant, user, employee_id, "APPOINTMENT_LETTER", reissue, request_id)
     _ensure_user_tenant(user, tenant)
     _require_doc_gen(tenant)
     await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_DOCUMENTS_GENERATE)
     emp = await _get_employee_or_404(db, tenant.id, employee_id)
-    dept = await db.get(Department, emp.department_id) if emp.department_id else None
-    desig = await db.get(Designation, emp.designation_id) if emp.designation_id else None
-    mgr = await db.get(Employee, emp.reporting_manager_id) if emp.reporting_manager_id else None
+    dept = await _owned_or_none(db, Department, emp.department_id, tenant.id)
+    desig = await _owned_or_none(db, Designation, emp.designation_id, tenant.id)
+    mgr = await _owned_or_none(db, Employee, emp.reporting_manager_id, tenant.id)
     pdf = hr_pdf.generate_appointment_letter_pdf(
         emp,
         dept_name=dept.name if dept else None,
         desig_title=desig.title if desig else None,
         manager_name=f"{mgr.first_name} {mgr.last_name or ''}".strip() if mgr else None,
         company_name=getattr(tenant, "name", None) or "Company",
+        show_address=(await employee_service.employee_field_access(db, user, tenant.id)).can_view_sensitive,
     )
     return Response(
         pdf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=appointment-letter.pdf"}
     )
+
+
+async def _owned_or_none(db: AsyncSession, model, row_id: int | None, tenant_id: int):
+    if row_id is None:
+        return None
+    row = await db.get(model, row_id)
+    return row if row is not None and row.tenant_id == tenant_id else None
+
+
+@router.post("/employees/{employee_id}/documents/job-description")
+async def generate_job_description(
+    employee_id: int,
+    reissue: bool = Query(default=False),
+    request_id: str | None = Query(default=None, min_length=8, max_length=64, pattern=GENERATION_REQUEST_PATTERN),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Job description from the designation's description, signed and versioned like the letter."""
+    return await _issue_signed_document(db, tenant, user, employee_id, "JOB_DESCRIPTION", reissue, request_id)
+
+
+@router.get("/employees/{employee_id}/generated-documents")
+async def list_generated_documents(
+    employee_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_DOCUMENTS_VIEW)
+    await _get_employee_or_404(db, tenant.id, employee_id)
+    rows = (
+        await db.execute(
+            select(HrGeneratedEmployeeDocument)
+            .where(HrGeneratedEmployeeDocument.tenant_id == tenant.id, HrGeneratedEmployeeDocument.employee_id == employee_id)
+            .order_by(HrGeneratedEmployeeDocument.document_type, HrGeneratedEmployeeDocument.document_version.desc())
+            .limit(200)
+        )
+    ).scalars().all()
+    return [generated_documents.document_out(r) for r in rows]
+
+
+@router.get("/generated-documents/{document_id}/pdf")
+async def download_generated_document(
+    document_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_DOCUMENTS_VIEW)
+    row = await db.get(HrGeneratedEmployeeDocument, document_id)
+    if row is None or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Document not found")
+    access = await employee_service.employee_field_access(db, user, tenant.id)
+    generated_documents.assert_can_read_snapshot(row.snapshot, access)
+    await log_action(
+        db, tenant_id=tenant.id, user_id=user.id, action="HR_DOCUMENT_DOWNLOADED",
+        resource=f"hr.employee:{row.employee_id}:generated-document:{row.id}",
+    )
+    await db.commit()
+    pdf = await asyncio.to_thread(generated_documents.render_pdf, row)
+    return _signed_pdf_response(row, pdf)
 
 
 @router.post("/employees/{employee_id}/documents/age-verification-cert")

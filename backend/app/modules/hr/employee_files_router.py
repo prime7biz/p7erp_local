@@ -41,6 +41,7 @@ from app.models.hr import Employee, EmployeeDocument
 from app.models.hr_attendance_device import AttendanceDevice
 from app.models.hr_lifecycle import HrEmployeeBiometricEnrollment, HrEmployeePrivacyConsent
 from app.modules.audit.service import log_action
+from app.modules.hr.onboarding_tasks import sync_onboarding_tasks
 from app.modules.hr.employee_identity import (
     EMPLOYEE_NUMBER_FORMAT_KEY,
     number_format,
@@ -179,6 +180,8 @@ async def upload_photo(
         )
     await log_action(db, tenant_id=tenant.id, user_id=user.id, action="HR_EMPLOYEE_PHOTO_UPLOADED",
                      resource=f"hr.employee:{emp.id}", details=f"{size} bytes")
+    await db.flush()
+    await sync_onboarding_tasks(db, tenant_id=tenant.id, employee_id=emp.id, actor_id=user.id)
     await db.commit()
     if old and old != stored:
         hr_secure_files.delete(tenant.id, "photo", old)
@@ -218,6 +221,7 @@ async def delete_photo(
     if consent is not None:
         consent.withdrawn_at, consent.withdrawn_by = datetime.utcnow(), user.id
     await log_action(db, tenant_id=tenant.id, user_id=user.id, action="HR_EMPLOYEE_PHOTO_DELETED", resource=f"hr.employee:{emp.id}")
+    await sync_onboarding_tasks(db, tenant_id=tenant.id, employee_id=emp.id, actor_id=user.id)
     await db.commit()
     if old:
         hr_secure_files.delete(tenant.id, "photo", old)
@@ -254,6 +258,7 @@ async def upload_document(
     await db.flush()
     await log_action(db, tenant_id=tenant.id, user_id=user.id, action="HR_EMPLOYEE_DOCUMENT_UPLOADED",
                      resource=f"hr.employee:{emp.id}:doc:{row.id}", details=f"{doc_type} {kind} {size} bytes")
+    await sync_onboarding_tasks(db, tenant_id=tenant.id, employee_id=emp.id, actor_id=user.id)
     await db.commit()
     return {"id": row.id, "document_type": doc_type, "file_type": kind, "has_file": True, "created_at": row.created_at.isoformat()}
 
@@ -393,6 +398,7 @@ async def create_biometric(
     await db.flush()
     await log_action(db, tenant_id=tenant.id, user_id=user.id, action="HR_BIOMETRIC_CONSENT_RECORDED",
                      resource=f"hr.employee:{emp.id}:biometric:{row.id}", details=f"{body.modality} {body.lawful_basis}")
+    await sync_onboarding_tasks(db, tenant_id=tenant.id, employee_id=emp.id, actor_id=user.id)
     await db.commit()
     await db.refresh(row)
     return _bio_out(row)
@@ -455,6 +461,7 @@ async def withdraw_biometric(
     row.status, row.consent_withdrawn_at, row.consent_withdrawn_by, row.deletion_requested_at = "DELETION_PENDING", now, user.id, now
     await log_action(db, tenant_id=tenant.id, user_id=user.id, action="HR_BIOMETRIC_CONSENT_WITHDRAWN",
                      resource=f"hr.biometric:{row.id}", details="Delete the user from the terminal, then confirm")
+    await sync_onboarding_tasks(db, tenant_id=tenant.id, employee_id=row.employee_id, actor_id=user.id)
     await db.commit()
     await db.refresh(row)
     return _bio_out(row)

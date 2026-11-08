@@ -74,6 +74,10 @@ def test_newly_gated_routers_use_expected_keys():
         f"{API}/finance/party-ledgers": "finance.access",
         f"{API}/control-tower": "merch.access",
         f"{API}/data-migration": "settings.access",
+        f"{API}/hr/onboarding": "hr.access",
+        f"{API}/hr/compensation": "hr.access",
+        f"{API}/hr/employee-access": "hr.access",
+        f"{API}/hr/generated-documents": "hr.access",
     }
     seen: dict[str, set[str]] = {}
     for route in app.routes:

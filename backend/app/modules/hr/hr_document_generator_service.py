@@ -123,6 +123,7 @@ def generate_appointment_letter_pdf(
     desig_title: str | None = None,
     manager_name: str | None = None,
     company_name: str = "Company",
+    show_address: bool = True,
 ) -> bytes:
     from reportlab.lib.pagesizes import A4
     from reportlab.pdfgen import canvas
@@ -142,7 +143,7 @@ def generate_appointment_letter_pdf(
     y -= 20
     c.drawString(50, y, f"To: {_emp_name(emp)}")
     y -= 16
-    c.drawString(50, y, emp.address_line or "")
+    c.drawString(50, y, (emp.address_line or "") if show_address else "")
     y -= 28
     for line in [
         f"We are pleased to appoint you as {(desig_title or 'Employee')} in {(dept_name or 'our organization')}.",
@@ -382,6 +383,126 @@ def _zip_id_cards(
             )
             zf.writestr(f"id-card-{emp.employee_code}.pdf", pdf)
     return buf.getvalue()
+
+
+def _signed_pdf(title: str, snapshot: dict, body: list, *, verification_id: str, verify_url: str, version: int) -> bytes:
+    """A4 letter with a scan-to-verify QR in the footer of every page."""
+    from xml.sax.saxutils import escape
+
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+
+    styles = getSampleStyleSheet()
+    buf = io.BytesIO()
+
+    def footer(c, _doc):
+        c.saveState()
+        _draw_qr(c, verify_url, A4[0] - 40 * mm, 10 * mm, 24 * mm)
+        c.setFont("Helvetica", 7)
+        c.drawString(20 * mm, 22 * mm, f"Verification ID: {verification_id}  (version {version})")
+        c.drawString(20 * mm, 18 * mm, "Scan the QR code or open the link to check this document is genuine:")
+        c.drawString(20 * mm, 14 * mm, verify_url[:110])
+        c.restoreState()
+
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm, topMargin=18 * mm, bottomMargin=40 * mm)
+    head = [
+        Paragraph(f"<b>{escape(str(snapshot.get('company_name') or 'Company'))}</b>", styles["Title"]),
+        Paragraph(f"<b>{escape(title)}</b>", styles["Heading2"]),
+        Paragraph(f"Date: {escape(str(snapshot.get('issued_on') or ''))}", styles["Normal"]),
+        Spacer(1, 6),
+    ]
+
+    def para(text: str, style: str = "Normal"):
+        return Paragraph(escape(text).replace("\n", "<br/>"), styles[style])
+
+    doc.build(head + [para(t, s) if isinstance(t, str) else t for t, s in body], onFirstPage=footer, onLaterPages=footer)
+    return buf.getvalue()
+
+
+def _line(label: str, value) -> tuple[str, str]:
+    return (f"{label}: {value if value not in (None, '') else '-'}", "Normal")
+
+
+def render_appointment_letter_pdf(snapshot: dict, *, verification_id: str, verify_url: str, version: int) -> bytes:
+    from reportlab.platypus import Spacer
+
+    emp = snapshot.get("employee") or {}
+    terms = snapshot.get("terms") or {}
+    salary = snapshot.get("salary")
+    body: list = [
+        (f"To: {emp.get('display_name', '')}", "Normal"),
+    ]
+    if emp.get("father_name"):
+        body.append((f"Father's name: {emp['father_name']}", "Normal"))
+    if emp.get("present_address"):
+        body.append((f"Present address: {emp['present_address']}", "Normal"))
+    if emp.get("permanent_address"):
+        body.append((f"Permanent address: {emp['permanent_address']}", "Normal"))
+    body += [
+        (Spacer(1, 8), None),
+        (
+            f"We are pleased to appoint you as {snapshot.get('designation') or 'Employee'} in "
+            f"{snapshot.get('department') or 'our organization'} on the following terms.",
+            "Normal",
+        ),
+        (Spacer(1, 6), None),
+        ("Terms of employment", "Heading3"),
+        _line("Employee number", emp.get("employee_code")),
+        _line("Employment type", terms.get("employment_type")),
+        _line("Category", terms.get("employee_category")),
+        _line("Joining date", terms.get("joining_date")),
+        _line(
+            "Probation period",
+            f"{terms['probation_months']} month(s)" if terms.get("probation_months") is not None else None,
+        ),
+        _line("Confirmation date (after probation)", terms.get("confirmation_date")),
+        _line("Section / line", snapshot.get("section")),
+        _line("Reporting to", snapshot.get("reporting_manager")),
+    ]
+    if salary:
+        body += [(Spacer(1, 6), None), ("Monthly salary", "Heading3")]
+        body.append(_line("Basic", salary.get("basic")))
+        for comp in salary.get("components") or []:
+            body.append(_line(comp.get("name", "Allowance"), comp.get("amount")))
+        body.append(_line("Gross monthly salary", salary.get("gross")))
+        if salary.get("wage_grade"):
+            body.append(_line("Wage grade", salary["wage_grade"]))
+        body.append(_line("Salary paid by", snapshot.get("salary_payment_method")))
+    facilities = snapshot.get("facilities") or []
+    if facilities:
+        body += [(Spacer(1, 6), None), ("Facilities", "Heading3")]
+        body += [(f"- {name}", "Normal") for name in facilities]
+    body += [
+        (Spacer(1, 6), None),
+        ("Working hours, leave and weekly holidays follow company policy and the Bangladesh Labour Act.", "Normal"),
+        ("Please sign and return a copy as acceptance of these terms.", "Normal"),
+        (Spacer(1, 30), None),
+        ("_________________________          _________________________", "Normal"),
+        ("Authorized signatory                         Employee acceptance", "Normal"),
+    ]
+    return _signed_pdf("APPOINTMENT LETTER", snapshot, body, verification_id=verification_id, verify_url=verify_url, version=version)
+
+
+def render_job_description_pdf(snapshot: dict, *, verification_id: str, verify_url: str, version: int) -> bytes:
+    from reportlab.platypus import Spacer
+
+    emp = snapshot.get("employee") or {}
+    body: list = [
+        _line("Employee", f"{emp.get('display_name', '')} ({emp.get('employee_code', '')})"),
+        _line("Position", snapshot.get("designation")),
+        _line("Department", snapshot.get("department")),
+        _line("Reporting to", snapshot.get("reporting_manager")),
+        _line("Employment type", snapshot.get("employment_type")),
+        (Spacer(1, 8), None),
+        ("Duties and responsibilities", "Heading3"),
+        (snapshot.get("job_description") or "No job description has been recorded for this designation yet.", "Normal"),
+        (Spacer(1, 30), None),
+        ("_________________________          _________________________", "Normal"),
+        ("Authorized signatory                         Employee acknowledgement", "Normal"),
+    ]
+    return _signed_pdf("JOB DESCRIPTION", snapshot, body, verification_id=verification_id, verify_url=verify_url, version=version)
 
 
 async def employee_ids_for_bulk_cards(db: AsyncSession, tenant_id: int) -> list[tuple[int, str]]:

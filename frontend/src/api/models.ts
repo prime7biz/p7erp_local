@@ -436,7 +436,8 @@ export interface HrDepartmentResponse {
 }
 
 export interface HrDepartmentCreate {
-  code: string;
+  /** Optional: the backend assigns the code automatically when omitted. */
+  code?: string;
   name: string;
   is_active?: boolean;
 }
@@ -458,7 +459,8 @@ export interface HrDesignationResponse {
 }
 
 export interface HrDesignationCreate {
-  code: string;
+  /** Optional: the backend assigns the code automatically when omitted. */
+  code?: string;
   title: string;
   description?: string | null;
   department_id?: number | null;
@@ -508,9 +510,200 @@ export interface HrEmployeeResponse {
   attendance_device_pin?: string | null;
   birth_registration_no?: string | null;
   has_photo?: boolean;
+  father_name?: string | null;
+  mother_name?: string | null;
+  spouse_name?: string | null;
+  religion?: string | null;
+  nationality?: string | null;
+  present_address_line?: string | null;
+  present_city?: string | null;
+  present_district?: string | null;
+  present_postal_code?: string | null;
+  present_country?: string | null;
+  permanent_address_line?: string | null;
+  permanent_city?: string | null;
+  permanent_district?: string | null;
+  permanent_postal_code?: string | null;
+  permanent_country?: string | null;
+  emergency_contact_relation?: string | null;
+  mobile_is_bkash?: boolean | null;
+  salary_payment_method?: HrSalaryPaymentMethod | null;
+  bank_account_name?: string | null;
+  bank_account_number?: string | null;
+  bank_name?: string | null;
+  bank_branch?: string | null;
+  bank_routing_no?: string | null;
+  probation_months?: number | null;
+  facilities?: string[] | null;
+  /** Detail endpoint only, for callers with hr.payroll.manage. */
+  pay_snapshot?: HrEmployeePaySnapshot | null;
+  /** Fields hidden (returned as null) for this caller; never send them back. */
+  masked_fields?: string[];
 }
 
-export interface HrEmployeeCreate {
+export type HrSalaryPaymentMethod = "bank" | "bkash" | "cash";
+
+/** Employee fields added for onboarding (migration 288). */
+export interface HrEmployeeOnboardingFields {
+  father_name?: string | null;
+  mother_name?: string | null;
+  spouse_name?: string | null;
+  religion?: string | null;
+  nationality?: string | null;
+  present_address_line?: string | null;
+  present_city?: string | null;
+  present_district?: string | null;
+  present_postal_code?: string | null;
+  present_country?: string | null;
+  permanent_address_line?: string | null;
+  permanent_city?: string | null;
+  permanent_district?: string | null;
+  permanent_postal_code?: string | null;
+  permanent_country?: string | null;
+  emergency_contact_relation?: string | null;
+  mobile_is_bkash?: boolean | null;
+  salary_payment_method?: HrSalaryPaymentMethod | null;
+  bank_account_name?: string | null;
+  bank_account_number?: string | null;
+  bank_name?: string | null;
+  bank_branch?: string | null;
+  bank_routing_no?: string | null;
+  probation_months?: number | null;
+  facilities?: string[] | null;
+}
+
+export interface HrEmployeePaySnapshot {
+  as_of: string;
+  basic: string;
+  gross: string;
+  structure_id: number | null;
+  structure_code: string | null;
+  structure_assignment_id: number | null;
+  structure_effective_from: string | null;
+  structure_effective_to: string | null;
+  wage_rate_id: number | null;
+  wage_rate_code: string | null;
+  wage_grade_basic: string | null;
+  wage_grade_gross: string | null;
+  wage_assignment_id: number | null;
+  wage_effective_from: string | null;
+}
+
+/** GET /hr/employee-access — UI hints only; the API enforces every rule. */
+export interface HrEmployeeAccess {
+  can_view_sensitive: boolean;
+  can_manage_identity: boolean;
+  can_manage_payroll: boolean;
+  can_manage_gate_pass: boolean;
+  can_generate_documents: boolean;
+  can_view_compliance: boolean;
+  can_manage_compliance: boolean;
+  masked_fields: string[];
+}
+
+export interface HrCompensationOptions {
+  as_of: string;
+  structures: { id: number; code: string; name: string }[];
+  wage_grades: {
+    id: number;
+    rate_code: string;
+    grade_code: string | null;
+    schedule_class: string;
+    employment_stage: string;
+    basic: string;
+    gross: string;
+  }[];
+}
+
+export interface HrCompensationInput {
+  structure_id: number;
+  bd_wage_rate_id?: number | null;
+  base_salary?: string | null;
+  effective_from?: string | null;
+}
+
+export interface HrCompensationPreview {
+  minimum_basic: string | null;
+  minimum_gross: string | null;
+  basic: string | null;
+  gross: string | null;
+  meets_minimum: boolean;
+  message: string | null;
+}
+
+export interface HrEmployeeCompensationView {
+  employee_id: number;
+  snapshot: HrEmployeePaySnapshot;
+  structure_assignments: {
+    id: number;
+    structure_id: number;
+    structure_code: string;
+    base_salary: string | null;
+    effective_from: string;
+    effective_to: string | null;
+  }[];
+  wage_assignments: {
+    id: number;
+    wage_rate_id: number;
+    rate_code: string;
+    effective_from: string;
+    effective_to: string | null;
+  }[];
+}
+
+export type HrOnboardingStepStatus = "PENDING" | "COMPLETED" | "FAILED" | "SKIPPED";
+
+export interface HrOnboardingSteps {
+  compensation?: HrCompensationInput | null;
+  issue_temp_gate_pass?: boolean;
+}
+
+export interface HrOnboardingRequest extends HrOnboardingSteps {
+  request_id: string;
+  employee: HrEmployeeCreate;
+}
+
+export interface HrOnboardingRun {
+  run_id: number;
+  request_id: string;
+  status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
+  steps: { employee: HrOnboardingStepStatus; payroll: HrOnboardingStepStatus; gate_pass: HrOnboardingStepStatus; checklist: HrOnboardingStepStatus };
+  employee: HrEmployeeResponse | null;
+  payroll_assignment_id: number | null;
+  wage_assignment_id: number | null;
+  gate_pass: { id: number; pass_code: string; status: string; valid_to: string } | null;
+  error: { step: string; code: string; message: string } | null;
+}
+
+export interface HrOnboardingTask {
+  id: number;
+  employee_id: number;
+  task_type: string;
+  label: string;
+  tab: string | null;
+  status: "DUE" | "COMPLETED" | "WAIVED";
+  source_table: string | null;
+  source_id: number | null;
+  due_date: string | null;
+  completed_at: string | null;
+  waived_at: string | null;
+  waive_reason: string | null;
+}
+
+export interface HrGeneratedDocument {
+  id: number;
+  employee_id: number;
+  document_type: "APPOINTMENT_LETTER" | "JOB_DESCRIPTION";
+  document_label: string;
+  document_number: string;
+  document_version: number;
+  verification_id: string;
+  verify_url: string;
+  signed_at: string | null;
+  created_at: string;
+}
+
+export interface HrEmployeeCreate extends HrEmployeeOnboardingFields {
   /** Leave empty to get the next permanent employee number (e.g. EMP-0000001). */
   employee_code?: string;
   birth_registration_no?: string | null;
@@ -542,7 +735,7 @@ export interface HrEmployeeCreate {
   attendance_device_pin?: string | null;
 }
 
-export interface HrEmployeeUpdate {
+export interface HrEmployeeUpdate extends HrEmployeeOnboardingFields {
   employee_code?: string;
   birth_registration_no?: string | null;
   first_name?: string;

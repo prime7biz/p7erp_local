@@ -11,6 +11,8 @@ approval. Agents must not re-report these as new findings, but they must flag an
 | KI-03 | Finance, posting idempotency design | Open, by design | Informational |
 | KI-04 | Commercial chain data model | Policy gap | Informational, needs a business decision |
 | KI-05 | Merchandising and production hierarchy | Policy gap | Informational, needs a business decision |
+| KI-06 | HR employee identity fields permission | Open, by user decision (2026-11-09) | Medium (planned special permission) |
+| KI-07 | HR onboarding checklist consent tasks | Open, by user decision (2026-11-09) | Informational |
 
 ## KI-01: `calculate_job_work_cost` loads a record without a tenant check
 
@@ -50,3 +52,20 @@ approval. Agents must not re-report these as new findings, but they must flag an
 - **What:** the business rule says Style is primary for merchandising and production. `Order.style_id` and many production
   `style_id` / `order_id` columns are nullable, and `docs/ORDER_EXECUTION_SPINE.md` names the Order as the status source.
 - **Decision needed:** confirm the intended hierarchy before any change that depends on it.
+
+## KI-06: NID, date of birth, mobile and the legacy address are editable with `hr.access`
+
+- **Where:** `backend/app/modules/hr/employee_service.py` (`IDENTITY_PROFILE_FIELDS` protects family, religion,
+  nationality, present / permanent address, emergency relation and the bKash flag with `hr.identity.manage`) versus
+  `national_id`, `birth_registration_no`, `date_of_birth`, `phone`, `address_line`, `city`, `country`, which keep the
+  pre-existing rule (any user with HR module access may change them; they are still masked for viewers without HR access).
+- **Decision (user, 2026-11-09):** keep them editable for now; a special permission will be added later.
+- **When doing it:** add the fields to the protected set, check recruitment `hire_candidate` and Excel import callers,
+  and extend `tests/test_hr_employee_sensitive_masking.py`.
+
+## KI-07: identity-document and CV consent checklist tasks are not created
+
+- **Where:** `backend/app/modules/hr/onboarding_tasks.py` (`applicable_task_types`).
+- **What:** `IDENTITY_DOCUMENT_CONSENT` and `CV_CONSENT` exist in the schema, but no screen records those privacy
+  consents yet, so creating the tasks would leave them pending forever. Evidence matching is already implemented.
+- **Decision (user, 2026-11-09, as recommended):** create them only after a consent-capture screen exists.

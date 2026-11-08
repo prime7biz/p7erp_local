@@ -117,6 +117,8 @@ AI_TURNOVER_PREDICTION_ENABLED = "ai_turnover_prediction_enabled"
 AI_PAYROLL_ANOMALY_DETECTION_ENABLED = "ai_payroll_anomaly_detection_enabled"
 AI_COMPLIANCE_RISK_PREDICTION_ENABLED = "ai_compliance_risk_prediction_enabled"
 AUTO_DOCUMENT_GENERATION_ENABLED = "auto_document_generation_enabled"
+# Unified tabbed employee onboarding workspace (default OFF; never add to DEFAULT_ON_FEATURE_FLAGS).
+HR_ONBOARDING_WORKSPACE_V2 = "hr_onboarding_workspace_v2"
 
 # Sprint 6 MIS reports (default ON — read-only).
 MIS_REPORTS_ENABLED = "mis_reports_enabled"
@@ -539,6 +541,10 @@ def is_ai_compliance_risk_prediction_enabled(feature_flags: Any) -> bool:
 
 def is_auto_document_generation_enabled(feature_flags: Any) -> bool:
     return _flag_true(feature_flags, AUTO_DOCUMENT_GENERATION_ENABLED)
+
+
+def is_hr_onboarding_workspace_v2_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, HR_ONBOARDING_WORKSPACE_V2)
 
 
 def is_mis_reports_enabled(feature_flags: Any) -> bool:

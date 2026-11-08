@@ -6,6 +6,16 @@
  */
 import { request, requestBlob } from "@/api/core";
 import type {
+  HrCompensationInput,
+  HrCompensationOptions,
+  HrCompensationPreview,
+  HrEmployeeAccess,
+  HrEmployeeCompensationView,
+  HrGeneratedDocument,
+  HrOnboardingRequest,
+  HrOnboardingRun,
+  HrOnboardingSteps,
+  HrOnboardingTask,
   HrAgeVerification,
   HrAttendanceBulkEntryBody,
   HrAttendanceEntryCreate,
@@ -98,6 +108,14 @@ import type {
   PayrollStatutoryPreviewBody,
   PayrollStatutoryPreviewResponse,
 } from "@/api/models";
+
+function signedDocQuery(opts?: { reissue?: boolean; requestId?: string }): string {
+  const q = new URLSearchParams();
+  if (opts?.reissue) q.set("reissue", "true");
+  if (opts?.requestId) q.set("request_id", opts.requestId);
+  const s = q.toString();
+  return s ? `?${s}` : "";
+}
 
 export const hrApi = {
   async listHrDepartments(params?: { active_only?: boolean }): Promise<HrDepartmentResponse[]> {
@@ -343,8 +361,72 @@ export const hrApi = {
   async generateHrIdCard(employeeId: number): Promise<Blob> {
     return requestBlob(`/api/v1/hr/employees/${employeeId}/documents/id-card`, { method: "POST" });
   },
-  async generateHrAppointmentLetter(employeeId: number): Promise<Blob> {
-    return requestBlob(`/api/v1/hr/employees/${employeeId}/documents/appointment-letter`, { method: "POST" });
+  /** Signed, versioned letter. Without `reissue` the latest version is returned again. */
+  async generateHrAppointmentLetter(employeeId: number, opts?: { reissue?: boolean; requestId?: string }): Promise<Blob> {
+    return requestBlob(
+      `/api/v1/hr/employees/${employeeId}/documents/appointment-letter${signedDocQuery(opts)}`,
+      { method: "POST" },
+    );
+  },
+  async generateHrJobDescription(employeeId: number, opts?: { reissue?: boolean; requestId?: string }): Promise<Blob> {
+    return requestBlob(
+      `/api/v1/hr/employees/${employeeId}/documents/job-description${signedDocQuery(opts)}`,
+      { method: "POST" },
+    );
+  },
+  async listHrGeneratedDocuments(employeeId: number): Promise<HrGeneratedDocument[]> {
+    return request<HrGeneratedDocument[]>(`/api/v1/hr/employees/${employeeId}/generated-documents`);
+  },
+  async downloadHrGeneratedDocument(documentId: number): Promise<Blob> {
+    return requestBlob(`/api/v1/hr/generated-documents/${documentId}/pdf`, { method: "GET" });
+  },
+  async getHrEmployeeAccess(): Promise<HrEmployeeAccess> {
+    return request<HrEmployeeAccess>("/api/v1/hr/employee-access");
+  },
+  async getHrCompensationOptions(): Promise<HrCompensationOptions> {
+    return request<HrCompensationOptions>("/api/v1/hr/compensation/options");
+  },
+  async previewHrCompensation(body: HrCompensationInput): Promise<HrCompensationPreview> {
+    return request<HrCompensationPreview>("/api/v1/hr/compensation/preview", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async getHrEmployeeCompensation(employeeId: number): Promise<HrEmployeeCompensationView> {
+    return request<HrEmployeeCompensationView>(`/api/v1/hr/employees/${employeeId}/compensation`);
+  },
+  async replaceHrEmployeeCompensation(
+    employeeId: number,
+    body: HrCompensationInput & { effective_from: string },
+  ): Promise<HrEmployeeCompensationView> {
+    return request<HrEmployeeCompensationView>(`/api/v1/hr/employees/${employeeId}/compensation`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+  async startHrOnboarding(body: HrOnboardingRequest): Promise<HrOnboardingRun> {
+    return request<HrOnboardingRun>("/api/v1/hr/onboarding", { method: "POST", body: JSON.stringify(body) });
+  },
+  async getHrOnboarding(requestId: string): Promise<HrOnboardingRun> {
+    return request<HrOnboardingRun>(`/api/v1/hr/onboarding/${encodeURIComponent(requestId)}`);
+  },
+  async resumeHrOnboarding(requestId: string, body: HrOnboardingSteps): Promise<HrOnboardingRun> {
+    return request<HrOnboardingRun>(`/api/v1/hr/onboarding/${encodeURIComponent(requestId)}/resume`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async listHrOnboardingTasks(employeeId: number): Promise<HrOnboardingTask[]> {
+    return request<HrOnboardingTask[]>(`/api/v1/hr/employees/${employeeId}/onboarding-tasks`);
+  },
+  async waiveHrOnboardingTask(taskId: number, reason: string): Promise<HrOnboardingTask> {
+    return request<HrOnboardingTask>(`/api/v1/hr/onboarding-tasks/${taskId}/waive`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    });
+  },
+  async printHrGatePass(passId: number): Promise<Blob> {
+    return requestBlob(`/api/v1/hr/gate-passes/${passId}/print`, { method: "GET" });
   },
   async generateHrAgeVerificationCert(employeeId: number): Promise<Blob> {
     return requestBlob(`/api/v1/hr/employees/${employeeId}/documents/age-verification-cert`, { method: "POST" });

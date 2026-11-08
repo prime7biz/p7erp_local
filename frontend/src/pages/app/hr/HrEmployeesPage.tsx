@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   api,
   type HrDepartmentResponse,
@@ -12,10 +12,15 @@ import {
 import { hrBangladeshApi } from "@/api/hrBangladesh";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { listPageRootClass } from "@/components/app/listPageLayout";
+import { useAuth } from "@/context/AuthContext";
 import { useDebouncedValue, useLatestRequest } from "@/hooks/useDebouncedValue";
 import { logApiError } from "@/utils/logApiError";
 
 export function HrEmployeesPage() {
+  const navigate = useNavigate();
+  const { me } = useAuth();
+  // Unified employee workspace replaces the add / quick-edit dialog when the tenant flag is on.
+  const workspaceV2 = me?.feature_flags?.hr_onboarding_workspace_v2 === true;
   const [departments, setDepartments] = useState<HrDepartmentResponse[]>([]);
   const [designations, setDesignations] = useState<HrDesignationResponse[]>([]);
   const [employees, setEmployees] = useState<HrEmployeeResponse[]>([]);
@@ -89,6 +94,10 @@ export function HrEmployeesPage() {
   }, []);
 
   const openCreate = () => {
+    if (workspaceV2) {
+      navigate("/app/hr/employees/new");
+      return;
+    }
     setEditing(null);
     setForm({
       employee_code: "",
@@ -320,8 +329,9 @@ export function HrEmployeesPage() {
                             <button
                               type="button"
                               onClick={() => {
-                                openEdit(row);
                                 setOpenActionsId(null);
+                                if (workspaceV2) navigate(`/app/hr/employees/${row.id}`);
+                                else openEdit(row);
                               }}
                               className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                             >

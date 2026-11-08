@@ -3,31 +3,36 @@ import { useRecordBreadcrumb } from "@/components/shell/recordBreadcrumb";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   api,
-  type HrAgeVerification,
   type HrDepartmentResponse,
   type HrDesignationResponse,
-  type HrEmployeeDocumentCreate,
   type HrEmployeeResponse,
-  type HrEmployeeStatusHistoryCreate,
   type HrEmployeeUpdate,
-  type HrMedicalRecord,
   type HrSectionResponse,
 } from "@/api/client";
-import { hrBangladeshApi } from "@/api/hrBangladesh";
-import { ActionsMenu } from "@/components/hr/bd/BdUi";
-import { EmployeeBiometricsPanel } from "@/components/hr/bd/EmployeeBiometricsPanel";
-import { EmployeeDocumentUpload, SECURE_FILE_PREFIX } from "@/components/hr/bd/EmployeeDocumentUpload";
-import { EmployeePhotoCapture } from "@/components/hr/bd/EmployeePhotoCapture";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { EmployeeWorkspace } from "@/components/hr/workspace/EmployeeWorkspace";
+import { AgeVerificationTab } from "@/components/hr/workspace/recordTabs/AgeVerificationTab";
+import { DocumentsTab } from "@/components/hr/workspace/recordTabs/DocumentsTab";
+import { IdentityTab } from "@/components/hr/workspace/recordTabs/IdentityTab";
+import { MedicalRecordsTab } from "@/components/hr/workspace/recordTabs/MedicalRecordsTab";
+import { ProductionTab } from "@/components/hr/workspace/recordTabs/ProductionTab";
+import { downloadBlob } from "@/components/hr/workspace/recordTabs/shared";
+import { StatusHistoryTab } from "@/components/hr/workspace/recordTabs/StatusHistoryTab";
 import { useAuth } from "@/context/AuthContext";
-import { logApiError } from "@/utils/logApiError";
 
 type Tab = "personal" | "job" | "identity" | "documents" | "age" | "medical" | "history" | "salary" | "production";
 
 const PREFIX = "/app/hr";
 const CAT_OPTS = ["WORKER", "STAFF", "MANAGEMENT"] as const;
 
+/** Employee view / edit. Tenants with `hr_onboarding_workspace_v2` get the unified workspace. */
 export function HrEmployeeDetailPage() {
+  const { me } = useAuth();
+  if (me?.feature_flags?.hr_onboarding_workspace_v2 === true) return <EmployeeWorkspace mode="edit" />;
+  return <LegacyEmployeeDetail />;
+}
+
+function LegacyEmployeeDetail() {
   const { employeeId } = useParams();
   const navigate = useNavigate();
   const { me } = useAuth();
@@ -44,47 +49,13 @@ export function HrEmployeeDetailPage() {
   const [designations, setDesignations] = useState<HrDesignationResponse[]>([]);
   const [sections, setSections] = useState<HrSectionResponse[]>([]);
   const [managers, setManagers] = useState<HrEmployeeResponse[]>([]);
-  const [documents, setDocuments] = useState<Awaited<ReturnType<typeof api.listHrEmployeeDocuments>>>([]);
-  const [history, setHistory] = useState<Awaited<ReturnType<typeof api.listHrEmployeeStatusHistory>>>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [form, setForm] = useState<HrEmployeeUpdate>({});
-
-  const [docForm, setDocForm] = useState<HrEmployeeDocumentCreate>({
-    document_type: "NID",
-    document_number: "",
-    issue_date: "",
-    expiry_date: "",
-    notes: "",
-  });
-
-  const [histForm, setHistForm] = useState<HrEmployeeStatusHistoryCreate>({
-    status: "ACTIVE",
-    effective_date: "",
-    remarks: "",
-  });
-
-  const [prodProfile, setProdProfile] = useState<Awaited<ReturnType<typeof api.getEmployeeProductionProfile>> | null>(null);
-  const [ageVerifications, setAgeVerifications] = useState<HrAgeVerification[]>([]);
-  const [medicalRecords, setMedicalRecords] = useState<HrMedicalRecord[]>([]);
   const [openDocActions, setOpenDocActions] = useState(false);
   const [docGenerating, setDocGenerating] = useState(false);
-
-  const [ageForm, setAgeForm] = useState({
-    verification_method: "DOCUMENT",
-    date_of_birth: "",
-    notes: "",
-  });
-  const [medicalForm, setMedicalForm] = useState({
-    examination_date: "",
-    fitness_status: "FIT",
-    certificate_number: "",
-    expiry_date: "",
-    doctor_name: "",
-    hospital_clinic: "",
-  });
 
   const designationOptions = useMemo(() => {
     if (!form.department_id) return designations;
@@ -147,67 +118,6 @@ export function HrEmployeeDetailPage() {
     }
   }, [employeeIdNum]);
 
-  const loadDocs = useCallback(async () => {
-    if (!employee) return;
-    try {
-      setDocuments(await api.listHrEmployeeDocuments(employee.id));
-    } catch (e) {
-      logApiError("HrEmployeeDetailPage.documents", e);
-      setDocuments([]);
-    }
-  }, [employee]);
-
-  useEffect(() => {
-    if (tab !== "production" || !employee) return;
-    void (async () => {
-      try {
-        setProdProfile(await api.getEmployeeProductionProfile(employee.id, 30));
-      } catch (e) {
-        logApiError("HrEmployeeDetailPage.productionProfile", e);
-        setProdProfile(null);
-      }
-    })();
-  }, [tab, employee]);
-
-  const loadHistory = useCallback(async () => {
-    if (!employee) return;
-    try {
-      setHistory(await api.listHrEmployeeStatusHistory(employee.id));
-    } catch (e) {
-      logApiError("HrEmployeeDetailPage.statusHistory", e);
-      setHistory([]);
-    }
-  }, [employee]);
-
-  const loadAgeVerifications = useCallback(async () => {
-    if (!employee) return;
-    try {
-      setAgeVerifications(await api.listHrAgeVerifications(employee.id));
-    } catch (e) {
-      logApiError("HrEmployeeDetailPage.ageVerifications", e);
-      setAgeVerifications([]);
-    }
-  }, [employee]);
-
-  const loadMedicalRecords = useCallback(async () => {
-    if (!employee) return;
-    try {
-      setMedicalRecords(await api.listHrMedicalRecords(employee.id));
-    } catch (e) {
-      logApiError("HrEmployeeDetailPage.medicalRecords", e);
-      setMedicalRecords([]);
-    }
-  }, [employee]);
-
-  const downloadBlob = (blob: Blob, filename: string) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   const generateDocument = async (kind: "id-card" | "appointment-letter" | "age-cert") => {
     if (!employee) return;
     setDocGenerating(true);
@@ -233,15 +143,6 @@ export function HrEmployeeDetailPage() {
   useEffect(() => {
     void loadCore();
   }, [loadCore]);
-
-  useEffect(() => {
-    if (employee && (tab === "documents" || tab === "history")) {
-      void loadDocs();
-      void loadHistory();
-    }
-    if (employee && tab === "age") void loadAgeVerifications();
-    if (employee && tab === "medical") void loadMedicalRecords();
-  }, [employee, tab, loadDocs, loadHistory, loadAgeVerifications, loadMedicalRecords]);
 
   const saveJob = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -304,102 +205,6 @@ export function HrEmployeeDetailPage() {
     }
   };
 
-  const addDocument = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!employee) return;
-    setSaving(true);
-    setError("");
-    try {
-      await api.createHrEmployeeDocument(employee.id, {
-        document_type: docForm.document_type.trim(),
-        document_number: docForm.document_number?.trim() || null,
-        issue_date: docForm.issue_date || null,
-        expiry_date: docForm.expiry_date || null,
-        notes: docForm.notes?.trim() || null,
-      });
-      setDocForm({ document_type: "NID", document_number: "", issue_date: "", expiry_date: "", notes: "" });
-      await loadDocs();
-      setSuccess("Document added.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const addStatus = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!employee || !histForm.effective_date) return;
-    setSaving(true);
-    setError("");
-    try {
-      await api.createHrEmployeeStatusHistory(employee.id, {
-        status: histForm.status.trim(),
-        effective_date: histForm.effective_date,
-        remarks: histForm.remarks?.trim() || null,
-      });
-      setHistForm({ status: "ACTIVE", effective_date: "", remarks: "" });
-      await loadHistory();
-      setSuccess("Status history added.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const addAgeVerification = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!employee || !ageForm.date_of_birth) return;
-    setSaving(true);
-    setError("");
-    try {
-      await api.createHrAgeVerification(employee.id, {
-        verification_method: ageForm.verification_method,
-        date_of_birth: ageForm.date_of_birth,
-        notes: ageForm.notes.trim() || null,
-      });
-      setAgeForm({ verification_method: "DOCUMENT", date_of_birth: "", notes: "" });
-      await loadAgeVerifications();
-      setSuccess("Age verification recorded.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const addMedicalRecord = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!employee || !medicalForm.examination_date) return;
-    setSaving(true);
-    setError("");
-    try {
-      await api.createHrMedicalRecord(employee.id, {
-        examination_date: medicalForm.examination_date,
-        fitness_status: medicalForm.fitness_status,
-        certificate_number: medicalForm.certificate_number.trim() || null,
-        expiry_date: medicalForm.expiry_date || null,
-        doctor_name: medicalForm.doctor_name.trim() || null,
-        hospital_clinic: medicalForm.hospital_clinic.trim() || null,
-      });
-      setMedicalForm({
-        examination_date: "",
-        fitness_status: "FIT",
-        certificate_number: "",
-        expiry_date: "",
-        doctor_name: "",
-        hospital_clinic: "",
-      });
-      await loadMedicalRecords();
-      setSuccess("Medical record added.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const toggleActive = async () => {
     if (!employee) return;
     setSaving(true);
@@ -444,6 +249,17 @@ export function HrEmployeeDetailPage() {
     { id: "production", label: "Production" },
     { id: "salary", label: "Salary" },
   ];
+  const tabProps = {
+    employee,
+    onError: (m: string) => {
+      setSuccess("");
+      setError(m);
+    },
+    onSuccess: (m: string) => {
+      setError("");
+      setSuccess(m);
+    },
+  };
 
   return (
     <div className="space-y-6">
@@ -631,285 +447,13 @@ export function HrEmployeeDetailPage() {
       )}
 
       {tab === "identity" && (
-        <div className="space-y-4">
-          <EmployeePhotoCapture
-            employeeId={employee.id}
-            hasPhoto={Boolean(employee.has_photo)}
-            onChanged={(hasPhoto) => setEmployee((p) => (p ? { ...p, has_photo: hasPhoto } : p))}
-          />
-          <EmployeeBiometricsPanel employeeId={employee.id} />
-        </div>
+        <IdentityTab {...tabProps} onPhotoChanged={(hasPhoto) => setEmployee((p) => (p ? { ...p, has_photo: hasPhoto } : p))} />
       )}
-
-      {tab === "documents" && (
-        <div className="space-y-4">
-          <EmployeeDocumentUpload employeeId={employee.id} onUploaded={() => void loadDocs()} />
-          <form onSubmit={addDocument} className="rounded-xl border border-border bg-surface-raised p-4 grid gap-2 sm:grid-cols-2">
-            <input className="rounded border px-2 py-1 text-sm" placeholder="Document type" value={docForm.document_type} onChange={(e) => setDocForm((p) => ({ ...p, document_type: e.target.value }))} />
-            <input className="rounded border px-2 py-1 text-sm" placeholder="Document number" value={docForm.document_number ?? ""} onChange={(e) => setDocForm((p) => ({ ...p, document_number: e.target.value }))} />
-            <input type="date" className="rounded border px-2 py-1 text-sm" value={docForm.issue_date ?? ""} onChange={(e) => setDocForm((p) => ({ ...p, issue_date: e.target.value }))} />
-            <input type="date" className="rounded border px-2 py-1 text-sm" value={docForm.expiry_date ?? ""} onChange={(e) => setDocForm((p) => ({ ...p, expiry_date: e.target.value }))} />
-            <input className="sm:col-span-2 rounded border px-2 py-1 text-sm" placeholder="Notes" value={docForm.notes ?? ""} onChange={(e) => setDocForm((p) => ({ ...p, notes: e.target.value }))} />
-            <div className="sm:col-span-2">
-              <button type="submit" disabled={saving} className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white">
-                Add document record
-              </button>
-            </div>
-          </form>
-          <div className="rounded-xl border border-border overflow-hidden">
-            <table className="min-w-full text-sm">
-              <thead className="bg-surface-subtle">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Type</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Number</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Expiry</th>
-                  <th className="px-4 py-2 text-right text-xs uppercase">File</th>
-                </tr>
-              </thead>
-              <tbody>
-                {documents.map((d) => (
-                  <tr key={d.id} className="border-t border-border">
-                    <td className="px-4 py-2">{d.document_type}</td>
-                    <td className="px-4 py-2">{d.document_number ?? "—"}</td>
-                    <td className="px-4 py-2">{d.expiry_date ?? "—"}</td>
-                    <td className="px-4 py-2 text-right">
-                      {(d.file_path ?? "").startsWith(SECURE_FILE_PREFIX) ? (
-                        <ActionsMenu
-                          items={[
-                            {
-                              label: "Download",
-                              onClick: () =>
-                                void (async () => {
-                                  try {
-                                    const blob = await hrBangladeshApi.employeeDocumentBlob(employee.id, d.id);
-                                    const ext = blob.type === "application/pdf" ? "pdf" : blob.type.split("/")[1] || "bin";
-                                    downloadBlob(blob, `${employee.employee_code}-${d.document_type.toLowerCase()}-${d.id}.${ext}`);
-                                  } catch (err) {
-                                    setError(err instanceof Error ? err.message : "Download failed");
-                                  }
-                                })(),
-                            },
-                          ]}
-                        />
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {tab === "age" && (
-        <div className="space-y-4">
-          <form onSubmit={addAgeVerification} className="rounded-xl border border-border bg-surface-raised p-4 grid gap-2 sm:grid-cols-2">
-            <select
-              className="rounded border px-2 py-1 text-sm"
-              value={ageForm.verification_method}
-              onChange={(e) => setAgeForm((p) => ({ ...p, verification_method: e.target.value }))}
-            >
-              <option value="DOCUMENT">Document</option>
-              <option value="BIRTH_CERTIFICATE">Birth certificate</option>
-              <option value="NID">National ID</option>
-            </select>
-            <input
-              type="date"
-              className="rounded border px-2 py-1 text-sm"
-              value={ageForm.date_of_birth}
-              onChange={(e) => setAgeForm((p) => ({ ...p, date_of_birth: e.target.value }))}
-              required
-            />
-            <input
-              className="sm:col-span-2 rounded border px-2 py-1 text-sm"
-              placeholder="Notes"
-              value={ageForm.notes}
-              onChange={(e) => setAgeForm((p) => ({ ...p, notes: e.target.value }))}
-            />
-            <div className="sm:col-span-2">
-              <button type="submit" disabled={saving} className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white">
-                Add verification
-              </button>
-            </div>
-          </form>
-          <div className="rounded-xl border border-border overflow-hidden">
-            <table className="min-w-full text-sm">
-              <thead className="bg-surface-subtle">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Method</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">DOB</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Age</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Status</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">BSCI</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ageVerifications.map((v) => (
-                  <tr key={v.id} className="border-t border-border">
-                    <td className="px-4 py-2">{v.verification_method}</td>
-                    <td className="px-4 py-2">{v.date_of_birth}</td>
-                    <td className="px-4 py-2">{v.age_at_verification}</td>
-                    <td className="px-4 py-2">{v.status}</td>
-                    <td className="px-4 py-2">{v.is_bsci_compliant ? "Yes" : "No"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {tab === "medical" && (
-        <div className="space-y-4">
-          <form onSubmit={addMedicalRecord} className="rounded-xl border border-border bg-surface-raised p-4 grid gap-2 sm:grid-cols-2">
-            <input
-              type="date"
-              className="rounded border px-2 py-1 text-sm"
-              value={medicalForm.examination_date}
-              onChange={(e) => setMedicalForm((p) => ({ ...p, examination_date: e.target.value }))}
-              required
-            />
-            <select
-              className="rounded border px-2 py-1 text-sm"
-              value={medicalForm.fitness_status}
-              onChange={(e) => setMedicalForm((p) => ({ ...p, fitness_status: e.target.value }))}
-            >
-              <option value="FIT">Fit</option>
-              <option value="UNFIT">Unfit</option>
-              <option value="PENDING">Pending</option>
-              <option value="RESTRICTED">Restricted</option>
-            </select>
-            <input
-              className="rounded border px-2 py-1 text-sm"
-              placeholder="Certificate number"
-              value={medicalForm.certificate_number}
-              onChange={(e) => setMedicalForm((p) => ({ ...p, certificate_number: e.target.value }))}
-            />
-            <input
-              type="date"
-              className="rounded border px-2 py-1 text-sm"
-              value={medicalForm.expiry_date}
-              onChange={(e) => setMedicalForm((p) => ({ ...p, expiry_date: e.target.value }))}
-            />
-            <input
-              className="rounded border px-2 py-1 text-sm"
-              placeholder="Doctor name"
-              value={medicalForm.doctor_name}
-              onChange={(e) => setMedicalForm((p) => ({ ...p, doctor_name: e.target.value }))}
-            />
-            <input
-              className="rounded border px-2 py-1 text-sm"
-              placeholder="Hospital / clinic"
-              value={medicalForm.hospital_clinic}
-              onChange={(e) => setMedicalForm((p) => ({ ...p, hospital_clinic: e.target.value }))}
-            />
-            <div className="sm:col-span-2">
-              <button type="submit" disabled={saving} className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white">
-                Add medical record
-              </button>
-            </div>
-          </form>
-          <div className="rounded-xl border border-border overflow-hidden">
-            <table className="min-w-full text-sm">
-              <thead className="bg-surface-subtle">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Exam date</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Fitness</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Certificate</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Expiry</th>
-                </tr>
-              </thead>
-              <tbody>
-                {medicalRecords.map((m) => (
-                  <tr key={m.id} className="border-t border-border">
-                    <td className="px-4 py-2">{m.examination_date}</td>
-                    <td className="px-4 py-2">{m.fitness_status}</td>
-                    <td className="px-4 py-2">{m.certificate_number ?? "—"}</td>
-                    <td className="px-4 py-2">{m.expiry_date ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {tab === "history" && (
-        <div className="space-y-4">
-          <form onSubmit={addStatus} className="rounded-xl border border-border bg-surface-raised p-4 grid gap-2 sm:grid-cols-2">
-            <input className="rounded border px-2 py-1 text-sm" placeholder="Status label" value={histForm.status} onChange={(e) => setHistForm((p) => ({ ...p, status: e.target.value }))} required />
-            <input type="date" className="rounded border px-2 py-1 text-sm" value={histForm.effective_date} onChange={(e) => setHistForm((p) => ({ ...p, effective_date: e.target.value }))} required />
-            <input className="sm:col-span-2 rounded border px-2 py-1 text-sm" placeholder="Remarks" value={histForm.remarks ?? ""} onChange={(e) => setHistForm((p) => ({ ...p, remarks: e.target.value }))} />
-            <div className="sm:col-span-2">
-              <button type="submit" disabled={saving} className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white">
-                Add status change
-              </button>
-            </div>
-          </form>
-          <div className="rounded-xl border border-border overflow-hidden">
-            <table className="min-w-full text-sm">
-              <thead className="bg-surface-subtle">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Effective</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Status</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Remarks</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map((h) => (
-                  <tr key={h.id} className="border-t border-border">
-                    <td className="px-4 py-2">{h.effective_date}</td>
-                    <td className="px-4 py-2">{h.status}</td>
-                    <td className="px-4 py-2">{h.remarks ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {tab === "production" && (
-        <div className="space-y-4 rounded-xl border border-border bg-surface-raised p-4 text-sm">
-          <p className="font-medium text-text-primary">Production profile</p>
-          {!prodProfile ? (
-            <p className="text-text-secondary">Loading…</p>
-          ) : (
-            <>
-              <div>
-                <p className="text-xs uppercase text-text-muted">Line assignment</p>
-                {prodProfile.line_assignment ? (
-                  <p>
-                    {prodProfile.line_assignment.line_code} (last crew date {prodProfile.line_assignment.last_date})
-                  </p>
-                ) : (
-                  <p className="text-text-secondary">No recent line crew assignment.</p>
-                )}
-              </div>
-              <div>
-                <p className="text-xs uppercase text-text-muted">Skills</p>
-                {prodProfile.skills.length === 0 ? (
-                  <p className="text-text-secondary">No IE skills recorded.</p>
-                ) : (
-                  <ul className="list-disc pl-5">
-                    {prodProfile.skills.map((s) => (
-                      <li key={`${s.operation_code}-${s.skill_level}`}>
-                        {s.operation_code} — {s.name} ({s.skill_level})
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              <div>
-                <p className="text-xs uppercase text-text-muted">Attendance trend (30d)</p>
-                <p className="text-text-secondary">{prodProfile.attendance_trend.length} days with records</p>
-              </div>
-            </>
-          )}
-        </div>
-      )}
+      {tab === "documents" && <DocumentsTab {...tabProps} />}
+      {tab === "age" && <AgeVerificationTab {...tabProps} />}
+      {tab === "medical" && <MedicalRecordsTab {...tabProps} />}
+      {tab === "history" && <StatusHistoryTab {...tabProps} />}
+      {tab === "production" && <ProductionTab {...tabProps} />}
 
       {tab === "salary" && (
         <div className="rounded-xl border border-border bg-surface-raised p-6 text-sm text-text-secondary">

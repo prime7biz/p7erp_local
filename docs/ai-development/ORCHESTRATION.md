@@ -1,4 +1,8 @@
-# Prime7 multi-agent development workflow (quality-first hybrid)
+# Prime7 multi-agent development workflow (balanced, cost-aware)
+
+> **Since 2026-11-09:** Premium agents are opt-in. The parent chat does most work itself, Auto agents do the
+> independent reviews, and the only automatic Premium step is `security-auditor-premium` once on CRITICAL work.
+> Budget per task without asking: 3 subagent runs, 1 Premium run, 2 correction rounds. See `MODEL-USAGE-POLICY.md`.
 
 How the agents in `.cursor/agents/` work together. Models and authorization: `MODEL-USAGE-POLICY.md`. Always-applied rules:
 `prime7-core.mdc`, `prime7-security.mdc`, `prime7-orchestration.mdc`. Verified facts: `prime7-development.mdc`. Tracked
@@ -12,22 +16,22 @@ approval prompts and your dashboard limits. It does not enforce gate order, loop
 | Agent | Model | `readonly` | Writes files | Role |
 |---|---|---|---|---|
 | `explorer` | inherit (Auto) | true | no | Targeted evidence with file references |
-| `architect` | inherit | true | no | STANDARD plans |
-| `architect-premium` | `claude-opus-4-8-thinking-high` | true | no | ADVANCED and CRITICAL plans |
-| `plan-auditor` | inherit | true | no | STANDARD plan verdict |
-| `plan-auditor-premium` | `gpt-5.6-sol-medium` | true | no | Final plan verdict for ADVANCED and CRITICAL |
-| `ui-designer` | inherit | true | no | Small or moderate UI briefs |
-| `ui-designer-premium` | `gemini-3.1-pro` | true | no | New modules, dashboards, major redesigns |
-| `backend-developer` | inherit | false | owned backend files | Routine backend scope |
-| `backend-developer-premium` | `claude-sonnet-5-5-high` | false | owned backend files | Complex or CRITICAL backend scope |
-| `frontend-developer` | inherit | false | owned frontend files | Routine frontend scope |
-| `frontend-developer-premium` | `claude-sonnet-5-5-high` | false | owned frontend files | Complex screens and redesigns |
-| `test-runner` | inherit | false | **no** (by instruction) | Executes allowlisted test, lint and type-check commands; raw results only |
-| `qa-engineer` | inherit | true | no | STANDARD QA review of diff and test output |
-| `qa-engineer-premium` | `gpt-5.6-sol-medium` | true | no | Final QA verdict for ADVANCED and CRITICAL |
-| `debugger-premium` | `gpt-5.6-sol-medium` | false | **no** (by instruction) | Root cause of complex defects; proposes the fix |
-| `security-auditor` | inherit | true | no | Security screening |
-| `security-auditor-premium` | `claude-opus-4-8-thinking-high` | true | no | Final security review for ADVANCED sensitive and all CRITICAL changes |
+| `architect` | inherit | true | no | Plans too large for the parent (any mode) |
+| `architect-premium` | `claude-opus-4-8-thinking-high` | true | no | Opt-in only |
+| `plan-auditor` | inherit | true | no | Plan verdict for ADVANCED and CRITICAL |
+| `plan-auditor-premium` | `gpt-5.6-sol-medium` | true | no | Opt-in only |
+| `ui-designer` | inherit | true | no | UI briefs of any size |
+| `ui-designer-premium` | `gemini-3.1-pro` | true | no | Opt-in only |
+| `backend-developer` | inherit | false | owned backend files | Backend scope delegated by the parent |
+| `backend-developer-premium` | `claude-sonnet-5-5-medium` | false | owned backend files | Opt-in only |
+| `frontend-developer` | inherit | false | owned frontend files | Frontend scope delegated by the parent |
+| `frontend-developer-premium` | `claude-sonnet-5-5-medium` | false | owned frontend files | Opt-in only |
+| `test-runner` | inherit | false | **no** (by instruction) | Long or noisy test runs; the parent runs normal tests itself |
+| `qa-engineer` | inherit | true | no | QA review of substantial changes (any mode) |
+| `qa-engineer-premium` | `gpt-5.6-sol-medium` | true | no | Opt-in only |
+| `debugger-premium` | `gpt-5.6-sol-medium` | false | **no** (by instruction) | Opt-in only |
+| `security-auditor` | inherit | true | no | Security screening for sensitive STANDARD / ADVANCED changes |
+| `security-auditor-premium` | `claude-opus-4-8-thinking-high` | true | no | Automatic once on the final diff of CRITICAL work; otherwise opt-in |
 
 **Read-only agents cannot run shell** (observed: Cursor blocks it). The parent passes them `git status --short`,
 `git diff` and `test-runner` output in the prompt. Test **execution** (`test-runner`) is deliberately separated from QA
@@ -36,7 +40,8 @@ approval prompts and your dashboard limits. It does not enforce gate order, loop
 ## 2. Parent responsibilities
 
 - Classify the mode and say why.
-- Choose agents (Premium is allowed under the standing authorization).
+- Do most work itself; choose subagents only when they add clear value. Premium only on request (or the one automatic
+  CRITICAL security review).
 - Give each subagent a complete prompt, since subagents do not see the chat.
 - Run `git status` and `git diff` itself, and forward the output to read-only reviewers.
 - Check verdict lines and count correction rounds.
@@ -47,38 +52,31 @@ The parent never accepts a subagent's claim as proof.
 ## 3. Workflows
 
 ### STANDARD (default)
-1. Explore (parent, `explore` or `explorer`).
-2. For trivial changes, the parent or an Auto developer implements, then `test-runner` runs focused checks.
-3. For substantial changes:
-   - `architect` plans, then `plan-auditor` gives a verdict. Escalate both to Premium for a hard design.
-   - An Auto developer implements, or a Premium developer if the scope is complex.
-   - `test-runner` runs the tests.
-   - `qa-engineer` reviews (required for substantial changes).
-4. Security-sensitive changes (section 5) need an independent security review: `security-auditor`, escalating to
-   `security-auditor-premium` for any finding of medium severity or above, or when the change is CRITICAL.
+1. The parent explores (Grep / Read; `explore` "quick" only for wide searches).
+2. The parent implements and runs focused tests in Shell.
+3. Substantial changes: `qa-engineer` reviews the diff and test output.
+4. Security-sensitive changes (section 5): `security-auditor` screens. A finding of medium severity or above is
+   reported to the user, who decides whether to run `security-auditor-premium`.
 5. Report.
 
 ### ADVANCED (new modules, architecture changes, complex integrations, major UI redesigns)
-1. `explorer` gathers evidence.
-2. `architect-premium` writes the plan, split into disjoint scopes with routine and complex parts marked.
-3. `plan-auditor-premium` gives the verdict. For REVISE, the architect fixes only the listed findings (max 2 rounds).
-4. `ui-designer-premium` writes the brief if UI is involved.
-5. Premium developers implement the complex scopes; Auto developers implement routine scopes (in parallel only per section 6).
-6. `test-runner` runs the tests.
-7. `qa-engineer-premium` reviews.
-8. `security-auditor-premium` reviews the sensitive parts.
-9. Report.
+1. The parent explores and writes the plan (or `architect` for a very large plan), split into disjoint scopes.
+2. `plan-auditor` gives the verdict. For REVISE, fix only the listed findings (max 2 rounds).
+3. The parent implements (or Auto developers, in parallel only per section 6).
+4. The parent runs the tests.
+5. `qa-engineer` reviews; `security-auditor` screens sensitive parts.
+6. Report. Premium agents only if the user approved them.
 
 ### CRITICAL (finance, accounting, inventory valuation, posting, tenant isolation, authorization, migrations)
-1. `explorer` gathers evidence.
-2. `architect-premium` writes the plan (mandatory). Acceptance criteria must be evidence-backed and each must name its regression test.
-3. `plan-auditor-premium` gives the verdict (mandatory). A BLOCK stops the workflow.
-4. Implementation: `backend-developer-premium` is preferred for complex logic, posting and migrations.
-5. `test-runner` runs the focused suite plus neighbouring suites (tenant ownership, route permissions, finance posting
+1. The parent explores and writes the plan. Acceptance criteria must be evidence-backed and each must name its regression test.
+2. `plan-auditor` gives the verdict. A BLOCK stops the workflow.
+3. The parent (or `backend-developer`) implements.
+4. The parent runs the focused suite plus neighbouring suites (tenant ownership, route permissions, finance posting
    guards, inventory accounting, commercial).
-6. `qa-engineer-premium` reviews (mandatory).
-7. `security-auditor-premium` reviews (mandatory). An Auto `security-auditor` screening first is optional.
-8. Block completion while any critical defect remains. If a mandatory Premium step is unavailable, stop and report.
+5. `security-auditor-premium` reviews the final diff (the one automatic Premium step; it also covers financial integrity).
+6. Block completion while any critical defect remains. If the Premium review is unavailable, stop and report.
+7. Extra Premium steps (`architect-premium`, `plan-auditor-premium`, `qa-engineer-premium`, Premium developers) only
+   when the user asks for them.
 
 ## 4. Gates
 
@@ -90,8 +88,8 @@ The parent never accepts a subagent's claim as proof.
 | QA | `QA: PASS` from a reviewer that did not write the code | Implementer fixes findings, `test-runner` re-runs, fresh QA review; max 2 rounds |
 | Security | `SECURITY: PASS` or `PASS WITH FINDINGS` with no critical or high findings | Same correction loop; an unresolved critical finding blocks completion |
 
-- **Debugging:** when tests fail for unclear reasons after one Auto attempt, use `debugger-premium`. Its fix proposal goes
-  to the responsible developer, and then the failed gate is re-run.
+- **Debugging:** when tests fail for unclear reasons after one Auto attempt, report to the user and offer
+  `debugger-premium` (opt-in). Its fix proposal goes to the responsible developer, and then the failed gate is re-run.
 - **Never:** let the implementer be the only reviewer, treat generated code as proof, weaken a test or permission to pass a
   gate, or reuse the same agent instance to review its own output.
 
@@ -137,7 +135,8 @@ external portals; env or config; raw SQL; deployment files.
 - An implementer needs a file outside its scope.
 - Two correction rounds failed.
 - Tests are blocked and cannot be unblocked safely.
-- A mandatory Premium step for CRITICAL work is unavailable.
+- The automatic Premium security review for CRITICAL work is unavailable.
+- The per-task budget (3 subagent runs, 1 Premium run) would be exceeded; ask the user first.
 - Any destructive or production-affecting step is needed.
 - Agent output contradicts `git diff` or the test output.
 
@@ -155,10 +154,11 @@ external portals; env or config; raw SQL; deployment files.
 
 ```text
 <Describe the task>. Classify it per .cursor/rules/prime7-orchestration.mdc and follow
-docs/ai-development/ORCHESTRATION.md end to end, using Premium specialists where justified. No commit or push.
+docs/ai-development/ORCHESTRATION.md. No commit or push.
 ```
 
-To force a mode, add `Treat this as CRITICAL.` or `Treat this as ADVANCED.`
+To force a mode, add `Treat this as CRITICAL.` or `Treat this as ADVANCED.` To allow Premium for one task, add
+`Use premium` (or name the agents, for example `Use architect-premium and qa-engineer-premium`).
 
 ## 11. Known limitations
 
@@ -166,6 +166,6 @@ To force a mode, add `Treat this as CRITICAL.` or `Treat this as ADVANCED.`
 - New agent files appear from the next message onward.
 - Auto picks its own model on the server (observed `claude-opus-5-5-high`), and inherited agents follow it.
 - Which billing pool is charged is visible only on the dashboard.
-- Pinned Premium models have not been confirmed by a real run yet. The first Premium run should be checked in the UI and the logs.
+- Premium agents were confirmed running on 2026-11-09 (one chat made 12 Premium calls under the old policy).
 - Premium files depend on their base files.
 - Subagents do not see the chat.

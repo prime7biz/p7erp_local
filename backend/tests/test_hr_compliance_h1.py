@@ -246,6 +246,37 @@ def test_hr_pdf_bytes_nonempty():
     assert slip[:4] == b"%PDF"
 
 
+def test_signed_letter_renderers_produce_pdf_from_snapshot(monkeypatch):
+    from reportlab import rl_config
+
+    from app.modules.hr.hr_document_generator_service import render_appointment_letter_pdf, render_job_description_pdf
+
+    monkeypatch.setattr(rl_config, "pageCompression", 0)  # readable content streams for the assertions below
+
+    snapshot = {
+        "company_name": "Demo Co & Sons <Ltd>",
+        "issued_on": "2026-11-08",
+        "employee": {"employee_code": "EMP-0001", "display_name": "Demo Worker", "father_name": "Father"},
+        "designation": "Operator",
+        "terms": {"employment_type": "permanent", "probation_months": 6, "joining_date": "2026-11-15"},
+        "salary": {"basic": "8390.00", "gross": "15035.00", "components": [{"name": "House rent", "amount": "4195.00"}]},
+        "facilities": ["Lunch", "Transport"],
+        "job_description": "Line one\nLine two with <tags> & symbols " + "long " * 3000,
+    }
+    kw = {"verification_id": "VFY-0123456789ABCDEF", "verify_url": "https://example.test/verify/document/VFY-0123456789ABCDEF", "version": 2}
+    letter = render_appointment_letter_pdf(snapshot, **kw)
+    assert letter[:4] == b"%PDF"
+    for text in (b"APPOINTMENT LETTER", b"Gross monthly salary", b"15035.00", b"House rent", b"Lunch", b"6 month",
+                 b"VFY-0123456789ABCDEF", b"version 2", b"Father"):
+        assert text in letter, text
+    # The company name is drawn; unescaped "<Ltd>" would have made reportlab's paragraph parser raise.
+    assert b"Demo Co" in letter and b"Sons" in letter
+    jd = render_job_description_pdf(snapshot, **kw)
+    import re
+
+    assert jd[:4] == b"%PDF" and len(re.findall(rb"/Type /Page(?!s)", jd)) >= 2  # long text wraps onto more pages
+
+
 @pytest.mark.asyncio
 async def test_payroll_anomaly_and_turnover(db_session_integration: AsyncSession):
     db = db_session_integration

@@ -5,6 +5,7 @@ import {
   type HrDepartmentResponse,
   type HrDepartmentUpdate,
 } from "@/api/client";
+import { prepareHrMasterPayload } from "@/components/hr/hrQuickAddPayload";
 
 export function HrDepartmentsPage() {
   const [departments, setDepartments] = useState<HrDepartmentResponse[]>([]);
@@ -58,14 +59,15 @@ export function HrDepartmentsPage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.code.trim() || !form.name.trim()) return;
+    if (!form.name.trim()) return;
     setError("");
     try {
+      const payload = prepareHrMasterPayload(form, editing !== null);
       if (editing) {
-        const payload: HrDepartmentUpdate = { ...form };
-        await api.updateHrDepartment(editing.id, payload);
+        const updatePayload: HrDepartmentUpdate = payload;
+        await api.updateHrDepartment(editing.id, updatePayload);
       } else {
-        await api.createHrDepartment(form);
+        await api.createHrDepartment(payload);
       }
       closeModal();
       await load();
@@ -176,16 +178,21 @@ export function HrDepartmentsPage() {
           <div className="w-full max-w-md rounded-xl bg-surface-raised p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="mb-4 text-lg font-semibold text-text-primary">{editing ? "Edit department" : "Add department"}</h2>
             <form onSubmit={onSubmit} className="space-y-3">
-              <input
-                className="w-full rounded border border-border-strong px-3 py-2 text-sm"
-                placeholder="Department code"
-                value={form.code}
-                onChange={(e) => setForm((prev) => ({ ...prev, code: e.target.value }))}
-                required
-              />
+              {editing ? (
+                <input
+                  className="w-full rounded border border-border-strong px-3 py-2 text-sm"
+                  placeholder="Department code"
+                  aria-label="Department code"
+                  value={form.code ?? ""}
+                  onChange={(e) => setForm((prev) => ({ ...prev, code: e.target.value }))}
+                />
+              ) : (
+                <p className="text-xs text-text-muted">Code assigned automatically</p>
+              )}
               <input
                 className="w-full rounded border border-border-strong px-3 py-2 text-sm"
                 placeholder="Department name"
+                aria-label="Department name"
                 value={form.name}
                 onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
                 required

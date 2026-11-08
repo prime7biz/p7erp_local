@@ -600,6 +600,9 @@ const HrEmployeesPage = lazy(() => import("@/pages/app/hr/HrEmployeesPage").then
 const HrEmployeeDetailPage = lazy(() =>
   import("@/pages/app/hr/HrEmployeeDetailPage").then((m) => ({ default: m.HrEmployeeDetailPage })),
 );
+const HrEmployeeNewPage = lazy(() =>
+  import("@/pages/app/hr/HrEmployeeNewPage").then((m) => ({ default: m.HrEmployeeNewPage })),
+);
 const HrShiftsPage = lazy(() => import("@/pages/app/hr/attendance/HrShiftsPage").then((m) => ({ default: m.HrShiftsPage })));
 const HrRosterPage = lazy(() => import("@/pages/app/hr/attendance/HrRosterPage").then((m) => ({ default: m.HrRosterPage })));
 const HrAttendanceEntryPage = lazy(() =>
@@ -1145,6 +1148,7 @@ export function AppProtectedRouter() {
           <Route path="hr/designations" element={<HrDesignationsPage />} />
           <Route path="hr/sections" element={<HrSectionsPage />} />
           <Route path="hr/employees" element={<HrEmployeesPage />} />
+          <Route path="hr/employees/new" element={<HrEmployeeNewPage />} />
           <Route path="hr/employees/ai-onboard" element={<AiEmployeeOnboardingPage />} />
           <Route path="hr/employees/:employeeId" element={<HrEmployeeDetailPage />} />
           <Route path="hr/attendance/shifts" element={<HrShiftsPage />} />

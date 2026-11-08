@@ -51,6 +51,7 @@ export const TIER_KEYS: Record<Exclude<FeatureTier, "essential">, string[]> = {
     "ocr_id_extraction_enabled",
     "ocr_medical_extraction_enabled",
     "auto_document_generation_enabled",
+    "hr_onboarding_workspace_v2",
     "ai_attendance_analysis_enabled",
     "ai_turnover_prediction_enabled",
     "ai_payroll_anomaly_detection_enabled",

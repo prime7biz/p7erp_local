@@ -400,6 +400,10 @@ async def create_medical_record(
         document_id=body.document_id,
     )
     db.add(row)
+    await db.flush()
+    from app.modules.hr.onboarding_tasks import sync_onboarding_tasks
+
+    await sync_onboarding_tasks(db, tenant_id=tenant_id, employee_id=employee_id, actor_id=None)
     await db.commit()
     await db.refresh(row)
     return row
@@ -448,6 +452,10 @@ async def update_medical_record(
         payload["fitness_status"] = str(payload["fitness_status"]).upper()
     for k, v in payload.items():
         setattr(row, k, v)
+    await db.flush()
+    from app.modules.hr.onboarding_tasks import sync_onboarding_tasks
+
+    await sync_onboarding_tasks(db, tenant_id=tenant_id, employee_id=employee_id, actor_id=None)
     await db.commit()
     await db.refresh(row)
     return row

@@ -52,6 +52,28 @@ async def active_wage_assignment(
     ).scalar_one_or_none()
 
 
+async def structure_gross(db: AsyncSession, tenant_id: int, structure_id: int, basic: Decimal) -> Decimal:
+    """Monthly earnings of a structure for a basic: FIXED lines plus PERCENT_OF_BASE lines, deductions excluded."""
+    lines = (
+        await db.execute(
+            select(PayrollStructureLine, PayrollComponent)
+            .join(PayrollComponent, PayrollComponent.id == PayrollStructureLine.component_id)
+            .where(PayrollStructureLine.tenant_id == tenant_id, PayrollStructureLine.structure_id == structure_id)
+        )
+    ).all()
+    gross = Decimal("0")
+    for line, comp in lines:
+        if (comp.component_type or "").upper() == "DEDUCTION":
+            continue
+        amount = api_money_to_decimal(line.amount)
+        calc = (comp.calculation_type or "FIXED").upper()
+        if calc == "PERCENT_OF_BASE":
+            gross += basic * amount / Decimal("100")
+        elif calc == "FIXED":
+            gross += amount
+    return gross.quantize(Decimal("0.01"))
+
+
 async def pay_snapshot(
     db: AsyncSession, tenant_id: int, employee: Employee, as_of: date, rates_by_code: dict[str, HrBdWageScheduleRate]
 ) -> PaySnapshot:
@@ -62,22 +84,7 @@ async def pay_snapshot(
     if asgn is not None:
         structure = await db.get(PayrollStructure, asgn.structure_id)
         code = structure.code if structure and structure.tenant_id == tenant_id else None
-        lines = (
-            await db.execute(
-                select(PayrollStructureLine, PayrollComponent)
-                .join(PayrollComponent, PayrollComponent.id == PayrollStructureLine.component_id)
-                .where(PayrollStructureLine.tenant_id == tenant_id, PayrollStructureLine.structure_id == asgn.structure_id)
-            )
-        ).all()
-        for line, comp in lines:
-            if (comp.component_type or "").upper() == "DEDUCTION":
-                continue
-            amount = api_money_to_decimal(line.amount)
-            calc = (comp.calculation_type or "FIXED").upper()
-            if calc == "PERCENT_OF_BASE":
-                gross += basic * amount / Decimal("100")
-            elif calc == "FIXED":
-                gross += amount
+        gross = await structure_gross(db, tenant_id, asgn.structure_id, basic)
     rate: HrBdWageScheduleRate | None = None
     source: str | None = None
     wa = await active_wage_assignment(db, tenant_id, employee.id, as_of)

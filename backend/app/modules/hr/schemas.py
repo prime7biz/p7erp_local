@@ -1,6 +1,63 @@
 from datetime import date
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+SalaryPaymentMethod = Literal["bank", "bkash", "cash"]
+MAX_FACILITIES = 20
+MAX_FACILITY_LENGTH = 64
+
+
+def clean_facilities(value: list[str] | None) -> list[str] | None:
+    if value is None:
+        return None
+    out: list[str] = []
+    for item in value:
+        name = (item or "").strip()
+        if not name:
+            continue
+        if len(name) > MAX_FACILITY_LENGTH:
+            raise ValueError(f"Each facility must be {MAX_FACILITY_LENGTH} characters or fewer")
+        if name not in out:
+            out.append(name)
+    if len(out) > MAX_FACILITIES:
+        raise ValueError(f"At most {MAX_FACILITIES} facilities")
+    return out
+
+
+class EmployeeOnboardingFields(BaseModel):
+    """Migration 288 fields shared by create and update (all optional)."""
+
+    father_name: str | None = Field(None, max_length=128)
+    mother_name: str | None = Field(None, max_length=128)
+    spouse_name: str | None = Field(None, max_length=128)
+    religion: str | None = Field(None, max_length=64)
+    nationality: str | None = Field(None, max_length=64)
+    present_address_line: str | None = Field(None, max_length=255)
+    present_city: str | None = Field(None, max_length=128)
+    present_district: str | None = Field(None, max_length=128)
+    present_postal_code: str | None = Field(None, max_length=16)
+    present_country: str | None = Field(None, max_length=128)
+    permanent_address_line: str | None = Field(None, max_length=255)
+    permanent_city: str | None = Field(None, max_length=128)
+    permanent_district: str | None = Field(None, max_length=128)
+    permanent_postal_code: str | None = Field(None, max_length=16)
+    permanent_country: str | None = Field(None, max_length=128)
+    emergency_contact_relation: str | None = Field(None, max_length=64)
+    mobile_is_bkash: bool | None = None
+    salary_payment_method: SalaryPaymentMethod | None = None
+    bank_account_name: str | None = Field(None, max_length=128)
+    bank_account_number: str | None = Field(None, max_length=64)
+    bank_name: str | None = Field(None, max_length=128)
+    bank_branch: str | None = Field(None, max_length=128)
+    bank_routing_no: str | None = Field(None, max_length=32)
+    probation_months: int | None = Field(None, ge=0, le=24)
+    facilities: list[str] | None = Field(None, max_length=MAX_FACILITIES)
+
+    @field_validator("facilities")
+    @classmethod
+    def _facilities(cls, value: list[str] | None) -> list[str] | None:
+        return clean_facilities(value)
 
 
 class DepartmentCreate(BaseModel):
@@ -32,7 +89,8 @@ class DesignationCreate(BaseModel):
     department_id: int | None = None
     code: str | None = Field(None, min_length=1, max_length=32)
     title: str = Field(..., min_length=1, max_length=128)
-    description: str | None = None
+    # Printed as the job description; snapshots of it are kept forever, so it is bounded.
+    description: str | None = Field(None, max_length=10000)
     is_active: bool = True
 
 
@@ -40,7 +98,7 @@ class DesignationUpdate(BaseModel):
     department_id: int | None = None
     code: str | None = Field(None, min_length=1, max_length=32)
     title: str | None = Field(None, min_length=1, max_length=128)
-    description: str | None = None
+    description: str | None = Field(None, max_length=10000)
     is_active: bool | None = None
 
 
@@ -130,7 +188,7 @@ class EmployeeStatusHistoryResponse(BaseModel):
     created_at: str
 
 
-class EmployeeCreate(BaseModel):
+class EmployeeCreate(EmployeeOnboardingFields):
     employee_code: str | None = Field(None, min_length=1, max_length=32)
     first_name: str = Field(..., min_length=1, max_length=128)
     last_name: str | None = Field(None, max_length=128)
@@ -161,7 +219,7 @@ class EmployeeCreate(BaseModel):
     birth_registration_no: str | None = Field(None, max_length=32)
 
 
-class EmployeeUpdate(BaseModel):
+class EmployeeUpdate(EmployeeOnboardingFields):
     employee_code: str | None = Field(None, min_length=1, max_length=32)
     first_name: str | None = Field(None, min_length=1, max_length=128)
     last_name: str | None = Field(None, max_length=128)
@@ -226,3 +284,59 @@ class EmployeeResponse(BaseModel):
     attendance_device_pin: str | None = None
     birth_registration_no: str | None = None
     has_photo: bool = False
+    father_name: str | None = None
+    mother_name: str | None = None
+    spouse_name: str | None = None
+    religion: str | None = None
+    nationality: str | None = None
+    present_address_line: str | None = None
+    present_city: str | None = None
+    present_district: str | None = None
+    present_postal_code: str | None = None
+    present_country: str | None = None
+    permanent_address_line: str | None = None
+    permanent_city: str | None = None
+    permanent_district: str | None = None
+    permanent_postal_code: str | None = None
+    permanent_country: str | None = None
+    emergency_contact_relation: str | None = None
+    mobile_is_bkash: bool | None = None
+    salary_payment_method: str | None = None
+    bank_account_name: str | None = None
+    bank_account_number: str | None = None
+    bank_name: str | None = None
+    bank_branch: str | None = None
+    bank_routing_no: str | None = None
+    probation_months: int | None = None
+    facilities: list[str] | None = None
+    # Detail endpoint only, and only for callers with hr.payroll.manage.
+    pay_snapshot: "EmployeePaySnapshot | None" = None
+    # Names of fields hidden from this caller (masked to null).
+    masked_fields: list[str] = Field(default_factory=list)
+
+
+class EmployeePaySnapshot(BaseModel):
+    as_of: date
+    basic: str
+    gross: str
+    structure_id: int | None = None
+    structure_code: str | None = None
+    structure_assignment_id: int | None = None
+    structure_effective_from: date | None = None
+    structure_effective_to: date | None = None
+    wage_rate_id: int | None = None
+    wage_rate_code: str | None = None
+    wage_grade_basic: str | None = None
+    wage_grade_gross: str | None = None
+    wage_assignment_id: int | None = None
+    wage_effective_from: date | None = None
+
+
+class EmployeeCompensationReplace(BaseModel):
+    structure_id: int
+    bd_wage_rate_id: int | None = None
+    base_salary: str | None = Field(None, max_length=32, description="Decimal string; defaults to the grade minimum basic")
+    effective_from: date
+
+
+EmployeeResponse.model_rebuild()

@@ -845,6 +845,11 @@ export function ConfigurationPage() {
                 "Generate ID cards, letters, age certs, and payslip PDFs.",
               ],
               [
+                "hr_onboarding_workspace_v2",
+                "Unified employee workspace",
+                "Add / edit employees in one tabbed screen with AI autofill, salary set-up, checklist and QR-signed letters.",
+              ],
+              [
                 "ai_attendance_analysis_enabled",
                 "AI: Attendance analysis",
                 "Show attendance patterns on HR AI Insights.",

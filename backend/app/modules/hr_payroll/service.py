@@ -25,7 +25,6 @@ from app.models import (
     PayrollPeriod,
     PayrollRun,
     PayrollRunLine,
-    PayrollStructure,
     Tenant,
 )
 from app.modules.hr_payroll.formula_engine import (
@@ -127,25 +126,15 @@ async def create_structure_assignment(
     component_overrides: dict | None,
     created_by: int | None,
 ) -> PayrollEmployeeStructureAssignment:
+    from app.modules.hr_localization.enforcement_service import assert_base_salary_meets_grade
+    from app.modules.hr_payroll import compensation_service as comp
+
     if effective_to is not None and effective_to < effective_from:
         raise HTTPException(status_code=400, detail="effective_to must be on/after effective_from")
 
-    emp = await db.get(Employee, employee_id)
-    if not emp or emp.tenant_id != tenant_id:
-        raise HTTPException(status_code=404, detail="Employee not found")
-    structure = await db.get(PayrollStructure, structure_id)
-    if not structure or structure.tenant_id != tenant_id:
-        raise HTTPException(status_code=404, detail="Payroll structure not found")
-
-    await assert_no_overlapping_assignment(
-        db,
-        tenant_id=tenant_id,
-        employee_id=employee_id,
-        effective_from=effective_from,
-        effective_to=effective_to,
-    )
-    from app.modules.hr_localization.enforcement_service import assert_base_salary_meets_grade
-
+    await comp.lock_employee(db, tenant_id, employee_id)
+    await comp.structure_for_tenant(db, tenant_id, structure_id)
+    overrides = _validate_component_overrides(component_overrides)
     tenant_row = await db.get(Tenant, tenant_id)
     await assert_base_salary_meets_grade(
         db,
@@ -154,18 +143,17 @@ async def create_structure_assignment(
         base_salary=api_money_to_decimal(base_salary) if base_salary is not None else None,
         as_of=effective_from,
     )
-
-    row = PayrollEmployeeStructureAssignment(
+    row = await comp.insert_structure_assignment(
+        db,
         tenant_id=tenant_id,
         employee_id=employee_id,
         structure_id=structure_id,
         effective_from=effective_from,
         effective_to=effective_to,
         base_salary=api_money_to_decimal(base_salary) if base_salary is not None else None,
-        component_overrides=_validate_component_overrides(component_overrides),
+        component_overrides=overrides,
         created_by=created_by,
     )
-    db.add(row)
     await db.commit()
     await db.refresh(row)
     return row
@@ -202,14 +190,10 @@ async def end_structure_assignment(
     assignment_id: int,
     effective_to: date | None = None,
 ) -> PayrollEmployeeStructureAssignment:
-    row = await db.get(PayrollEmployeeStructureAssignment, assignment_id)
-    if not row or row.tenant_id != tenant_id:
-        raise HTTPException(status_code=404, detail="Assignment not found")
+    from app.modules.hr_payroll import compensation_service as comp
+
     end = effective_to or today_local(await db.get(Tenant, tenant_id))
-    if end < row.effective_from:
-        raise HTTPException(status_code=400, detail="effective_to must be on/after effective_from")
-    row.effective_to = end
-    row.updated_at = datetime.utcnow()
+    row = await comp.close_structure_assignment(db, tenant_id=tenant_id, assignment_id=assignment_id, effective_to=end)
     await db.commit()
     await db.refresh(row)
     return row

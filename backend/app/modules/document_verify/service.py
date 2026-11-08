@@ -25,6 +25,7 @@ from app.models.inventory import (
     ProductionMaterialIssue,
     WarehouseTransfer,
 )
+from app.models.hr_onboarding import HrGeneratedEmployeeDocument
 from app.models.tenant import Tenant
 from app.modules.document_verify.schemas import PublicDocumentVerification
 from app.modules.finance.voucher_signature import compute_voucher_signature_hash
@@ -194,4 +195,15 @@ async def verify_document_publicly(db: AsyncSession, raw_verification_id: str) -
         row = (await db.execute(select(model).where(model.verification_id == vid))).scalars().first()
         if row is not None:
             return await _verify_inventory(db, doc_type, row)
+    hr_doc = (
+        await db.execute(select(HrGeneratedEmployeeDocument).where(HrGeneratedEmployeeDocument.verification_id == vid))
+    ).scalars().first()
+    if hr_doc is not None:
+        tenant = await _company_if_enabled(db, hr_doc.tenant_id)
+        if tenant is None:
+            return None
+        await bind_session_tenant(db, tenant.id)
+        from app.modules.hr.generated_documents import public_verification
+
+        return public_verification(hr_doc, tenant.name)
     return None

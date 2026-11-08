@@ -6,6 +6,8 @@ import {
   type HrDesignationResponse,
   type HrDesignationUpdate,
 } from "@/api/client";
+import { QuickAddSelect } from "@/components/hr/QuickAddSelect";
+import { prepareHrMasterPayload } from "@/components/hr/hrQuickAddPayload";
 
 export function HrDesignationsPage() {
   const [departments, setDepartments] = useState<HrDepartmentResponse[]>([]);
@@ -24,6 +26,11 @@ export function HrDesignationsPage() {
 
   const departmentMap = useMemo(
     () => new Map(departments.map((d) => [d.id, `${d.code} - ${d.name}`])),
+    [departments]
+  );
+
+  const departmentOptions = useMemo(
+    () => departments.map((d) => ({ id: d.id, label: `${d.code} - ${d.name}` })),
     [departments]
   );
 
@@ -79,14 +86,15 @@ export function HrDesignationsPage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.code.trim() || !form.title.trim()) return;
+    if (!form.title.trim()) return;
     setError("");
     try {
+      const payload = prepareHrMasterPayload(form, editing !== null);
       if (editing) {
-        const payload: HrDesignationUpdate = { ...form };
-        await api.updateHrDesignation(editing.id, payload);
+        const updatePayload: HrDesignationUpdate = payload;
+        await api.updateHrDesignation(editing.id, updatePayload);
       } else {
-        await api.createHrDesignation(form);
+        await api.createHrDesignation(payload);
       }
       closeModal();
       await load();
@@ -202,34 +210,39 @@ export function HrDesignationsPage() {
           <div className="w-full max-w-md rounded-xl bg-surface-raised p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="mb-4 text-lg font-semibold text-text-primary">{editing ? "Edit designation" : "Add designation"}</h2>
             <form onSubmit={onSubmit} className="space-y-3">
-              <input
-                className="w-full rounded border border-border-strong px-3 py-2 text-sm"
-                placeholder="Designation code **"
-                value={form.code}
-                onChange={(e) => setForm((prev) => ({ ...prev, code: e.target.value }))}
-                required
-              />
+              {editing ? (
+                <input
+                  className="w-full rounded border border-border-strong px-3 py-2 text-sm"
+                  placeholder="Designation code"
+                  aria-label="Designation code"
+                  value={form.code ?? ""}
+                  onChange={(e) => setForm((prev) => ({ ...prev, code: e.target.value }))}
+                />
+              ) : (
+                <p className="text-xs text-text-muted">Code assigned automatically</p>
+              )}
               <input
                 className="w-full rounded border border-border-strong px-3 py-2 text-sm"
                 placeholder="Designation name **"
+                aria-label="Designation name"
                 value={form.title}
                 onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
                 required
               />
-              <select
-                className="w-full rounded border border-border-strong px-3 py-2 text-sm"
-                value={form.department_id ?? ""}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, department_id: e.target.value ? Number(e.target.value) : null }))
-                }
-              >
-                <option value="">No department</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.code} - {d.name}
-                  </option>
-                ))}
-              </select>
+              <QuickAddSelect
+                kind="department"
+                label="Department"
+                emptyLabel="No department"
+                value={form.department_id ?? null}
+                options={departmentOptions}
+                onChange={(id) => setForm((prev) => ({ ...prev, department_id: id }))}
+                onCreated={(record) => {
+                  // Add the new department to the list; QuickAddSelect then selects it.
+                  setDepartments((prev) =>
+                    prev.some((d) => d.id === record.id) ? prev : [...prev, record as HrDepartmentResponse],
+                  );
+                }}
+              />
               <label className="flex items-center gap-2 text-sm text-text-secondary">
                 <input
                   type="checkbox"

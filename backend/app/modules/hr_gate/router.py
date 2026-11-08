@@ -16,8 +16,6 @@ caller's company (another company's pass looks exactly like an unknown code). Em
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import io
 from datetime import datetime
 from typing import Any
@@ -28,26 +26,24 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
-from app.common.business_date import now_local
-from app.common.codegen import next_tenant_code_entity_key
 from app.common.permissions import (
     PERMISSION_HR_GATE_PASS_MANAGE,
     PERMISSION_HR_GATE_PASS_SCAN,
     assert_hr_manager_or_permission,
 )
 from app.common.tenant import require_tenant
-from app.config import get_settings
 from app.database import get_db
 from app.models import Tenant, User
 from app.models.hr import Employee
 from app.models.hr_lifecycle import HrEmployeeGateEvent, HrEmployeeGatePass
 from app.modules.audit.service import log_action
 from app.modules.hr.hr_document_generator_service import _draw_qr, verify_employee_card_qr
+from app.modules.hr_gate import service as gate_service
 
 router = APIRouter(prefix="/hr", tags=["hr-gate-pass"])
 
-QR_PREFIX = "P7GP:"
-MAX_PASS_DAYS = 31
+QR_PREFIX = gate_service.QR_PREFIX
+MAX_PASS_DAYS = gate_service.MAX_PASS_DAYS
 
 PASS_FIELDS = (
     "id", "pass_code", "employee_id", "person_name", "mobile", "identity_ref", "sponsor_employee_id", "purpose",
@@ -69,18 +65,9 @@ def _out(row: HrEmployeeGatePass) -> dict[str, Any]:
     return out
 
 
-def _now(tenant: Tenant) -> datetime:
-    return now_local(tenant).replace(tzinfo=None)
-
-
-def qr_token(row: HrEmployeeGatePass) -> str:
-    key = hashlib.sha256(b"p7-gate-pass-v1:" + get_settings().jwt_secret.encode()).digest()
-    msg = f"{row.tenant_id}:{row.id}:{row.pass_code}:{row.created_at.isoformat()}".encode()
-    return QR_PREFIX + hmac.new(key, msg, hashlib.sha256).hexdigest()[:40]
-
-
-def token_hash(token: str) -> str:
-    return hashlib.sha256(token.strip().encode()).hexdigest()
+_now = gate_service.tenant_now
+qr_token = gate_service.qr_token
+token_hash = gate_service.token_hash
 
 
 async def _locked_pass(db: AsyncSession, tenant_id: int, pass_id: int) -> HrEmployeeGatePass:
@@ -160,24 +147,11 @@ async def create_gate_pass(
 ):
     _ensure_tenant(user, tenant)
     await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_GATE_PASS_MANAGE)
-    for emp_id in (body.employee_id, body.sponsor_employee_id):
-        if emp_id is not None:
-            emp = await db.get(Employee, emp_id)
-            if emp is None or emp.tenant_id != tenant.id:
-                raise HTTPException(status_code=404, detail="Employee not found")
-    code = await next_tenant_code_entity_key(db, tenant_id=tenant.id, entity_key="hr_gate_pass", prefix="GP-", width=6)
-    row = HrEmployeeGatePass(
-        tenant_id=tenant.id, pass_code=code, employee_id=body.employee_id, person_name=body.person_name.strip(),
-        mobile=body.mobile.strip(), identity_ref=(body.identity_ref or "").strip() or None,
-        sponsor_employee_id=body.sponsor_employee_id, purpose=body.purpose.strip(),
-        permitted_zones=[z.strip().upper() for z in body.permitted_zones if z.strip()],
-        valid_from=body.valid_from.replace(tzinfo=None), valid_to=body.valid_to.replace(tzinfo=None),
-        status="DRAFT", qr_token_hash=f"pending-{tenant.id}-{code}", created_by=user.id, created_at=datetime.utcnow(),
+    row = await gate_service.create_draft_pass(
+        db, tenant=tenant, user=user, employee_id=body.employee_id, person_name=body.person_name,
+        mobile=body.mobile, identity_ref=body.identity_ref, sponsor_employee_id=body.sponsor_employee_id,
+        purpose=body.purpose, permitted_zones=body.permitted_zones, valid_from=body.valid_from, valid_to=body.valid_to,
     )
-    db.add(row)
-    await db.flush()
-    row.qr_token_hash = token_hash(qr_token(row))
-    await log_action(db, tenant_id=tenant.id, user_id=user.id, action="HR_GATE_PASS_CREATED", resource=f"hr.gate_pass:{row.id}", details=code)
     await db.commit()
     await db.refresh(row)
     return _out(row)
@@ -193,12 +167,7 @@ async def activate_gate_pass(
     _ensure_tenant(user, tenant)
     await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_GATE_PASS_MANAGE)
     row = await _locked_pass(db, tenant.id, pass_id)
-    if row.status != "DRAFT":
-        raise HTTPException(status_code=409, detail=f"Pass is {row.status}")
-    if row.valid_to <= _now(tenant):
-        raise HTTPException(status_code=409, detail="The validity window has already ended")
-    row.status, row.issued_by, row.issued_at = "ACTIVE", user.id, datetime.utcnow()
-    await log_action(db, tenant_id=tenant.id, user_id=user.id, action="HR_GATE_PASS_ACTIVATED", resource=f"hr.gate_pass:{row.id}")
+    await gate_service.activate_pass(db, tenant=tenant, user=user, row=row)
     await db.commit()
     await db.refresh(row)
     return _out(row)

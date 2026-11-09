@@ -36,7 +36,7 @@ The **HR** section of the sidebar holds everything about your people: who works 
 
 The HR sidebar has eight groups. Open **HR** in the sidebar and expand the group you need.
 
-1. **Overview → HR Dashboard** (\`/app/hr\`) — counts of employees, pending leave, payroll queue, open hiring and today's attendance, plus quick links. **Overview → HR Settings** (\`/app/hr/settings\`) — weekend days, overtime pay from salary and the employee number format. **Bangladesh Setup** and **Bangladesh Rules** — official RMG wage grades, leave and labour-law rules (see **Configure HR for Bangladesh**).
+1. **Overview → HR Dashboard** (\`/app/hr\`) — clickable cards for employees, today's attendance, pending leave, payroll queue and open hiring, a **Needs your attention** list of items waiting for approval, and quick links grouped by area. **Overview → HR Settings** (\`/app/hr/settings\`) — weekend days, overtime pay from salary and the employee number format. **Bangladesh Setup** and **Bangladesh Rules** — official RMG wage grades, leave and labour-law rules (see **Configure HR for Bangladesh**).
 2. **Core HR** — **Departments**, **Designations**, **Sections & Lines**, **Employees**, **Notices & Cases**, **Separations & Settlement**, **Gate Passes**, **Gate Scan**, **AI Onboarding**. Set up the first four before anything else.
 3. **Time & Attendance** — **Shifts**, **Holidays**, **Roster**, **Daily Entry**, **Manual IN / OUT**, **Attendance Devices** (\`/app/hr/attendance/devices\`, for fingerprint / face / card machines), **Regularizations**, **Overtime Rules**, **Overtime**, **Summary**.
 4. **Leave** — **Leave Types**, **Policies**, **Balances**, **Requests**, **Approvals**, **Calendar**.
@@ -236,14 +236,14 @@ HR officers usually do this once, then add new items when the factory grows.
 ### A. Add a department
 
 1. Open **HR → Core HR → Departments** (\`/app/hr/departments\`).
-2. Click **Add department**.
+2. Click **+ Add department**.
 3. Type the **Department name**. Keep **Active** ticked. The code (for example **DEPT-0001**) is assigned automatically ("Code assigned automatically").
 4. Click **Save**.
 
 ### B. Add a designation
 
 1. Open **HR → Core HR → Designations** (\`/app/hr/designations\`).
-2. Click **Add designation**.
+2. Click **+ Add designation**. If you filtered the list by a department first, that department is already chosen.
 3. Type the **Designation name** (required — the screen marks required fields with two stars). The code (for example **DESG-0001**) is assigned automatically.
 4. Choose the department in the drop-down (or leave **No department** if the title is used everywhere). If the department is missing, click **+** next to the drop-down, type its name and click **Create** — it is added and selected without leaving the form.
 5. Click **Save**.
@@ -261,9 +261,16 @@ HR officers usually do this once, then add new items when the factory grows.
 - On the **Job** tab, the designation list is filtered to the department you picked.
 - Sections & lines help attendance and production reports group workers by line.
 
+## Find and filter
+
+- The cards at the top show **Total**, **Active** and **Inactive** (click one to filter), plus **No designations** on Departments and **No department** on Designations.
+- Search by code or name, pick a **Status**, and on Designations pick a **Department** (or **No department**). **Clear** resets the filters. Click a column title to sort.
+- On Departments, the **Designations** column shows how many job titles each department has; click it (or **Actions → View designations**) to open Designations filtered to that department.
+- Managers and admins can save the filtered list with **Export (Excel)**.
+
 ## Tips
 
-- To change a department or designation, use **Actions → Edit** on its row. Untick **Active** instead of deleting when a name is no longer used. Only an edit shows the code box; leave it as it is unless you must rename the code.
+- To change a department or designation, use **Actions → Edit** on its row. Use **Actions → Deactivate** (or untick **Active**) instead of deleting when a name is no longer used. Only an edit shows the code box; leave it as it is unless you must rename the code.
 - The designation **description** is printed as the employee's **Job description** (see **Unified employee workspace**), so write the duties there, one per line.
 - Every drop-down with a **+** button (department, designation, section / line) lets you add a missing entry on the spot.
 - **Actions → Delete** is blocked when employees are still linked — this protects old records.
@@ -276,7 +283,7 @@ HR officers usually do this once, then add new items when the factory grows.
 - **Delete does nothing / shows an error** → employees are linked. Move them to another department first, or just untick **Active**.`,
       tags: ["HR", "departments", "designations", "sections", "lines", "setup"],
       keywords: ["department", "designation", "job title", "position", "post", "padobi", "line", "floor", "unit", "section", "org chart", "quick add", "auto code", "job description"],
-      lastUpdated: "2026-11-08",
+      lastUpdated: "2026-11-09",
       coverImage: "/tutorials/screens/hr-designations.jpg",
       infographics: [
         {
@@ -337,8 +344,8 @@ The **Employees** list is the master record of every worker and staff member. At
 ### A. Add the employee
 
 1. Open **HR → Core HR → Employees** (\`/app/hr/employees\`).
-2. Type the number or name in **Search by code/name** to make sure the person is not already there (tick **Show inactive** to search old staff too). If they worked here before, reactivate the old record instead of adding a new one.
-3. Click **Add employee**. The top box shows the next employee number ("New number on save, never reused").
+2. Type the number, name, email or phone in **Search code, name, email or phone** to make sure the person is not already there (set the **Status** filter to **All statuses** to search old staff too). If they worked here before, reactivate the old record instead of adding a new one.
+3. Click **+ Add employee**. The top box shows the next employee number ("New number on save, never reused").
 4. Fill **First name** (required), then **Last name**, **Email**, **Mobile**, **NID** or **Birth registration no.**
 5. Pick the department (**No department** by default) and the designation (**No designation** by default).
 6. In **Linked app user (ESS / login)** choose the person's login, or leave **None**.
@@ -354,11 +361,19 @@ The **Employees** list is the master record of every worker and staff member. At
 5. **Documents** tab — **Upload CV or scanned document**: choose the type (CV, NID scan, birth registration scan, certificate…), then **Choose file** or **Scan with camera** on a phone, and **Upload**. Uploaded files have **Actions → Download** in the list. You can still add a paper record without a file with **Add document record**.
 6. Click **Generate document** (top right) → **ID card (PDF)** (with photo and a secure QR), **Appointment letter** or **Age verification cert**. Every ID card print is recorded in the ID card issue register.
 
-### C. Many employees at once
+### C. Find and filter employees
 
-- **Export Excel** downloads the current list (\`employees.xlsx\`) — use it as the template.
-- **Import Excel** uploads a filled sheet. The message shows how many were created and updated. After Bangladesh setup, import only **updates** existing employees; add new people through **Add employee** so the number, mobile and NID / birth registration checks run.
-- **Print all ID cards** downloads a ZIP with one ID card per active employee.
+- The cards at the top show **Total**, **Active**, **Inactive**, **Departments**, **On probation** and **New (30 days)** for the current filters. Click **Total**, **Active**, **Inactive**, **On probation** or **New (30 days)** to filter by it.
+- Narrow the list with **Status**, **Department**, **Designation**, **Section / line**, **Employment type**, **Category** and **Gender**. **Clear** resets every filter.
+- Quick chips: **On probation**, **Joined last 30 days**, **No department**, **No linked app user**, **Has photo**.
+- Switch between **Table** and **Cards** (the page remembers your choice), sort with the sort box or by clicking a column title, and change **Rows** per page at the bottom.
+
+### D. Many employees at once
+
+- Tick the box on each row (or the box in the table header for the whole page), then use the bar that appears: **Export selected**, **Print ID cards**, **Activate**, **Deactivate**. **Select all … matching** picks every employee that matches the filters.
+- **Import / Export → Export all employees (Excel)** downloads every employee (\`employees.xlsx\`) — use it as the template. **Export current view** saves only what the filters show. Exporting (and **Activate** / **Deactivate**) is for managers and admins.
+- **Import / Export → Import from Excel** uploads a filled sheet. The message shows how many were created and updated. After Bangladesh setup, import only **updates** existing employees; add new people through **Add employee** so the number, mobile and NID / birth registration checks run.
+- **Import / Export → Print all ID cards (ZIP)** downloads a ZIP with one ID card per active employee.
 
 ## What happens next
 
@@ -407,7 +422,7 @@ The **Employees** list is the master record of every worker and staff member. At
         "link user",
         "karmi",
       ],
-      lastUpdated: "2026-11-08",
+      lastUpdated: "2026-11-09",
       coverImage: "/tutorials/screens/hr-employees.jpg",
       videos: [
         {
@@ -752,12 +767,12 @@ The **unified employee workspace** replaces the small **Add employee** dialog an
       audience: "hr",
       content: `## Overview
 
-**HR → HR Settings** (\`/app/hr/settings\`) holds company-wide HR rules. The **Weekend (weekly holiday)** box lists the seven days; tick the days that are off every week.
+**HR → HR Settings** (\`/app/hr/settings\`) holds company-wide HR rules. The cards at the top show the current weekend, overtime setting, hours per month and multiplier; click one to jump to its box. The **Weekend (weekly holiday)** box shows the seven days as buttons; the highlighted days are off every week.
 
 ## Steps
 
 1. Open **HR Settings**.
-2. Tick the weekend days (default **Friday** until you save).
+2. Click the days to turn them on or off as weekend days (default **Friday** until you save). An **Unsaved changes** tag appears; **Reset** puts back the saved days.
 3. Click **Save weekend**.
 
 ## Rules
@@ -768,7 +783,7 @@ The **unified employee workspace** replaces the small **Add employee** dialog an
 - The production planning calendar has its own weekend and does not change leave days.`,
       tags: ["HR", "settings", "weekend", "leave", "holiday"],
       keywords: ["weekly holiday", "friday", "saturday", "off day"],
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-09",
       relatedAppRoutes: ["/app/hr/settings", "/app/hr/leave/requests"],
       relatedArticleIds: ["hr-overview", "hr-overtime-from-salary"],
     },
@@ -1631,18 +1646,18 @@ When someone leaves, HR closes the record in a fixed order so pay, attendance an
 
 ## Steps
 
-1. Open **HR → Core HR → Employees** and find the person (**Search by code/name**). Click **Actions → View**.
+1. Open **HR → Core HR → Employees** and find the person (**Search code, name, email or phone**). Click **Actions → View**.
 2. **Documents** tab — add a record for the resignation letter or termination order (**Document type**, **Document number**, date, **Notes**) and click **Add document record**.
 3. **Status history** tab — type the **Status label** (for example \`RESIGNED\`, \`TERMINATED\`, \`RETIRED\`), pick the effective date, write **Remarks**, then click **Add status change**.
 4. **Job** tab — set the third date box (full width) to the **exit date** and click **Save job**.
 5. Create the separation, clearance and final settlement on **HR → Core HR → Separations & Settlement** — see **Final settlement when an employee leaves** (linked below). For unauthorised absence (a worker who stopped coming), start on **Notices & Cases** instead; the s.27(3A) decision creates the separation for you.
 6. Back on the profile, click **Deactivate** (top right). The header now shows **Inactive** and the person disappears from normal lists. The employee number stays with this person and is never given to anyone else.
 
-To bring someone back (re-join), open them with **Show inactive** ticked on Employees and click **Activate**.
+To bring someone back (re-join), set **Status** to **Inactive only** on Employees, then use **Actions → Activate** on their row (or open the profile and click **Activate**).
 
 ## What happens next
 
-- Inactive employees are hidden from the Employees list unless **Show inactive** is ticked.
+- Inactive employees are hidden from the Employees list unless the **Status** filter is **Inactive only** or **All statuses** (or you click the **Inactive** card).
 - Their attendance, leave and payslip history stays for reports and audits.
 - If their login is linked, ask the admin to disable the user under **Settings → User Mgmt**.
 
@@ -1654,11 +1669,11 @@ To bring someone back (re-join), open them with **Show inactive** ticked on Empl
 ## Common problems
 
 - **Add status change does nothing** → the effective date is empty.
-- **I cannot find a person who left** → tick **Show inactive** on Employees.
+- **I cannot find a person who left** → set **Status** to **All statuses** on Employees.
 - **The leaver still logs in** → disable their user in **Settings → User Mgmt**.`,
       tags: ["HR", "exit", "separation", "resignation", "termination", "employees"],
       keywords: ["resign", "resignation", "termination", "separation", "exit", "left job", "final settlement", "deactivate", "inactive", "absconding", "lefty", "unauthorised absence", "retire", "chakri chhara"],
-      lastUpdated: "2026-11-07",
+      lastUpdated: "2026-11-09",
       coverImage: "/tutorials/screens/hr-emp-detail-history.jpg",
       infographics: [
         {

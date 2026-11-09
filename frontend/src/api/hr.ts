@@ -118,9 +118,18 @@ function signedDocQuery(opts?: { reissue?: boolean; requestId?: string }): strin
 }
 
 export const hrApi = {
-  async listHrDepartments(params?: { active_only?: boolean }): Promise<HrDepartmentResponse[]> {
+  async listHrDepartments(params?: {
+    active_only?: boolean;
+    search?: string;
+    /** Server default is 100, maximum 500. */
+    limit?: number;
+    offset?: number;
+  }): Promise<HrDepartmentResponse[]> {
     const q = new URLSearchParams();
     if (params?.active_only === false) q.set("active_only", "false");
+    if (params?.search) q.set("search", params.search);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<HrDepartmentResponse[]>(`/api/v1/hr/departments${suffix}`);
   },
@@ -139,10 +148,20 @@ export const hrApi = {
   async deleteHrDepartment(id: number): Promise<void> {
     return request<void>(`/api/v1/hr/departments/${id}`, { method: "DELETE" });
   },
-  async listHrDesignations(params?: { active_only?: boolean; department_id?: number }): Promise<HrDesignationResponse[]> {
+  async listHrDesignations(params?: {
+    active_only?: boolean;
+    department_id?: number;
+    search?: string;
+    /** Server default is 100, maximum 500. */
+    limit?: number;
+    offset?: number;
+  }): Promise<HrDesignationResponse[]> {
     const q = new URLSearchParams();
     if (params?.active_only === false) q.set("active_only", "false");
     if (params?.department_id != null) q.set("department_id", String(params.department_id));
+    if (params?.search) q.set("search", params.search);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<HrDesignationResponse[]>(`/api/v1/hr/designations${suffix}`);
   },
@@ -166,12 +185,17 @@ export const hrApi = {
     department_id?: number;
     designation_id?: number;
     search?: string;
+    /** Server default is 100, maximum 500. */
+    limit?: number;
+    offset?: number;
   }): Promise<HrEmployeeResponse[]> {
     const q = new URLSearchParams();
     if (params?.active_only === false) q.set("active_only", "false");
     if (params?.department_id != null) q.set("department_id", String(params.department_id));
     if (params?.designation_id != null) q.set("designation_id", String(params.designation_id));
     if (params?.search) q.set("search", params.search);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<HrEmployeeResponse[]>(`/api/v1/hr/employees${suffix}`);
   },

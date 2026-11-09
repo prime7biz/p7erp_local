@@ -17,3 +17,9 @@ export function resolveRole(roleName: string | null | undefined): RoleBucket {
     isHr: role.includes("hr") || role === "payroll",
   };
 }
+
+/** Client-side HR Excel export follows the server export rule (`_require_manager_or_admin` in hr/router.py). */
+export function canExportHrData(roleName: string | null | undefined): boolean {
+  const role = (roleName || "").trim().toLowerCase();
+  return ["admin", "owner", "manager", "super_admin", "superadmin"].includes(role);
+}

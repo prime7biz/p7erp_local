@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type HrPayslipResponse } from "@/api/client";
 import { HrSimpleCrudPage } from "@/pages/app/hr/components/HrSimpleCrudPage";
 import { logApiError } from "@/utils/logApiError";
+import { saveBlob } from "@/lib/fileSave";
 
 interface HrPayslipFilter {
   run_id: number;
@@ -25,12 +26,7 @@ export function HrPayslipsPage() {
 
   const downloadPdf = async (id: number) => {
     const blob = await api.downloadHrPayslipPdf(id);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `payslip-${id}.pdf`;
-    a.click();
-    URL.revokeObjectURL(url);
+    void saveBlob(blob, `payslip-${id}.pdf`);
   };
 
   return (

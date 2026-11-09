@@ -3,6 +3,7 @@ import type { AiWeeklyReportItem } from "@/api/client";
 import { MarkdownNarrative } from "./MarkdownNarrative";
 import { AiWeeklyReportKpiPanel } from "./AiWeeklyReportKpiPanel";
 import { buildWeeklyReportMarkdownFile } from "@/pages/app/ai/utils/weeklyReportFormat";
+import { saveBlob } from "@/lib/fileSave";
 
 export function AiWeeklyReportDetail({ report, printId }: { report: AiWeeklyReportItem; printId: string }) {
   const onCopy = async () => {
@@ -15,11 +16,7 @@ export function AiWeeklyReportDetail({ report, printId }: { report: AiWeeklyRepo
   };
   const onDownload = () => {
     const blob = new Blob([buildWeeklyReportMarkdownFile(report)], { type: "text/markdown;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `weekly-report-${report.week_start}.md`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    void saveBlob(blob, `weekly-report-${report.week_start}.md`);
   };
   const onPrint = () => window.print();
 

@@ -20,6 +20,7 @@ import { buildLcFieldApplyStates } from "@/utils/extractionHelpers";
 import { todayLocalISO } from "@/lib/dates";
 import { subtractMoney, sumMoneyBy } from "@/lib/money";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { saveBlob } from "@/lib/fileSave";
 
 const CONTRACT_TYPES = [
   { value: "EXPORT_LC", label: "Master Export LC" },
@@ -400,14 +401,7 @@ export function MasterContractsPage() {
       )
       .join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${safeRef}_readiness_${now}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    void saveBlob(blob, `${safeRef}_readiness_${now}.csv`);
   };
 
   const printReadinessSummary = () => {

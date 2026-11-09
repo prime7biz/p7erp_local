@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Layers, Package, Warehouse, Workflow } from "lucide-react";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
+import { saveBlob } from "@/lib/fileSave";
 
 type Tab = "overview" | "group" | "warehouse" | "wip";
 
@@ -60,12 +61,7 @@ export function StockInventorySummaryPage() {
     const escape = (v: unknown) => `"${String(v ?? "").replaceAll('"', '""')}"`;
     const lines = [headers.join(","), ...rows.map((r) => headers.map((h) => escape(r[h])).join(","))];
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${name}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    void saveBlob(blob, `${name}.csv`);
   };
 
   const flatLinesFromGroup = () => {

@@ -105,7 +105,7 @@ export function PageHelpButton() {
           id={panelId}
           role="dialog"
           aria-label="Help for this page"
-          className="absolute right-0 z-30 mt-1 w-80 max-w-[calc(100vw-1.5rem)] rounded-lg border border-border bg-surface-raised shadow-xl"
+          className="fixed inset-x-3 top-12 z-30 rounded-lg border border-border bg-surface-raised shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-1 sm:w-80 sm:max-w-[calc(100vw-1.5rem)]"
         >
           <div className="border-b border-border-subtle px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
             Help for this page

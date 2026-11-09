@@ -19,11 +19,11 @@ export function WorkflowSummaryStrip({ items, className = "" }: WorkflowSummaryS
   if (!items.length) return null;
   return (
     <div
-      className={`flex flex-wrap gap-2 rounded-xl border border-border bg-surface-subtle/80 px-3 py-2 text-xs ${className}`}
+      className={`flex gap-2 overflow-x-auto rounded-xl border border-border bg-surface-subtle/80 px-3 py-2 text-xs sm:flex-wrap sm:overflow-visible ${className}`}
     >
       {items.map((it) => {
         const inner = (
-          <span className="inline-flex items-baseline gap-1.5 rounded-lg bg-surface-raised px-2.5 py-1.5 shadow-sm">
+          <span className="inline-flex shrink-0 items-baseline gap-1.5 whitespace-nowrap rounded-lg bg-surface-raised px-2.5 py-1.5 shadow-sm">
             <span className="font-medium text-text-muted">{it.label}</span>
             <span className="font-semibold text-text-primary" title={it.hint}>
               {it.value}
@@ -31,11 +31,13 @@ export function WorkflowSummaryStrip({ items, className = "" }: WorkflowSummaryS
           </span>
         );
         return it.to ? (
-          <Link key={it.label} to={it.to} className="hover:opacity-90">
+          <Link key={it.label} to={it.to} className="shrink-0 hover:opacity-90">
             {inner}
           </Link>
         ) : (
-          <span key={it.label}>{inner}</span>
+          <span key={it.label} className="shrink-0">
+            {inner}
+          </span>
         );
       })}
     </div>

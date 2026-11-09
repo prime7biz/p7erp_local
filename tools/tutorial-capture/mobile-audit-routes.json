@@ -1,0 +1,35 @@
+{
+  "description": "First-pass phone audit (max 30 routes). Keep the most-used page of each module; add or remove routes here.",
+  "routes": [
+    { "module": "Dashboard", "path": "/app" },
+    { "module": "ESS", "path": "/app/hr/ess/attendance" },
+    { "module": "ESS", "path": "/app/hr/ess/payslips" },
+    { "module": "Merchandising", "path": "/app/inquiries" },
+    { "module": "Merchandising", "path": "/app/quotations" },
+    { "module": "Merchandising", "path": "/app/orders" },
+    { "module": "Merchandising", "path": "/app/customers" },
+    { "module": "Inventory", "path": "/app/inventory/goods-receiving" },
+    { "module": "Inventory", "path": "/app/inventory/stock-inventory-summary" },
+    { "module": "Inventory", "path": "/app/inventory/purchase-orders" },
+    { "module": "Merchandising", "path": "/app/inquiries/new" },
+    { "module": "Production", "path": "/app/production/hourly/sewing" },
+    { "module": "Production", "path": "/app/production/scan-station" },
+    { "module": "Finance", "path": "/app/accounts/vouchers" },
+    { "module": "Finance", "path": "/app/accounts/vouchers/approval-queue" },
+    { "module": "Finance", "path": "/app/finance/party-ledgers" },
+    { "module": "Finance", "path": "/app/accounts/reports/trial-balance" },
+    { "module": "HR", "path": "/app/hr/employees" },
+    { "module": "HR", "path": "/app/hr/attendance/entries" },
+    { "module": "HR", "path": "/app/hr/payroll/payslips" },
+    { "module": "Commercial", "path": "/app/commercial/master-contracts" },
+    { "module": "Commercial", "path": "/app/commercial/proforma-invoices" },
+    { "module": "Reports", "path": "/app/reports" },
+    { "module": "Reports", "path": "/app/reports/gate-passes" },
+    { "module": "Approvals", "path": "/app/approvals" },
+    { "module": "Help", "path": "/app/tutorials" }
+  ],
+  "viewports": [
+    { "name": "phone-360", "width": 360, "height": 780 },
+    { "name": "phone-390", "width": 390, "height": 844 }
+  ]
+}

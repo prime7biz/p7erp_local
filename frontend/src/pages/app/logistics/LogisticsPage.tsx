@@ -13,6 +13,7 @@ import { buildShippingFieldApplyStates } from "@/utils/extractionHelpers";
 import { logApiError } from "@/utils/logApiError";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { todayLocalISO } from "@/lib/dates";
+import { saveBlob } from "@/lib/fileSave";
 
 const EMPTY_FORM: ShipmentCreate = {
   trade_case_id: 0,
@@ -219,12 +220,7 @@ export function LogisticsPage() {
     );
     const csv = [headers.join(","), ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `shipments-${todayLocalISO()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    void saveBlob(blob, `shipments-${todayLocalISO()}.csv`);
   }, [filteredItems]);
 
   const submit = async (e: React.FormEvent) => {

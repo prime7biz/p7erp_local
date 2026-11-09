@@ -4,6 +4,7 @@ import { api, type TdsDeductionResponse, type TdsReturnResponse } from "@/api/cl
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { saveBlob } from "@/lib/fileSave";
 
 export function TdsReportsPage() {
   const now = new Date();
@@ -67,12 +68,7 @@ export function TdsReportsPage() {
       setError("");
       const payload = await api.exportTdsReturn({ year, quarter, form });
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = payload.filename || `Form_${form}_Q${quarter}_${year}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      void saveBlob(blob, payload.filename || `Form_${form}_Q${quarter}_${year}.json`);
     } catch (e) {
       logApiError("TdsReportsPage.exportJson", e);
       setError((e as Error).message);

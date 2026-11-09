@@ -13,6 +13,7 @@ import {
   type WastageThresholdRuleResponse,
   type CustomerResponse,
 } from "@/api/client";
+import { saveBlob } from "@/lib/fileSave";
 
 const PREFIX = "/app";
 const WASTAGE_THRESHOLD = 15;
@@ -234,12 +235,7 @@ export function WastageReportPage() {
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
       });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "wastage_report.xlsx";
-      a.click();
-      URL.revokeObjectURL(url);
+      void saveBlob(blob, "wastage_report.xlsx");
     } catch (e) {
       logApiError("WastageReportPage.exportExcel", e);
       setError(e instanceof Error ? e.message : "Export failed");

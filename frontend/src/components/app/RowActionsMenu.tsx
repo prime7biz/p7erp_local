@@ -32,6 +32,13 @@ const MENU_WIDTH = 160;
 const VIEWPORT_GAP = 8;
 const OPEN_UP_THRESHOLD = 220;
 
+/** Phones and tablets: tables scroll sideways there, which would cut off an inline menu. */
+function isNarrowViewport(): boolean {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function"
+    ? window.matchMedia("(max-width: 1023px)").matches
+    : false;
+}
+
 /**
  * Shared row Actions dropdown (Quotations / Customers pattern).
  * Single combined control — do not use side-by-side Edit/Delete icons.
@@ -44,9 +51,11 @@ export function RowActionsMenu({
   label = "Actions",
   className = "",
   children,
-  menuPortal = false,
+  menuPortal: menuPortalProp = false,
 }: RowActionsMenuProps) {
   const open = openId === rowId;
+  const [narrow] = useState(isNarrowViewport);
+  const menuPortal = menuPortalProp || narrow;
   const menuId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -108,14 +117,14 @@ export function RowActionsMenu({
       style={menuPortal ? portalStyle ?? { position: "fixed", visibility: "hidden" } : undefined}
       className={
         menuPortal
-          ? "z-50 rounded-lg border border-border bg-surface-raised p-1 shadow-lg"
+          ? "z-[120] rounded-lg border border-border bg-surface-raised p-1 shadow-lg"
           : "absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg"
       }
     >
       {items.map((item) => {
         const itemClass = item.danger
-          ? "block w-full rounded-md px-2 py-1.5 text-left text-xs text-rose-600 hover:bg-rose-50 disabled:opacity-50"
-          : "block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-50";
+          ? "block w-full rounded-md px-2 py-2.5 text-left text-xs text-rose-600 hover:bg-rose-50 disabled:opacity-50 lg:py-1.5"
+          : "block w-full rounded-md px-2 py-2.5 text-left text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-50 lg:py-1.5";
         if (item.href) {
           return (
             <a
@@ -158,7 +167,7 @@ export function RowActionsMenu({
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         onClick={() => onOpenChange(open ? null : rowId)}
-        className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
+        className="rounded-lg border border-border-strong px-2.5 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle lg:py-1"
       >
         {label}
       </button>

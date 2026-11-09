@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type StockVsGlResponse, type WipVsGlResponse } from "@/api/client";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
+import { saveBlob } from "@/lib/fileSave";
 
 type TabKey = "po" | "grn" | "challan" | "gatepass" | "stock" | "finance";
 
@@ -159,12 +160,7 @@ export function InventoryReconciliationPage() {
     }
     const content = toCsv(data);
     const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `inventory_${tab}_reconciliation.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    void saveBlob(blob, `inventory_${tab}_reconciliation.csv`);
   };
 
   const q = search.trim().toLowerCase();

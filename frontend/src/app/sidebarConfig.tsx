@@ -116,6 +116,8 @@ export interface BottomNavItem {
   matchPrefixes?: string[];
   visibleFor?: TenantTypeFilter[];
   isMore?: boolean;
+  /** Same RBAC key as the matching sidebar section; checked only while RBAC is enforced. */
+  permissionKey?: string;
 }
 
 const PREFIX = "/app";
@@ -1006,6 +1008,7 @@ export const bottomNavItems: BottomNavItem[] = [
     icon: ShoppingCart,
     label: "Sales",
     href: `${PREFIX}/orders`,
+    permissionKey: "merch.access",
     matchPrefixes: [
       `${PREFIX}/orders`,
       `${PREFIX}/inquiries`,
@@ -1026,6 +1029,7 @@ export const bottomNavItems: BottomNavItem[] = [
     icon: Package,
     label: "Stock",
     href: `${PREFIX}/inventory`,
+    permissionKey: "inventory.access",
     matchPrefixes: [`${PREFIX}/inventory`],
   },
   {
@@ -1033,6 +1037,7 @@ export const bottomNavItems: BottomNavItem[] = [
     icon: DollarSign,
     label: "Finance",
     href: `${PREFIX}/accounts`,
+    permissionKey: "finance.access",
     matchPrefixes: [`${PREFIX}/accounts`, `${PREFIX}/banking`, `${PREFIX}/finance`, `${PREFIX}/cashflow`],
   },
   {

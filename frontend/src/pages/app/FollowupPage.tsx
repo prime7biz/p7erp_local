@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { addDaysLocalISO, toLocalISODate, todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { getCustomersCached } from "@/lib/masterData";
+import { saveBlob } from "@/lib/fileSave";
 
 const TNA_PHASES = [
   "pre_order",
@@ -134,12 +135,7 @@ function downloadActionsCsv(rows: OrderFollowupActionResponse[]) {
     ),
   ];
   const blob = new Blob([lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `tna-followup-actions-${todayLocalISO()}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  void saveBlob(blob, `tna-followup-actions-${todayLocalISO()}.csv`);
 }
 
 function CalendarGrid({

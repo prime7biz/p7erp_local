@@ -2,23 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
 import type { MeResponse, TenantType } from "@/api/client";
-import {
-  isNavItemVisibleForTenant,
-  isSidebarNavItemActive,
-  menuSections,
-} from "@/app/sidebarConfig";
+import { isSidebarNavItemActive, menuSections } from "@/app/sidebarConfig";
 import { prefetchSidebarRoute } from "@/app/prefetchRoutes";
-import { getRbacMode } from "@/components/auth/rbacMode";
 import { getNavFavorites } from "@/components/shell/navShortcuts";
 import { SidebarNavLink } from "@/components/shell/SidebarNavLink";
 import { SidebarSection } from "@/components/shell/SidebarSection";
 import { SidebarShortcuts } from "@/components/shell/SidebarShortcuts";
 import { SidebarTooltip } from "@/components/shell/SidebarTooltip";
-import {
-  getNameInitial,
-  isVisible,
-  sectionPermissionKey,
-} from "@/components/shell/sidebarNavUtils";
+import { filterVisibleMenuSections, getNameInitial } from "@/components/shell/sidebarNavUtils";
 
 export type SidebarProps = {
   tenantType: TenantType;
@@ -81,41 +72,16 @@ export function Sidebar({
     return getNavFavorites(userId);
   }, [userId, location.pathname]);
 
-  const filtered = useMemo(() => {
-    const rbacMode = getRbacMode(featureFlags);
-    return menuSections
-      .filter((s) => isVisible(tenantType, s.visibleFor))
-      .filter((s) => {
-        if (rbacMode !== "enforce") return true;
-        const permissionKey = sectionPermissionKey(s.section);
-        if (!permissionKey) return true;
-        return hasPermission(permissionKey);
-      })
-      .map((s) => {
-        if (s.subsections && s.subsections.length > 0) {
-          const subsections = s.subsections
-            .map((sub) => ({
-              ...sub,
-              items: sub.items.filter((i) =>
-                isNavItemVisibleForTenant(i, tenantType, enabledOptionalProductionUnits, featureFlags),
-              ),
-            }))
-            .filter((sub) => sub.items.length > 0);
-          return { ...s, items: [], subsections };
-        }
-        return {
-          ...s,
-          items: s.items.filter((i) =>
-            isNavItemVisibleForTenant(i, tenantType, enabledOptionalProductionUnits, featureFlags),
-          ),
-        };
-      })
-      .filter((s) => {
-        if (s.directLink) return true;
-        if (s.subsections && s.subsections.length > 0) return s.subsections.some((sub) => sub.items.length > 0);
-        return s.items.length > 0;
-      });
-  }, [tenantType, enabledOptionalProductionUnits, featureFlags, hasPermission]);
+  const filtered = useMemo(
+    () =>
+      filterVisibleMenuSections(menuSections, {
+        tenantType,
+        enabledOptionalProductionUnits,
+        featureFlags,
+        hasPermission,
+      }),
+    [tenantType, enabledOptionalProductionUnits, featureFlags, hasPermission],
+  );
 
   useEffect(() => {
     const path = location.pathname;

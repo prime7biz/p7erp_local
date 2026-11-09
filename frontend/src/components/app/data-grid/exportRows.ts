@@ -1,3 +1,4 @@
+import { saveBlob } from "@/lib/fileSave";
 import type { GridColumn } from "./types";
 
 type Cell = string | number | null | undefined;
@@ -8,15 +9,6 @@ function exportMatrix<T>(columns: GridColumn<T>[], rows: T[]): { headers: string
     headers: cols.map((c) => c.header),
     body: rows.map((r) => cols.map((c) => c.value!(r))),
   };
-}
-
-function download(blob: Blob, fileName: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 function csvCell(v: Cell): string {
@@ -32,7 +24,7 @@ export function buildCsv<T>(columns: GridColumn<T>[], rows: T[]): string {
 }
 
 export function exportCsv<T>(columns: GridColumn<T>[], rows: T[], baseName: string) {
-  download(new Blob([buildCsv(columns, rows)], { type: "text/csv;charset=utf-8" }), `${baseName}.csv`);
+  void saveBlob(new Blob([buildCsv(columns, rows)], { type: "text/csv;charset=utf-8" }), `${baseName}.csv`);
 }
 
 /** Native .xlsx (numbers stay numeric); the writer is loaded only when someone exports. */
@@ -47,5 +39,6 @@ export async function exportXlsx<T>(columns: GridColumn<T>[], rows: T[], baseNam
       ),
     ),
   ];
-  await writeXlsxFile(data, { fileName: `${baseName}.xlsx` });
+  const blob = await writeXlsxFile(data, {});
+  await saveBlob(blob, `${baseName}.xlsx`);
 }

@@ -13,6 +13,7 @@ import { useAuth } from "@/context/AuthContext";
 import { logApiError } from "@/utils/logApiError";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { fetchInventoryItemPage, fetchOrderPage, fetchVendorPage, hydrateInventoryItem, hydrateOrder, hydrateVendor } from "@/lib/remoteSelectFetchers";
+import { saveBlob } from "@/lib/fileSave";
 
 const CERT_TYPES: { value: CertificateType; label: string }[] = [
   { value: "GOTS", label: "GOTS (organic textile)" },
@@ -135,12 +136,7 @@ function OrderReport() {
       ],
       report.fabric_lots,
     );
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `traceability-${report.order_code}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    void saveBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), `traceability-${report.order_code}.csv`);
   };
 
   return (

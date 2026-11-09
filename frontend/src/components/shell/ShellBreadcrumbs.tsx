@@ -15,15 +15,15 @@ export function ShellBreadcrumbs({ routes }: { routes: FlatNavRoute[] }) {
   return (
     <nav
       aria-label="Breadcrumb"
-      className="hidden border-b border-border-subtle bg-surface-raised px-3 py-1.5 text-xs text-text-muted md:flex md:px-4"
+      className="no-print hidden border-b border-border-subtle bg-surface-raised px-3 py-1.5 text-xs text-text-muted md:flex md:px-4"
     >
-      <ol className="flex min-w-0 flex-wrap items-center gap-1">
+      <ol className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden whitespace-nowrap">
         <li>
           <Link to="/app" className="text-text-muted hover:text-brand-primary">
             Home
           </Link>
         </li>
-        <li className="flex items-center gap-1">
+        <li className="flex min-w-0 shrink items-center gap-1">
           <ChevronRight className="h-3 w-3 shrink-0" />
           <span className="truncate text-text-secondary">{crumb.module}</span>
         </li>

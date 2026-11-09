@@ -6,7 +6,9 @@
  */
 import type {
   HrCompensationInput,
+  HrCompensationPreview,
   HrEmployeeCreate,
+  HrEmployeePaySnapshot,
   HrEmployeeResponse,
   HrEmployeeUpdate,
   HrOnboardingRequest,
@@ -19,8 +21,7 @@ export type WorkspaceMode = "create" | "edit";
 
 export type WorkspaceTab =
   | "personal"
-  | "job"
-  | "salary"
+  | "employment"
   | "checklist"
   | "identity"
   | "documents"
@@ -31,8 +32,8 @@ export type WorkspaceTab =
 
 /** Tabs that store rows linked to a saved employee, so they open only after the first save. */
 export const RECORD_TABS: readonly WorkspaceTab[] = ["checklist", "identity", "documents", "age", "medical", "history", "production"];
-/** Create-mode steps shown as "Core details n of 3". */
-export const CORE_TABS: readonly WorkspaceTab[] = ["personal", "job", "salary"];
+/** Create-mode steps shown as "Core details n of 2". */
+export const CORE_TABS: readonly WorkspaceTab[] = ["personal", "employment"];
 
 export function isTabLocked(mode: WorkspaceMode, tab: WorkspaceTab): boolean {
   return mode === "create" && RECORD_TABS.includes(tab);
@@ -103,11 +104,20 @@ export type EmployeeFormState = {
   facilities: string[];
 };
 
+/**
+ * Salary set-up on the Employment & Salary tab.
+ * `enabled` is "Set salary now" (create) or an open "Change salary" form (edit); when false no salary is sent.
+ * With a wage grade the basic is the grade minimum unless `override` is on; without a grade the basic is required.
+ * `acknowledged` is the on-screen override confirmation only; it is never sent to the API.
+ */
 export type SalaryFormState = {
+  enabled: boolean;
   structure_id: number | null;
   bd_wage_rate_id: number | null;
+  override: boolean;
   base_salary: string;
   effective_from: string;
+  acknowledged: boolean;
 };
 
 export const PRESENT_KEYS = [
@@ -140,6 +150,8 @@ export const PAYMENT_KEYS: readonly (keyof EmployeeFormState)[] = [
   "salary_payment_method", "bank_account_name", "bank_account_number", "bank_name", "bank_branch", "bank_routing_no",
   "facilities",
 ];
+/** Edit mode "Save employment & payment" on the Employment & Salary tab (salary has its own save). */
+export const EMPLOYMENT_KEYS: readonly (keyof EmployeeFormState)[] = [...JOB_KEYS, ...PAYMENT_KEYS];
 
 export function emptyEmployeeForm(): EmployeeFormState {
   return {
@@ -157,7 +169,7 @@ export function emptyEmployeeForm(): EmployeeFormState {
 }
 
 export function emptySalaryForm(): SalaryFormState {
-  return { structure_id: null, bd_wage_rate_id: null, base_salary: "", effective_from: "" };
+  return { enabled: false, structure_id: null, bd_wage_rate_id: null, override: false, base_salary: "", effective_from: "", acknowledged: false };
 }
 
 const s = (v: string | null | undefined): string => v ?? "";
@@ -387,14 +399,140 @@ export function buildEmployeeCreate(form: EmployeeFormState, omit: readonly stri
   return out as unknown as HrEmployeeCreate;
 }
 
-export function buildCompensation(salary: SalaryFormState, joiningDate: string): HrCompensationInput | null {
-  if (!salary.structure_id) return null;
+// --- Salary set-up ------------------------------------------------------------------------------------
+
+const MONEY_RE = /^\d{1,14}(\.\d{1,4})?$/;
+
+export function isMoneyInput(value: string): boolean {
+  return MONEY_RE.test(value.trim());
+}
+
+/** "12500.0000" -> "12500", "0012500.50" -> "12500.5"; anything that is not a plain decimal is returned trimmed. */
+export function normalizeMoney(value: string | null | undefined): string {
+  const s = (value ?? "").trim();
+  if (!/^\d+(\.\d+)?$/.test(s)) return s;
+  const [whole = "0", frac = ""] = s.split(".");
+  const i = whole.replace(/^0+(?=\d)/, "");
+  const f = frac.replace(/0+$/, "");
+  return f ? `${i}.${f}` : i;
+}
+
+/** True when the basic must be typed: no wage grade, or the grade's standard basic is overridden. */
+export function salaryNeedsAmount(salary: SalaryFormState): boolean {
+  return salary.bd_wage_rate_id === null || salary.override;
+}
+
+/** Apply a change to the salary form; any change to what is paid clears the override confirmation. */
+export function updateSalary(prev: SalaryFormState, patch: Partial<SalaryFormState>): SalaryFormState {
+  const next = { ...prev, ...patch };
+  const payKeys = ["enabled", "structure_id", "bd_wage_rate_id", "override", "base_salary"] as const;
+  if (!("acknowledged" in patch) && payKeys.some((k) => k in patch && patch[k] !== prev[k])) next.acknowledged = false;
+  if (next.bd_wage_rate_id === null) next.override = false;
+  return next;
+}
+
+/** "Change salary" starts from the pay in force, so saving without edits never lowers the basic. */
+export function salaryFormFromSnapshot(snapshot: HrEmployeePaySnapshot | null | undefined): SalaryFormState {
+  const base = { ...emptySalaryForm(), enabled: true };
+  if (!snapshot) return base;
+  // An assignment without a stored basic reports "0"; that is "no basic", not a basic below the grade.
+  const basic = normalizeMoney(snapshot.basic);
+  const storedBasic = snapshot.structure_id !== null && basic !== "0" && basic !== "" ? basic : "";
+  if (snapshot.wage_rate_id !== null) {
+    const aboveGrade = storedBasic !== "" && snapshot.wage_grade_basic !== null && storedBasic !== normalizeMoney(snapshot.wage_grade_basic);
+    return { ...base, structure_id: snapshot.structure_id, bd_wage_rate_id: snapshot.wage_rate_id, override: aboveGrade, base_salary: aboveGrade ? storedBasic : "" };
+  }
+  return { ...base, structure_id: snapshot.structure_id, base_salary: storedBasic };
+}
+
+export type SalaryDateSource = "custom" | "joining" | "company_today" | "missing";
+
+/**
+ * The date the salary starts. Create: typed date, else joining date, else today's company date
+ * (`as_of` from the compensation options). Edit: always a typed date.
+ */
+export function resolveSalaryEffectiveDate(
+  salary: SalaryFormState,
+  mode: WorkspaceMode,
+  joiningDate: string,
+  asOf: string | null,
+): { date: string; source: SalaryDateSource } {
+  const custom = salary.effective_from.trim();
+  if (custom) return { date: custom, source: "custom" };
+  if (mode === "edit") return { date: "", source: "missing" };
+  if (joiningDate.trim()) return { date: joiningDate.trim(), source: "joining" };
+  if (asOf) return { date: asOf, source: "company_today" };
+  return { date: "", source: "missing" };
+}
+
+/** Compensation payload; null whenever salary set-up is off, whatever hidden fields still hold. */
+export function buildCompensation(salary: SalaryFormState, effectiveFrom: string | null): HrCompensationInput | null {
+  if (!salary.enabled || !salary.structure_id) return null;
   return {
     structure_id: salary.structure_id,
     bd_wage_rate_id: salary.bd_wage_rate_id,
-    base_salary: t(salary.base_salary),
-    effective_from: t(salary.effective_from) ?? t(joiningDate),
+    base_salary: salaryNeedsAmount(salary) ? t(salary.base_salary) : null,
+    effective_from: effectiveFrom ? t(effectiveFrom) : null,
   };
+}
+
+/** The request to preview, or null while required parts are still missing. */
+export function previewableCompensation(salary: SalaryFormState, effectiveFrom: string): HrCompensationInput | null {
+  const req = buildCompensation(salary, effectiveFrom);
+  if (!req || !req.effective_from) return null;
+  if (salaryNeedsAmount(salary) && !isMoneyInput(salary.base_salary)) return null;
+  return req;
+}
+
+export type SalaryPreviewStatus = "idle" | "pending" | "valid" | "invalid" | "error";
+export type SalaryPreviewState = {
+  status: SalaryPreviewStatus;
+  /** `previewKey` of the request this result belongs to. */
+  key: string | null;
+  preview: HrCompensationPreview | null;
+  message: string | null;
+};
+export const IDLE_PREVIEW: SalaryPreviewState = { status: "idle", key: null, preview: null, message: null };
+
+export function previewKey(req: HrCompensationInput | null): string | null {
+  if (!req) return null;
+  return JSON.stringify({
+    structure_id: req.structure_id,
+    bd_wage_rate_id: req.bd_wage_rate_id ?? null,
+    base_salary: req.base_salary ?? null,
+    effective_from: req.effective_from ?? null,
+  });
+}
+
+/**
+ * Why the salary cannot be saved yet, or null when it can. Only meaningful when `salary.enabled`;
+ * a salary that is switched on is never silently dropped.
+ */
+export function salaryBlocker(
+  salary: SalaryFormState,
+  effectiveFrom: string,
+  preview: SalaryPreviewState,
+  opts: { mode: WorkspaceMode; joiningDate: string; joiningDateUnsaved?: boolean },
+): string | null {
+  if (!salary.enabled) return null;
+  if (opts.mode === "edit" && opts.joiningDateUnsaved) return "Save employment first: the joining date has unsaved changes.";
+  if (!salary.structure_id) return "Choose a salary structure, or switch off “Set salary now”.";
+  if (salaryNeedsAmount(salary)) {
+    if (!salary.base_salary.trim()) return "Enter the basic salary.";
+    if (!isMoneyInput(salary.base_salary)) return "Basic salary must be a number such as 12500 or 12500.50 (no commas).";
+  }
+  if (!effectiveFrom) {
+    return opts.mode === "edit" ? "Choose the date the new salary starts." : "Enter a joining date or a salary start date.";
+  }
+  if (opts.joiningDate && effectiveFrom < opts.joiningDate) return "The salary cannot start before the joining date.";
+  if (salary.bd_wage_rate_id !== null && salary.override && !salary.acknowledged) {
+    return "Tick the confirmation box to use a basic salary different from the grade standard.";
+  }
+  const key = previewKey(previewableCompensation(salary, effectiveFrom));
+  if (preview.key !== key || preview.status === "pending" || preview.status === "idle") return "Checking the salary…";
+  if (preview.status === "error") return preview.message || "Could not check the salary. Try again.";
+  if (preview.status === "invalid") return preview.message || "The salary is below the legal minimum.";
+  return null;
 }
 
 export function newRequestId(): string {
@@ -412,11 +550,12 @@ export function buildOnboardingRequest(
   salary: SalaryFormState,
   issueTempGatePass: boolean,
   omit: readonly string[] = [],
+  asOf: string | null = null,
 ): HrOnboardingRequest {
   return {
     request_id: requestId,
     employee: buildEmployeeCreate(form, omit),
-    compensation: buildCompensation(salary, form.joining_date),
+    compensation: buildCompensation(salary, resolveSalaryEffectiveDate(salary, "create", form.joining_date, asOf).date),
     issue_temp_gate_pass: issueTempGatePass,
   };
 }

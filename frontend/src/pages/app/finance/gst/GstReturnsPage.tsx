@@ -4,6 +4,7 @@ import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { downloadCsv } from "@/lib/reportExport";
 import { logApiError } from "@/utils/logApiError";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { saveBlob } from "@/lib/fileSave";
 
 type Tab = "gstr1" | "gstr2" | "gstr3b" | "itc";
 
@@ -62,12 +63,7 @@ export function GstReturnsPage() {
     try {
       const payload = await api.exportGstr1({ from_date: from, to_date: to, format: "json" });
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `gstr1_${ym}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      void saveBlob(blob, `gstr1_${ym}.json`);
     } catch (e) {
       logApiError("GstReturnsPage.exportJson", e);
       setError((e as Error).message);

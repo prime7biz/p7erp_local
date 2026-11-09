@@ -96,6 +96,8 @@ type SelectFieldProps = {
   onChange: (value: string) => void;
   options: readonly { value: string; label: string }[];
   emptyLabel?: string;
+  /** False hides the empty choice (the value cannot be cleared). */
+  allowEmpty?: boolean;
   hint?: string;
   disabled?: boolean;
   masked?: boolean;
@@ -103,7 +105,9 @@ type SelectFieldProps = {
   className?: string;
 };
 
-export function SelectField({ label, value, onChange, options, emptyLabel = "Select…", hint, disabled, masked, highlight, className }: SelectFieldProps) {
+export function SelectField({
+  label, value, onChange, options, emptyLabel = "Select…", allowEmpty = true, hint, disabled, masked, highlight, className,
+}: SelectFieldProps) {
   return (
     <FieldShell label={label} hint={hint} masked={masked} className={className}>
       {(id, describedBy) => (
@@ -115,7 +119,7 @@ export function SelectField({ label, value, onChange, options, emptyLabel = "Sel
           disabled={disabled || masked}
           aria-describedby={describedBy}
         >
-          <option value="">{emptyLabel}</option>
+          {(allowEmpty || !value) && <option value="">{emptyLabel}</option>}
           {options.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}

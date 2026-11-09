@@ -11,6 +11,7 @@ import {
   type TradeDocumentRow,
 } from "@/api/client";
 import { baseCurrencyOf, costDisplay, marginDisplay, revenueDisplay } from "./tradeMarginDisplay";
+import { saveBlob } from "@/lib/fileSave";
 
 export function TradeCaseDetailPage() {
   const { caseId } = useParams<{ caseId: string }>();
@@ -478,12 +479,7 @@ export function TradeCaseDetailPage() {
                             type="button"
                             onClick={async () => {
                               const blob = await api.downloadTradeDocument(id, d.id);
-                              const url = URL.createObjectURL(blob);
-                              const a = document.createElement("a");
-                              a.href = url;
-                              a.download = d.file_name;
-                              a.click();
-                              URL.revokeObjectURL(url);
+                              void saveBlob(blob, d.file_name);
                             }}
                             className="rounded border border-border-strong px-2 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
                           >

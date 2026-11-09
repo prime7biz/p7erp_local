@@ -4,6 +4,7 @@ import { Download, RefreshCw } from "lucide-react";
 
 import { api, type TradeCaseDashboardResponse, type TradeCaseRow } from "@/api/client";
 import { todayLocalISO } from "@/lib/dates";
+import { saveBlob } from "@/lib/fileSave";
 
 const ALERTS = "/app/merchandising/alerts";
 
@@ -161,12 +162,7 @@ export function TradeDashboardPage() {
               );
               const csv = [headers.join(","), ...rows].join("\n");
               const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = `trade-at-risk-${todayLocalISO()}.csv`;
-              a.click();
-              URL.revokeObjectURL(url);
+              void saveBlob(blob, `trade-at-risk-${todayLocalISO()}.csv`);
             }}
             disabled={riskCases.length === 0}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-50"

@@ -150,7 +150,10 @@ export function HrEmployeesPage() {
   const load = useCallback(async (keepMessages = false) => {
     const token = begin();
     setLoading(true);
-    if (!keepMessages) setError("");
+    if (!keepMessages) {
+      setError("");
+      setInfo("");
+    }
     try {
       const [depRows, desRows, secRows, empResult] = await Promise.all([
         fetchAllHrDepartments(),

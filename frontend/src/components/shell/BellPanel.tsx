@@ -136,7 +136,7 @@ export function BellPanel() {
         <div
           role="dialog"
           aria-label="Notifications"
-          className="absolute right-0 z-30 mt-1 w-[22rem] max-w-[calc(100vw-1.5rem)] rounded-lg border border-border bg-surface-raised shadow-xl"
+          className="fixed inset-x-3 top-12 z-30 max-h-[calc(100dvh-8rem)] overflow-y-auto rounded-lg border border-border bg-surface-raised shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-1 sm:max-h-none sm:w-[22rem] sm:max-w-[calc(100vw-1.5rem)] sm:overflow-visible"
         >
           <div className="border-b border-border-subtle px-3 py-2">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Needs attention</div>

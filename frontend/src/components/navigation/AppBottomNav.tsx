@@ -1,39 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { Link, useLocation } from "react-router-dom";
 import type { TenantType } from "@/api/client";
 import { APP_VERSION } from "@/api/client";
-import {
-  bottomNavItems,
-  isNavItemVisibleForTenant,
-  menuSections,
-  type BottomNavItem,
-  type TenantTypeFilter,
-} from "@/app/sidebarConfig";
+import { bottomNavItems, menuSections, type BottomNavItem, type MenuSection } from "@/app/sidebarConfig";
 import { prefetchSidebarRoute } from "@/app/prefetchRoutes";
-import { getRbacMode } from "@/components/auth/rbacMode";
+import {
+  filterVisibleMenuSections,
+  isMenuPermissionAllowed,
+  isVisible,
+} from "@/components/shell/sidebarNavUtils";
 import { Landmark, ScanBarcode, Search, Settings, Timer, TriangleAlert, Users, X } from "lucide-react";
-
-function isVisible(tenantType: TenantType, filter?: TenantTypeFilter[]): boolean {
-  if (!filter || filter.length === 0) return true;
-  if (tenantType === "both") return true;
-  return filter.includes(tenantType);
-}
 
 function isPathMatch(pathname: string, basePath: string): boolean {
   return pathname === basePath || pathname.startsWith(`${basePath}/`);
-}
-
-function sectionPermissionKey(section: string): string | null {
-  if (section === "Merchandising") return "merch.access";
-  if (section === "Export & Import") return "merch.access";
-  if (section === "Inventory") return "inventory.access";
-  if (section === "Manufacturing") return "production.access";
-  if (section === "AI Tools") return "ai.access";
-  if (section === "HR") return "hr.access";
-  if (section === "Finance") return "finance.access";
-  if (section === "Reports") return "reports.access";
-  if (section === "Settings") return "settings.access";
-  return null;
 }
 
 /** More is active only while the drawer is open — not for every deep route. */
@@ -42,6 +21,52 @@ function isTabActive(pathname: string, tab: BottomNavItem, isMoreOpen: boolean):
   if (tab.exact) return pathname === tab.href;
   const prefixes = tab.matchPrefixes?.length ? tab.matchPrefixes : [tab.href];
   return prefixes.some((prefix) => isPathMatch(pathname, prefix));
+}
+
+type DrawerLink = {
+  href: string;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+  /** Shown only when this sidebar section is visible to the user (tenant type + RBAC). */
+  requiresSection?: string;
+};
+
+const MOBILE_SHORTCUTS: DrawerLink[] = [
+  { href: "/app/inventory/stock-inventory-summary", label: "Scan barcode / stock", icon: ScanBarcode, requiresSection: "Inventory" },
+  { href: "/app/hr/ess/attendance", label: "Quick clock-in", icon: Timer },
+  { href: "/app/production/quality", label: "Report defect", icon: TriangleAlert, requiresSection: "Manufacturing" },
+];
+
+const PORTAL_LINKS: DrawerLink[] = [
+  { href: "/login?role=customer", label: "Customer portal login", icon: Users },
+  { href: "/login?role=financier", label: "Financier portal login", icon: Landmark },
+  { href: "/app/settings/external-access", label: "Manage external access", icon: Settings, requiresSection: "Settings" },
+];
+
+const drawerLinkClass =
+  "flex min-h-11 items-center gap-2 rounded-md px-2 py-2 text-sm text-text-secondary hover:bg-state-hover";
+
+/** Keep whole sections whose name matches; otherwise keep only the matching pages. */
+function filterSectionsByQuery(sections: MenuSection[], query: string): MenuSection[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return sections;
+  const matches = (label: string) => label.toLowerCase().includes(q);
+  return sections
+    .map((s) => {
+      if (matches(s.section)) return s;
+      if (s.subsections && s.subsections.length > 0) {
+        const subsections = s.subsections
+          .map((sub) => (matches(sub.label) ? sub : { ...sub, items: sub.items.filter((i) => matches(i.label)) }))
+          .filter((sub) => sub.items.length > 0);
+        return { ...s, directLink: undefined, subsections };
+      }
+      return { ...s, directLink: undefined, items: s.items.filter((i) => matches(i.label)) };
+    })
+    .filter((s) => {
+      if (s.directLink) return true;
+      if (s.subsections && s.subsections.length > 0) return true;
+      return s.items.length > 0;
+    });
 }
 
 export function AppBottomNav({
@@ -59,66 +84,44 @@ export function AppBottomNav({
   const location = useLocation();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [drawerSearch, setDrawerSearch] = useState("");
+  const moreButtonRef = useRef<HTMLButtonElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const drawerRef = useRef<HTMLDivElement | null>(null);
 
   const tabs = useMemo(
-    () => bottomNavItems.filter((item) => isVisible(tenantType, item.visibleFor)),
-    [tenantType],
+    () =>
+      bottomNavItems.filter(
+        (item) =>
+          isVisible(tenantType, item.visibleFor) &&
+          isMenuPermissionAllowed(item.permissionKey, featureFlags, hasPermission),
+      ),
+    [tenantType, featureFlags, hasPermission],
   );
 
-  const filteredSections = useMemo(() => {
-    const rbacMode = getRbacMode(featureFlags);
-    return menuSections
-      .filter((section) => isVisible(tenantType, section.visibleFor))
-      .filter((section) => {
-        if (rbacMode !== "enforce") return true;
-        const permissionKey = sectionPermissionKey(section.section);
-        if (!permissionKey) return true;
-        return hasPermission(permissionKey);
-      })
-      .map((section) => {
-        if (section.subsections && section.subsections.length > 0) {
-          const subsections = section.subsections
-            .map((sub) => ({
-              ...sub,
-              items: sub.items.filter((item) =>
-                isNavItemVisibleForTenant(item, tenantType, enabledOptionalProductionUnits, featureFlags),
-              ),
-            }))
-            .filter((sub) => sub.items.length > 0);
-          return { ...section, items: [], subsections };
-        }
-        const topItems = section.items.filter((item) =>
-          isNavItemVisibleForTenant(item, tenantType, enabledOptionalProductionUnits, featureFlags),
-        );
-        return {
-          ...section,
-          items: topItems,
-          subsections: undefined,
-        };
-      })
-      .filter((section) => {
-        if (section.directLink) return true;
-        if (section.subsections && section.subsections.length > 0) {
-          return section.subsections.some((sub) => sub.items.length > 0);
-        }
-        return section.items.length > 0;
-      });
-  }, [tenantType, enabledOptionalProductionUnits, featureFlags, hasPermission]);
+  const filteredSections = useMemo(
+    () =>
+      filterVisibleMenuSections(menuSections, {
+        tenantType,
+        enabledOptionalProductionUnits,
+        featureFlags,
+        hasPermission,
+      }),
+    [tenantType, enabledOptionalProductionUnits, featureFlags, hasPermission],
+  );
 
-  const filteredDrawerSections = useMemo(() => {
-    if (!drawerSearch.trim()) return filteredSections;
-    const q = drawerSearch.toLowerCase();
-    return filteredSections.filter((s) => {
-      const sectionMatch = s.section.toLowerCase().includes(q);
-      const itemMatch = s.items?.some((i) => i.label.toLowerCase().includes(q));
-      const subMatch = s.subsections?.some(
-        (sub) =>
-          sub.label.toLowerCase().includes(q) ||
-          sub.items.some((i) => i.label.toLowerCase().includes(q)),
-      );
-      return sectionMatch || itemMatch || subMatch;
-    });
-  }, [drawerSearch, filteredSections]);
+  const visibleSectionNames = useMemo(
+    () => new Set(filteredSections.map((s) => s.section)),
+    [filteredSections],
+  );
+  const isDrawerLinkVisible = (link: DrawerLink) =>
+    !link.requiresSection || visibleSectionNames.has(link.requiresSection);
+  const shortcuts = MOBILE_SHORTCUTS.filter(isDrawerLinkVisible);
+  const portalLinks = PORTAL_LINKS.filter(isDrawerLinkVisible);
+
+  const filteredDrawerSections = useMemo(
+    () => filterSectionsByQuery(filteredSections, drawerSearch),
+    [drawerSearch, filteredSections],
+  );
 
   useEffect(() => {
     setIsMoreOpen(false);
@@ -135,15 +138,67 @@ export function AppBottomNav({
     };
   }, [isMoreOpen]);
 
-  const closeMore = () => {
+  const closeMore = useCallback((restoreFocus = true) => {
     setIsMoreOpen(false);
     setDrawerSearch("");
+    if (restoreFocus) window.setTimeout(() => moreButtonRef.current?.focus(), 0);
+  }, []);
+
+  useEffect(() => {
+    if (!isMoreOpen) return;
+    // Focus the close button (not the search box) so phones do not pop up the keyboard.
+    closeButtonRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeMore();
+        return;
+      }
+      if (e.key !== "Tab" || !drawerRef.current) return;
+      // Keep keyboard focus inside the open drawer (it is a modal dialog).
+      const focusable = drawerRef.current.querySelectorAll<HTMLElement>("a[href], button, input");
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isMoreOpen, closeMore]);
+
+  const renderDrawerLink = (link: DrawerLink) => {
+    const Icon = link.icon;
+    return (
+      <Link
+        key={link.href}
+        to={link.href}
+        onClick={() => closeMore(false)}
+        onMouseEnter={() => prefetchSidebarRoute(link.href)}
+        onFocus={() => prefetchSidebarRoute(link.href)}
+        className={drawerLinkClass}
+      >
+        <Icon className="h-4 w-4 shrink-0 text-text-muted" />
+        <span className="truncate">{link.label}</span>
+      </Link>
+    );
   };
 
   return (
     <>
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface-subtle/95 backdrop-blur supports-[backdrop-filter]:bg-surface-subtle/85 pb-[env(safe-area-inset-bottom)] lg:hidden">
-        <div className="grid h-16 grid-cols-5 px-1">
+      <nav
+        className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface-subtle/95 backdrop-blur supports-[backdrop-filter]:bg-surface-subtle/85 pb-[env(safe-area-inset-bottom)] lg:hidden"
+        aria-label="Main menu"
+      >
+        <div
+          className="grid h-16 px-1"
+          style={{ gridTemplateColumns: `repeat(${Math.max(tabs.length, 1)}, minmax(0, 1fr))` }}
+        >
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const active = isTabActive(location.pathname, tab, isMoreOpen);
@@ -157,13 +212,9 @@ export function AppBottomNav({
               return (
                 <button
                   key={tab.key}
+                  ref={moreButtonRef}
                   type="button"
-                  onClick={() =>
-                    setIsMoreOpen((open) => {
-                      if (open) setDrawerSearch("");
-                      return !open;
-                    })
-                  }
+                  onClick={() => (isMoreOpen ? closeMore() : setIsMoreOpen(true))}
                   className={baseClassName}
                   aria-expanded={isMoreOpen}
                   aria-controls="mobile-more-menu"
@@ -181,6 +232,7 @@ export function AppBottomNav({
                 onMouseEnter={() => prefetchSidebarRoute(tab.href)}
                 onFocus={() => prefetchSidebarRoute(tab.href)}
                 className={baseClassName}
+                aria-current={active ? "page" : undefined}
               >
                 <Icon className="h-4 w-4" />
                 <span>{tab.label}</span>
@@ -191,107 +243,68 @@ export function AppBottomNav({
       </nav>
 
       {isMoreOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="no-print fixed inset-0 z-50 lg:hidden">
           <button
             type="button"
             className="absolute inset-0 bg-black/30"
-            onClick={closeMore}
+            onClick={() => closeMore()}
             aria-label="Close menu"
+            tabIndex={-1}
           />
           <div
+            ref={drawerRef}
             id="mobile-more-menu"
-            className="absolute inset-x-0 bottom-0 flex max-h-[75vh] flex-col overflow-hidden rounded-t-2xl border-t border-border bg-surface-subtle shadow-2xl pb-[env(safe-area-inset-bottom)]"
+            role="dialog"
+            aria-modal="true"
+            aria-label="All modules"
+            className="absolute inset-x-0 bottom-0 flex h-[85dvh] max-h-[85vh] flex-col overflow-hidden rounded-t-2xl border-t border-border bg-surface-subtle shadow-2xl pb-[env(safe-area-inset-bottom)]"
           >
             <div className="shrink-0 bg-surface-subtle px-4 pt-4 pb-2 border-b border-border-subtle">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-text-primary">All Modules</h2>
                 <button
+                  ref={closeButtonRef}
                   type="button"
-                  onClick={closeMore}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-base"
+                  onClick={() => closeMore()}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-md text-text-muted hover:bg-surface-base"
                   aria-label="Close modules"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-5 w-5" />
                 </button>
               </div>
               <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-raised px-3 py-2">
                 <Search className="h-4 w-4 text-text-muted" />
                 <input
-                  type="text"
-                  placeholder="Filter modules..."
-                  className="flex-1 bg-transparent text-sm outline-none text-text-primary placeholder:text-text-muted"
+                  type="search"
+                  placeholder="Filter modules and pages..."
+                  aria-label="Filter modules and pages"
+                  className="flex-1 bg-transparent text-base outline-none text-text-primary placeholder:text-text-muted"
                   value={drawerSearch}
                   onChange={(e) => setDrawerSearch(e.target.value)}
-                  autoFocus
                 />
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 pb-4">
-              <section className="rounded-xl border border-border bg-surface-raised p-3">
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
-                  Mobile shortcuts
-                </h3>
-                <div className="space-y-1">
-                  <Link
-                    to="/app/inventory/stock-inventory-summary"
-                    onClick={closeMore}
-                    className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-text-secondary hover:bg-state-hover"
-                  >
-                    <ScanBarcode className="h-4 w-4 text-text-muted" />
-                    Scan barcode / stock
-                  </Link>
-                  <Link
-                    to="/app/hr/ess/attendance"
-                    onClick={closeMore}
-                    className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-text-secondary hover:bg-state-hover"
-                  >
-                    <Timer className="h-4 w-4 text-text-muted" />
-                    Quick clock-in
-                  </Link>
-                  <Link
-                    to="/app/production/quality"
-                    onClick={closeMore}
-                    className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-text-secondary hover:bg-state-hover"
-                  >
-                    <TriangleAlert className="h-4 w-4 text-text-muted" />
-                    Report defect
-                  </Link>
-                </div>
-              </section>
-              <section className="rounded-xl border border-border bg-surface-raised p-3">
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
-                  Stakeholder portals
-                </h3>
-                <div className="space-y-1">
-                  <Link
-                    to="/login?role=customer"
-                    onClick={closeMore}
-                    className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
-                  >
-                    <Users className="h-4 w-4 text-text-muted" />
-                    Customer portal login
-                  </Link>
-                  <Link
-                    to="/login?role=financier"
-                    onClick={closeMore}
-                    className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
-                  >
-                    <Landmark className="h-4 w-4 text-text-muted" />
-                    Financier portal login
-                  </Link>
-                  <Link
-                    to="/app/settings/external-access"
-                    onClick={closeMore}
-                    onMouseEnter={() => prefetchSidebarRoute("/app/settings/external-access")}
-                    onFocus={() => prefetchSidebarRoute("/app/settings/external-access")}
-                    className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
-                  >
-                    <Settings className="h-4 w-4 text-text-muted" />
-                    Manage external access
-                  </Link>
-                </div>
-              </section>
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4 pb-4">
+              {!drawerSearch.trim() && shortcuts.length > 0 && (
+                <section className="rounded-xl border border-border bg-surface-raised p-3">
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
+                    Mobile shortcuts
+                  </h3>
+                  <div className="space-y-1">{shortcuts.map(renderDrawerLink)}</div>
+                </section>
+              )}
+              {!drawerSearch.trim() && (
+                <section className="rounded-xl border border-border bg-surface-raised p-3">
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
+                    Stakeholder portals
+                  </h3>
+                  <div className="space-y-1">{portalLinks.map(renderDrawerLink)}</div>
+                </section>
+              )}
+              {drawerSearch.trim() && filteredDrawerSections.length === 0 && (
+                <p className="px-2 py-6 text-center text-sm text-text-muted">No pages match “{drawerSearch.trim()}”.</p>
+              )}
               {filteredDrawerSections.map((section) => {
                 const SectionIcon = section.icon;
                 return (
@@ -303,54 +316,18 @@ export function AppBottomNav({
                       </h3>
                     </div>
                     <div className="space-y-1">
-                      {section.directLink && (
-                        <Link
-                          to={section.directLink}
-                          onMouseEnter={() => prefetchSidebarRoute(section.directLink as string)}
-                          onFocus={() => prefetchSidebarRoute(section.directLink as string)}
-                          className="block rounded-md px-2 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
-                        >
-                          {section.section}
-                        </Link>
-                      )}
+                      {section.directLink &&
+                        renderDrawerLink({ href: section.directLink, label: section.section, icon: SectionIcon })}
                       {section.subsections && section.subsections.length > 0
                         ? section.subsections.map((sub) => (
                             <div key={sub.label} className="space-y-0.5">
                               <p className="px-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
                                 {sub.label}
                               </p>
-                              {sub.items.map((item) => {
-                                const ItemIcon = item.icon;
-                                return (
-                                  <Link
-                                    key={item.href}
-                                    to={item.href}
-                                    onMouseEnter={() => prefetchSidebarRoute(item.href)}
-                                    onFocus={() => prefetchSidebarRoute(item.href)}
-                                    className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
-                                  >
-                                    <ItemIcon className="h-4 w-4 text-text-muted" />
-                                    <span className="truncate">{item.label}</span>
-                                  </Link>
-                                );
-                              })}
+                              {sub.items.map((item) => renderDrawerLink(item))}
                             </div>
                           ))
-                        : section.items.map((item) => {
-                            const ItemIcon = item.icon;
-                            return (
-                              <Link
-                                key={item.href}
-                                to={item.href}
-                                onMouseEnter={() => prefetchSidebarRoute(item.href)}
-                                onFocus={() => prefetchSidebarRoute(item.href)}
-                                className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
-                              >
-                                <ItemIcon className="h-4 w-4 text-text-muted" />
-                                <span className="truncate">{item.label}</span>
-                              </Link>
-                            );
-                          })}
+                        : section.items.map((item) => renderDrawerLink(item))}
                     </div>
                   </section>
                 );

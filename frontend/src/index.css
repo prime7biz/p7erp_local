@@ -5,9 +5,10 @@
 /*
   Design tokens — Phase 3.1
   Primary: orange · Secondary: teal · Tertiary: rose
-  Dark mode: class "dark" on <html>
+  The app is light-only (see src/lib/theme.ts). The `.dark` tokens below are unused but kept.
 */
 :root {
+  color-scheme: light;
   /* Refined primary — deeper orange, less neon */
   --color-brand-primary: #ea580c;
   --color-brand-primary-foreground: #ffffff;
@@ -225,6 +226,41 @@ body {
   box-shadow: inset 3px 0 0 var(--color-brand-primary);
 }
 
+/*
+ Phones and tablets (screen only).
+ - Inputs at 16px: iPhone Safari zooms the whole page into any smaller input and does not zoom back.
+ - Centered dialogs (overlay `fixed inset-0 flex items-center justify-center`): let the overlay
+   scroll so tall forms keep their Save / Cancel buttons reachable. `margin-block: auto` still
+   centers short dialogs.
+*/
+@media screen and (max-width: 1023px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .fixed.inset-0.flex.items-center.justify-center {
+    align-items: flex-start;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .fixed.inset-0.flex.items-center.justify-center > :not(.absolute) {
+    margin-block: auto;
+    flex-shrink: 0;
+  }
+
+  /* Fallbacks only (zero specificity): a dialog's own p-* / max-w-* classes still win. */
+  :where(.fixed.inset-0.flex.items-center.justify-center) {
+    padding: 0.75rem;
+  }
+
+  :where(.fixed.inset-0.flex.items-center.justify-center > :not(.absolute)) {
+    max-width: 100%;
+  }
+}
+
 .print-only {
   display: none;
 }
@@ -232,6 +268,41 @@ body {
 @media print {
   @page {
     margin: 14mm;
+  }
+
+  /*
+    The app shell scrolls inside <main> on desktop (fixed height + overflow). Undo that so the
+    whole page prints, not just the part visible on screen. Shell parts (header, menus, footer,
+    quick-create button) carry `no-print`; the shell wrapper and <main> must stay visible.
+  */
+  html,
+  body,
+  #root,
+  .erp-app-shell,
+  .erp-app-shell > div,
+  .erp-main-content {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .erp-app-shell,
+  .erp-main-content {
+    display: block !important;
+    padding: 0 !important;
+  }
+
+  html,
+  body,
+  .erp-app-shell,
+  .erp-main-content {
+    background: #ffffff !important;
+    color: #000000;
+  }
+
+  .erp-main-content table {
+    min-width: 0;
   }
 
   .no-print {
@@ -275,6 +346,17 @@ body {
   .print-report th,
   .print-report td {
     border: 1px solid #dbe2ea;
+  }
+
+  /*
+    Single-area print modes: hidden siblings would still take up space now that the shell is no
+    longer clipped, adding blank pages. Remove everything that is not the print area or one of
+    its ancestors from the layout.
+  */
+  body.print-timeline *:not(:has(#timeline-print-area)):not(#timeline-print-area):not(#timeline-print-area *),
+  body.print-list *:not(:has(#followup-table-print-area)):not(#followup-table-print-area):not(#followup-table-print-area *),
+  body.print-tutorial *:not(:has(#tutorial-print-area)):not(#tutorial-print-area):not(#tutorial-print-area *) {
+    display: none !important;
   }
 
   body.print-timeline * {

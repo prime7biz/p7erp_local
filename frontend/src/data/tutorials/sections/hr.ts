@@ -257,8 +257,8 @@ HR officers usually do this once, then add new items when the factory grows.
 
 ## What happens next
 
-- The **Add employee** form and the employee **Job** tab show these lists in drop-downs.
-- On the **Job** tab, the designation list is filtered to the department you picked.
+- The **Add employee** form and the employee **Job** tab (**Employment & Salary** in the unified employee workspace) show these lists in drop-downs.
+- On that tab, the designation list is filtered to the department you picked.
 - Sections & lines help attendance and production reports group workers by line.
 
 ## Find and filter
@@ -576,16 +576,28 @@ The **unified employee workspace** replaces the small **Add employee** dialog an
 1. Open **HR → Core HR → Employees** and click **Add employee** (\`/app/hr/employees/new\`).
 2. **Personal** tab — at the top, **AI autofill** (coloured box): upload the National ID, CV or birth certificate. Matching fields fill in by themselves and glow for a moment. Anything you already typed is kept; the box lists "AI read …" with **Use AI value** / **Keep mine**.
 3. Fill **Basic details**, **Family** (father's, mother's, spouse's name), **Contact & emergency** (tick **This mobile is a bKash number** when it is), **Present address** and **Permanent address**. Tick **Same as present address** to copy it.
-4. **Job** tab — employment type (permanent, temporary, contractual or probation), category, joining date and **Probation (months)**; the confirmation date is calculated for you (**Use …**). Pick department, designation and section / line; if one is missing click **+** next to it to add it without leaving the form.
+4. **Employment & Salary** tab — one page for the job and the pay. First the employment type (permanent, temporary, contractual or probation), category, joining date and **Probation (months)**; the confirmation date is calculated for you (**Use …**). Pick department, designation and section / line; if one is missing click **+** next to it to add it without leaving the form.
 5. Tick **Issue a 7-day temporary gate pass** if the person starts before the ID card is printed (needs a mobile number).
-6. **Salary** tab — choose the **Salary structure** and, for workers, the **Bangladesh wage grade**. Leave **Basic salary** empty to use the grade minimum. The green / red box shows basic and gross against the legal minimum; a salary below the grade is refused. Then **Salary paid by** (bank, bKash or cash), the optional bank details and the **Facilities** the person gets (lunch, transport…).
-7. Click **Create employee** in the bar at the bottom (use **Next** / **Back** to move between Personal, Job and Salary). Photo, documents, medical and the other tabs are locked until this first save.
-8. The **Next steps** window shows each step. Download the **ID card**, the **Appointment letter (QR signed)**, the **Job description (QR signed)** and the **Temporary gate pass**. If a step failed (for example salary below the grade), fix it and click **Retry failed steps** — the employee is never created twice.
+6. **Salary set-up** (same tab, needs payroll permission) — tick **Set salary now**, or leave it off and set the salary later from the profile. Then:
+   - Choose the **Salary structure** (how the pay is split into basic, house rent and allowances).
+   - For workers choose the **Bangladesh wage grade**. The **Standard basic salary** is the grade minimum, so you do not type anything.
+   - Only if this person is paid more than the standard, tick **Override standard basic salary**, type the **Employee basic salary** and tick the confirmation box. Changing the amount, grade or structure clears the tick, so you confirm the final figure.
+   - Without a grade, type the **Basic salary** yourself.
+   - **Salary starts on** is the joining date unless you type another date (with no joining date it is today).
+   - The green / red box shows basic and gross against the legal minimum; a salary below the grade is refused.
+7. Below the salary: **Salary paid by** (bank, bKash or cash), the optional bank details and the **Facilities** the person gets (lunch, transport…).
+8. Click **Create employee** in the bar at the bottom (use **Next** / **Back** to move between Personal and Employment & Salary). If **Set salary now** is ticked but the salary is not complete or not valid yet, the employee is **not** created and a message says what to fix. Photo, documents, medical and the other tabs are locked until this first save.
+9. The **Next steps** window shows each step. Download the **ID card**, the **Appointment letter (QR signed)**, the **Job description (QR signed)** and the **Temporary gate pass**. If a step failed, fix it and click **Retry failed steps** — the employee is never created twice.
+
+> **Tip:** You no longer need **Payroll → Structure assignments** for a new employee: choosing the structure here creates the assignment.
 
 ### B. Complete and edit the profile
 
 1. Open the employee (**Actions → View** or **Edit**). Each tab has its own **Save** button in the bottom bar.
-2. **Salary** tab — **Current salary** shows basic, gross, structure and grade with the history. To change pay, choose the new structure / grade / basic and an **Effective from** date, then **Save new salary**: the old period ends the day before and the new one starts that day.
+2. **Employment & Salary** tab — job, payment and facility changes are saved with **Save employment & payment** in the bottom bar. The salary has its own save:
+   - **Current salary** shows basic, gross, structure and grade with the history.
+   - Click **Change salary**. The form starts from today's pay (an above-standard basic shows as an override). Make the change, choose **New salary starts on**, then **Save new salary**: the old period ends the day before and the new one starts that day. Earlier periods are never changed.
+   - If you changed the **Joining date**, click **Save employment & payment** first; until then **Save new salary** stays off.
 3. **Checklist** tab — photo, photo consent, NID / birth registration scan and (when medical tracking is on) the medical exam. Each task shows **Pending** until the real record is saved on the matching tab (click **Open**); it reopens if the record is withdrawn. The medical task needs a medical record with result **Fit** or **Restricted** — a record still marked **Pending** keeps it pending. A compliance manager can **Waive…** a task with a reason.
 
 ### C. Signed letters
@@ -599,6 +611,8 @@ The **unified employee workspace** replaces the small **Add employee** dialog an
 - **"Requires … permission 'hr.identity.manage'"** or **'hr.payroll.manage'** → your role cannot set that field; leave it for a manager.
 - **"Basic … is below the … minimum"** / **"Gross … is below …"** → raise the basic salary or pick the right structure for the grade.
 - **"A salary assignment already starts on …"** → choose an effective date after the latest salary period.
+- **"Tick the confirmation box …"** → you overrode the standard basic; tick the box under the amount to confirm it.
+- **"Save employment first …"** → the joining date has an unsaved change; save employment & payment, then the new salary.
 - **"A mobile number is needed for the temporary gate pass"** → fill **Mobile** on the Personal tab.
 - **Generate document is missing** → document generation is off, or your role lacks the documents permission.`,
       tags: ["HR", "employees", "onboarding", "AI", "salary", "documents", "checklist"],
@@ -631,18 +645,18 @@ The **unified employee workspace** replaces the small **Add employee** dialog an
         },
         {
           src: "/tutorials/screens/hr-emp-ws-job.jpg",
-          alt: "Job tab with employment type, probation months, confirmation date and department, designation and section drop-downs with + buttons",
-          caption: "Job tab: probation months calculate the confirmation date; + next to a drop-down adds a missing entry.",
+          alt: "Employment & Salary tab with employment type, joining date, probation months, confirmation date and department, designation and section drop-downs with + buttons",
+          caption: "Employment & Salary tab, top: probation months calculate the confirmation date; + next to a drop-down adds a missing entry.",
         },
         {
           src: "/tutorials/screens/hr-emp-ws-quick-add.jpg",
-          alt: "Add department dialog opened from the Job tab with the name Finishing and the note Code assigned automatically",
+          alt: "Add department dialog opened from the Employment & Salary tab with the name Finishing and the note Code assigned automatically",
           caption: "Quick add: type the name, click Create — the new department is selected and your form stays as it was.",
         },
         {
           src: "/tutorials/screens/hr-emp-ws-salary.jpg",
-          alt: "Salary tab with salary structure, Bangladesh wage grade, basic salary, effective date, payment method and bank fields",
-          caption: "Salary tab: structure, wage grade and basic, then how the salary is paid and the facilities.",
+          alt: "Salary set-up on the Employment & Salary tab with Set salary now ticked, salary structure, Bangladesh wage grade, standard basic salary with an override tick, start date and a green legal-minimum check",
+          caption: "Salary set-up: pick the structure and grade; the standard basic is the grade minimum unless you override it with a confirmation.",
         },
       ],
       infographics: [
@@ -651,8 +665,7 @@ The **unified employee workspace** replaces the small **Add employee** dialog an
           title: "Add an employee in one screen",
           steps: [
             { label: "Personal (+ AI autofill)", href: "/app/hr/employees/new" },
-            { label: "Job" },
-            { label: "Salary" },
+            { label: "Employment & Salary" },
             { label: "Create employee" },
             { label: "Next steps: ID card, letter, JD, gate pass" },
           ],
@@ -964,7 +977,7 @@ Only a **manager / admin** or a role with **hr.attendance.manage** can open this
 - **ZKTeco attendance log** — \`attlog.dat\` / .txt from the machine's USB export.
 - **JSON** — a list of \`{"employee_code": "...", "punched_at": "..."}\`.
 
-The device user number (PIN) is matched to the employee's **Device PIN** (employee page → **Job** tab) when one is filled in, otherwise to the **employee code**. The summary shows new punches, punches already imported, attendance days created / updated, unknown employee codes and lines that could not be read. Importing the same file again adds nothing.
+The device user number (PIN) is matched to the employee's **Device PIN** (employee page → **Job** tab, or **Employment & Salary** in the unified employee workspace) when one is filled in, otherwise to the **employee code**. The summary shows new punches, punches already imported, attendance days created / updated, unknown employee codes and lines that could not be read. Importing the same file again adds nothing.
 
 ## Automatic push
 
@@ -993,7 +1006,7 @@ The machine is recognised by its serial number **and** the IP it connects from; 
 > **Tip:** Overtime minutes on attendance are for information. Paid overtime still comes from approved entries on **Overtime** (\`/app/hr/attendance/overtime\`).`,
       tags: ["HR", "attendance", "device", "biometric", "fingerprint", "ZKTeco", "punch", "import"],
       keywords: ["machine", "attlog", "card", "clock in", "API key", "cloud push", "ADMS", "iclock", "device PIN"],
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-09",
       infographics: [
         {
           type: "flow",

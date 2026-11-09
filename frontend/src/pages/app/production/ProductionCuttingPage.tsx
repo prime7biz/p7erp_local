@@ -3,6 +3,7 @@ import { api } from "@/api/client";
 import { CutTicketFabricLots } from "@/components/production/CutTicketFabricLots";
 import { useAuth } from "@/context/AuthContext";
 import { logApiError } from "@/utils/logApiError";
+import { saveBlob } from "@/lib/fileSave";
 
 export function ProductionCuttingPage() {
   const { me } = useAuth();
@@ -85,12 +86,7 @@ export function ProductionCuttingPage() {
     if (!cutTicketId) return;
     try {
       const blob = await api.downloadCuttingBundlePdf(Number(cutTicketId));
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `bundles-${cutTicketId}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      void saveBlob(blob, `bundles-${cutTicketId}.pdf`);
     } catch (e) {
       logApiError(e, "ProductionCuttingPage.downloadPdf");
     }

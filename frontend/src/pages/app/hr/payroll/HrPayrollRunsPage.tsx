@@ -11,6 +11,7 @@ import {
 } from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
 import { todayLocalISO } from "@/lib/dates";
+import { saveBlob } from "@/lib/fileSave";
 
 const PREFIX = "/app/hr";
 
@@ -391,12 +392,7 @@ export function HrPayrollRunsPage() {
                             setMsg("");
                             try {
                               const blob = await api.downloadHrPayrollRunBankFile(r.id);
-                              const url = URL.createObjectURL(blob);
-                              const a = document.createElement("a");
-                              a.href = url;
-                              a.download = `payroll-run-${r.id}-bank.csv`;
-                              a.click();
-                              URL.revokeObjectURL(url);
+                              void saveBlob(blob, `payroll-run-${r.id}-bank.csv`);
                             } catch (e) {
                               setMsg(e instanceof Error ? e.message : "Download failed");
                             }

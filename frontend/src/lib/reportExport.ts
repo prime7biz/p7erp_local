@@ -1,3 +1,5 @@
+import { saveBlob } from "@/lib/fileSave";
+
 function timestampForFilename(d: Date): string {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -13,27 +15,12 @@ export function datedFilename(baseName: string, extension: "csv" | "txt" = "csv"
 
 export function downloadCsv(csvContent: string, baseName: string): void {
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = datedFilename(baseName, "csv");
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  void saveBlob(blob, datedFilename(baseName, "csv"));
 }
 
 /** Save a file the API returned (fetched with auth headers via `requestBlob`). */
 export function downloadBlob(blob: Blob, baseName: string, extension: "csv" | "txt" = "csv"): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = datedFilename(baseName, extension);
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  // Some browsers start the download asynchronously; revoking immediately can cancel it.
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  void saveBlob(blob, datedFilename(baseName, extension));
 }
 
 type XlsxCell = string | number | null | undefined;
@@ -52,7 +39,8 @@ export async function downloadXlsx(headers: string[], rows: XlsxCell[][], baseNa
       ),
     ),
   ];
-  await writeXlsxFile(data, { fileName: `${baseName}_${timestampForFilename(new Date())}.xlsx` });
+  const blob = await writeXlsxFile(data, {});
+  await saveBlob(blob, `${baseName}_${timestampForFilename(new Date())}.xlsx`);
 }
 
 export function printCurrentPage(): void {

@@ -359,6 +359,46 @@
   display: none;
 }
 
+/* Phones (screen only): stack the toolbar and grids so the A4 preview stays readable. */
+@media screen and (max-width: 640px) {
+  .qp-root {
+    padding: 8px;
+  }
+
+  .qp-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .qp-toolbar-actions {
+    flex-wrap: wrap;
+  }
+
+  .qp-toolbar-actions > * {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .qp-sheet {
+    padding: 5mm 4mm 24mm;
+    border-radius: 8px;
+  }
+
+  .qp-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .qp-meta-grid,
+  .qp-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .qp-section {
+    overflow-x: auto;
+  }
+}
+
 @media print {
   @page {
     size: A4;

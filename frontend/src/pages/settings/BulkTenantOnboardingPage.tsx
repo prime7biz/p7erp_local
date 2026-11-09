@@ -9,6 +9,7 @@ import { listPageErrorClass, listTableHeadCellClass, listTableRowClass } from "@
 import { Button } from "@/components/ui/button";
 import { todayLocalISO } from "@/lib/dates";
 import { PLATFORM_ADMIN_TOKEN_KEY } from "@/api/authStorage";
+import { saveBlob } from "@/lib/fileSave";
 
 /** Platform admin token lives in sessionStorage: it is dropped when this tab closes. */
 const ADMIN_TOKEN_KEY = PLATFORM_ADMIN_TOKEN_KEY;
@@ -115,12 +116,7 @@ export function BulkTenantOnboardingPage() {
   function downloadCreatedCsv() {
     const body = created.map((r) => `${r.id},${r.company_code ?? ""},"${r.name.replace(/"/g, '""')}"`).join("\n");
     const blob = new Blob([`id,company_code,name\n${body}\n`], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `bulk-created-tenants-${todayLocalISO()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    void saveBlob(blob, `bulk-created-tenants-${todayLocalISO()}.csv`);
   }
 
   return (

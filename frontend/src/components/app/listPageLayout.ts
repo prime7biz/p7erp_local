@@ -47,10 +47,10 @@ export const listPageChipInactiveClass =
   "rounded-full border border-border px-3 py-1 text-xs font-semibold text-text-secondary";
 
 /** KPI summary grid (4 columns on sm+) */
-export const listPageKpiGridClass = "grid grid-cols-1 gap-3 sm:grid-cols-4";
+export const listPageKpiGridClass = "grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3";
 
 /** KPI summary grid (3 columns) — e.g. Quotations */
-export const listPageKpiGridClass3 = "grid grid-cols-1 gap-3 sm:grid-cols-3";
+export const listPageKpiGridClass3 = "grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3";
 
 export const listPageKpiCardClass =
   "rounded-lg border border-border bg-surface-raised p-3";

@@ -80,7 +80,7 @@ export function NextStepsDialog({ run, canGenerateDocuments, canPrintGatePass, o
             <div className="rounded-lg border border-status-danger/30 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">
               <p>{run.error?.message ?? "A step did not finish."} The employee is saved.</p>
               {salaryNeedsFix ? (
-                <p className="mt-1">Continue to the profile and set a valid salary on the <strong>Salary</strong> tab.</p>
+                <p className="mt-1">Continue to the profile and set a valid salary on the <strong>Employment &amp; Salary</strong> tab (<strong>Change salary</strong>).</p>
               ) : (
                 <Button type="button" variant="outline" className="mt-2" onClick={onRetry} disabled={retrying}>
                   {retrying ? "Retrying…" : "Retry failed steps"}

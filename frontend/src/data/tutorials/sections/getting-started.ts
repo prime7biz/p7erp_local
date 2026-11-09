@@ -476,7 +476,7 @@ Every page in P7 ERP sits inside the same frame: the **sidebar** on the left, th
 4. **✦ (Prime7 AI)** — opens the AI assistant panel.
 5. **Keyboard icon** — list of keyboard shortcuts (or press **?**).
 6. **Bell** — work waiting and your notifications.
-7. **Your name** — **My Profile**, **My Signature**, **Settings**, **Dark mode / Light mode**, **Logout**.
+7. **Your name** — **My Profile**, **My Signature**, **Settings**, **Logout**.
 
 ### Under and below the page
 
@@ -498,8 +498,8 @@ Every page in P7 ERP sits inside the same frame: the **sidebar** on the left, th
 - **A section disappeared** → your admin changed your role or switched off a feature. See *What decides the menus you see*.
 - **The sidebar is missing** → the window is narrow (tablet / phone). Use the bottom bar and **More** instead. See *Using P7 ERP on a phone*.`,
       tags: ["navigation", "sidebar", "menu", "top bar", "breadcrumbs", "favorites"],
-      keywords: ["left menu", "collapse sidebar", "where is", "find page", "help and tutorials", "footer", "dark mode", "portals menu"],
-      lastUpdated: "2026-11-06",
+      keywords: ["left menu", "collapse sidebar", "where is", "find page", "help and tutorials", "footer", "portals menu"],
+      lastUpdated: "2026-11-09",
       relatedAppRoutes: ["/app", "/app/tutorials"],
       relatedArticleIds: [
         "gs-global-search-and-new-menu",
@@ -690,9 +690,9 @@ Two buttons in the top bar help you stay on top of work:
     },
     {
       id: "gs-profile-and-signature",
-      title: "Your menu: profile, signature, dark mode and logout",
+      title: "Your menu: profile, signature and logout",
       summary:
-        "Use the menu under your name to open My Profile, set your designation and signature image, switch dark mode and sign out safely.",
+        "Use the menu under your name to open My Profile, set your designation and signature image, and sign out safely.",
       estimatedMinutes: 3,
       audience: "everyone",
       coverImage: "/tutorials/screens/gs-user-menu.jpg",
@@ -724,7 +724,6 @@ Click **your name** at the top right of any page. The menu shows your name, emai
 | **My Profile** | Your employee self-service profile (\`/app/hr/ess/profile\`) |
 | **My Signature** | Designation + signature image for printed documents (\`/app/my-signature\`) |
 | **Settings** | Company settings (admins and users with settings access) |
-| **Dark mode / Light mode** | Switches the colours on this browser |
 | **Logout** | Signs you out |
 
 ## Before you start
@@ -741,10 +740,6 @@ Click **your name** at the top right of any page. The menu shows your name, emai
 3. Type your **Designation**, for example *Store Officer* or *Finance Manager*, and click **Save designation**. You see **Designation saved.**
 4. Under **Signature image** click **Upload image** and pick a **PNG, JPG or WEBP** file up to **2 MB**. A PNG with a transparent background looks best. You see **Signature image uploaded.** and a preview.
 5. Later you can click **Replace image** or **Remove image**.
-
-### Switch dark mode
-
-1. Click your name → **Dark mode** (or **Light mode** to switch back). The choice is saved on this browser.
 
 ### Sign out
 
@@ -766,10 +761,11 @@ Some shop-floor and self-service screens have a small **English / বাংল�
 ## Common problems
 
 - **My Profile shows no access** → your role has no HR access. Ask your admin if you need it.
-- **Settings is missing or empty** → only admins (and roles with settings access) can change company settings.`,
-      tags: ["profile", "signature", "designation", "dark mode", "logout", "language", "bangla"],
-      keywords: ["my profile", "my signature", "upload signature", "e-signature", "theme", "night mode", "sign out", "log out", "bengali", "bangla language"],
-      lastUpdated: "2026-11-06",
+- **Settings is missing or empty** → only admins (and roles with settings access) can change company settings.
+- **Looking for dark mode?** → P7 ERP always uses the light colours, even when your phone or computer is set to dark. This keeps every page and printout readable.`,
+      tags: ["profile", "signature", "designation", "logout", "language", "bangla"],
+      keywords: ["my profile", "my signature", "upload signature", "e-signature", "theme", "dark mode", "night mode", "sign out", "log out", "bengali", "bangla language"],
+      lastUpdated: "2026-11-09",
       relatedAppRoutes: ["/app/my-signature", "/app/hr/ess/profile", "/app/settings"],
       relatedArticleIds: ["wf-digital-signatures", "gs-sidebar", "gs-login"],
     },
@@ -794,7 +790,7 @@ Some shop-floor and self-service screens have a small **English / বাংল�
             },
             {
               title: "More → All Modules",
-              body: "Every sidebar section, a **Filter modules…** box, **Mobile shortcuts** and **Stakeholder portals**.",
+              body: "The same sections as the computer sidebar, a **Filter modules and pages…** box, **Mobile shortcuts** and **Stakeholder portals**.",
               imageSrc: "/tutorials/screens/gs-mobile-more.jpg",
               imageAlt: "All Modules drawer on a phone with a filter box and mobile shortcuts",
             },
@@ -824,13 +820,18 @@ P7 ERP works in the phone's browser — no app to install. On small screens the 
    - **Stock** — Inventory stock master.
    - **Finance** — the Chart of Accounts and other finance pages.
    - **More** — opens **All Modules**.
-2. **More → All Modules:** type in **Filter modules…** to find a page, or scroll the sections. At the top are:
-   - **Mobile shortcuts** — **Scan barcode / stock**, **Quick clock-in** (your attendance), **Report defect** (production quality).
-   - **Stakeholder portals** — **Customer portal login**, **Financier portal login**, **Manage external access**.
-3. **Round + button** (above the bottom bar, right side) — opens a quick-create menu. Tap again (**×**) to close.
-4. **Search** — tap the search box at the top; it works the same as **Ctrl+K** on a computer.
+   Tabs for modules your role cannot open (for example **Finance**) are not shown.
+2. **More → All Modules:** it lists exactly the same sections and pages as the sidebar on a computer. Type in **Filter modules and pages…** to find a page by name (only the matching pages stay), or scroll the sections. Close it with **×**, by tapping outside, or by opening a page. With the filter empty, the top shows:
+   - **Mobile shortcuts** — **Scan barcode / stock**, **Quick clock-in** (your attendance), **Report defect** (production quality). A shortcut only appears when you can open its module.
+   - **Stakeholder portals** — **Customer portal login**, **Financier portal login**, **Manage external access** (only with Settings access).
+3. **Round + button** (above the bottom bar, right side) — opens a quick-create menu. Tap again (**×**) to close. It is hidden on *new* and *edit* forms and on shop-floor entry screens (**Hourly production**, **Scan station**, **Gate scan**) so it never covers a **Save** button.
+4. **Search** — tap the search box at the top; it works the same as **Ctrl+K** on a computer. The **bell** and **Help** panels open full width on a phone.
 5. **Refresh the dashboard** — pull the page down until it says **Release to refresh**.
 6. **Wide tables** scroll sideways; some inventory lists offer a **Cards** view that is easier to read on a phone.
+7. **Print or save as PDF** — tap **Print** / **Print / Save PDF** on the page. The phone's print screen opens with only the document (no menus); choose a printer or **Save as PDF**. The whole document prints, not just the part you see on screen.
+8. **Export / Download** (CSV, Excel, PDF) — on Android the file goes to **Downloads**. On iPhone and iPad the **share sheet** opens: tap **Save to Files** (or send it by mail or WhatsApp).
+
+> **Tip:** P7 ERP always uses its light colours, even when the phone is in dark mode, so screens and printouts stay readable.
 
 ## What happens next
 
@@ -845,10 +846,12 @@ P7 ERP works in the phone's browser — no app to install. On small screens the 
 ## Common problems
 
 - **I signed in on the phone and my PC logged out** → expected; only one device can be active per user.
-- **A button is hidden off the screen** → scroll the table sideways or turn the phone to landscape.`,
-      tags: ["mobile", "phone", "tablet", "bottom navigation", "quick create"],
-      keywords: ["android", "iphone", "smartphone", "mobile app", "bottom bar", "more menu", "scan barcode", "clock in", "report defect", "pull to refresh"],
-      lastUpdated: "2026-11-06",
+- **A button is hidden off the screen** → scroll the table sideways or turn the phone to landscape.
+- **Nothing happens when I tap Download on iPhone** → look for the share sheet at the bottom of the screen; if you closed it, tap **Download** again.
+- **The print shows only one page** → refresh the page so the phone loads the latest version of P7 ERP, then print again.`,
+      tags: ["mobile", "phone", "tablet", "bottom navigation", "quick create", "print", "download"],
+      keywords: ["android", "iphone", "smartphone", "mobile app", "bottom bar", "more menu", "scan barcode", "clock in", "report defect", "pull to refresh", "save pdf", "export csv", "share sheet", "save to files", "dark mode"],
+      lastUpdated: "2026-11-09",
       relatedAppRoutes: ["/app", "/app/inventory/stock-inventory-summary", "/app/hr/ess/attendance", "/app/production/quality"],
       relatedArticleIds: ["gs-sidebar", "gs-global-search-and-new-menu", "gs-session-replaced"],
     },

@@ -2,20 +2,16 @@ import { Suspense, useState, useMemo, useEffect } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { getActiveAnnouncements, getToken, getTenantId } from "@/api/client";
-import {
-  isNavItemVisibleForTenant,
-  menuSections,
-} from "@/app/sidebarConfig";
+import { menuSections } from "@/app/sidebarConfig";
 import { useProductionOptionalUnits } from "@/hooks/useProductionOptionalUnits";
 import { AppBottomNav } from "@/components/navigation/AppBottomNav";
-import { getRbacMode } from "@/components/auth/rbacMode";
 import { flattenMenuRoutes } from "@/components/shell/flattenMenuRoutes";
 import { ShellTopHeader } from "@/components/shell/ShellTopHeader";
 import { ShellBreadcrumbs } from "@/components/shell/ShellBreadcrumbs";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { AppFooter } from "@/components/shell/AppFooter";
 import { QuickCreateFab } from "@/components/shell/QuickCreateFab";
-import { isVisible, sectionPermissionKey } from "@/components/shell/sidebarNavUtils";
+import { filterVisibleMenuSections } from "@/components/shell/sidebarNavUtils";
 import { DemoModeBanner } from "@/components/shell/DemoModeBanner";
 import { logApiError } from "@/utils/logApiError";
 
@@ -56,39 +52,12 @@ export function Layout() {
 
   const paletteRoutes = useMemo(() => {
     if (!me) return [];
-    const rbacMode = getRbacMode(me.feature_flags);
-    const filtered = menuSections
-      .filter((s) => isVisible(me.tenant_type, s.visibleFor))
-      .filter((s) => {
-        if (rbacMode !== "enforce") return true;
-        const permissionKey = sectionPermissionKey(s.section);
-        if (!permissionKey) return true;
-        return hasPermission(permissionKey);
-      })
-      .map((s) => {
-        if (s.subsections && s.subsections.length > 0) {
-          const subsections = s.subsections
-            .map((sub) => ({
-              ...sub,
-              items: sub.items.filter((i) =>
-                isNavItemVisibleForTenant(i, me.tenant_type, enabledOptionalUnits, me.feature_flags),
-              ),
-            }))
-            .filter((sub) => sub.items.length > 0);
-          return { ...s, items: [], subsections };
-        }
-        return {
-          ...s,
-          items: s.items.filter((i) =>
-            isNavItemVisibleForTenant(i, me.tenant_type, enabledOptionalUnits, me.feature_flags),
-          ),
-        };
-      })
-      .filter((s) => {
-        if (s.directLink) return true;
-        if (s.subsections && s.subsections.length > 0) return s.subsections.some((sub) => sub.items.length > 0);
-        return s.items.length > 0;
-      });
+    const filtered = filterVisibleMenuSections(menuSections, {
+      tenantType: me.tenant_type,
+      enabledOptionalProductionUnits: enabledOptionalUnits,
+      featureFlags: me.feature_flags,
+      hasPermission,
+    });
     return flattenMenuRoutes(filtered);
   }, [me, enabledOptionalUnits, hasPermission]);
 
@@ -124,14 +93,14 @@ export function Layout() {
   const appShellV2 = me.feature_flags?.app_shell_v2 === true;
 
   return (
-    <div className="flex min-h-[100dvh] overflow-hidden bg-surface-base lg:h-screen">
+    <div className="erp-app-shell flex min-h-[100dvh] bg-surface-base lg:h-screen lg:overflow-hidden">
       <a
         href="#main-content"
         className="absolute left-4 top-4 z-[100] -translate-y-[220%] rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow-md outline-none ring-2 ring-brand-primary/40 transition focus:translate-y-0"
       >
         Skip to content
       </a>
-      <div className="hidden lg:flex">
+      <div className="no-print hidden lg:flex">
         <Sidebar
           tenantType={me.tenant_type}
           tenantName={me.tenant_name}
@@ -157,11 +126,11 @@ export function Layout() {
         <main
           id="main-content"
           tabIndex={-1}
-          className="erp-main-content flex-1 overflow-y-auto bg-surface-base p-3 pb-20 sm:p-4 md:p-4 lg:p-5 lg:pb-4 focus:outline-none"
+          className="erp-main-content min-w-0 flex-1 bg-surface-base p-3 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-4 sm:pb-[calc(6rem+env(safe-area-inset-bottom))] lg:overflow-y-auto lg:p-5 lg:pb-4 focus:outline-none"
         >
           <DemoModeBanner />
           {announcements.length > 0 && (
-            <div className="mb-3 space-y-2" aria-live="polite">
+            <div className="no-print mb-3 space-y-2" aria-live="polite">
               {announcements.map((a) => (
                 <div
                   key={a.id}
@@ -188,7 +157,7 @@ export function Layout() {
             <Outlet />
           </Suspense>
         </main>
-        <div className="hidden lg:block">
+        <div className="no-print hidden lg:block">
           <AppFooter showHealthDetails={showHealthDetails} />
         </div>
       </div>

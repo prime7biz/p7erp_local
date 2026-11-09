@@ -67,6 +67,13 @@ before committing; it re-encodes to VP9 with an ffmpeg Docker image and keeps te
 Only one capture runs at a time (a `.capture.lock` file makes later runs wait), because every run
 signs in again. Results are written to `capture-report.json` (`ok` / `warning` / `failed`).
 
+## Phone-size audit
+
+`node mobile-audit.mjs` opens the routes in `mobile-audit-routes.json` at 360px and 390px with the browser
+in dark mode, and reports sideways overflow, controls cut off at the right edge, dark mode, print problems
+and small tap targets. Output goes to `.mobile-audit/` (git-ignored). Severity rules and the latest result:
+`docs/MOBILE_RESPONSIVE_AUDIT.md`.
+
 ## Manifest format
 
 ```json

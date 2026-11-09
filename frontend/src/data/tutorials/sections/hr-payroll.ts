@@ -185,7 +185,7 @@ Related screens outside the Payroll group: **Overtime Rules** and **Overtime** (
         "base salary",
       ],
       estimatedMinutes: 10,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-09",
       audience: "hr",
       coverImage: `${S}/hr-payroll-components.jpg`,
       videos: [
@@ -206,6 +206,8 @@ There are three building blocks:
 1. **Components** — single pay items (Basic, House rent, Medical, Transport, Food, Overtime, Tax, Advance recovery …). Each one is either an **EARNING** (adds to gross) or a **DEDUCTION** (reduces net) and has a **calculation type**.
 2. **Salary Structures** — a template, usually one per grade or worker type (for example "Grade 7 operator", "Staff", "Piece-rate sewing"). A structure holds **lines**: which components, the amount or rate of each, and the order they are calculated in.
 3. **Structure Assignments** — link **one employee** to **one structure** from an **Effective from** date, with that person's **base salary**.
+
+> **Tip:** With the **Unified employee workspace** switched on, you can skip step 3 for new and existing employees: open the employee, go to **Employment & Salary** and use **Set salary now** (when adding) or **Change salary** (when editing). Choosing the structure and wage grade there creates the assignment for you. See **Unified employee workspace: add and edit employees**.
 
 Who uses it: HR / payroll officer (with **hr.payroll.manage** or HR manager access).
 

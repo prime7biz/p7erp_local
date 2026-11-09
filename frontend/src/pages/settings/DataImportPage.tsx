@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api, type DataMigrationImportResponse, type DataMigrationTemplateEntity } from "@/api/client";
 import { listPageErrorClass, listTableHeadCellClass, listTableRowClass } from "@/components/app/listPageLayout";
 import { Button } from "@/components/ui/button";
+import { saveBlob } from "@/lib/fileSave";
 
 export function DataImportPage() {
   const [templates, setTemplates] = useState<DataMigrationTemplateEntity[]>([]);
@@ -69,12 +70,7 @@ export function DataImportPage() {
           ? "EMP-001,First name"
           : "CODE-001,Sample name";
     const blob = new Blob([`${header}\n${sampleRow}\n`], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${entityType}-import-template.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    void saveBlob(blob, `${entityType}-import-template.csv`);
   }
 
   if (loading) return <p>Loading data import templates…</p>;

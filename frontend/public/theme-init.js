@@ -1,16 +1,11 @@
-// Runs before React (loaded from index.html) so the page never flashes the wrong theme.
+// Runs before React (loaded from index.html). The app is light-only: dark styles are not
+// complete across pages and prints, so ignore the OS setting and any old saved choice.
 // Must stay a tiny plain-JS file: it is not bundled by Vite.
 (function () {
+  document.documentElement.classList.remove("dark");
   try {
-    var stored = localStorage.getItem("p7_theme");
-    var dark =
-      stored === "dark" ||
-      (stored !== "light" &&
-        window.matchMedia &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches);
-    if (dark) document.documentElement.classList.add("dark");
-    else document.documentElement.classList.remove("dark");
+    localStorage.removeItem("p7_theme");
   } catch {
-    // Storage blocked (private mode): keep the default light theme.
+    // Storage blocked (private mode): nothing to clear.
   }
 })();

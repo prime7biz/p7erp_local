@@ -1,69 +1,48 @@
-/** Theme helpers: localStorage key `p7_theme` = "light" | "dark". */
+/**
+ * Theme helpers. The app is light-only: most pages and print layouts have no dark styles,
+ * so the OS dark setting and any old `p7_theme` value are ignored.
+ * The exports stay so older imports keep compiling; none of them can turn dark mode on.
+ */
 
 export type ThemePreference = "light" | "dark";
 
 export const THEME_STORAGE_KEY = "p7_theme";
 
-/** Return explicit stored preference, or null when following the OS. */
+/** Always null: there is no stored preference any more. */
 export function getStoredTheme(): ThemePreference | null {
-  try {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored === "light" || stored === "dark") return stored;
-  } catch {
-    /* private mode / blocked storage */
-  }
   return null;
 }
 
-/** Resolve stored preference, or fall back to OS prefers-color-scheme. */
 export function resolveTheme(): ThemePreference {
-  const stored = getStoredTheme();
-  if (stored) return stored;
-  if (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-    return "dark";
-  }
   return "light";
 }
 
-/** Apply theme by toggling the `dark` class on <html>. */
-export function applyTheme(theme: ThemePreference) {
-  const root = document.documentElement;
-  if (theme === "dark") root.classList.add("dark");
-  else root.classList.remove("dark");
+/** Always applies light mode (removes the `dark` class on <html>). */
+export function applyTheme() {
+  if (typeof document === "undefined") return;
+  document.documentElement.classList.remove("dark");
 }
 
-export function setTheme(theme: ThemePreference) {
+/** Clears any old saved choice and applies light mode. */
+export function setTheme() {
   try {
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
+    localStorage.removeItem(THEME_STORAGE_KEY);
   } catch {
-    /* ignore */
+    /* private mode / blocked storage */
   }
-  applyTheme(theme);
+  applyTheme();
 }
 
 export function toggleTheme(): ThemePreference {
-  const next: ThemePreference = resolveTheme() === "dark" ? "light" : "dark";
-  setTheme(next);
-  return next;
+  setTheme();
+  return "light";
 }
 
-/**
- * When the user has not set `p7_theme`, keep the document in sync with the OS.
- * Returns an unsubscribe function.
- */
+/** No-op kept for compatibility: the app no longer follows the OS theme. */
 export function watchSystemTheme(): () => void {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-    return () => {};
-  }
-  const mq = window.matchMedia("(prefers-color-scheme: dark)");
-  const onChange = () => {
-    if (getStoredTheme() != null) return;
-    applyTheme(mq.matches ? "dark" : "light");
-  };
-  mq.addEventListener("change", onChange);
-  return () => mq.removeEventListener("change", onChange);
+  return () => {};
 }
 
 if (typeof window !== "undefined") {
-  watchSystemTheme();
+  setTheme();
 }

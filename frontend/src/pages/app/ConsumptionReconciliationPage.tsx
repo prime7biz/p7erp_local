@@ -10,6 +10,7 @@ import {
   type StyleResponse,
   type OrderResponse,
 } from "@/api/client";
+import { saveBlob } from "@/lib/fileSave";
 
 const TOLERANCE_OPTIONS = [2, 5, 10] as const;
 const DASH_PAGE_SIZE = 20;
@@ -278,12 +279,7 @@ export function ConsumptionReconciliationPage() {
       const blob = await api.getConsumptionReconciliationExportBlob(Number(selectedOrderId), {
         tolerance_pct: tolerancePct,
       });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `consumption_recon_order_${data.order.order_code || selectedOrderId}.xlsx`;
-      a.click();
-      URL.revokeObjectURL(url);
+      void saveBlob(blob, `consumption_recon_order_${data.order.order_code || selectedOrderId}.xlsx`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Export failed");
     } finally {
@@ -303,12 +299,7 @@ export function ConsumptionReconciliationPage() {
         material_type: dashMaterialType || undefined,
         tolerance_pct: dashTolerance,
       });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "consumption_recon_dashboard.xlsx";
-      a.click();
-      URL.revokeObjectURL(url);
+      void saveBlob(blob, "consumption_recon_dashboard.xlsx");
     } catch (e) {
       setDashError(e instanceof Error ? e.message : "Export failed");
     } finally {
@@ -879,12 +870,7 @@ export function ConsumptionReconciliationPage() {
                                           row.order_id,
                                           { tolerance_pct: dashTolerance }
                                         );
-                                        const url = URL.createObjectURL(blob);
-                                        const a = document.createElement("a");
-                                        a.href = url;
-                                        a.download = `consumption_recon_${row.order_code}.xlsx`;
-                                        a.click();
-                                        URL.revokeObjectURL(url);
+                                        void saveBlob(blob, `consumption_recon_${row.order_code}.xlsx`);
                                       } catch (e) {
                                         logApiError("recon.exportRow", e);
                                       }

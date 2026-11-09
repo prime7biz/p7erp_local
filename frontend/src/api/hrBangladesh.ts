@@ -4,6 +4,7 @@
  * Backend: backend/app/modules/hr_localization/routers.py (mounted under hr.access).
  */
 import { request, requestBlob } from "@/api/core";
+import { openOrSaveBlob } from "@/lib/fileSave";
 
 const BD = "/api/v1/hr/localization/bd-rmg";
 const HR = "/api/v1/hr";
@@ -237,18 +238,9 @@ export const hrBangladeshApi = {
   approveFestivalBonus: (id: number) => post<{ approved: number; total: string }>(`${HR}/festival-bonus/${id}/approve`),
 };
 
-/** Open a downloaded PDF / ZIP in a new tab (PDF) or save it (other types). */
+/** Open a downloaded PDF in a new tab, or save it (other types, phones, blocked pop-ups). */
 export function openBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  if (blob.type === "application/pdf") {
-    window.open(url, "_blank", "noopener");
-  } else {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-  }
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  void openOrSaveBlob(blob, filename);
 }
 
 export function newIdempotencyKey(): string {

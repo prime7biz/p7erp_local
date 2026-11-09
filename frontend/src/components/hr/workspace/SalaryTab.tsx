@@ -1,35 +1,41 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  api,
-  type HrCompensationOptions,
-  type HrCompensationPreview,
-  type HrEmployeeCompensationView,
-} from "@/api/client";
-import { logApiError } from "@/utils/logApiError";
+import type { HrCompensationOptions, HrEmployeeCompensationView } from "@/api/client";
 import { CheckboxField, Section, SelectField, TextField } from "./formControls";
 import {
   addFacility,
   FACILITY_SUGGESTIONS,
+  normalizeMoney,
   toggleFacility,
   type EmployeeFormState,
+  type SalaryDateSource,
   type SalaryFormState,
+  type SalaryPreviewState,
   type WorkspaceMode,
 } from "./employeeWorkspaceLogic";
+
+export type SalaryStatus = { kind: "success" | "error"; text: string } | null;
 
 type Props = {
   mode: WorkspaceMode;
   canManagePayroll: boolean;
   options: HrCompensationOptions | null;
   salary: SalaryFormState;
-  setSalary: (next: SalaryFormState) => void;
+  onSalaryChange: (patch: Partial<SalaryFormState>) => void;
+  preview: SalaryPreviewState;
+  effective: { date: string; source: SalaryDateSource };
+  /** Why the salary cannot be saved yet (null = ready). */
+  blocker: string | null;
   form: EmployeeFormState;
   setField: <K extends keyof EmployeeFormState>(key: K, value: EmployeeFormState[K]) => void;
   masked: ReadonlySet<string>;
-  /** Edit mode: current pay + history, and the save action for a new salary window. */
+  /** Edit mode: current pay + history, the change form and its own save. */
   current?: HrEmployeeCompensationView | null;
+  onStartChange?: () => void;
+  onCancelChange?: () => void;
   onSaveSalary?: () => void;
   savingSalary?: boolean;
+  salaryStatus?: SalaryStatus;
 };
 
 const PAYMENT_METHODS = [
@@ -38,59 +44,116 @@ const PAYMENT_METHODS = [
   { value: "cash", label: "Cash" },
 ];
 
-function usePreview(salary: SalaryFormState, joiningDate: string, enabled: boolean) {
-  const [preview, setPreview] = useState<HrCompensationPreview | null>(null);
-  useEffect(() => {
-    if (!enabled || !salary.structure_id) {
-      setPreview(null);
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      api
-        .previewHrCompensation({
-          structure_id: salary.structure_id as number,
-          bd_wage_rate_id: salary.bd_wage_rate_id,
-          base_salary: salary.base_salary.trim() || null,
-          effective_from: salary.effective_from || joiningDate || null,
-        })
-        .then(setPreview)
-        .catch((e) => {
-          logApiError("SalaryTab.preview", e);
-          setPreview({ minimum_basic: null, minimum_gross: null, basic: null, gross: null, meets_minimum: false, message: e instanceof Error ? e.message : "Preview failed" });
-        });
-    }, 400);
-    return () => window.clearTimeout(timer);
-  }, [enabled, salary.structure_id, salary.bd_wage_rate_id, salary.base_salary, salary.effective_from, joiningDate]);
-  return preview;
+function dateHint(mode: WorkspaceMode, effective: Props["effective"]): string {
+  if (mode === "edit") return "The current salary period ends the day before this date.";
+  if (effective.source === "joining") return `Leave empty to start on the joining date (${effective.date}).`;
+  if (effective.source === "company_today") return `No joining date yet, so the salary starts today (${effective.date}). Enter a date to change it.`;
+  if (effective.source === "missing") return "Enter a joining date on this tab or a salary start date.";
+  return "";
 }
 
-export function SalaryTab({ mode, canManagePayroll, options, salary, setSalary, form, setField, masked, current, onSaveSalary, savingSalary }: Props) {
-  const preview = usePreview(salary, form.joining_date, canManagePayroll);
+function PreviewBox({ preview }: { preview: SalaryPreviewState }) {
+  if (preview.status === "idle") return null;
+  if (preview.status === "pending") {
+    return (
+      <div className="sm:col-span-2 rounded-lg border border-border bg-surface-subtle px-3 py-2 text-sm text-text-secondary" role="status">
+        Checking the salary…
+      </div>
+    );
+  }
+  if (preview.status === "error") {
+    return (
+      <div className="sm:col-span-2 rounded-lg border border-status-danger/30 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground" role="status">
+        Could not check the salary: {preview.message}
+      </div>
+    );
+  }
+  const p = preview.preview;
+  const ok = preview.status === "valid";
+  return (
+    <div
+      className={`sm:col-span-2 rounded-lg border px-3 py-2 text-sm ${
+        ok ? "border-status-success/30 bg-status-success-subtle text-status-success-foreground" : "border-status-danger/30 bg-status-danger-subtle text-status-danger-foreground"
+      }`}
+      role="status"
+    >
+      {p?.basic && (
+        <p>
+          Basic {normalizeMoney(p.basic)} · Gross {normalizeMoney(p.gross)}
+        </p>
+      )}
+      {p?.minimum_basic && (
+        <p className="text-xs">
+          Legal minimum: basic {normalizeMoney(p.minimum_basic)}, gross {normalizeMoney(p.minimum_gross)}
+        </p>
+      )}
+      {!ok && preview.message && <p className="text-xs font-medium">{preview.message}</p>}
+    </div>
+  );
+}
+
+export function SalaryTab({
+  mode, canManagePayroll, options, salary, onSalaryChange, preview, effective, blocker, form, setField, masked,
+  current, onStartChange, onCancelChange, onSaveSalary, savingSalary, salaryStatus,
+}: Props) {
   const [customFacility, setCustomFacility] = useState("");
-  const grade = options?.wage_grades.find((g) => g.id === salary.bd_wage_rate_id) ?? null;
+  const grades = options?.wage_grades ?? [];
+  const grade = grades.find((g) => g.id === salary.bd_wage_rate_id) ?? null;
+  const snapshot = current?.snapshot ?? null;
   const bankMasked = masked.has("bank_account_number");
+  // The grade in force cannot be removed here (an empty grade keeps it), so edit offers no empty choice.
+  const keepsGrade = mode === "edit" && snapshot?.wage_rate_id != null;
+  const gradeFromStructure = keepsGrade && snapshot?.wage_assignment_id == null && salary.bd_wage_rate_id === snapshot?.wage_rate_id;
+
+  const structureOptions = (options?.structures ?? []).map((s) => ({ value: String(s.id), label: `${s.code} - ${s.name}` }));
+  if (snapshot?.structure_id != null && !structureOptions.some((o) => o.value === String(snapshot.structure_id))) {
+    structureOptions.unshift({ value: String(snapshot.structure_id), label: `${snapshot.structure_code ?? "Current"} (current)` });
+  }
+  const gradeOptions = grades.map((g) => ({ value: String(g.id), label: `${g.rate_code} (basic ${normalizeMoney(g.basic)}, gross ${normalizeMoney(g.gross)})` }));
+  if (snapshot?.wage_rate_id != null && !gradeOptions.some((o) => o.value === String(snapshot.wage_rate_id))) {
+    gradeOptions.unshift({ value: String(snapshot.wage_rate_id), label: `${snapshot.wage_rate_code ?? "Current"} (current)` });
+  }
+  const standardBasic = grade?.basic ?? (snapshot?.wage_rate_id === salary.bd_wage_rate_id ? snapshot?.wage_grade_basic : null) ?? null;
+  const showForm = salary.enabled;
+
+  const statusBox = salaryStatus && (
+    <div
+      className={`sm:col-span-2 lg:col-span-3 rounded-lg border px-3 py-2 text-sm ${
+        salaryStatus.kind === "success"
+          ? "border-status-success/30 bg-status-success-subtle text-status-success-foreground"
+          : "border-status-danger/30 bg-status-danger-subtle text-status-danger-foreground"
+      }`}
+      role={salaryStatus.kind === "error" ? "alert" : "status"}
+    >
+      {salaryStatus.text}
+    </div>
+  );
 
   return (
     <div className="space-y-4">
       {canManagePayroll ? (
         <>
-          {mode === "edit" && current && (
-            <Section title="Current salary" description={`As of ${current.snapshot.as_of}`}>
-              <div className="text-sm">
-                <p className="text-xs text-text-muted">Basic / gross</p>
-                <p className="font-semibold text-text-primary">
-                  {current.snapshot.basic} / {current.snapshot.gross}
-                </p>
-              </div>
-              <div className="text-sm">
-                <p className="text-xs text-text-muted">Structure</p>
-                <p className="text-text-primary">{current.snapshot.structure_code ?? "None assigned"}</p>
-              </div>
-              <div className="text-sm">
-                <p className="text-xs text-text-muted">Wage grade</p>
-                <p className="text-text-primary">{current.snapshot.wage_rate_code ?? "—"}</p>
-              </div>
-              {current.structure_assignments.length > 0 && (
+          {mode === "edit" && (
+            <Section title="Current salary" description={snapshot ? `As of ${snapshot.as_of}` : "Loading…"}>
+              {snapshot && (
+                <>
+                  <div className="text-sm">
+                    <p className="text-xs text-text-muted">Basic / gross</p>
+                    <p className="font-semibold text-text-primary">
+                      {normalizeMoney(snapshot.basic)} / {normalizeMoney(snapshot.gross)}
+                    </p>
+                  </div>
+                  <div className="text-sm">
+                    <p className="text-xs text-text-muted">Structure</p>
+                    <p className="text-text-primary">{snapshot.structure_code ?? "None assigned"}</p>
+                  </div>
+                  <div className="text-sm">
+                    <p className="text-xs text-text-muted">Wage grade</p>
+                    <p className="text-text-primary">{snapshot.wage_rate_code ?? "—"}</p>
+                  </div>
+                </>
+              )}
+              {current && current.structure_assignments.length > 0 && (
                 <div className="sm:col-span-2 lg:col-span-3 overflow-x-auto">
                   <table className="min-w-full text-xs">
                     <thead className="bg-surface-subtle">
@@ -107,89 +170,166 @@ export function SalaryTab({ mode, canManagePayroll, options, salary, setSalary, 
                           <td className="px-3 py-1.5">{a.effective_from}</td>
                           <td className="px-3 py-1.5">{a.effective_to ?? "Open"}</td>
                           <td className="px-3 py-1.5">{a.structure_code}</td>
-                          <td className="px-3 py-1.5 text-right">{a.base_salary ?? "—"}</td>
+                          <td className="px-3 py-1.5 text-right">{a.base_salary ? normalizeMoney(a.base_salary) : "—"}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               )}
+              {!showForm && onStartChange && (
+                <div className="sm:col-span-2 lg:col-span-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={onStartChange}
+                    disabled={!current || !options}
+                    title={!current || !options ? "Waiting for the current salary to load" : undefined}
+                    className="rounded border border-border-strong px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle disabled:opacity-60"
+                  >
+                    Change salary
+                  </button>
+                </div>
+              )}
+              {!showForm && statusBox}
             </Section>
           )}
 
-          <Section
-            title={mode === "edit" ? "Change salary" : "Salary set-up"}
-            description={
-              mode === "edit"
-                ? "A change starts a new period from the effective date; the earlier period closes the day before."
-                : "Optional. Choose a salary structure to set pay now, or leave empty and set it later."
-            }
-          >
-            <SelectField
-              label="Salary structure"
-              value={salary.structure_id ? String(salary.structure_id) : ""}
-              onChange={(v) => setSalary({ ...salary, structure_id: v ? Number(v) : null })}
-              options={(options?.structures ?? []).map((s) => ({ value: String(s.id), label: `${s.code} - ${s.name}` }))}
-              emptyLabel="No salary set-up yet"
-            />
-            <SelectField
-              label="Bangladesh wage grade"
-              value={salary.bd_wage_rate_id ? String(salary.bd_wage_rate_id) : ""}
-              onChange={(v) => setSalary({ ...salary, bd_wage_rate_id: v ? Number(v) : null })}
-              options={(options?.wage_grades ?? []).map((g) => ({ value: String(g.id), label: `${g.rate_code} (basic ${g.basic}, gross ${g.gross})` }))}
-              emptyLabel="No grade"
-              hint="The grade is the legal minimum; salary below it is refused."
-            />
-            <TextField
-              label="Basic salary"
-              value={salary.base_salary}
-              onChange={(v) => setSalary({ ...salary, base_salary: v })}
-              inputMode="numeric"
-              placeholder={grade ? `Grade minimum ${grade.basic}` : "e.g. 12500"}
-              hint={grade ? "Leave empty to use the grade minimum basic" : undefined}
-            />
-            <TextField
-              label={mode === "edit" ? "Effective from *" : "Effective from"}
-              type="date"
-              value={salary.effective_from}
-              onChange={(v) => setSalary({ ...salary, effective_from: v })}
-              hint={mode === "create" ? "Defaults to the joining date" : undefined}
-            />
-            {preview && (
-              <div
-                className={`sm:col-span-2 rounded-lg border px-3 py-2 text-sm ${
-                  preview.meets_minimum
-                    ? "border-status-success/30 bg-status-success-subtle text-status-success-foreground"
-                    : "border-status-danger/30 bg-status-danger-subtle text-status-danger-foreground"
-                }`}
-                role="status"
-              >
-                {preview.basic && (
-                  <p>
-                    Basic {preview.basic} · Gross {preview.gross}
-                  </p>
-                )}
-                {preview.minimum_basic && (
-                  <p className="text-xs">
-                    Legal minimum: basic {preview.minimum_basic}, gross {preview.minimum_gross}
-                  </p>
-                )}
-                {!preview.meets_minimum && preview.message && <p className="text-xs font-medium">{preview.message}</p>}
-              </div>
-            )}
-            {mode === "edit" && onSaveSalary && (
-              <div className="sm:col-span-2 lg:col-span-3 flex justify-end">
-                <button
-                  type="button"
-                  onClick={onSaveSalary}
-                  disabled={savingSalary || !salary.structure_id || !salary.effective_from || (preview !== null && !preview.meets_minimum)}
-                  className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                >
-                  {savingSalary ? "Saving..." : "Save new salary"}
-                </button>
-              </div>
-            )}
-          </Section>
+          {(mode === "create" || showForm) && (
+            <Section
+              title={mode === "edit" ? "Change salary" : "Salary set-up"}
+              description={
+                mode === "edit"
+                  ? "Starts a new salary period from the date you choose; earlier periods are kept as history."
+                  : "Choose a salary structure now, or leave this off and set the salary later from the profile."
+              }
+            >
+              {mode === "create" && (
+                <div className="sm:col-span-2 lg:col-span-3">
+                  <CheckboxField
+                    label="Set salary now"
+                    hint="When ticked, the salary must be complete and valid before the employee can be created."
+                    checked={salary.enabled}
+                    onChange={(v) => onSalaryChange({ enabled: v })}
+                  />
+                </div>
+              )}
+              {showForm && (
+                <>
+                  <SelectField
+                    label="Salary structure *"
+                    value={salary.structure_id ? String(salary.structure_id) : ""}
+                    onChange={(v) => onSalaryChange({ structure_id: v ? Number(v) : null })}
+                    options={structureOptions}
+                    emptyLabel="Choose a structure"
+                    hint={
+                      !options
+                        ? "Salary options did not load. Reload the page to try again."
+                        : structureOptions.length === 0
+                          ? "No active salary structures yet. Add one under Payroll → Salary structures."
+                          : "How the pay is split (basic, house rent, allowances)."
+                    }
+                  />
+                  <SelectField
+                    label="Bangladesh wage grade"
+                    value={salary.bd_wage_rate_id ? String(salary.bd_wage_rate_id) : ""}
+                    onChange={(v) => onSalaryChange({ bd_wage_rate_id: v ? Number(v) : null })}
+                    options={gradeOptions}
+                    emptyLabel="No grade (type the basic salary)"
+                    allowEmpty={!keepsGrade}
+                    hint={
+                      gradeFromStructure
+                        ? "The legal minimum pay, taken from the current salary structure. Saving records it as this employee's grade."
+                        : "The legal minimum pay. A salary below it is refused."
+                    }
+                  />
+                  {salary.bd_wage_rate_id !== null ? (
+                    <div className="text-sm">
+                      <p className="text-xs font-medium text-text-muted">Standard basic salary</p>
+                      <p className="mt-1 font-semibold text-text-primary">
+                        {standardBasic ? `${normalizeMoney(standardBasic)} (grade minimum)` : "Grade minimum"}
+                      </p>
+                      <div className="mt-2">
+                        <CheckboxField
+                          label="Override standard basic salary"
+                          checked={salary.override}
+                          onChange={(v) => onSalaryChange({ override: v })}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <TextField
+                      label="Basic salary"
+                      required
+                      value={salary.base_salary}
+                      onChange={(v) => onSalaryChange({ base_salary: v })}
+                      inputMode="numeric"
+                      placeholder="e.g. 12500"
+                      hint="No grade is chosen, so type this employee's basic salary."
+                    />
+                  )}
+                  {salary.bd_wage_rate_id !== null && salary.override && (
+                    <>
+                      <TextField
+                        label="Employee basic salary"
+                        required
+                        value={salary.base_salary}
+                        onChange={(v) => onSalaryChange({ base_salary: v })}
+                        inputMode="numeric"
+                        placeholder={standardBasic ? `Grade standard ${normalizeMoney(standardBasic)}` : "e.g. 15000"}
+                        hint="Must not be below the grade minimum."
+                      />
+                      <div className="sm:col-span-2 rounded-lg border border-status-warning/30 bg-status-warning-subtle px-3 py-2 text-sm text-text-secondary">
+                        <p className="font-medium text-text-primary">This replaces the grade's standard basic salary for this employee.</p>
+                        <div className="mt-2">
+                          <CheckboxField
+                            label="I confirm this employee's basic salary is different from the grade standard."
+                            checked={salary.acknowledged}
+                            onChange={(v) => onSalaryChange({ acknowledged: v })}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  <TextField
+                    label={mode === "edit" ? "New salary starts on" : "Salary starts on"}
+                    required={mode === "edit"}
+                    type="date"
+                    value={salary.effective_from}
+                    onChange={(v) => onSalaryChange({ effective_from: v })}
+                    hint={dateHint(mode, effective)}
+                  />
+                  <PreviewBox preview={preview} />
+                  {blocker && preview.status !== "pending" && (
+                    <p className="sm:col-span-2 lg:col-span-3 text-xs font-medium text-status-warning-foreground" role="status">
+                      {mode === "create" ? "Before you can create the employee: " : "Before you can save: "}
+                      {blocker}
+                    </p>
+                  )}
+                  {mode === "edit" && (
+                    <div className="sm:col-span-2 lg:col-span-3 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={onCancelChange}
+                        disabled={savingSalary}
+                        className="rounded border border-border-strong px-4 py-2 text-sm text-text-secondary hover:bg-surface-subtle disabled:opacity-60"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onSaveSalary}
+                        disabled={savingSalary || blocker !== null}
+                        className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                      >
+                        {savingSalary ? "Saving..." : "Save new salary"}
+                      </button>
+                    </div>
+                  )}
+                  {statusBox}
+                </>
+              )}
+            </Section>
+          )}
         </>
       ) : (
         <div className="rounded-xl border border-border bg-surface-subtle p-4 text-sm text-text-secondary">
@@ -253,10 +393,6 @@ export function SalaryTab({ mode, canManagePayroll, options, salary, setSalary, 
         Full payroll screens:{" "}
         <Link className="text-brand-primary hover:underline" to="/app/hr/payroll/salary-structures">
           Salary structures
-        </Link>{" "}
-        ·{" "}
-        <Link className="text-brand-primary hover:underline" to="/app/hr/payroll/assignments">
-          Structure assignments
         </Link>{" "}
         ·{" "}
         <Link className="text-brand-primary hover:underline" to="/app/hr/payroll/payslips">

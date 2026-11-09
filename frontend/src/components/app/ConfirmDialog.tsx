@@ -51,11 +51,11 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                 {opts.description}
               </p>
             ) : null}
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
               <button
                 type="button"
                 onClick={() => close(false)}
-                className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
+                className="min-h-10 rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle sm:min-h-0"
               >
                 {opts.cancelLabel ?? "Cancel"}
               </button>
@@ -65,8 +65,8 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                 onClick={() => close(true)}
                 className={
                   opts.danger
-                    ? "rounded-lg bg-status-danger px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90"
-                    : "rounded-lg bg-brand-primary px-3 py-1.5 text-sm font-semibold text-brand-primary-foreground hover:opacity-90"
+                    ? "min-h-10 rounded-lg bg-status-danger px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 sm:min-h-0"
+                    : "min-h-10 rounded-lg bg-brand-primary px-3 py-1.5 text-sm font-semibold text-brand-primary-foreground hover:opacity-90 sm:min-h-0"
                 }
               >
                 {opts.confirmLabel ?? "Confirm"}

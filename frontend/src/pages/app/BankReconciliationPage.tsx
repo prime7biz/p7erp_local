@@ -14,6 +14,7 @@ import { useAuth } from "@/context/AuthContext";
 import { todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
+import { saveBlob } from "@/lib/fileSave";
 
 export function BankReconciliationPage() {
   const { me } = useAuth();
@@ -308,14 +309,7 @@ export function BankReconciliationPage() {
       setIsExporting(true);
       const csv = await api.exportBankStatementMatchLogsCsv(selectedReconId);
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `reconciliation_${selectedReconId}_match_logs.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      void saveBlob(blob, `reconciliation_${selectedReconId}_match_logs.csv`);
       setSuccess("Audit CSV exported successfully.");
     } catch (e) {
       setError((e as Error).message);

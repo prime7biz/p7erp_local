@@ -2,6 +2,7 @@ node_modules/
 .video-tmp/
 .capture.lock
 .capture-queue/
+.mobile-audit/
 capture-report.json
 redact.local.json
 referenced-assets.json

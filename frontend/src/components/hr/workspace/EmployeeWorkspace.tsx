@@ -1,10 +1,11 @@
 /**
  * One employee screen for Add and View/Edit (tenant flag `hr_onboarding_workspace_v2`).
  *
- * - Create mode (/app/hr/employees/new): fill Personal, Job and Salary (AI autofill on Personal),
+ * - Create mode (/app/hr/employees/new): fill Personal and Employment & Salary (AI autofill on Personal),
  *   then "Create employee" calls POST /hr/onboarding once with a stable request id, so a retry or a
  *   double click never makes a second employee. Record tabs unlock after the save.
- * - Edit mode (/app/hr/employees/:id): every tab saves on its own, as before.
+ * - Edit mode (/app/hr/employees/:id): every tab saves on its own. On Employment & Salary the
+ *   employment/payment fields and a new salary period are two separate saves.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -37,20 +38,25 @@ import {
   buildOnboardingRequest,
   buildResumeSteps,
   buildTabUpdate,
+  buildCompensation,
   CORE_TABS,
+  EMPLOYMENT_KEYS,
   emptyEmployeeForm,
   emptySalaryForm,
   formFromEmployee,
   isDirty,
   isTabLocked,
-  JOB_KEYS,
   mergeExtraction,
   newRequestId,
   omittedCreateKeys,
-  PAYMENT_KEYS,
   PERSONAL_KEYS,
   PRESENT_KEYS,
+  previewableCompensation,
+  resolveSalaryEffectiveDate,
+  salaryBlocker,
+  salaryFormFromSnapshot,
   syncPermanentAddress,
+  updateSalary,
   type EmployeeFormState,
   type SalaryFormState,
   type WorkspaceMode,
@@ -66,7 +72,8 @@ import { MedicalRecordsTab } from "./recordTabs/MedicalRecordsTab";
 import { ProductionTab } from "./recordTabs/ProductionTab";
 import { downloadBlob } from "./recordTabs/shared";
 import { StatusHistoryTab } from "./recordTabs/StatusHistoryTab";
-import { SalaryTab } from "./SalaryTab";
+import { SalaryTab, type SalaryStatus } from "./SalaryTab";
+import { useCompensationPreview } from "./useCompensationPreview";
 import { LEAVE_MESSAGE, useUnsavedChangesGuard } from "./useUnsavedChangesGuard";
 
 const PREFIX = "/app/hr";
@@ -110,6 +117,10 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
   const [form, setForm] = useState<EmployeeFormState>(emptyEmployeeForm);
   const [initialForm, setInitialForm] = useState<EmployeeFormState>(emptyEmployeeForm);
   const [salary, setSalary] = useState<SalaryFormState>(emptySalaryForm);
+  const [salarySaving, setSalarySaving] = useState(false);
+  const [salaryStatus, setSalaryStatus] = useState<SalaryStatus>(null);
+  const [previewNonce, setPreviewNonce] = useState(0);
+  const creating = useRef(false);
   const [sameAsPresent, setSameAsPresent] = useState(false);
   const [issueTempGatePass, setIssueTempGatePass] = useState(false);
   const touched = useRef(new Set<string>());
@@ -132,7 +143,24 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
     () => new Set<string>(employee?.masked_fields ?? access.masked_fields ?? []),
     [employee?.masked_fields, access.masked_fields],
   );
-  const dirty = isDirty(initialForm, form) || (mode === "create" && salary.structure_id !== null);
+  const dirty = isDirty(initialForm, form) || salary.enabled;
+
+  const savedJoiningDate = mode === "edit" ? initialForm.joining_date : form.joining_date;
+  const effective = resolveSalaryEffectiveDate(salary, mode, form.joining_date, compOptions?.as_of ?? null);
+  const preview = useCompensationPreview(
+    previewableCompensation(salary, effective.date),
+    access.can_manage_payroll && salary.enabled,
+    previewNonce,
+  );
+  const salaryBlock = salaryBlocker(salary, effective.date, preview, {
+    mode,
+    joiningDate: savedJoiningDate,
+    joiningDateUnsaved: mode === "edit" && form.joining_date !== initialForm.joining_date,
+  });
+  const changeSalary = useCallback((patch: Partial<SalaryFormState>) => {
+    setSalaryStatus(null);
+    setSalary((prev) => updateSalary(prev, patch));
+  }, []);
 
   const showError = useCallback((m: string) => {
     setSuccess("");
@@ -242,11 +270,18 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
   // --- create -----------------------------------------------------------------------------------------
 
   const createEmployee = async () => {
+    if (creating.current) return;
     if (!form.first_name.trim()) {
       setTab("personal");
       showError("First name is required.");
       return;
     }
+    if (salary.enabled && salaryBlock) {
+      setTab("employment");
+      showError(`Salary set-up: ${salaryBlock}`);
+      return;
+    }
+    creating.current = true;
     setSaving(true);
     setError("");
     try {
@@ -256,6 +291,7 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
         salary,
         issueTempGatePass && access.can_manage_gate_pass,
         omittedCreateKeys(access),
+        compOptions?.as_of ?? null,
       );
       lastRequest.current = body;
       const result = await api.startHrOnboarding(body);
@@ -264,6 +300,7 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
     } catch (e) {
       showError(e instanceof Error ? e.message : "Could not create the employee");
     } finally {
+      creating.current = false;
       setSaving(false);
     }
   };
@@ -296,35 +333,50 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
       setEmployee(updated);
       const saved = formFromEmployee(updated);
       const pick = (prev: EmployeeFormState) => ({ ...prev, ...Object.fromEntries(keys.map((k) => [k, saved[k]])) });
-      // Only the saved tab is refreshed, so unsaved edits on other tabs survive.
+      // Only the saved card is refreshed, so unsaved edits elsewhere (including the salary form) survive.
       setForm(pick);
       setInitialForm(pick);
       showSuccess(`${label} saved.`);
+      if ("joining_date" in body && access.can_manage_payroll) {
+        // Salary dates are checked against the saved joining date, so re-read pay and re-check the preview.
+        api
+          .getHrEmployeeCompensation(updated.id)
+          .then(setCompensation)
+          .catch((e) => logApiError("EmployeeWorkspace.compensation", e));
+        setPreviewNonce((n) => n + 1);
+      }
     } catch (e) {
-      showError(e instanceof Error ? e.message : "Update failed");
+      showError(`${label} not saved: ${e instanceof Error ? e.message : "Update failed"}`);
     } finally {
       setSaving(false);
     }
   };
 
   const saveSalary = async () => {
-    if (!employee || !salary.structure_id || !salary.effective_from) return;
-    setSaving(true);
+    if (!employee || salarySaving || salaryBlock) return;
+    const body = buildCompensation(salary, effective.date);
+    if (!body || !body.effective_from) return;
+    setSalarySaving(true);
+    setSalaryStatus(null);
     try {
-      const view = await api.replaceHrEmployeeCompensation(employee.id, {
-        structure_id: salary.structure_id,
-        bd_wage_rate_id: salary.bd_wage_rate_id,
-        base_salary: salary.base_salary.trim() || null,
-        effective_from: salary.effective_from,
-      });
+      const view = await api.replaceHrEmployeeCompensation(employee.id, { ...body, effective_from: body.effective_from });
       setCompensation(view);
       setSalary(emptySalaryForm());
-      showSuccess("New salary saved.");
+      setSalaryStatus({ kind: "success", text: `New salary saved from ${body.effective_from}.` });
     } catch (e) {
-      showError(e instanceof Error ? e.message : "Salary change failed");
+      setSalaryStatus({ kind: "error", text: `Salary not saved: ${e instanceof Error ? e.message : "Salary change failed"}` });
     } finally {
-      setSaving(false);
+      setSalarySaving(false);
     }
+  };
+
+  const startSalaryChange = () => {
+    setSalaryStatus(null);
+    setSalary(salaryFormFromSnapshot(compensation?.snapshot));
+  };
+  const cancelSalaryChange = () => {
+    setSalaryStatus(null);
+    setSalary(emptySalaryForm());
   };
 
   const toggleActive = async () => {
@@ -388,8 +440,7 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
 
   const tabs: { id: WorkspaceTab; label: string }[] = [
     { id: "personal", label: "Personal" },
-    { id: "job", label: "Job" },
-    { id: "salary", label: "Salary" },
+    { id: "employment", label: "Employment & Salary" },
     { id: "identity", label: "Photo & biometrics" },
     { id: "documents", label: "Documents" },
     ...(ageEnabled ? [{ id: "age" as const, label: "Age verification" }] : []),
@@ -411,7 +462,7 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
           title={title}
           description={
             mode === "create"
-              ? "Fill Personal, Job and Salary, then create. Photo, documents and checks open after the first save."
+              ? "Fill Personal and Employment & Salary, then create. Photo, documents and checks open after the first save."
               : `${employee?.employee_code} · ${employee?.is_active ? "Active" : "Inactive"}`
           }
           breadcrumbs={[
@@ -530,38 +581,44 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
           }
         />
       )}
-      {tab === "job" && (
-        <JobTab
-          mode={mode}
-          form={form}
-          setField={setField}
-          employeeCode={employee?.employee_code ?? null}
-          nextCode={nextCode}
-          departments={departments}
-          designations={designations}
-          sections={sections}
-          managers={managers}
-          onMasterCreated={onMasterCreated}
-          highlight={highlight}
-          issueTempGatePass={issueTempGatePass}
-          onIssueTempGatePassChange={setIssueTempGatePass}
-          canManageGatePass={access.can_manage_gate_pass}
-        />
-      )}
-      {tab === "salary" && (
-        <SalaryTab
-          mode={mode}
-          canManagePayroll={access.can_manage_payroll}
-          options={compOptions}
-          salary={salary}
-          setSalary={setSalary}
-          form={form}
-          setField={setField}
-          masked={masked}
-          current={compensation}
-          onSaveSalary={mode === "edit" ? () => void saveSalary() : undefined}
-          savingSalary={saving}
-        />
+      {tab === "employment" && (
+        <div className="space-y-4">
+          <JobTab
+            mode={mode}
+            form={form}
+            setField={setField}
+            employeeCode={employee?.employee_code ?? null}
+            nextCode={nextCode}
+            departments={departments}
+            designations={designations}
+            sections={sections}
+            managers={managers}
+            onMasterCreated={onMasterCreated}
+            highlight={highlight}
+            issueTempGatePass={issueTempGatePass}
+            onIssueTempGatePassChange={setIssueTempGatePass}
+            canManageGatePass={access.can_manage_gate_pass}
+          />
+          <SalaryTab
+            mode={mode}
+            canManagePayroll={access.can_manage_payroll}
+            options={compOptions}
+            salary={salary}
+            onSalaryChange={changeSalary}
+            preview={preview}
+            effective={effective}
+            blocker={salaryBlock}
+            form={form}
+            setField={setField}
+            masked={masked}
+            current={compensation}
+            onStartChange={mode === "edit" ? startSalaryChange : undefined}
+            onCancelChange={mode === "edit" ? cancelSalaryChange : undefined}
+            onSaveSalary={mode === "edit" ? () => void saveSalary() : undefined}
+            savingSalary={salarySaving}
+            salaryStatus={salaryStatus}
+          />
+        </div>
       )}
       {recordProps && tab === "identity" && (
         <IdentityTab {...recordProps} onPhotoChanged={(hasPhoto) => setEmployee((p) => (p ? { ...p, has_photo: hasPhoto } : p))} />
@@ -601,7 +658,7 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
                 {coreIndex >= 0 && coreIndex < CORE_TABS.length - 1 && (
                   <button
                     type="button"
-                    onClick={() => setTab(CORE_TABS[coreIndex + 1] ?? "salary")}
+                    onClick={() => setTab(CORE_TABS[coreIndex + 1] ?? "employment")}
                     className="inline-flex items-center gap-1 rounded border border-border-strong px-3 py-2 text-sm text-text-secondary"
                   >
                     Next <ChevronRight className="h-4 w-4" aria-hidden="true" />
@@ -623,14 +680,9 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
                     {saving ? "Saving..." : "Save personal"}
                   </button>
                 )}
-                {tab === "job" && (
-                  <button type="button" disabled={saving} onClick={() => void saveTab(JOB_KEYS, "Job details")} className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-                    {saving ? "Saving..." : "Save job"}
-                  </button>
-                )}
-                {tab === "salary" && (
-                  <button type="button" disabled={saving} onClick={() => void saveTab(PAYMENT_KEYS, "Payment and facilities")} className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-                    {saving ? "Saving..." : "Save payment & facilities"}
+                {tab === "employment" && (
+                  <button type="button" disabled={saving} onClick={() => void saveTab(EMPLOYMENT_KEYS, "Employment & payment")} className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+                    {saving ? "Saving..." : "Save employment & payment"}
                   </button>
                 )}
               </>

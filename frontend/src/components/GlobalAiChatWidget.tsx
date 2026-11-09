@@ -41,7 +41,7 @@ export function GlobalAiChatWidget() {
     <>
       {/* Desktop FAB — hidden when app_shell_v2 (use top-bar AI). Mobile always uses top bar. */}
       {!widgetOpen && !appShellV2 ? (
-        <div className="fixed bottom-6 right-6 z-[90] hidden lg:block">
+        <div className="no-print fixed bottom-6 right-6 z-[90] hidden lg:block">
           <button
             type="button"
             onClick={toggleWidget}
@@ -54,9 +54,10 @@ export function GlobalAiChatWidget() {
       ) : null}
 
       <div
-        className={`fixed inset-y-0 right-0 z-[85] w-full max-w-[430px] transform border-l border-border bg-surface-base shadow-2xl transition-transform duration-300 ease-out ${
-          widgetOpen ? "translate-x-0" : "translate-x-full"
+        className={`no-print fixed inset-y-0 right-0 z-[85] w-full max-w-[430px] transform border-l border-border bg-surface-base shadow-2xl transition-[transform,visibility] duration-300 ease-out ${
+          widgetOpen ? "visible translate-x-0" : "invisible translate-x-full"
         }`}
+        aria-hidden={!widgetOpen}
       >
         <div className="flex h-full flex-col">
           <div className="flex items-center justify-between border-b border-border bg-surface-raised px-4 py-3">

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { financierPortalApi } from "@/hooks/useFinancierPortal";
 import { PortalErrorState } from "@/components/external-access/PortalErrorState";
 import { todayLocalISO } from "@/lib/dates";
+import { saveBlob } from "@/lib/fileSave";
 
 const REPORTS: {
   key: string;
@@ -37,12 +38,7 @@ const REPORTS: {
 
 function downloadJson(filename: string, data: unknown) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  void saveBlob(blob, filename);
 }
 
 export function FinancierReportsPage() {

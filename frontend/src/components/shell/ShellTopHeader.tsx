@@ -6,13 +6,11 @@ import {
   ExternalLink,
   Landmark,
   LogOut,
-  Moon,
   PenLine,
   Plus,
   Search,
   Settings,
   Sparkles,
-  Sun,
   User,
   Users,
 } from "lucide-react";
@@ -24,8 +22,6 @@ import { PageHelpButton } from "@/components/shell/PageHelpButton";
 import { ShortcutSheet } from "@/components/shell/ShortcutSheet";
 import { getCreateActions } from "@/components/shell/createActions";
 import type { FlatNavRoute } from "@/components/shell/flattenMenuRoutes";
-import { resolveTheme, setTheme, type ThemePreference } from "@/lib/theme";
-
 function getNameInitial(name?: string | null) {
   if (!name) return "U";
   return name.trim().charAt(0).toUpperCase();
@@ -103,7 +99,6 @@ export function ShellTopHeader({
 }) {
   const { setWidgetOpen } = useAiChatContext();
   const [profileOpen, setProfileOpen] = useState(false);
-  const [theme, setThemeState] = useState<ThemePreference>(() => resolveTheme());
   const [newOpen, setNewOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -156,7 +151,7 @@ export function ShellTopHeader({
 
   return (
     <>
-      <header className="flex h-12 items-center justify-between gap-3 border-b border-border bg-surface-raised px-3 md:px-4">
+      <header className="no-print flex h-12 items-center justify-between gap-2 border-b border-border bg-surface-raised px-3 sm:gap-3 md:px-4">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <button
             type="button"
@@ -236,7 +231,7 @@ export function ShellTopHeader({
               <ChevronDown className="h-3.5 w-3.5 shrink-0 text-text-muted" />
             </button>
             {profileOpen && (
-              <div className="absolute right-0 z-20 mt-1 w-64 rounded-lg border border-border bg-surface-raised p-2 shadow-lg">
+              <div className="absolute right-0 z-20 mt-1 w-64 max-w-[calc(100vw-1.5rem)] rounded-lg border border-border bg-surface-raised p-2 shadow-lg">
                 <div className="border-b border-border-subtle px-2 py-1.5">
                   <p className="truncate text-sm font-semibold text-text-primary">{displayName}</p>
                   <p className="truncate text-xs text-text-secondary">{me.email}</p>
@@ -270,18 +265,6 @@ export function ShellTopHeader({
                     <Settings className="h-4 w-4" />
                     Settings
                   </Link>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next: ThemePreference = theme === "dark" ? "light" : "dark";
-                      setTheme(next);
-                      setThemeState(next);
-                    }}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-text-secondary hover:bg-surface-subtle"
-                  >
-                    {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                    {theme === "dark" ? "Light mode" : "Dark mode"}
-                  </button>
                 </div>
                 <div className="mt-1 border-t border-border-subtle pt-1">
                   <button

@@ -44,10 +44,10 @@ export function AppPageHeader({
               {backTo.label}
             </Link>
           ) : null}
-          <h1 className={titleClass}>{title}</h1>
+          <h1 className={`${titleClass} break-words`}>{title}</h1>
           {description ? <p className="mt-0.5 max-w-3xl text-sm text-text-muted">{description}</p> : null}
         </div>
-        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
+        {actions ? <div className="no-print flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">{actions}</div> : null}
       </div>
       {belowTitle}
     </header>

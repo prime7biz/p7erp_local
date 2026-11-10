@@ -1,12 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   api,
   type HrAttendanceBulkEntryBody,
   type HrAttendanceEntryCreate,
   type HrAttendanceEntryResponse,
-  type HrAttendanceEntryUpdate,
 } from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { HrStatusBadge } from "@/components/hr/HrStatusBadge";
+import { HrDataTable, type HrTableColumn } from "@/components/hr/kit/HrDataTable";
+import { HrEmployeeCell, HrEmployeeSelect } from "@/components/hr/kit/HrEmployeeFields";
+import { HrFormDrawer } from "@/components/hr/kit/HrFormDrawer";
+import { useEmployeeLookup } from "@/components/hr/kit/useEmployeeLookup";
+import { useAuth } from "@/context/AuthContext";
+import { canExportHrData } from "@/lib/roles";
 
 const PREFIX = "/app/hr";
 const BULK_IMPORT_SAMPLE = `{
@@ -21,25 +27,33 @@ const BULK_IMPORT_SAMPLE = `{
     }
   ]
 }`;
+const STATUS_SUGGESTIONS = ["PRESENT", "ABSENT", "LATE"];
+const SOURCES = ["MANUAL", "BIOMETRIC", "CARD_READER", "MOBILE_APP"];
+const inputClass = "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm";
+const labelClass = "block text-sm font-medium text-text-secondary";
+
+const EMPTY_FORM: HrAttendanceEntryCreate = {
+  employee_id: 0,
+  attendance_date: "",
+  in_time: "",
+  out_time: "",
+  status: "PRESENT",
+  remarks: "",
+  source: "MANUAL",
+};
 
 export function HrAttendanceEntryPage() {
+  const { me } = useAuth();
   const [rows, setRows] = useState<HrAttendanceEntryResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [bulkJson, setBulkJson] = useState("");
   const [bulkMsg, setBulkMsg] = useState("");
-  const [editId, setEditId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState<HrAttendanceEntryUpdate>({});
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
-  const [form, setForm] = useState<HrAttendanceEntryCreate>({
-    employee_id: 0,
-    attendance_date: "",
-    in_time: "",
-    out_time: "",
-    status: "PRESENT",
-    remarks: "",
-    source: "MANUAL",
-  });
+  const [drawer, setDrawer] = useState<{ mode: "create" } | { mode: "edit"; row: HrAttendanceEntryResponse } | null>(null);
+  const [form, setForm] = useState<HrAttendanceEntryCreate>(EMPTY_FORM);
+  const [formError, setFormError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const lookup = useEmployeeLookup(useMemo(() => rows.map((r) => r.employee_id), [rows]));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -57,52 +71,58 @@ export function HrAttendanceEntryPage() {
     void load();
   }, [load]);
 
-  const onCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.attendance_date || !form.employee_id) return;
-    setError("");
-    try {
-      await api.createHrAttendanceEntry({
-        ...form,
-        employee_id: Number(form.employee_id),
-        source: form.source || "MANUAL",
-      });
-      setForm({
-        employee_id: 0,
-        attendance_date: "",
-        in_time: "",
-        out_time: "",
-        status: "PRESENT",
-        remarks: "",
-        source: "MANUAL",
-      });
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
-    }
+  const openCreate = () => {
+    setForm(EMPTY_FORM);
+    setFormError("");
+    setDrawer({ mode: "create" });
   };
-
   const openEdit = (row: HrAttendanceEntryResponse) => {
-    setEditId(row.id);
-    setEditForm({
-      in_time: row.in_time,
-      out_time: row.out_time,
+    setForm({
+      employee_id: row.employee_id,
+      attendance_date: row.attendance_date,
+      in_time: row.in_time ?? "",
+      out_time: row.out_time ?? "",
       status: row.status,
-      remarks: row.remarks,
-      source: row.source,
+      remarks: row.remarks ?? "",
+      source: row.source ?? "MANUAL",
     });
-    setOpenActionsId(null);
+    setFormError("");
+    setDrawer({ mode: "edit", row });
   };
 
-  const saveEdit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (editId == null) return;
+    if (!drawer) return;
+    if (drawer.mode === "create" && (!form.employee_id || !form.attendance_date)) {
+      setFormError("Choose the employee and the date.");
+      return;
+    }
+    setSaving(true);
+    setFormError("");
     try {
-      await api.updateHrAttendanceEntry(editId, editForm);
-      setEditId(null);
+      if (drawer.mode === "create") {
+        await api.createHrAttendanceEntry({
+          ...form,
+          in_time: form.in_time || null,
+          out_time: form.out_time || null,
+          remarks: form.remarks || null,
+          source: form.source || "MANUAL",
+        });
+      } else {
+        await api.updateHrAttendanceEntry(drawer.row.id, {
+          in_time: form.in_time || null,
+          out_time: form.out_time || null,
+          status: form.status,
+          remarks: form.remarks || null,
+          source: form.source ?? undefined,
+        });
+      }
+      setDrawer(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Update failed");
+      setFormError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -121,81 +141,70 @@ export function HrAttendanceEntryPage() {
     }
   };
 
+  const columns: HrTableColumn<HrAttendanceEntryResponse>[] = [
+    {
+      key: "employee",
+      header: "Employee",
+      render: (r) => <HrEmployeeCell id={r.employee_id} lookup={lookup} />,
+      value: (r) => {
+        const e = lookup(r.employee_id);
+        return e ? `${e.full_name} ${e.employee_code}` : `#${r.employee_id}`;
+      },
+    },
+    { key: "date", header: "Date", render: (r) => r.attendance_date, value: (r) => r.attendance_date },
+    { key: "in", header: "In", render: (r) => r.in_time ?? "—", value: (r) => r.in_time },
+    { key: "out", header: "Out", render: (r) => r.out_time ?? "—", value: (r) => r.out_time },
+    { key: "status", header: "Status", render: (r) => <HrStatusBadge status={r.status} />, value: (r) => r.status },
+    { key: "source", header: "Source", render: (r) => r.source ?? "-", value: (r) => r.source, hideOnMobile: true },
+  ];
+
+  const addButton = (
+    <button type="button" onClick={openCreate} className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground hover:opacity-90">
+      + Add entry
+    </button>
+  );
+
+  const set = (key: keyof HrAttendanceEntryCreate) => (e: { target: { value: string } }) =>
+    setForm((p) => ({ ...p, [key]: e.target.value }));
+
   return (
-    <div className="space-y-6">
-      <HrPageHeader
-        title="Daily attendance entry"
-        description="Manual or device-sourced attendance. Use bulk JSON for biometric batch upload."
-        breadcrumbs={[{ label: "HR", href: PREFIX }, { label: "Daily entry" }]}
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <HrPageHeader
+          title="Daily attendance entry"
+          description="Manual or device-sourced attendance. Use bulk JSON for a biometric batch upload."
+          breadcrumbs={[{ label: "HR", href: PREFIX }, { label: "Daily entry" }]}
+        />
+        {addButton}
+      </div>
+
+      <HrDataTable
+        rows={rows}
+        rowKey={(r) => r.id}
+        columns={columns}
+        loading={loading}
+        error={error}
+        onRetry={() => void load()}
+        onRefresh={() => void load()}
+        emptyTitle="No attendance entries yet"
+        emptyHint="Add entries by hand, record IN / OUT on the Manual tab, or import from attendance devices."
+        emptyAction={addButton}
+        searchPlaceholder="Search employee, date or status…"
+        statusOf={(r) => r.status}
+        initialSort={{ key: "date", dir: "desc" }}
+        exportFileName="attendance-entries"
+        canExport={canExportHrData(me?.role_name)}
+        rowActions={(r) => [{ key: "edit", label: "Edit", primary: true, onClick: () => openEdit(r) }]}
       />
-      {error && <div className="text-sm text-status-danger-foreground">{error}</div>}
 
-      <form onSubmit={onCreate} className="grid gap-3 rounded-xl border border-border bg-surface-raised p-4 sm:grid-cols-2 lg:grid-cols-3">
-        <input
-          type="number"
-          className="rounded border px-2 py-1 text-sm"
-          placeholder="Employee ID"
-          value={form.employee_id || ""}
-          onChange={(e) => setForm((p) => ({ ...p, employee_id: Number(e.target.value) }))}
-          required
-        />
-        <input
-          type="date"
-          className="rounded border px-2 py-1 text-sm"
-          value={form.attendance_date}
-          onChange={(e) => setForm((p) => ({ ...p, attendance_date: e.target.value }))}
-          required
-        />
-        <input
-          className="rounded border px-2 py-1 text-sm"
-          placeholder="In time (HH:MM:SS)"
-          value={form.in_time ?? ""}
-          onChange={(e) => setForm((p) => ({ ...p, in_time: e.target.value || null }))}
-        />
-        <input
-          className="rounded border px-2 py-1 text-sm"
-          placeholder="Out time (HH:MM:SS)"
-          value={form.out_time ?? ""}
-          onChange={(e) => setForm((p) => ({ ...p, out_time: e.target.value || null }))}
-        />
-        <input
-          className="rounded border px-2 py-1 text-sm"
-          placeholder="Status (PRESENT, ABSENT, LATE...)"
-          value={form.status}
-          onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}
-          required
-        />
-        <select
-          className="rounded border px-2 py-1 text-sm"
-          value={form.source ?? "MANUAL"}
-          onChange={(e) => setForm((p) => ({ ...p, source: e.target.value }))}
-        >
-          <option value="MANUAL">MANUAL</option>
-          <option value="BIOMETRIC">BIOMETRIC</option>
-          <option value="CARD_READER">CARD_READER</option>
-          <option value="MOBILE_APP">MOBILE_APP</option>
-        </select>
-        <input
-          className="sm:col-span-2 rounded border px-2 py-1 text-sm"
-          placeholder="Remarks"
-          value={form.remarks ?? ""}
-          onChange={(e) => setForm((p) => ({ ...p, remarks: e.target.value || null }))}
-        />
-        <div className="flex items-end">
-          <button type="submit" className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white">
-            Save entry
-          </button>
-        </div>
-      </form>
-
-      <div className="rounded-xl border border-border bg-surface-raised p-4">
-        <h3 className="text-sm font-semibold text-text-primary">Bulk import (JSON)</h3>
-        <p className="text-xs text-text-muted mt-1">
-          Body shape: <code className="text-xs">{"{ \"rows\": [ { employee_id, attendance_date, in_time, out_time, status, source } ] }"}</code> — field names must match API
-          (see backend <code className="text-xs">AttendanceBulkEntryBody</code>).
+      <details className="rounded-xl border border-border bg-surface-raised p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-text-primary">Bulk import (JSON)</summary>
+        <p className="mt-2 text-xs text-text-muted">
+          Body shape: <code className="text-xs">{"{ \"rows\": [ { employee_id, attendance_date, in_time, out_time, status, source } ] }"}</code> — field
+          names must match the API (backend <code className="text-xs">AttendanceBulkEntryBody</code>).
         </p>
         <textarea
-          className="mt-2 w-full rounded border px-2 py-2 font-mono text-xs"
+          className="mt-2 w-full rounded-lg border border-border-strong px-3 py-2 font-mono text-xs"
           rows={5}
           value={bulkJson}
           onChange={(e) => setBulkJson(e.target.value)}
@@ -203,120 +212,72 @@ export function HrAttendanceEntryPage() {
         />
         {bulkMsg && <p className="mt-2 text-sm text-text-secondary">{bulkMsg}</p>}
         <div className="mt-2 flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="rounded border px-3 py-1.5 text-xs"
-            onClick={() => setBulkJson(BULK_IMPORT_SAMPLE)}
-          >
+          <button type="button" className="rounded-lg border border-border-strong px-3 py-1.5 text-xs" onClick={() => setBulkJson(BULK_IMPORT_SAMPLE)}>
             Load sample JSON
           </button>
-          <button type="button" className="rounded border px-3 py-1.5 text-xs" onClick={() => void onBulk()}>
+          <button type="button" className="rounded-lg border border-border-strong px-3 py-1.5 text-xs font-medium" onClick={() => void onBulk()}>
             Upload batch
           </button>
         </div>
-      </div>
+      </details>
 
-      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-sm text-text-muted">Loading...</div>
-        ) : (
-          <table className="min-w-full divide-y divide-border text-sm">
-            <thead className="bg-surface-subtle">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs uppercase">Emp</th>
-                <th className="px-4 py-2 text-left text-xs uppercase">Date</th>
-                <th className="px-4 py-2 text-left text-xs uppercase">In</th>
-                <th className="px-4 py-2 text-left text-xs uppercase">Out</th>
-                <th className="px-4 py-2 text-left text-xs uppercase">Status</th>
-                <th className="px-4 py-2 text-right text-xs uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td className="px-4 py-2">{row.employee_id}</td>
-                  <td className="px-4 py-2">{row.attendance_date}</td>
-                  <td className="px-4 py-2">{row.in_time ?? "—"}</td>
-                  <td className="px-4 py-2">{row.out_time ?? "—"}</td>
-                  <td className="px-4 py-2">{row.status}</td>
-                  <td className="px-4 py-2 text-right">
-                    <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => setOpenActionsId(openActionsId === row.id ? null : row.id)}
-                        className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      >
-                        Actions
-                      </button>
-                      {openActionsId === row.id && (
-                        <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                          <button
-                            type="button"
-                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                            onClick={() => openEdit(row)}
-                          >
-                            Edit
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {editId != null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <form onSubmit={saveEdit} className="w-full max-w-md rounded-xl border border-border bg-surface-raised p-6 shadow-xl space-y-3">
-            <h3 className="text-lg font-semibold text-text-primary">Edit attendance</h3>
-            <label className="block text-sm">
-              In time
-              <input
-                className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
-                placeholder="HH:MM:SS"
-                value={editForm.in_time ?? ""}
-                onChange={(e) => setEditForm((f) => ({ ...f, in_time: e.target.value || null }))}
-              />
-            </label>
-            <label className="block text-sm">
-              Out time
-              <input
-                className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
-                placeholder="HH:MM:SS"
-                value={editForm.out_time ?? ""}
-                onChange={(e) => setEditForm((f) => ({ ...f, out_time: e.target.value || null }))}
-              />
-            </label>
-            <label className="block text-sm">
-              Status
-              <input
-                className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
-                value={editForm.status ?? ""}
-                onChange={(e) => setEditForm((f) => ({ ...f, status: e.target.value }))}
-              />
-            </label>
-            <label className="block text-sm">
-              Remarks
-              <input
-                className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
-                value={editForm.remarks ?? ""}
-                onChange={(e) => setEditForm((f) => ({ ...f, remarks: e.target.value || null }))}
-              />
-            </label>
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" className="rounded border px-3 py-1.5 text-sm" onClick={() => setEditId(null)}>
-                Cancel
-              </button>
-              <button type="submit" className="rounded bg-brand-primary px-3 py-1.5 text-sm font-semibold text-white">
-                Save
-              </button>
-            </div>
-          </form>
+      <HrFormDrawer
+        open={drawer != null}
+        title={drawer?.mode === "edit" ? "Edit attendance" : "Add attendance entry"}
+        description={drawer?.mode === "edit" ? "Changing a saved entry needs manager / admin or hr.attendance.manage." : undefined}
+        onClose={() => setDrawer(null)}
+        onSubmit={(e) => void onSubmit(e)}
+        submitting={saving}
+        error={formError}
+      >
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="att-employee">Employee **</label>
+          {drawer?.mode === "edit" ? (
+            <HrEmployeeCell id={form.employee_id} lookup={lookup} link={false} />
+          ) : (
+            <HrEmployeeSelect id="att-employee" value={form.employee_id || null} onChange={(v) => setForm((p) => ({ ...p, employee_id: v ?? 0 }))} required />
+          )}
         </div>
-      )}
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="att-date">Date **</label>
+          <input id="att-date" type="date" className={inputClass} value={form.attendance_date} disabled={drawer?.mode === "edit"} onChange={set("attendance_date")} required />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className={labelClass} htmlFor="att-in">In time</label>
+            <input id="att-in" className={inputClass} placeholder="09:00:00" value={form.in_time ?? ""} onChange={set("in_time")} />
+          </div>
+          <div className="space-y-1">
+            <label className={labelClass} htmlFor="att-out">Out time</label>
+            <input id="att-out" className={inputClass} placeholder="18:00:00" value={form.out_time ?? ""} onChange={set("out_time")} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className={labelClass} htmlFor="att-status">Status **</label>
+            <input id="att-status" list="att-status-list" className={inputClass} value={form.status} onChange={set("status")} required />
+            <datalist id="att-status-list">
+              {STATUS_SUGGESTIONS.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+          </div>
+          <div className="space-y-1">
+            <label className={labelClass} htmlFor="att-source">Source</label>
+            <select id="att-source" className={inputClass} value={form.source ?? "MANUAL"} onChange={set("source")}>
+              {SOURCES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="att-remarks">Remarks</label>
+          <textarea id="att-remarks" rows={2} className={inputClass} value={form.remarks ?? ""} onChange={set("remarks")} />
+        </div>
+      </HrFormDrawer>
     </div>
   );
 }

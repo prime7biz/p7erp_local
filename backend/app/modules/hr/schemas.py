@@ -171,6 +171,16 @@ class EmployeeDocumentResponse(BaseModel):
     created_at: str
 
 
+class EmployeeLookupItem(BaseModel):
+    """Display-only employee label for list tables (no sensitive or pay fields)."""
+
+    id: int
+    employee_code: str
+    full_name: str
+    department_id: int | None = None
+    is_active: bool
+
+
 class EmployeeStatusHistoryCreate(BaseModel):
     status: str = Field(..., min_length=1, max_length=32)
     effective_date: date

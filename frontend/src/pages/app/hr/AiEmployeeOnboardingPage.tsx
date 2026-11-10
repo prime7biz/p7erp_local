@@ -5,41 +5,31 @@ import { FileImportCard } from "@/components/ai-extract/FileImportCard";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
 import { useAuth } from "@/context/AuthContext";
 import { useHrDocExtraction, type HrDocExtractionKind } from "@/hooks/useHrDocExtraction";
+import { readExtractedField, type HrExtractionTarget } from "@/lib/hrExtractedFields";
 
 const PREFIX = "/app/hr";
 
-function fieldValue(fields: Record<string, unknown>, key: string): string {
-  const raw = fields[key];
-  if (raw == null) return "";
-  if (typeof raw === "object" && raw !== null && "value" in raw) {
-    const v = (raw as { value: unknown }).value;
-    return v == null ? "" : String(v);
-  }
-  return String(raw);
-}
+const MERGED_FIELDS = [
+  "first_name",
+  "last_name",
+  "email",
+  "phone",
+  "date_of_birth",
+  "gender",
+  "national_id",
+  "address_line",
+  "city",
+  "country",
+  "joining_date",
+  "employment_type",
+] as const satisfies readonly (HrExtractionTarget & keyof HrEmployeeCreate)[];
 
 function mergeFields(target: HrEmployeeCreate, response: HrDocExtractionResponse | null): HrEmployeeCreate {
   if (!response) return target;
-  const f = response.fields;
   const next = { ...target };
-  const map: Record<string, keyof HrEmployeeCreate> = {
-    employee_code: "employee_code",
-    first_name: "first_name",
-    last_name: "last_name",
-    email: "email",
-    phone: "phone",
-    date_of_birth: "date_of_birth",
-    gender: "gender",
-    national_id: "national_id",
-    address_line: "address_line",
-    city: "city",
-    country: "country",
-    joining_date: "joining_date",
-    employment_type: "employment_type",
-  };
-  for (const [src, dest] of Object.entries(map)) {
-    const v = fieldValue(f, src);
-    if (v) (next as Record<string, unknown>)[dest] = v;
+  for (const key of MERGED_FIELDS) {
+    const v = readExtractedField(response.fields, key);
+    if (v) (next as Record<string, unknown>)[key] = v;
   }
   return next;
 }

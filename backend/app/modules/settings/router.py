@@ -3,7 +3,7 @@ from functools import lru_cache
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user, hash_password
@@ -13,7 +13,11 @@ from app.common.permissions import permissions_registry_api_payload, require_int
 from app.common.username import generate_unique_username_for_tenant
 from app.common.authz import ensure_user_is_tenant_admin
 from app.common.tenant import require_tenant
-from app.common.tenant_feature_keys import normalize_feature_flags, with_effective_default_flags
+from app.common.tenant_feature_keys import (
+    is_payroll_four_eyes_enabled,
+    normalize_feature_flags,
+    with_effective_default_flags,
+)
 from app.modules.hr.employee_identity import EMPLOYEE_NUMBER_FORMAT_KEY
 from app.modules.hr_localization.enforcement_flags import ENFORCEMENT_FLAGS
 from app.modules.hr_localization.preset_service import PRESET_MARKER_KEY
@@ -69,6 +73,29 @@ async def _get_tenant_role(db: AsyncSession, tenant_id: int, role_id: int) -> Ro
     if not role:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Role not found")
     return role
+
+
+PAYROLL_APPROVER_ROLE_NAMES = ("admin", "manager", "super_admin", "superadmin", "owner")
+
+
+async def _count_payroll_approvers(db: AsyncSession, tenant_id: int) -> int:
+    """Active users whose role may approve payroll runs (same role names as hr_payroll)."""
+    return int(
+        (
+            await db.execute(
+                select(func.count(User.id))
+                .join(Role, Role.id == User.role_id)
+                .where(
+                    User.tenant_id == tenant_id,
+                    # Same role scope as get_user_role_scoped_to_tenant (tenant role or shared global role).
+                    or_(Role.tenant_id == tenant_id, Role.tenant_id.is_(None)),
+                    User.is_active.is_(True),
+                    func.lower(func.trim(Role.name)).in_(PAYROLL_APPROVER_ROLE_NAMES),
+                )
+            )
+        ).scalar_one()
+        or 0
+    )
 
 
 async def _get_tenant_user(db: AsyncSession, tenant_id: int, user_id: int) -> User:
@@ -138,7 +165,28 @@ async def update_settings_config(
                 new_flags[key] = current[key]
             else:
                 new_flags.pop(key, None)
+        four_eyes_was = is_payroll_four_eyes_enabled(current)
+        four_eyes_now = is_payroll_four_eyes_enabled(new_flags)
+        if four_eyes_now and not four_eyes_was:
+            approvers = await _count_payroll_approvers(db, tenant.id)
+            if approvers < 2:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Payroll four-eyes approval needs at least 2 active admin or manager users; "
+                        "otherwise nobody could approve a payroll run."
+                    ),
+                )
         tenant.feature_flags = new_flags
+        if four_eyes_now != four_eyes_was:
+            await log_action(
+                db,
+                tenant_id=tenant.id,
+                user_id=user.id,
+                action="SETTINGS_UPDATE",
+                resource="settings.payroll_four_eyes_approval",
+                details=f"Payroll four-eyes approval {'enabled' if four_eyes_now else 'disabled'}",
+            )
     if body.country_code is not None:
         cc = (body.country_code or "").strip().upper() or None
         tenant.country_code = cc

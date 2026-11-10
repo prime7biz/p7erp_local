@@ -4,6 +4,7 @@ import { Layout } from "@/components/Layout";
 import { TradeFeatureRouteGuard } from "@/components/TradeFeatureRouteGuard";
 import { KnittingFeatureRouteGuard } from "@/components/KnittingFeatureRouteGuard";
 import { PermissionRouteGuard } from "@/components/auth/PermissionRouteGuard";
+import { HrLegacyRedirect } from "@/components/hr/kit/HrLegacyRedirect";
 import { ROUTE_PERMISSION } from "@/app/routePermissions";
 // Translations are only used inside the app, so i18n starts here instead of in main.tsx.
 import "@/i18n";
@@ -563,11 +564,6 @@ const ComparativeStatementsPage = lazy(() =>
 const CashFlowScenarioPage = lazy(() =>
   import("@/pages/app/finance/mis/CashFlowScenarioPage").then((m) => ({ default: m.CashFlowScenarioPage })),
 );
-const PayrollStatutoryConfigPage = lazy(() =>
-  import("@/pages/app/hr/payroll/PayrollStatutoryConfigPage").then((m) => ({
-    default: m.PayrollStatutoryConfigPage,
-  })),
-);
 const LcPerformancePage = lazy(() =>
   import("@/pages/app/commercial/LcPerformancePage").then((m) => ({ default: m.LcPerformancePage })),
 );
@@ -592,10 +588,6 @@ const LedgerActivityPage = lazy(() =>
 const VoucherAnalyticsPage = lazy(() =>
   import("@/pages/app/VoucherAnalyticsPage").then((m) => ({ default: m.VoucherAnalyticsPage })),
 );
-const HrDepartmentsPage = lazy(() => import("@/pages/app/hr/HrDepartmentsPage").then((m) => ({ default: m.HrDepartmentsPage })));
-const HrDesignationsPage = lazy(() =>
-  import("@/pages/app/hr/HrDesignationsPage").then((m) => ({ default: m.HrDesignationsPage })),
-);
 const HrEmployeesPage = lazy(() => import("@/pages/app/hr/HrEmployeesPage").then((m) => ({ default: m.HrEmployeesPage })));
 const HrEmployeeDetailPage = lazy(() =>
   import("@/pages/app/hr/HrEmployeeDetailPage").then((m) => ({ default: m.HrEmployeeDetailPage })),
@@ -603,129 +595,11 @@ const HrEmployeeDetailPage = lazy(() =>
 const HrEmployeeNewPage = lazy(() =>
   import("@/pages/app/hr/HrEmployeeNewPage").then((m) => ({ default: m.HrEmployeeNewPage })),
 );
-const HrShiftsPage = lazy(() => import("@/pages/app/hr/attendance/HrShiftsPage").then((m) => ({ default: m.HrShiftsPage })));
-const HrRosterPage = lazy(() => import("@/pages/app/hr/attendance/HrRosterPage").then((m) => ({ default: m.HrRosterPage })));
-const HrAttendanceEntryPage = lazy(() =>
-  import("@/pages/app/hr/attendance/HrAttendanceEntryPage").then((m) => ({ default: m.HrAttendanceEntryPage })),
-);
-const HrAttendanceSummaryPage = lazy(() =>
-  import("@/pages/app/hr/attendance/HrAttendanceSummaryPage").then((m) => ({ default: m.HrAttendanceSummaryPage })),
-);
-const HrRegularizationsPage = lazy(() =>
-  import("@/pages/app/hr/attendance/HrRegularizationsPage").then((m) => ({ default: m.HrRegularizationsPage })),
-);
-const HrLeaveTypesPage = lazy(() => import("@/pages/app/hr/leave/HrLeaveTypesPage").then((m) => ({ default: m.HrLeaveTypesPage })));
-const HrLeaveBalancesPage = lazy(() =>
-  import("@/pages/app/hr/leave/HrLeaveBalancesPage").then((m) => ({ default: m.HrLeaveBalancesPage })),
-);
-const HrLeaveRequestsPage = lazy(() =>
-  import("@/pages/app/hr/leave/HrLeaveRequestsPage").then((m) => ({ default: m.HrLeaveRequestsPage })),
-);
-const HrLeaveApprovalsPage = lazy(() =>
-  import("@/pages/app/hr/leave/HrLeaveApprovalsPage").then((m) => ({ default: m.HrLeaveApprovalsPage })),
-);
-const HrPayrollPeriodsPage = lazy(() =>
-  import("@/pages/app/hr/payroll/HrPayrollPeriodsPage").then((m) => ({ default: m.HrPayrollPeriodsPage })),
-);
-const HrSalaryStructuresPage = lazy(() =>
-  import("@/pages/app/hr/payroll/HrSalaryStructuresPage").then((m) => ({ default: m.HrSalaryStructuresPage })),
-);
-const HrPayrollRunsPage = lazy(() =>
-  import("@/pages/app/hr/payroll/HrPayrollRunsPage").then((m) => ({ default: m.HrPayrollRunsPage })),
-);
-const PayrollEmployeeAssignmentPage = lazy(() =>
-  import("@/pages/app/hr/payroll/PayrollEmployeeAssignmentPage").then((m) => ({
-    default: m.PayrollEmployeeAssignmentPage,
-  })),
-);
-const HrPayrollApprovalsPage = lazy(() =>
-  import("@/pages/app/hr/payroll/HrPayrollApprovalsPage").then((m) => ({ default: m.HrPayrollApprovalsPage })),
-);
-const HrPayslipsPage = lazy(() => import("@/pages/app/hr/payroll/HrPayslipsPage").then((m) => ({ default: m.HrPayslipsPage })));
-const HrGoalsPage = lazy(() => import("@/pages/app/hr/performance/HrGoalsPage").then((m) => ({ default: m.HrGoalsPage })));
-const HrReviewsPage = lazy(() => import("@/pages/app/hr/performance/HrReviewsPage").then((m) => ({ default: m.HrReviewsPage })));
-const HrPerformanceDashboardPage = lazy(() =>
-  import("@/pages/app/hr/performance/HrPerformanceDashboardPage").then((m) => ({ default: m.HrPerformanceDashboardPage })),
-);
-const HrJobRequisitionsPage = lazy(() =>
-  import("@/pages/app/hr/recruitment/HrJobRequisitionsPage").then((m) => ({ default: m.HrJobRequisitionsPage })),
-);
-const HrCandidatesPage = lazy(() =>
-  import("@/pages/app/hr/recruitment/HrCandidatesPage").then((m) => ({ default: m.HrCandidatesPage })),
-);
-const HrInterviewsPage = lazy(() =>
-  import("@/pages/app/hr/recruitment/HrInterviewsPage").then((m) => ({ default: m.HrInterviewsPage })),
-);
-const HrOffersPage = lazy(() => import("@/pages/app/hr/recruitment/HrOffersPage").then((m) => ({ default: m.HrOffersPage })));
-const HrMyProfilePage = lazy(() => import("@/pages/app/hr/ess/HrMyProfilePage").then((m) => ({ default: m.HrMyProfilePage })));
-const HrMyAttendancePage = lazy(() =>
-  import("@/pages/app/hr/ess/HrMyAttendancePage").then((m) => ({ default: m.HrMyAttendancePage })),
-);
-const HrMyLeavePage = lazy(() => import("@/pages/app/hr/ess/HrMyLeavePage").then((m) => ({ default: m.HrMyLeavePage })));
-const HrMyPayslipsPage = lazy(() =>
-  import("@/pages/app/hr/ess/HrMyPayslipsPage").then((m) => ({ default: m.HrMyPayslipsPage })),
-);
-const HrReportsDashboardPage = lazy(() =>
-  import("@/pages/app/hr/HrReportsDashboardPage").then((m) => ({ default: m.HrReportsDashboardPage })),
-);
 const HrDashboardPage = lazy(() => import("@/pages/app/hr/HrDashboardPage").then((m) => ({ default: m.HrDashboardPage })));
-const HrSectionsPage = lazy(() => import("@/pages/app/hr/HrSectionsPage").then((m) => ({ default: m.HrSectionsPage })));
-const HrAttendanceHolidaysPage = lazy(() =>
-  import("@/pages/app/hr/attendance/HrAttendanceHolidaysPage").then((m) => ({ default: m.HrAttendanceHolidaysPage })),
-);
-const HrOvertimeRulesPage = lazy(() =>
-  import("@/pages/app/hr/attendance/HrOvertimeRulesPage").then((m) => ({ default: m.HrOvertimeRulesPage })),
-);
-const HrOvertimePage = lazy(() => import("@/pages/app/hr/attendance/HrOvertimePage").then((m) => ({ default: m.HrOvertimePage })));
-const HrAttendanceDevicesPage = lazy(() =>
-  import("@/pages/app/hr/attendance/HrAttendanceDevicesPage").then((m) => ({ default: m.HrAttendanceDevicesPage })),
-);
-const HrSettingsPage = lazy(() => import("@/pages/app/hr/HrSettingsPage").then((m) => ({ default: m.HrSettingsPage })));
-const HrBangladeshSetupPage = lazy(() =>
-  import("@/pages/app/hr/bangladesh/HrBangladeshSetupPage").then((m) => ({ default: m.HrBangladeshSetupPage })),
-);
+const HrHubPage = lazy(() => import("@/components/hr/kit/HrHubPage").then((m) => ({ default: m.HrHubPage })));
 const HrBangladeshRulesPage = lazy(() =>
   import("@/pages/app/hr/bangladesh/HrBangladeshRulesPage").then((m) => ({ default: m.HrBangladeshRulesPage })),
 );
-const HrManualAttendancePage = lazy(() =>
-  import("@/pages/app/hr/attendance/HrManualAttendancePage").then((m) => ({ default: m.HrManualAttendancePage })),
-);
-const HrGatePassesPage = lazy(() => import("@/pages/app/hr/gate/HrGatePassesPage").then((m) => ({ default: m.HrGatePassesPage })));
-const HrGateScanPage = lazy(() => import("@/pages/app/hr/gate/HrGateScanPage").then((m) => ({ default: m.HrGateScanPage })));
-const HrPayrollRegistersPage = lazy(() =>
-  import("@/pages/app/hr/payroll/HrPayrollRegistersPage").then((m) => ({ default: m.HrPayrollRegistersPage })),
-);
-const HrAllowancesBonusesPage = lazy(() =>
-  import("@/pages/app/hr/payroll/HrAllowancesBonusesPage").then((m) => ({ default: m.HrAllowancesBonusesPage })),
-);
-const HrEmployeeCasesPage = lazy(() =>
-  import("@/pages/app/hr/cases/HrEmployeeCasesPage").then((m) => ({ default: m.HrEmployeeCasesPage })),
-);
-const HrSeparationsPage = lazy(() =>
-  import("@/pages/app/hr/separation/HrSeparationsPage").then((m) => ({ default: m.HrSeparationsPage })),
-);
-const HrLeavePoliciesPage = lazy(() =>
-  import("@/pages/app/hr/leave/HrLeavePoliciesPage").then((m) => ({ default: m.HrLeavePoliciesPage })),
-);
-const HrLeaveCalendarPage = lazy(() =>
-  import("@/pages/app/hr/leave/HrLeaveCalendarPage").then((m) => ({ default: m.HrLeaveCalendarPage })),
-);
-const HrPayrollComponentsPage = lazy(() =>
-  import("@/pages/app/hr/payroll/HrPayrollComponentsPage").then((m) => ({ default: m.HrPayrollComponentsPage })),
-);
-const HrPayrollAdvancesPage = lazy(() =>
-  import("@/pages/app/hr/payroll/HrPayrollAdvancesPage").then((m) => ({ default: m.HrPayrollAdvancesPage })),
-);
-const HrPayrollBonusesPage = lazy(() =>
-  import("@/pages/app/hr/payroll/HrPayrollBonusesPage").then((m) => ({ default: m.HrPayrollBonusesPage })),
-);
-const HrPayrollAccountingConfigPage = lazy(() =>
-  import("@/pages/app/hr/payroll/HrPayrollAccountingConfigPage").then((m) => ({ default: m.HrPayrollAccountingConfigPage })),
-);
-const HrPerformanceCyclesPage = lazy(() =>
-  import("@/pages/app/hr/performance/HrPerformanceCyclesPage").then((m) => ({ default: m.HrPerformanceCyclesPage })),
-);
-const HrEssTicketsPage = lazy(() => import("@/pages/app/hr/ess/HrEssTicketsPage").then((m) => ({ default: m.HrEssTicketsPage })));
 const SupportTicketsPage = lazy(() =>
   import("@/pages/app/support/SupportTicketsPage").then((m) => ({ default: m.SupportTicketsPage })),
 );
@@ -735,12 +609,8 @@ const SupportNewTicketPage = lazy(() =>
 const SupportTicketDetailPage = lazy(() =>
   import("@/pages/app/support/SupportTicketDetailPage").then((m) => ({ default: m.SupportTicketDetailPage })),
 );
-const HrCompliancePage = lazy(() => import("@/pages/app/hr/HrCompliancePage").then((m) => ({ default: m.HrCompliancePage })));
 const AiEmployeeOnboardingPage = lazy(() =>
   import("@/pages/app/hr/AiEmployeeOnboardingPage").then((m) => ({ default: m.AiEmployeeOnboardingPage })),
-);
-const HrAiInsightsPage = lazy(() =>
-  import("@/pages/app/hr/HrAiInsightsPage").then((m) => ({ default: m.HrAiInsightsPage })),
 );
 const GarmentProductionOverviewPage = lazy(() =>
   import("@/pages/app/production/GarmentProductionOverviewPage").then((m) => ({ default: m.GarmentProductionOverviewPage })),
@@ -1144,65 +1014,80 @@ export function AppProtectedRouter() {
         </Route>
         <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.hr} />}>
           <Route path="hr" element={<HrDashboardPage />} />
-          <Route path="hr/departments" element={<HrDepartmentsPage />} />
-          <Route path="hr/designations" element={<HrDesignationsPage />} />
-          <Route path="hr/sections" element={<HrSectionsPage />} />
           <Route path="hr/employees" element={<HrEmployeesPage />} />
           <Route path="hr/employees/new" element={<HrEmployeeNewPage />} />
           <Route path="hr/employees/ai-onboard" element={<AiEmployeeOnboardingPage />} />
           <Route path="hr/employees/:employeeId" element={<HrEmployeeDetailPage />} />
-          <Route path="hr/attendance/shifts" element={<HrShiftsPage />} />
-          <Route path="hr/attendance/holidays" element={<HrAttendanceHolidaysPage />} />
-          <Route path="hr/attendance/roster" element={<HrRosterPage />} />
-          <Route path="hr/attendance/entries" element={<HrAttendanceEntryPage />} />
-          <Route path="hr/attendance/devices" element={<HrAttendanceDevicesPage />} />
-          <Route path="hr/settings" element={<HrSettingsPage />} />
-          <Route path="hr/bangladesh-setup" element={<HrBangladeshSetupPage />} />
           <Route path="hr/bangladesh-rules" element={<HrBangladeshRulesPage />} />
-          <Route path="hr/attendance/manual" element={<HrManualAttendancePage />} />
-          <Route path="hr/gate-passes" element={<HrGatePassesPage />} />
-          <Route path="hr/gate-scan" element={<HrGateScanPage />} />
-          <Route path="hr/cases" element={<HrEmployeeCasesPage />} />
-          <Route path="hr/separations" element={<HrSeparationsPage />} />
-          <Route path="hr/attendance/regularizations" element={<HrRegularizationsPage />} />
-          <Route path="hr/attendance/overtime-rules" element={<HrOvertimeRulesPage />} />
-          <Route path="hr/attendance/overtime" element={<HrOvertimePage />} />
-          <Route path="hr/attendance/summary" element={<HrAttendanceSummaryPage />} />
-          <Route path="hr/leave/types" element={<HrLeaveTypesPage />} />
-          <Route path="hr/leave/policies" element={<HrLeavePoliciesPage />} />
-          <Route path="hr/leave/balances" element={<HrLeaveBalancesPage />} />
-          <Route path="hr/leave/requests" element={<HrLeaveRequestsPage />} />
-          <Route path="hr/leave/approvals" element={<HrLeaveApprovalsPage />} />
-          <Route path="hr/leave/calendar" element={<HrLeaveCalendarPage />} />
-          <Route path="hr/payroll/components" element={<HrPayrollComponentsPage />} />
-          <Route path="hr/payroll/periods" element={<HrPayrollPeriodsPage />} />
-          <Route path="hr/payroll/salary-structures" element={<HrSalaryStructuresPage />} />
-          <Route path="hr/payroll/assignments" element={<PayrollEmployeeAssignmentPage />} />
-          <Route path="hr/payroll/runs" element={<HrPayrollRunsPage />} />
-          <Route path="hr/payroll/advances" element={<HrPayrollAdvancesPage />} />
-          <Route path="hr/payroll/bonuses" element={<HrPayrollBonusesPage />} />
-          <Route path="hr/payroll/accounting-config" element={<HrPayrollAccountingConfigPage />} />
-          <Route path="hr/payroll/statutory" element={<PayrollStatutoryConfigPage />} />
-          <Route path="hr/payroll/approvals" element={<HrPayrollApprovalsPage />} />
-          <Route path="hr/payroll/payslips" element={<HrPayslipsPage />} />
-          <Route path="hr/payroll/registers" element={<HrPayrollRegistersPage />} />
-          <Route path="hr/payroll/allowances" element={<HrAllowancesBonusesPage />} />
-          <Route path="hr/performance/cycles" element={<HrPerformanceCyclesPage />} />
-          <Route path="hr/performance/goals" element={<HrGoalsPage />} />
-          <Route path="hr/performance/reviews" element={<HrReviewsPage />} />
-          <Route path="hr/performance/dashboard" element={<HrPerformanceDashboardPage />} />
-          <Route path="hr/recruitment/requisitions" element={<HrJobRequisitionsPage />} />
-          <Route path="hr/recruitment/candidates" element={<HrCandidatesPage />} />
-          <Route path="hr/recruitment/interviews" element={<HrInterviewsPage />} />
-          <Route path="hr/recruitment/offers" element={<HrOffersPage />} />
-          <Route path="hr/ess/profile" element={<HrMyProfilePage />} />
-          <Route path="hr/ess/attendance" element={<HrMyAttendancePage />} />
-          <Route path="hr/ess/leave" element={<HrMyLeavePage />} />
-          <Route path="hr/ess/payslips" element={<HrMyPayslipsPage />} />
-          <Route path="hr/ess/tickets" element={<HrEssTicketsPage />} />
-          <Route path="hr/compliance" element={<HrCompliancePage />} />
-          <Route path="hr/ai-insights" element={<HrAiInsightsPage />} />
-          <Route path="hr/reports" element={<HrReportsDashboardPage />} />
+          {/* HR hubs: one page per area, existing pages shown as ?tab= (see components/hr/kit/hrHubs.ts). */}
+          <Route path="hr/my" element={<HrHubPage hubId="my" />} />
+          <Route path="hr/attendance" element={<HrHubPage hubId="attendance" />} />
+          <Route path="hr/leave" element={<HrHubPage hubId="leave" />} />
+          <Route path="hr/gate" element={<HrHubPage hubId="gate" />} />
+          <Route path="hr/cases-exits" element={<HrHubPage hubId="cases-exits" />} />
+          <Route path="hr/payroll" element={<HrHubPage hubId="payroll" />} />
+          <Route path="hr/payroll-extras" element={<HrHubPage hubId="payroll-extras" />} />
+          <Route path="hr/recruitment" element={<HrHubPage hubId="recruitment" />} />
+          <Route path="hr/performance" element={<HrHubPage hubId="performance" />} />
+          <Route path="hr/setup" element={<HrHubPage hubId="setup" />} />
+          <Route path="hr/attendance-setup" element={<HrHubPage hubId="attendance-setup" />} />
+          <Route path="hr/leave-payroll-setup" element={<HrHubPage hubId="leave-payroll-setup" />} />
+          <Route path="hr/insights" element={<HrHubPage hubId="insights" />} />
+          {/* Old standalone HR pages stay reachable (bookmarks, tutorials, approval inbox) and open their hub tab. */}
+          <Route path="hr/departments" element={<HrLegacyRedirect from="hr/departments" />} />
+          <Route path="hr/designations" element={<HrLegacyRedirect from="hr/designations" />} />
+          <Route path="hr/sections" element={<HrLegacyRedirect from="hr/sections" />} />
+          <Route path="hr/settings" element={<HrLegacyRedirect from="hr/settings" />} />
+          <Route path="hr/bangladesh-setup" element={<HrLegacyRedirect from="hr/bangladesh-setup" />} />
+          <Route path="hr/attendance/shifts" element={<HrLegacyRedirect from="hr/attendance/shifts" />} />
+          <Route path="hr/attendance/holidays" element={<HrLegacyRedirect from="hr/attendance/holidays" />} />
+          <Route path="hr/attendance/roster" element={<HrLegacyRedirect from="hr/attendance/roster" />} />
+          <Route path="hr/attendance/entries" element={<HrLegacyRedirect from="hr/attendance/entries" />} />
+          <Route path="hr/attendance/devices" element={<HrLegacyRedirect from="hr/attendance/devices" />} />
+          <Route path="hr/attendance/manual" element={<HrLegacyRedirect from="hr/attendance/manual" />} />
+          <Route path="hr/attendance/regularizations" element={<HrLegacyRedirect from="hr/attendance/regularizations" />} />
+          <Route path="hr/attendance/overtime-rules" element={<HrLegacyRedirect from="hr/attendance/overtime-rules" />} />
+          <Route path="hr/attendance/overtime" element={<HrLegacyRedirect from="hr/attendance/overtime" />} />
+          <Route path="hr/attendance/summary" element={<HrLegacyRedirect from="hr/attendance/summary" />} />
+          <Route path="hr/gate-passes" element={<HrLegacyRedirect from="hr/gate-passes" />} />
+          <Route path="hr/gate-scan" element={<HrLegacyRedirect from="hr/gate-scan" />} />
+          <Route path="hr/cases" element={<HrLegacyRedirect from="hr/cases" />} />
+          <Route path="hr/separations" element={<HrLegacyRedirect from="hr/separations" />} />
+          <Route path="hr/leave/types" element={<HrLegacyRedirect from="hr/leave/types" />} />
+          <Route path="hr/leave/policies" element={<HrLegacyRedirect from="hr/leave/policies" />} />
+          <Route path="hr/leave/balances" element={<HrLegacyRedirect from="hr/leave/balances" />} />
+          <Route path="hr/leave/requests" element={<HrLegacyRedirect from="hr/leave/requests" />} />
+          <Route path="hr/leave/approvals" element={<HrLegacyRedirect from="hr/leave/approvals" />} />
+          <Route path="hr/leave/calendar" element={<HrLegacyRedirect from="hr/leave/calendar" />} />
+          <Route path="hr/payroll/components" element={<HrLegacyRedirect from="hr/payroll/components" />} />
+          <Route path="hr/payroll/periods" element={<HrLegacyRedirect from="hr/payroll/periods" />} />
+          <Route path="hr/payroll/salary-structures" element={<HrLegacyRedirect from="hr/payroll/salary-structures" />} />
+          <Route path="hr/payroll/assignments" element={<HrLegacyRedirect from="hr/payroll/assignments" />} />
+          <Route path="hr/payroll/runs" element={<HrLegacyRedirect from="hr/payroll/runs" />} />
+          <Route path="hr/payroll/advances" element={<HrLegacyRedirect from="hr/payroll/advances" />} />
+          <Route path="hr/payroll/bonuses" element={<HrLegacyRedirect from="hr/payroll/bonuses" />} />
+          <Route path="hr/payroll/accounting-config" element={<HrLegacyRedirect from="hr/payroll/accounting-config" />} />
+          <Route path="hr/payroll/statutory" element={<HrLegacyRedirect from="hr/payroll/statutory" />} />
+          <Route path="hr/payroll/approvals" element={<HrLegacyRedirect from="hr/payroll/approvals" />} />
+          <Route path="hr/payroll/payslips" element={<HrLegacyRedirect from="hr/payroll/payslips" />} />
+          <Route path="hr/payroll/registers" element={<HrLegacyRedirect from="hr/payroll/registers" />} />
+          <Route path="hr/payroll/allowances" element={<HrLegacyRedirect from="hr/payroll/allowances" />} />
+          <Route path="hr/performance/cycles" element={<HrLegacyRedirect from="hr/performance/cycles" />} />
+          <Route path="hr/performance/goals" element={<HrLegacyRedirect from="hr/performance/goals" />} />
+          <Route path="hr/performance/reviews" element={<HrLegacyRedirect from="hr/performance/reviews" />} />
+          <Route path="hr/performance/dashboard" element={<HrLegacyRedirect from="hr/performance/dashboard" />} />
+          <Route path="hr/recruitment/requisitions" element={<HrLegacyRedirect from="hr/recruitment/requisitions" />} />
+          <Route path="hr/recruitment/candidates" element={<HrLegacyRedirect from="hr/recruitment/candidates" />} />
+          <Route path="hr/recruitment/interviews" element={<HrLegacyRedirect from="hr/recruitment/interviews" />} />
+          <Route path="hr/recruitment/offers" element={<HrLegacyRedirect from="hr/recruitment/offers" />} />
+          <Route path="hr/ess/profile" element={<HrLegacyRedirect from="hr/ess/profile" />} />
+          <Route path="hr/ess/attendance" element={<HrLegacyRedirect from="hr/ess/attendance" />} />
+          <Route path="hr/ess/leave" element={<HrLegacyRedirect from="hr/ess/leave" />} />
+          <Route path="hr/ess/payslips" element={<HrLegacyRedirect from="hr/ess/payslips" />} />
+          <Route path="hr/ess/tickets" element={<HrLegacyRedirect from="hr/ess/tickets" />} />
+          <Route path="hr/compliance" element={<HrLegacyRedirect from="hr/compliance" />} />
+          <Route path="hr/ai-insights" element={<HrLegacyRedirect from="hr/ai-insights" />} />
+          <Route path="hr/reports" element={<HrLegacyRedirect from="hr/reports" />} />
         </Route>
         <Route path="approvals" element={<AllApprovalsPage />} />
         <Route path="my-signature" element={<MySignaturePage />} />

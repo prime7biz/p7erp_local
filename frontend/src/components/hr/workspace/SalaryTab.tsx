@@ -391,11 +391,11 @@ export function SalaryTab({
 
       <p className="text-xs text-text-muted">
         Full payroll screens:{" "}
-        <Link className="text-brand-primary hover:underline" to="/app/hr/payroll/salary-structures">
+        <Link className="text-brand-primary hover:underline" to="/app/hr/leave-payroll-setup?tab=structures">
           Salary structures
         </Link>{" "}
         ·{" "}
-        <Link className="text-brand-primary hover:underline" to="/app/hr/payroll/payslips">
+        <Link className="text-brand-primary hover:underline" to="/app/hr/payroll?tab=payslips">
           Payslips
         </Link>
       </p>

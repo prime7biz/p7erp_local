@@ -58,13 +58,8 @@ import {
   GitBranch,
   Percent,
   PenLine,
-  Flag,
-  DoorOpen,
-  ScanLine,
-  Gavel,
-  LogOut,
-  Gift,
 } from "lucide-react";
+import { getHrHub, hrHubHref, type HrHubId } from "@/components/hr/kit/hrHubs";
 
 export type TenantTypeFilter = "manufacturer" | "buying_house" | "both";
 
@@ -121,6 +116,12 @@ export interface BottomNavItem {
 }
 
 const PREFIX = "/app";
+
+/** Sidebar link for an HR hub; label, icon and route come from `hrHubs.ts`. */
+function hrHubNavItem(id: HrHubId): NavItem {
+  const hub = getHrHub(id);
+  return { icon: hub.icon, label: hub.label, href: hrHubHref(hub) };
+}
 
 /** Active state for sidebar links: avoids `/app/inventory` matching every inventory sub-route. */
 /** Sidebar / mobile nav: tenant type + optional production unit entitlement. */
@@ -626,131 +627,37 @@ export const menuSections: MenuSection[] = [
     items: [],
     subsections: [
       {
-        label: "Overview",
+        label: "Main",
         items: [
           { icon: LayoutDashboard, label: "HR Dashboard", href: `${PREFIX}/hr`, exact: true },
-          { icon: SlidersHorizontal, label: "HR Settings", href: `${PREFIX}/hr/settings` },
-          { icon: Flag, label: "Bangladesh Setup", href: `${PREFIX}/hr/bangladesh-setup` },
+          { icon: UserCheck, label: "Employees", href: `${PREFIX}/hr/employees` },
+          hrHubNavItem("my"),
+        ],
+      },
+      {
+        label: "Daily work",
+        items: [hrHubNavItem("attendance"), hrHubNavItem("leave"), hrHubNavItem("gate"), hrHubNavItem("cases-exits")],
+      },
+      {
+        label: "Payroll",
+        items: [hrHubNavItem("payroll"), hrHubNavItem("payroll-extras")],
+      },
+      {
+        label: "Talent",
+        items: [hrHubNavItem("recruitment"), hrHubNavItem("performance")],
+      },
+      {
+        label: "Setup",
+        items: [
+          hrHubNavItem("setup"),
+          hrHubNavItem("attendance-setup"),
+          hrHubNavItem("leave-payroll-setup"),
           { icon: BookOpen, label: "Bangladesh Rules", href: `${PREFIX}/hr/bangladesh-rules` },
         ],
       },
       {
-        label: "Core HR",
-        items: [
-          { icon: FolderTree, label: "Departments", href: `${PREFIX}/hr/departments` },
-          { icon: UserCog, label: "Designations", href: `${PREFIX}/hr/designations` },
-          { icon: Factory, label: "Sections & Lines", href: `${PREFIX}/hr/sections` },
-          { icon: UserCheck, label: "Employees", href: `${PREFIX}/hr/employees` },
-          { icon: Gavel, label: "Notices & Cases", href: `${PREFIX}/hr/cases` },
-          { icon: LogOut, label: "Separations & Settlement", href: `${PREFIX}/hr/separations` },
-          { icon: DoorOpen, label: "Gate Passes", href: `${PREFIX}/hr/gate-passes` },
-          { icon: ScanLine, label: "Gate Scan", href: `${PREFIX}/hr/gate-scan` },
-          {
-            icon: Sparkles,
-            label: "AI Onboarding",
-            href: `${PREFIX}/hr/employees/ai-onboard`,
-            requiresAnyFeatureFlag: [
-              "ocr_cv_extraction_enabled",
-              "ocr_id_extraction_enabled",
-              "ocr_medical_extraction_enabled",
-            ],
-          },
-        ],
-      },
-      {
-        label: "Time & Attendance",
-        items: [
-          { icon: Clock, label: "Shifts", href: `${PREFIX}/hr/attendance/shifts` },
-          { icon: Calendar, label: "Holidays", href: `${PREFIX}/hr/attendance/holidays` },
-          { icon: Calendar, label: "Roster", href: `${PREFIX}/hr/attendance/roster` },
-          { icon: ClipboardCheck, label: "Daily Entry", href: `${PREFIX}/hr/attendance/entries` },
-          { icon: PenLine, label: "Manual IN / OUT", href: `${PREFIX}/hr/attendance/manual` },
-          { icon: HardDrive, label: "Attendance Devices", href: `${PREFIX}/hr/attendance/devices` },
-          { icon: AlertTriangle, label: "Regularizations", href: `${PREFIX}/hr/attendance/regularizations` },
-          { icon: Activity, label: "Overtime Rules", href: `${PREFIX}/hr/attendance/overtime-rules` },
-          { icon: Clock, label: "Overtime", href: `${PREFIX}/hr/attendance/overtime` },
-          { icon: BarChart3, label: "Summary", href: `${PREFIX}/hr/attendance/summary` },
-        ],
-      },
-      {
-        label: "Leave",
-        items: [
-          { icon: FileText, label: "Leave Types", href: `${PREFIX}/hr/leave/types` },
-          { icon: BookOpen, label: "Policies", href: `${PREFIX}/hr/leave/policies` },
-          { icon: BookOpen, label: "Balances", href: `${PREFIX}/hr/leave/balances` },
-          { icon: ClipboardList, label: "Requests", href: `${PREFIX}/hr/leave/requests` },
-          { icon: CheckSquare, label: "Approvals", href: `${PREFIX}/hr/leave/approvals` },
-          { icon: Calendar, label: "Calendar", href: `${PREFIX}/hr/leave/calendar` },
-        ],
-      },
-      {
-        label: "Payroll",
-        items: [
-          { icon: Layers, label: "Components", href: `${PREFIX}/hr/payroll/components` },
-          { icon: Layers, label: "Salary Structures", href: `${PREFIX}/hr/payroll/salary-structures` },
-          { icon: Users, label: "Structure Assignments", href: `${PREFIX}/hr/payroll/assignments` },
-          { icon: Calendar, label: "Periods", href: `${PREFIX}/hr/payroll/periods` },
-          { icon: DollarSign, label: "Runs", href: `${PREFIX}/hr/payroll/runs` },
-          { icon: Banknote, label: "Advances & Loans", href: `${PREFIX}/hr/payroll/advances` },
-          { icon: TrendingUp, label: "Bonuses", href: `${PREFIX}/hr/payroll/bonuses` },
-          {
-            icon: Gift,
-            label: "Allowances & Bonuses",
-            href: `${PREFIX}/hr/payroll/allowances`,
-            requiresAnyFeatureFlag: ["hr_meal_night_bills_enabled", "hr_production_bonus_enabled", "hr_festival_bonus_enabled"],
-          },
-          { icon: Landmark, label: "Accounting Config", href: `${PREFIX}/hr/payroll/accounting-config` },
-          {
-            icon: ShieldCheck,
-            label: "Statutory Config",
-            href: `${PREFIX}/hr/payroll/statutory`,
-            requiresFeatureFlag: "statutory_payroll_enabled",
-          },
-          { icon: ShieldCheck, label: "Approvals", href: `${PREFIX}/hr/payroll/approvals` },
-          { icon: FileSpreadsheet, label: "Payslips", href: `${PREFIX}/hr/payroll/payslips` },
-          { icon: FileBarChart, label: "Salary Sheets & Registers", href: `${PREFIX}/hr/payroll/registers` },
-        ],
-      },
-      {
-        label: "Talent",
-        items: [
-          { icon: Calendar, label: "Performance Cycles", href: `${PREFIX}/hr/performance/cycles` },
-          { icon: Target, label: "Goals", href: `${PREFIX}/hr/performance/goals` },
-          { icon: Activity, label: "Reviews", href: `${PREFIX}/hr/performance/reviews` },
-          { icon: Gauge, label: "Performance Dashboard", href: `${PREFIX}/hr/performance/dashboard` },
-          { icon: Users, label: "Job Requisitions", href: `${PREFIX}/hr/recruitment/requisitions` },
-          { icon: UserCheck, label: "Candidates", href: `${PREFIX}/hr/recruitment/candidates` },
-          { icon: Calendar, label: "Interviews", href: `${PREFIX}/hr/recruitment/interviews` },
-          { icon: FileText, label: "Offers", href: `${PREFIX}/hr/recruitment/offers` },
-        ],
-      },
-      {
-        label: "Self-Service",
-        items: [
-          { icon: UserCog, label: "My Profile", href: `${PREFIX}/hr/ess/profile` },
-          { icon: Clock, label: "My Attendance", href: `${PREFIX}/hr/ess/attendance` },
-          { icon: FileText, label: "My Leave", href: `${PREFIX}/hr/ess/leave` },
-          { icon: FileSpreadsheet, label: "My Payslips", href: `${PREFIX}/hr/ess/payslips` },
-          { icon: ClipboardList, label: "My Tickets", href: `${PREFIX}/hr/ess/tickets` },
-        ],
-      },
-      {
-        label: "Analytics",
-        items: [
-          { icon: Shield, label: "Compliance", href: `${PREFIX}/hr/compliance`, requiresFeatureFlag: "compliance_tracking_enabled" },
-          {
-            icon: Sparkles,
-            label: "AI Insights",
-            href: `${PREFIX}/hr/ai-insights`,
-            requiresAnyFeatureFlag: [
-              "ai_attendance_analysis_enabled",
-              "ai_turnover_prediction_enabled",
-              "ai_payroll_anomaly_detection_enabled",
-              "ai_compliance_risk_prediction_enabled",
-            ],
-          },
-          { icon: BarChart3, label: "HR Reports", href: `${PREFIX}/hr/reports` },
-        ],
+        label: "Reports",
+        items: [hrHubNavItem("insights")],
       },
     ],
   },

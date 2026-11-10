@@ -6,7 +6,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { hrBangladeshApi, type Row } from "@/api/hrBangladesh";
-import { ActionsMenu, Badge, Banner, Card, Field, Messages, SimpleTable, btnPrimary, btnSecondary, inputCls } from "@/components/hr/bd/BdUi";
+import { KitTable } from "@/components/hr/bd/BdKitTable";
+import { Badge, Banner, Card, Field, Messages, btnPrimary, btnSecondary, inputCls } from "@/components/hr/bd/BdUi";
 import { employeeLabel, money, todayIso, useAction, useEmployees, useLoad } from "@/components/hr/bd/bdHooks";
 import { SEPARATION_TYPE_LABELS } from "@/components/hr/bd/bdLabels";
 import { EmployeePicker } from "@/components/hr/bd/EmployeePicker";
@@ -74,26 +75,34 @@ function Clearance({ sepId }: { sepId: number }) {
           </button>
         </div>
       </div>
-      <SimpleTable<Row>
+      <KitTable<Row>
         rows={list.data ?? []}
         rowKey={(r) => String(r.id)}
-        empty={list.loading ? "Loading..." : "No clearance items."}
+        loading={list.loading}
+        empty="No clearance items."
+        searchPlaceholder="Search department or item…"
+        statusOf={(r) => String(r.status)}
+        defaultPageSize={50}
         columns={[
-          { header: "Department", cell: (r) => String(r.department) },
-          { header: "Item", cell: (r) => String(r.item) },
-          { header: "Recoverable", align: "right", cell: (r) => money(r.amount_recoverable) },
-          { header: "Status", cell: (r) => <Badge tone={r.status === "PENDING" ? "amber" : "green"}>{String(r.status)}</Badge> },
+          { header: "Department", cell: (r) => String(r.department), value: (r) => String(r.department) },
+          { header: "Item", cell: (r) => String(r.item), value: (r) => String(r.item) },
+          { header: "Recoverable", align: "right", cell: (r) => money(r.amount_recoverable), value: (r) => Number(r.amount_recoverable) },
+          { header: "Status", cell: (r) => <Badge tone={r.status === "PENDING" ? "amber" : "green"}>{String(r.status)}</Badge>, value: (r) => String(r.status) },
+        ]}
+        actions={(r) => [
           {
-            header: "Actions",
-            align: "right",
-            cell: (r) => (
-              <ActionsMenu
-                items={[
-                  { label: "Mark cleared", hidden: r.status !== "PENDING", onClick: () => void run(async () => { await hrBangladeshApi.signOffClearance(Number(r.id), "CLEARED"); await list.reload(); }, "Cleared.") },
-                  { label: "Waive", hidden: r.status !== "PENDING", onClick: () => void run(async () => { await hrBangladeshApi.signOffClearance(Number(r.id), "WAIVED"); await list.reload(); }, "Waived.") },
-                ]}
-              />
-            ),
+            label: "Mark cleared",
+            primary: true,
+            positive: true,
+            disabled: busy,
+            hidden: r.status !== "PENDING",
+            onClick: () => void run(async () => { await hrBangladeshApi.signOffClearance(Number(r.id), "CLEARED"); await list.reload(); }, "Cleared."),
+          },
+          {
+            label: "Waive",
+            disabled: busy,
+            hidden: r.status !== "PENDING",
+            onClick: () => void run(async () => { await hrBangladeshApi.signOffClearance(Number(r.id), "WAIVED"); await list.reload(); }, "Waived."),
           },
         ]}
       />
@@ -305,37 +314,49 @@ export function HrSeparationsPage() {
             </div>
           </form>
         ) : null}
-        <SimpleTable<Row>
+        <KitTable<Row>
           rows={list.data ?? []}
           rowKey={(r) => String(r.id)}
-          empty={list.loading ? "Loading..." : "No separations."}
+          loading={list.loading}
+          onRefresh={() => void list.reload()}
+          empty="No separations."
+          emptyHint="Use New separation, or record a deemed resignation from Notices & cases."
+          searchPlaceholder="Search employee or type…"
+          statusOf={(r) => String(r.status)}
           columns={[
-            { header: "Employee", cell: (r) => empName(r.employee_id) },
-            { header: "Type", cell: (r) => SEPARATION_TYPE_LABELS[String(r.separation_type)] ?? String(r.separation_type) },
-            { header: "Last day", cell: (r) => String(r.last_working_date) },
-            { header: "Status", cell: (r) => <Badge tone={TONE[String(r.status)] ?? "gray"}>{String(r.status)}</Badge> },
-            { header: "Settlement", cell: (r) => (r.settlement_status ? `${String(r.settlement_status)} · ${money(r.settlement_net_amount)}` : "-") },
+            { header: "Employee", cell: (r) => empName(r.employee_id), value: (r) => empName(r.employee_id) },
             {
-              header: "Actions",
-              align: "right",
-              cell: (r) => (
-                <ActionsMenu
-                  items={[
-                    { label: "Open", onClick: () => setOpenId(Number(r.id)) },
-                    {
-                      label: "Approve",
-                      hidden: r.status !== "DRAFT",
-                      onClick: () => void run(async () => { await hrBangladeshApi.approveSeparation(Number(r.id)); await list.reload(); }, "Separation approved."),
-                    },
-                    {
-                      label: "Cancel",
-                      danger: true,
-                      hidden: !["DRAFT", "APPROVED"].includes(String(r.status)) || ["APPROVED", "POSTED", "PAID"].includes(String(r.settlement_status ?? "")),
-                      onClick: () => window.confirm("Cancel this separation?") && void run(async () => { await hrBangladeshApi.cancelSeparation(Number(r.id)); await list.reload(); }, "Cancelled."),
-                    },
-                  ]}
-                />
-              ),
+              header: "Type",
+              cell: (r) => SEPARATION_TYPE_LABELS[String(r.separation_type)] ?? String(r.separation_type),
+              value: (r) => SEPARATION_TYPE_LABELS[String(r.separation_type)] ?? String(r.separation_type),
+            },
+            { header: "Last day", cell: (r) => String(r.last_working_date), value: (r) => String(r.last_working_date) },
+            { header: "Status", cell: (r) => <Badge tone={TONE[String(r.status)] ?? "gray"}>{String(r.status)}</Badge>, value: (r) => String(r.status) },
+            {
+              header: "Settlement",
+              cell: (r) => (r.settlement_status ? `${String(r.settlement_status)} · ${money(r.settlement_net_amount)}` : "-"),
+              value: (r) => String(r.settlement_status ?? ""),
+              hideOnMobile: true,
+            },
+          ]}
+          actions={(r) => [
+            { label: "Open", primary: true, onClick: () => setOpenId(Number(r.id)) },
+            {
+              label: "Approve",
+              primary: true,
+              positive: true,
+              disabled: busy,
+              hidden: r.status !== "DRAFT",
+              onClick: () =>
+                window.confirm(`Approve the separation of ${empName(r.employee_id)}? The final settlement can then be calculated.`) &&
+                void run(async () => { await hrBangladeshApi.approveSeparation(Number(r.id)); await list.reload(); }, "Separation approved."),
+            },
+            {
+              label: "Cancel",
+              danger: true,
+              disabled: busy,
+              hidden: !["DRAFT", "APPROVED"].includes(String(r.status)) || ["APPROVED", "POSTED", "PAID"].includes(String(r.settlement_status ?? "")),
+              onClick: () => window.confirm("Cancel this separation?") && void run(async () => { await hrBangladeshApi.cancelSeparation(Number(r.id)); await list.reload(); }, "Cancelled."),
             },
           ]}
         />

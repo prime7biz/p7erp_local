@@ -97,6 +97,11 @@ export function HrEmployeesPage() {
   const { me } = useAuth();
   // Unified employee workspace replaces the add / quick-edit dialog when the tenant flag is on.
   const workspaceV2 = me?.feature_flags?.hr_onboarding_workspace_v2 === true;
+  const aiOnboardingEnabled =
+    !workspaceV2 &&
+    (["ocr_cv_extraction_enabled", "ocr_id_extraction_enabled", "ocr_medical_extraction_enabled"] as const).some(
+      (key) => me?.feature_flags?.[key] === true,
+    );
   const canExport = canExportHrData(me?.role_name);
   const [departments, setDepartments] = useState<HrDepartmentResponse[]>([]);
   const [designations, setDesignations] = useState<HrDesignationResponse[]>([]);
@@ -576,6 +581,14 @@ export function HrEmployeesPage() {
                 if (file) void onImportFile(file);
               }}
             />
+            {aiOnboardingEnabled && (
+              <Link
+                to="/app/hr/employees/ai-onboard"
+                className="rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
+              >
+                AI onboarding
+              </Link>
+            )}
             <button
               type="button"
               onClick={openCreate}

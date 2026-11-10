@@ -776,6 +776,8 @@ async def extract_shipping_doc_form(
     )
 
 
+# HR responses report success only when at least one value was read; warnings alone (for example
+# "AI service unavailable") are a failure the screen must show, not a partial fill.
 _HR_DATE_KEYS = frozenset(
     {"date_of_birth", "examination_date", "expiry_date", "issue_date", "from_date", "to_date"}
 )
@@ -822,7 +824,7 @@ async def extract_hr_cv_form(
     warnings.extend(a["message"] for a in alerts if a.get("message"))
     success = any(f.value is not None and str(f.value).strip() for f in fields.values() if not isinstance(f.value, (list, dict)))
     return HrDocExtractionResponse(
-        success=success or bool(warnings),
+        success=success,
         document_type="hr_cv",
         fields=fields,
         unmapped_text=[html.escape(x, quote=False) for x in (raw.get("_unmapped_text") or [])],
@@ -842,7 +844,7 @@ async def extract_hr_national_id_form(
     warnings.extend(a["message"] for a in alerts if a.get("message"))
     success = any(f.value is not None and str(f.value).strip() for f in fields.values())
     return HrDocExtractionResponse(
-        success=success or bool(warnings),
+        success=success,
         document_type="hr_national_id",
         fields=fields,
         unmapped_text=[html.escape(x, quote=False) for x in (raw.get("_unmapped_text") or [])],
@@ -862,7 +864,7 @@ async def extract_hr_medical_form(
     warnings.extend(a["message"] for a in alerts if a.get("message"))
     success = any(f.value is not None and str(f.value).strip() for f in fields.values() if not isinstance(f.value, (list, dict)))
     return HrDocExtractionResponse(
-        success=success or bool(warnings),
+        success=success,
         document_type="hr_medical_certificate",
         fields=fields,
         unmapped_text=[html.escape(x, quote=False) for x in (raw.get("_unmapped_text") or [])],
@@ -882,7 +884,7 @@ async def extract_hr_birth_certificate_form(
     warnings.extend(a["message"] for a in alerts if a.get("message"))
     success = any(f.value is not None and str(f.value).strip() for f in fields.values())
     return HrDocExtractionResponse(
-        success=success or bool(warnings),
+        success=success,
         document_type="hr_birth_certificate",
         fields=fields,
         unmapped_text=[html.escape(x, quote=False) for x in (raw.get("_unmapped_text") or [])],

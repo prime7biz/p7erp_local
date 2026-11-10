@@ -106,7 +106,7 @@ export async function loadOpsApprovals(opts: {
       amount: null,
       details: `Employee #${lv.employee_id} | ${lv.from_date} → ${lv.to_date} (${lv.days_requested} day(s))${lv.reason ? ` | ${lv.reason}` : ""}`,
       actions: canApproveHr ? ["approve", "reject"] : [],
-      href: "/app/hr/leave/approvals",
+      href: "/app/hr/leave?tab=approvals",
     });
   }
   for (const run of payrollPages.flat()) {
@@ -119,7 +119,7 @@ export async function loadOpsApprovals(opts: {
       amount: Number(run.net_total),
       details: `Gross ${run.gross_total} | Deductions ${run.deduction_total}`,
       actions: canApproveHr ? ["approve", "reject"] : [],
-      href: "/app/hr/payroll/approvals",
+      href: "/app/hr/payroll?tab=approvals",
     });
   }
   return rows;

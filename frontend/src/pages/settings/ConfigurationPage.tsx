@@ -805,6 +805,26 @@ export function ConfigurationPage() {
               </span>
             </span>
           </label>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.payroll_four_eyes_approval === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  payroll_four_eyes_approval: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Payroll four-eyes approval</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                The person who finalized a payroll run cannot approve it; a second admin or manager must. Needs at
+                least 2 active admin or manager users. Applies to admins too. Off by default.
+              </span>
+            </span>
+          </label>
         </div>
 
         <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3" hidden={!showTier("all")}>

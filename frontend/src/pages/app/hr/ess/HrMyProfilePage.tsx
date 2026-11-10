@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api, type HrEssProfileResponse, type HrEssProfileUpdate } from "@/api/client";
+import { HrPageHeader } from "@/components/hr/HrPageHeader";
 
 export function HrMyProfilePage() {
   const [profile, setProfile] = useState<HrEssProfileResponse | null>(null);
@@ -59,10 +60,7 @@ export function HrMyProfilePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-text-primary">My Profile</h1>
-        <p className="text-sm text-text-muted">View and update your own contact profile.</p>
-      </div>
+      <HrPageHeader title="My Profile" description="View and update your own contact profile." />
       {error && <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-2 text-sm text-status-danger-foreground">{error}</div>}
       {success && <div className="rounded-lg border border-status-success/20 bg-status-success-subtle px-4 py-2 text-sm text-status-success-foreground">{success}</div>}
 

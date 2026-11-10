@@ -79,7 +79,7 @@ import { LEAVE_MESSAGE, useUnsavedChangesGuard } from "./useUnsavedChangesGuard"
 const PREFIX = "/app/hr";
 const FIELD_LABELS: Partial<Record<keyof EmployeeFormState, string>> = {
   first_name: "First name", last_name: "Last name", email: "Email", phone: "Mobile", date_of_birth: "Date of birth",
-  gender: "Gender", national_id: "NID", birth_registration_no: "Birth registration no.", father_name: "Father's name",
+  gender: "Gender", blood_group: "Blood group", national_id: "NID", birth_registration_no: "Birth registration no.", father_name: "Father's name",
   mother_name: "Mother's name", present_address_line: "Present address", present_city: "City", present_country: "Country",
   joining_date: "Joining date", employment_type: "Employment type",
 };

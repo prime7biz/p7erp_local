@@ -1,23 +1,33 @@
-import { useCallback, useEffect, useState } from "react";
-import { api, type HrRosterEntryCreate, type HrRosterEntryResponse, type HrRosterEntryUpdate } from "@/api/client";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { api, type HrRosterEntryResponse } from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { HrDataTable, type HrTableColumn } from "@/components/hr/kit/HrDataTable";
+import { HrEmployeeCell, HrEmployeeSelect } from "@/components/hr/kit/HrEmployeeFields";
+import { HrFormDrawer } from "@/components/hr/kit/HrFormDrawer";
+import { useEmployeeLookup } from "@/components/hr/kit/useEmployeeLookup";
+import { useHrOptions } from "@/components/hr/kit/useHrOptions";
 
 const PREFIX = "/app/hr";
+const inputClass = "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm";
+const labelClass = "block text-sm font-medium text-text-secondary";
+
+type RosterForm = { employee_id: number | null; roster_date: string; shift_id: number | null; is_week_off: boolean; note: string };
+const EMPTY_FORM: RosterForm = { employee_id: null, roster_date: "", shift_id: null, is_week_off: false, note: "" };
 
 export function HrRosterPage() {
   const [rows, setRows] = useState<HrRosterEntryResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [form, setForm] = useState<HrRosterEntryCreate>({
-    employee_id: 0,
-    roster_date: "",
-    shift_id: 0,
-    is_week_off: false,
-    note: "",
-  });
-  const [editId, setEditId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState<HrRosterEntryUpdate>({});
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  const [formError, setFormError] = useState("");
+  const [drawer, setDrawer] = useState<{ mode: "create" } | { mode: "edit"; row: HrRosterEntryResponse } | null>(null);
+  const [form, setForm] = useState<RosterForm>(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const shifts = useHrOptions(
+    "shifts",
+    () => api.listHrShifts(),
+    (s) => ({ value: s.id, label: `${s.code} · ${s.name} (${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)})` }),
+  );
+  const lookup = useEmployeeLookup(useMemo(() => rows.map((r) => r.employee_id), [rows]));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -36,199 +46,164 @@ export function HrRosterPage() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    const close = () => setOpenActionsId(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, []);
-
-  const onCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.roster_date || !form.employee_id || !form.shift_id) return;
-    setError("");
-    try {
-      await api.createHrRosterEntry({
-        ...form,
-        employee_id: Number(form.employee_id),
-        shift_id: Number(form.shift_id),
-      });
-      setForm({ employee_id: 0, roster_date: "", shift_id: 0, is_week_off: false, note: "" });
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
-    }
+  const openCreate = () => {
+    setForm(EMPTY_FORM);
+    setFormError("");
+    setDrawer({ mode: "create" });
   };
-
-  const openEdit = (r: HrRosterEntryResponse) => {
-    setEditId(r.id);
-    setEditForm({
-      shift_id: r.shift_id ?? undefined,
-      is_week_off: r.is_week_off,
-      note: r.note ?? undefined,
+  const openEdit = (row: HrRosterEntryResponse) => {
+    setForm({
+      employee_id: row.employee_id,
+      roster_date: row.roster_date,
+      shift_id: row.shift_id,
+      is_week_off: Boolean(row.is_week_off),
+      note: row.note ?? "",
     });
-    setOpenActionsId(null);
+    setFormError("");
+    setDrawer({ mode: "edit", row });
   };
 
-  const saveEdit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (editId == null) return;
+    if (!drawer) return;
+    if (drawer.mode === "create" && (!form.employee_id || !form.roster_date || !form.shift_id)) {
+      setFormError("Choose the employee, date and shift.");
+      return;
+    }
+    setSaving(true);
+    setFormError("");
     try {
-      await api.updateHrRosterEntry(editId, editForm);
-      setEditId(null);
+      if (drawer.mode === "create") {
+        await api.createHrRosterEntry({
+          employee_id: form.employee_id!,
+          roster_date: form.roster_date,
+          shift_id: form.shift_id!,
+          is_week_off: form.is_week_off,
+          note: form.note.trim() || null,
+        });
+      } else {
+        await api.updateHrRosterEntry(drawer.row.id, {
+          shift_id: form.shift_id,
+          is_week_off: form.is_week_off,
+          note: form.note.trim() || null,
+        });
+      }
+      setDrawer(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Update failed");
+      setFormError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
     }
   };
+
+  const columns: HrTableColumn<HrRosterEntryResponse>[] = [
+    {
+      key: "employee",
+      header: "Employee",
+      render: (r) => <HrEmployeeCell id={r.employee_id} lookup={lookup} />,
+      value: (r) => {
+        const e = lookup(r.employee_id);
+        return e ? `${e.full_name} ${e.employee_code}` : `#${r.employee_id}`;
+      },
+    },
+    { key: "date", header: "Date", render: (r) => r.roster_date, value: (r) => r.roster_date },
+    { key: "shift", header: "Shift", render: (r) => (r.shift_id == null ? "—" : shifts.labelOf(r.shift_id)), value: (r) => shifts.labelOf(r.shift_id) },
+    {
+      key: "weekoff",
+      header: "Week off",
+      render: (r) =>
+        r.is_week_off ? (
+          <span className="inline-flex rounded-md border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-900">Week off</span>
+        ) : (
+          <span className="text-text-muted">No</span>
+        ),
+      value: (r) => (r.is_week_off ? "Week off" : "No"),
+    },
+    { key: "note", header: "Note", render: (r) => r.note || "-", value: (r) => r.note, hideOnMobile: true },
+  ];
+
+  const addButton = (
+    <button type="button" onClick={openCreate} className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground hover:opacity-90">
+      + Add roster entry
+    </button>
+  );
 
   return (
-    <div className="space-y-6">
-      <HrPageHeader
-        title="HR Roster"
-        description="Assign employees to shifts by day."
-        breadcrumbs={[{ label: "HR", href: PREFIX }, { label: "Roster" }]}
-      />
-      {error && <div className="text-sm text-status-danger-foreground">{error}</div>}
-
-      <form onSubmit={onCreate} className="grid gap-3 rounded-xl border border-border bg-surface-raised p-4 sm:grid-cols-2 lg:grid-cols-3">
-        <input
-          type="number"
-          className="rounded border px-2 py-1 text-sm"
-          placeholder="Employee ID"
-          value={form.employee_id || ""}
-          onChange={(e) => setForm((p) => ({ ...p, employee_id: Number(e.target.value) }))}
-          required
-        />
-        <input
-          type="date"
-          className="rounded border px-2 py-1 text-sm"
-          value={form.roster_date}
-          onChange={(e) => setForm((p) => ({ ...p, roster_date: e.target.value }))}
-          required
-        />
-        <input
-          type="number"
-          className="rounded border px-2 py-1 text-sm"
-          placeholder="Shift ID"
-          value={form.shift_id || ""}
-          onChange={(e) => setForm((p) => ({ ...p, shift_id: Number(e.target.value) }))}
-          required
-        />
-        <label className="flex items-center gap-2 text-sm sm:col-span-2">
-          <input
-            type="checkbox"
-            checked={form.is_week_off}
-            onChange={(e) => setForm((p) => ({ ...p, is_week_off: e.target.checked }))}
-          />
-          Week off
-        </label>
-        <input
-          className="sm:col-span-2 rounded border px-2 py-1 text-sm"
-          placeholder="Note"
-          value={form.note ?? ""}
-          onChange={(e) => setForm((p) => ({ ...p, note: e.target.value || null }))}
-        />
-        <div className="flex items-end">
-          <button type="submit" className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white">
-            Add roster entry
-          </button>
-        </div>
-      </form>
-
-      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-sm text-text-muted">Loading...</div>
-        ) : rows.length === 0 ? (
-          <div className="p-8 text-center text-sm text-text-muted">No roster entries.</div>
-        ) : (
-          <table className="min-w-full divide-y divide-border text-sm">
-            <thead className="bg-surface-subtle">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs uppercase">Employee</th>
-                <th className="px-4 py-2 text-left text-xs uppercase">Date</th>
-                <th className="px-4 py-2 text-left text-xs uppercase">Shift</th>
-                <th className="px-4 py-2 text-left text-xs uppercase">Week off</th>
-                <th className="px-4 py-2 text-right text-xs uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id} className="border-t border-border-subtle">
-                  <td className="px-4 py-2">{row.employee_id}</td>
-                  <td className="px-4 py-2">{row.roster_date}</td>
-                  <td className="px-4 py-2">{row.shift_id ?? "—"}</td>
-                  <td className="px-4 py-2">{row.is_week_off ? "Yes" : "No"}</td>
-                  <td className="px-4 py-2 text-right">
-                    <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => setOpenActionsId(openActionsId === row.id ? null : row.id)}
-                        className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      >
-                        Actions
-                      </button>
-                      {openActionsId === row.id && (
-                        <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                          <button
-                            type="button"
-                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                            onClick={() => openEdit(row)}
-                          >
-                            Edit
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <HrPageHeader title="HR Roster" description="Assign employees to shifts by day, and mark week-off days." breadcrumbs={[{ label: "HR", href: PREFIX }, { label: "Roster" }]} />
+        {addButton}
       </div>
+      <HrDataTable
+        rows={rows}
+        rowKey={(r) => r.id}
+        columns={columns}
+        loading={loading}
+        error={error}
+        onRetry={() => void load()}
+        onRefresh={() => void load()}
+        emptyTitle="No roster entries"
+        emptyHint="Create shifts first, then assign people to a shift for each day."
+        emptyAction={addButton}
+        searchPlaceholder="Search employee, date or shift…"
+        initialSort={{ key: "date", dir: "desc" }}
+        rowActions={(r) => [{ key: "edit", label: "Edit", primary: true, onClick: () => openEdit(r) }]}
+      />
 
-      {editId != null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <form onSubmit={saveEdit} className="w-full max-w-md rounded-xl border border-border bg-surface-raised p-6 shadow-xl space-y-3">
-            <h3 className="text-lg font-semibold text-text-primary">Edit roster</h3>
-            <label className="block text-sm">
-              Shift ID
-              <input
-                type="number"
-                className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
-                value={editForm.shift_id ?? ""}
-                onChange={(e) =>
-                  setEditForm((f) => ({ ...f, shift_id: e.target.value ? Number(e.target.value) : undefined }))
-                }
-              />
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={editForm.is_week_off ?? false}
-                onChange={(e) => setEditForm((f) => ({ ...f, is_week_off: e.target.checked }))}
-              />
-              Week off
-            </label>
-            <label className="block text-sm">
-              Note
-              <input
-                className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
-                value={editForm.note ?? ""}
-                onChange={(e) => setEditForm((f) => ({ ...f, note: e.target.value || null }))}
-              />
-            </label>
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" className="rounded border px-3 py-1.5 text-sm" onClick={() => setEditId(null)}>
-                Cancel
-              </button>
-              <button type="submit" className="rounded bg-brand-primary px-3 py-1.5 text-sm font-semibold text-white">
-                Save
-              </button>
-            </div>
-          </form>
+      <HrFormDrawer
+        open={drawer != null}
+        title={drawer?.mode === "edit" ? "Edit roster entry" : "Add roster entry"}
+        onClose={() => setDrawer(null)}
+        onSubmit={(e) => void onSubmit(e)}
+        submitting={saving}
+        error={formError}
+      >
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="roster-employee">Employee **</label>
+          {drawer?.mode === "edit" ? (
+            <HrEmployeeCell id={form.employee_id} lookup={lookup} link={false} />
+          ) : (
+            <HrEmployeeSelect id="roster-employee" value={form.employee_id} onChange={(v) => setForm((f) => ({ ...f, employee_id: v }))} required />
+          )}
         </div>
-      )}
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="roster-date">Date **</label>
+          <input
+            id="roster-date"
+            type="date"
+            className={inputClass}
+            value={form.roster_date}
+            disabled={drawer?.mode === "edit"}
+            onChange={(e) => setForm((f) => ({ ...f, roster_date: e.target.value }))}
+            required
+          />
+        </div>
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="roster-shift">Shift **</label>
+          <select
+            id="roster-shift"
+            className={inputClass}
+            value={form.shift_id ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, shift_id: e.target.value ? Number(e.target.value) : null }))}
+          >
+            <option value="">Choose a shift…</option>
+            {shifts.options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-text-secondary">
+          <input type="checkbox" checked={form.is_week_off} onChange={(e) => setForm((f) => ({ ...f, is_week_off: e.target.checked }))} />
+          Week off on this day
+        </label>
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="roster-note">Note</label>
+          <textarea id="roster-note" rows={2} className={inputClass} value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
+        </div>
+      </HrFormDrawer>
     </div>
   );
 }

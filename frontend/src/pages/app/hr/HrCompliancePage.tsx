@@ -9,6 +9,7 @@ import {
   type HrEmployeeComplianceRecord,
 } from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { HrEmployeeSelect } from "@/components/hr/kit/HrEmployeeFields";
 import { useAuth } from "@/context/AuthContext";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
@@ -159,6 +160,10 @@ export function HrCompliancePage() {
   const onLegacyCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    if (!employeeId) {
+      setError("Choose an employee first.");
+      return;
+    }
     try {
       await api.createHrComplianceCheck({
         employee_id: Number(employeeId),
@@ -385,13 +390,13 @@ export function HrCompliancePage() {
           <p className="text-xs text-text-muted">Original age verification / safety training check list.</p>
         </div>
         <form onSubmit={onLegacyCreate} className="flex flex-wrap items-end gap-2">
-          <input
-            className="rounded border border-border px-2 py-1 text-sm"
-            placeholder="Employee ID"
-            value={employeeId}
-            onChange={(e) => setEmployeeId(e.target.value)}
-            required
-          />
+          <div className="w-full min-w-[240px] sm:w-72">
+            <HrEmployeeSelect
+              value={employeeId ? Number(employeeId) : null}
+              onChange={(v) => setEmployeeId(v ? String(v) : "")}
+              required
+            />
+          </div>
           <select className="rounded border border-border px-2 py-1 text-sm" value={checkType} onChange={(e) => setCheckType(e.target.value)}>
             <option value="AGE_VERIFICATION">Age verification</option>
             <option value="SAFETY_TRAINING">Safety training</option>

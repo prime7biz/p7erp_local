@@ -65,7 +65,7 @@ Most changes take effect immediately. After changing **Configuration** or a **Ro
         "portal",
       ],
       estimatedMinutes: 4,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-10",
       featured: true,
       coverImage: "/tutorials/screens/settings.jpg",
       infographics: [
@@ -151,7 +151,7 @@ Who uses it: the company admin, usually during setup and at the start of a finan
 ## The switches, by view
 
 - **Essential (always shown):** **Enable Trade module**; **Finance & costing** — **Financial year starts in** (choose **July (Bangladesh July–June)** for most BD companies), **VAT BIN**, **Budget enforcement mode** (Off / Warn / Block), **Auto-post WIP journals**, **Enable MIS reports**, **Enable party ledger**, **Enable stock hierarchy**, **Enable batch tracking**, **Enable GST / tax ledger system**, **Auto-calculate tax on vouchers**.
-- **More features adds:** **Require master contract for RM procurement**, **Enable Knitting module**, **Enable Operations Control Tower**, **Auto-propose line bookings**, **Advanced vouchers** (credit/debit notes, stock transfer, memorandum, optional, post-dated, recurring, voucher classes, **Direct posting (save = post)**), **Order execution spine** (TNA event sync, require order on shop floor, line allocation → TNA sync, sample approvals gate BOM→PO, open CAPA blocks challan, colour / size breakdowns, shop-floor scan station, carton detail on packing lists, traceability & certificates, commission engine, Bangladesh bond & VAT registers, **AI exception agents**, **Ask-a-metric dashboard cards**), **Requisitions & comparative statement (CS)**, **Payroll auto-calculate**.
+- **More features adds:** **Require master contract for RM procurement**, **Enable Knitting module**, **Enable Operations Control Tower**, **Auto-propose line bookings**, **Advanced vouchers** (credit/debit notes, stock transfer, memorandum, optional, post-dated, recurring, voucher classes, **Direct posting (save = post)**), **Order execution spine** (TNA event sync, require order on shop floor, line allocation → TNA sync, sample approvals gate BOM→PO, open CAPA blocks challan, colour / size breakdowns, shop-floor scan station, carton detail on packing lists, traceability & certificates, commission engine, Bangladesh bond & VAT registers, **AI exception agents**, **Ask-a-metric dashboard cards**), **Requisitions & comparative statement (CS)**, **Payroll auto-calculate**, **Payroll four-eyes approval** (the person who finalized a payroll run cannot approve it; needs at least 2 active admin or manager users).
 - **All features adds:** **TDS system**, **Statutory payroll**, and **HR compliance / OCR / AI** (compliance tracking, age verification, medical certificates, OCR for CV / ID / medical, auto document generation, AI attendance / turnover / payroll anomaly / compliance risk).
 
 ## What happens next

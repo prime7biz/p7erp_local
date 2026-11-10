@@ -248,3 +248,5 @@ class RegularizationOut(BaseModel):
     decided_at: str | None
     created_at: str
     updated_at: str
+    # Display only: the employee of the attendance entry (filled on the list endpoint).
+    employee_id: int | None = None

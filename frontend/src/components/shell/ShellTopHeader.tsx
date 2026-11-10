@@ -242,7 +242,7 @@ export function ShellTopHeader({
                 </div>
                 <div className="space-y-0.5 pt-1">
                   <Link
-                    to="/app/hr/ess/profile"
+                    to="/app/hr/my?tab=profile"
                     onClick={() => setProfileOpen(false)}
                     className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-text-secondary hover:bg-surface-subtle"
                   >

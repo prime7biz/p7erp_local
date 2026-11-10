@@ -44,6 +44,9 @@ import type {
   HrEmployeeStatusHistoryCreate,
   HrEmployeeStatusHistoryResponse,
   HrEmployeeUpdate,
+  HrEssAttendanceSummaryRow,
+  HrEssLeaveRequestResponse,
+  HrEssPayslipResponse,
   HrEssProfileResponse,
   HrEssProfileUpdate,
   HrGoalCreate,
@@ -56,6 +59,7 @@ import type {
   HrJobRequisitionResponse,
   HrLeaveBalanceResponse,
   HrLeaveBalanceUpsert,
+  HrLeavePolicyCreate,
   HrLeavePolicyResponse,
   HrLeavePolicyUpdate,
   HrLeaveReportRow,
@@ -117,7 +121,20 @@ function signedDocQuery(opts?: { reissue?: boolean; requestId?: string }): strin
   return s ? `?${s}` : "";
 }
 
+export interface HrEmployeeLookupItem {
+  id: number;
+  employee_code: string;
+  full_name: string;
+  department_id: number | null;
+  is_active: boolean;
+}
+
 export const hrApi = {
+  /** Code + name for up to 500 employee ids (display only). Unknown / other-tenant ids are left out. */
+  async lookupHrEmployees(ids: number[]): Promise<HrEmployeeLookupItem[]> {
+    if (ids.length === 0) return [];
+    return request<HrEmployeeLookupItem[]>(`/api/v1/hr/employees/lookup?ids=${ids.join(",")}`);
+  },
   async listHrDepartments(params?: {
     active_only?: boolean;
     search?: string;
@@ -673,6 +690,12 @@ export const hrApi = {
   async listHrLeavePolicies(): Promise<HrLeavePolicyResponse[]> {
     return request<HrLeavePolicyResponse[]>("/api/v1/hr/leave/policies");
   },
+  async createHrLeavePolicy(data: HrLeavePolicyCreate): Promise<HrLeavePolicyResponse> {
+    return request<HrLeavePolicyResponse>("/api/v1/hr/leave/policies", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
   async updateHrLeavePolicy(id: number, data: HrLeavePolicyUpdate): Promise<HrLeavePolicyResponse> {
     return request<HrLeavePolicyResponse>(`/api/v1/hr/leave/policies/${id}`, {
       method: "PATCH",
@@ -1080,30 +1103,29 @@ export const hrApi = {
       body: JSON.stringify(data),
     });
   },
-  async listHrEssMyAttendance(params?: { from_date?: string; to_date?: string }): Promise<HrAttendanceEntryResponse[]> {
+  async listHrEssMyAttendance(params?: { year?: number }): Promise<HrEssAttendanceSummaryRow[]> {
     const q = new URLSearchParams();
-    if (params?.from_date) q.set("from_date", params.from_date);
-    if (params?.to_date) q.set("to_date", params.to_date);
+    if (params?.year != null) q.set("year", String(params.year));
     const suffix = q.toString() ? `?${q.toString()}` : "";
-    return request<HrAttendanceEntryResponse[]>(`/api/v1/hr/ess/my-attendance-summary${suffix}`);
+    return request<HrEssAttendanceSummaryRow[]>(`/api/v1/hr/ess/my-attendance-summary${suffix}`);
   },
-  async listHrEssMyLeaveRequests(params?: { status?: string }): Promise<HrLeaveRequestResponse[]> {
+  async listHrEssMyLeaveRequests(params?: { status?: string }): Promise<HrEssLeaveRequestResponse[]> {
     const q = new URLSearchParams();
     if (params?.status) q.set("status", params.status);
     const suffix = q.toString() ? `?${q.toString()}` : "";
-    return request<HrLeaveRequestResponse[]>(`/api/v1/hr/ess/my-leave-requests${suffix}`);
+    return request<HrEssLeaveRequestResponse[]>(`/api/v1/hr/ess/my-leave-requests${suffix}`);
   },
-  async createHrEssMyLeaveRequest(data: Omit<HrLeaveRequestCreate, "employee_id">): Promise<HrLeaveRequestResponse> {
-    return request<HrLeaveRequestResponse>("/api/v1/hr/ess/my-leave-requests", {
+  async createHrEssMyLeaveRequest(data: Omit<HrLeaveRequestCreate, "employee_id">): Promise<HrEssLeaveRequestResponse> {
+    return request<HrEssLeaveRequestResponse>("/api/v1/hr/ess/my-leave-requests", {
       method: "POST",
       body: JSON.stringify(data),
     });
   },
-  async listHrEssMyPayslips(params?: { year?: number }): Promise<HrPayslipResponse[]> {
+  async listHrEssMyPayslips(params?: { year?: number }): Promise<HrEssPayslipResponse[]> {
     const q = new URLSearchParams();
     if (params?.year != null) q.set("year", String(params.year));
     const suffix = q.toString() ? `?${q.toString()}` : "";
-    return request<HrPayslipResponse[]>(`/api/v1/hr/ess/my-payslips${suffix}`);
+    return request<HrEssPayslipResponse[]>(`/api/v1/hr/ess/my-payslips${suffix}`);
   },
   async listHrEssMyTickets(): Promise<Record<string, unknown>[]> {
     return request<Record<string, unknown>[]>("/api/v1/hr/ess/my-tickets");

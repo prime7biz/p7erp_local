@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import date
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -19,6 +20,8 @@ from app.models import (
     LeaveRequest,
     LeaveType,
     PayrollPayslip,
+    PayrollPeriod,
+    PayrollRun,
     PayrollRunLine,
     Tenant,
     User,
@@ -34,6 +37,7 @@ from app.modules.hr_ess.schemas import (
     PayslipResponse,
 )
 from app.modules.hr_leave.leave_days import validate_leave_request
+from app.modules.hr_payroll.formula_engine import quantize_money
 
 router = APIRouter(prefix="/hr/ess", tags=["hr-ess"])
 
@@ -319,9 +323,12 @@ async def my_payslips(
 ):
     _ensure_user_tenant(user, tenant)
     employee = await _get_my_employee_or_404(db, tenant.id, user.id)
+    # The payslip month is the payroll period's month (October payroll paid in November is "October").
     stmt = (
-        select(PayrollPayslip, PayrollRunLine)
+        select(PayrollPayslip, PayrollRunLine, PayrollPeriod.start_date)
         .join(PayrollRunLine, PayrollRunLine.id == PayrollPayslip.payroll_run_line_id)
+        .join(PayrollRun, and_(PayrollRun.id == PayrollRunLine.run_id, PayrollRun.tenant_id == tenant.id))
+        .join(PayrollPeriod, and_(PayrollPeriod.id == PayrollRun.period_id, PayrollPeriod.tenant_id == tenant.id))
         .where(
             PayrollPayslip.tenant_id == tenant.id,
             PayrollRunLine.tenant_id == tenant.id,
@@ -329,26 +336,28 @@ async def my_payslips(
         )
     )
     if year is not None:
-        start = datetime(year=year, month=1, day=1)
-        end = datetime(year=year + 1, month=1, day=1)
-        stmt = stmt.where(PayrollPayslip.generated_at >= start, PayrollPayslip.generated_at < end)
-    stmt = stmt.order_by(PayrollPayslip.generated_at.desc()).offset(offset).limit(limit)
+        stmt = stmt.where(PayrollPeriod.start_date >= date(year, 1, 1), PayrollPeriod.start_date < date(year + 1, 1, 1))
+    stmt = (
+        stmt.order_by(PayrollPeriod.start_date.desc(), PayrollPayslip.generated_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
     result = await db.execute(stmt)
     rows = result.all()
     return [
         PayslipResponse(
             id=payslip.id,
-            period_year=payslip.generated_at.year,
-            period_month=payslip.generated_at.month,
-            gross_pay=float(run_line.gross_pay),
-            deductions=float(run_line.deductions),
-            net_pay=float(run_line.net_pay),
+            period_year=period_start.year,
+            period_month=period_start.month,
+            gross_pay=quantize_money(Decimal(run_line.gross_pay or 0)),
+            deductions=quantize_money(Decimal(run_line.deductions or 0)),
+            net_pay=quantize_money(Decimal(run_line.net_pay or 0)),
             currency="BDT",
             status="generated",
             issued_at=payslip.generated_at.isoformat() if payslip.generated_at else None,
-            download_url=payslip.file_path,
+            download_url=None,
         )
-        for payslip, run_line in rows
+        for payslip, run_line, period_start in rows
     ]
 
 

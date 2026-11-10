@@ -125,6 +125,32 @@ describe("employee workspace: AI autofill never overwrites manual input", () => 
     expect(res.filled).not.toContain("first_name");
   });
 
+  it("fills NID address, blood group, gender and birth registration in the form's own format", () => {
+    const res = mergeExtraction(
+      emptyEmployeeForm(),
+      {
+        first_name: { value: "RAHIMA" },
+        address: { value: "House 12, Mirpur &amp; Pallabi" },
+        blood_group: { value: "B Positive" },
+        gender: { value: "FEMALE" },
+        national_id: { value: "1234 5678 90" },
+        birth_registration_number: { value: "19982612345678901" },
+      },
+      new Set(),
+    );
+    expect(res.form).toMatchObject({
+      first_name: "RAHIMA",
+      present_address_line: "House 12, Mirpur & Pallabi",
+      blood_group: "B+",
+      gender: "Female",
+      national_id: "1234567890",
+      birth_registration_no: "19982612345678901",
+    });
+    expect(res.filled).toEqual(expect.arrayContaining(["present_address_line", "blood_group", "gender", "birth_registration_no"]));
+    // A gender the form cannot show is left empty instead of a value no option matches.
+    expect(mergeExtraction(emptyEmployeeForm(), { gender: { value: "N/A" } }, new Set()).filled).toEqual([]);
+  });
+
   it("shows the AI panel only when a document OCR flag is on", () => {
     expect(aiAutofillEnabled(null)).toBe(false);
     expect(aiAutofillEnabled({ ocr_cv_extraction_enabled: false })).toBe(false);

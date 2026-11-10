@@ -7,7 +7,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "@/api/client";
 import { hrBangladeshApi, type Row } from "@/api/hrBangladesh";
-import { ActionsMenu, Badge, Banner, Card, Field, Messages, SimpleTable, btnPrimary, btnSecondary, inputCls } from "@/components/hr/bd/BdUi";
+import { KitTable } from "@/components/hr/bd/BdKitTable";
+import { Badge, Banner, Card, Field, Messages, btnPrimary, btnSecondary, inputCls } from "@/components/hr/bd/BdUi";
 import { employeeLabel, money, todayIso, useAction, useEmployees, useLoad } from "@/components/hr/bd/bdHooks";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
 
@@ -105,31 +106,36 @@ function MealBills() {
             </button>
           </div>
         </div>
-        <SimpleTable<Row>
+        <KitTable<Row>
           rows={rules.data ?? []}
           rowKey={(r) => String(r.id)}
-          empty={rules.loading ? "Loading..." : "No bill rules yet."}
+          loading={rules.loading}
+          onRefresh={() => void rules.reload()}
+          empty="No bill rules yet."
+          searchPlaceholder="Search code or bill…"
+          statusOf={(r) => String(r.status)}
           columns={[
-            { header: "Code", cell: (r) => String(r.code) },
-            { header: "Bill", cell: (r) => BILL_LABEL[String(r.bill_type)] ?? String(r.bill_type) },
-            { header: "Rule", cell: (r) => `${BASIS_LABEL[String(r.eligibility_basis)] ?? String(r.eligibility_basis)}${Number(r.threshold_minutes) ? ` (${String(r.threshold_minutes)} min)` : ""}` },
-            { header: "Amount", align: "right", cell: (r) => money(r.amount) },
-            { header: "From", cell: (r) => String(r.effective_from) },
-            { header: "Status", cell: (r) => statusBadge(r.status) },
+            { header: "Code", cell: (r) => String(r.code), value: (r) => String(r.code) },
+            { header: "Bill", cell: (r) => BILL_LABEL[String(r.bill_type)] ?? String(r.bill_type), value: (r) => BILL_LABEL[String(r.bill_type)] ?? String(r.bill_type) },
             {
-              header: "Actions",
-              align: "right",
-              cell: (r) => (
-                <ActionsMenu
-                  items={[
-                    {
-                      label: "Approve",
-                      hidden: r.status !== "DRAFT",
-                      onClick: () => void run(async () => { await hrBangladeshApi.approveAllowanceRule(Number(r.id)); await rules.reload(); }, "Rule approved."),
-                    },
-                  ]}
-                />
-              ),
+              header: "Rule",
+              cell: (r) => `${BASIS_LABEL[String(r.eligibility_basis)] ?? String(r.eligibility_basis)}${Number(r.threshold_minutes) ? ` (${String(r.threshold_minutes)} min)` : ""}`,
+              hideOnMobile: true,
+            },
+            { header: "Amount", align: "right", cell: (r) => money(r.amount), value: (r) => Number(r.amount) },
+            { header: "From", cell: (r) => String(r.effective_from), value: (r) => String(r.effective_from), hideOnMobile: true },
+            { header: "Status", cell: (r) => statusBadge(r.status), value: (r) => String(r.status) },
+          ]}
+          actions={(r) => [
+            {
+              label: "Approve",
+              primary: true,
+              positive: true,
+              disabled: busy,
+              hidden: r.status !== "DRAFT",
+              onClick: () =>
+                window.confirm(`Approve bill rule ${String(r.code)} (${money(r.amount)})?`) &&
+                void run(async () => { await hrBangladeshApi.approveAllowanceRule(Number(r.id)); await rules.reload(); }, "Rule approved."),
             },
           ]}
         />
@@ -199,41 +205,40 @@ function MealBills() {
           </>
         }
       >
-        <SimpleTable<Row>
+        <KitTable<Row>
           rows={(entries.data ?? []).slice(0, 500)}
           rowKey={(r) => String(r.id)}
-          empty={entries.loading ? "Loading..." : "No bills."}
+          loading={entries.loading}
+          onRefresh={() => void entries.reload()}
+          empty="No bills."
+          searchPlaceholder="Search date, employee or rule…"
+          defaultPageSize={50}
           columns={[
-            { header: "Date", cell: (r) => String(r.work_date) },
-            { header: "Employee", cell: (r) => empName(r.employee_id) },
-            { header: "Rule", cell: (r) => ruleName(r.rule_id) },
-            { header: "Amount", align: "right", cell: (r) => money(r.amount) },
-            { header: "Status", cell: (r) => statusBadge(r.status) },
+            { header: "Date", cell: (r) => String(r.work_date), value: (r) => String(r.work_date) },
+            { header: "Employee", cell: (r) => empName(r.employee_id), value: (r) => empName(r.employee_id) },
+            { header: "Rule", cell: (r) => ruleName(r.rule_id), value: (r) => ruleName(r.rule_id), hideOnMobile: true },
+            { header: "Amount", align: "right", cell: (r) => money(r.amount), value: (r) => Number(r.amount) },
+            { header: "Status", cell: (r) => statusBadge(r.status), value: (r) => String(r.status) },
+          ]}
+          actions={(r) => [
             {
-              header: "Actions",
-              align: "right",
-              cell: (r) => (
-                <ActionsMenu
-                  items={[
-                    {
-                      label: "Correct amount",
-                      hidden: r.status !== "PENDING",
-                      onClick: () => {
-                        const amount = window.prompt("New amount (Tk)", String(r.amount));
-                        const reason = amount ? window.prompt("Reason for the correction") : null;
-                        if (amount && reason && reason.trim().length >= 3)
-                          void run(async () => { await hrBangladeshApi.correctAllowance(Number(r.id), amount, reason.trim()); await entries.reload(); }, "Corrected.");
-                      },
-                    },
-                    {
-                      label: "Reject",
-                      danger: true,
-                      hidden: r.status === "REJECTED" || r.status === "PAID" || Boolean(r.payroll_run_line_id) || Boolean(r.final_settlement_id),
-                      onClick: () => window.confirm("Reject this bill?") && void run(async () => { await hrBangladeshApi.rejectAllowance(Number(r.id)); await entries.reload(); }, "Rejected."),
-                    },
-                  ]}
-                />
-              ),
+              label: "Correct amount",
+              primary: true,
+              disabled: busy,
+              hidden: r.status !== "PENDING",
+              onClick: () => {
+                const amount = window.prompt("New amount (Tk)", String(r.amount));
+                const reason = amount ? window.prompt("Reason for the correction") : null;
+                if (amount && reason && reason.trim().length >= 3)
+                  void run(async () => { await hrBangladeshApi.correctAllowance(Number(r.id), amount, reason.trim()); await entries.reload(); }, "Corrected.");
+              },
+            },
+            {
+              label: "Reject",
+              danger: true,
+              disabled: busy,
+              hidden: r.status === "REJECTED" || r.status === "PAID" || Boolean(r.payroll_run_line_id) || Boolean(r.final_settlement_id),
+              onClick: () => window.confirm("Reject this bill?") && void run(async () => { await hrBangladeshApi.rejectAllowance(Number(r.id)); await entries.reload(); }, "Rejected."),
             },
           ]}
         />
@@ -327,30 +332,31 @@ function ProductionBonus() {
             </button>
           </div>
         </div>
-        <SimpleTable<Row>
+        <KitTable<Row>
           rows={schemes.data ?? []}
           rowKey={(r) => String(r.id)}
-          empty={schemes.loading ? "Loading..." : "No schemes yet."}
+          loading={schemes.loading}
+          onRefresh={() => void schemes.reload()}
+          empty="No schemes yet."
+          searchPlaceholder="Search code or name…"
+          statusOf={(r) => String(r.status)}
           columns={[
-            { header: "Code", cell: (r) => String(r.code) },
-            { header: "Name", cell: (r) => String(r.name) },
-            { header: "Basis", cell: (r) => String(r.basis) },
-            { header: "Cap", align: "right", cell: (r) => (r.cap_amount ? money(r.cap_amount) : "-") },
-            { header: "Status", cell: (r) => statusBadge(r.status) },
+            { header: "Code", cell: (r) => String(r.code), value: (r) => String(r.code) },
+            { header: "Name", cell: (r) => String(r.name), value: (r) => String(r.name) },
+            { header: "Basis", cell: (r) => String(r.basis), value: (r) => String(r.basis), hideOnMobile: true },
+            { header: "Cap", align: "right", cell: (r) => (r.cap_amount ? money(r.cap_amount) : "-"), value: (r) => (r.cap_amount ? Number(r.cap_amount) : null), hideOnMobile: true },
+            { header: "Status", cell: (r) => statusBadge(r.status), value: (r) => String(r.status) },
+          ]}
+          actions={(r) => [
             {
-              header: "Actions",
-              align: "right",
-              cell: (r) => (
-                <ActionsMenu
-                  items={[
-                    {
-                      label: "Approve",
-                      hidden: r.status !== "DRAFT",
-                      onClick: () => void run(async () => { await hrBangladeshApi.approveProductionScheme(Number(r.id)); await schemes.reload(); }, "Scheme approved."),
-                    },
-                  ]}
-                />
-              ),
+              label: "Approve",
+              primary: true,
+              positive: true,
+              disabled: busy,
+              hidden: r.status !== "DRAFT",
+              onClick: () =>
+                window.confirm(`Approve production bonus scheme ${String(r.code)}?`) &&
+                void run(async () => { await hrBangladeshApi.approveProductionScheme(Number(r.id)); await schemes.reload(); }, "Scheme approved."),
             },
           ]}
         />
@@ -416,17 +422,22 @@ function ProductionBonus() {
           </button>
         }
       >
-        <SimpleTable<Row>
+        <KitTable<Row>
           rows={(entries.data ?? []).slice(0, 500)}
           rowKey={(r) => String(r.id)}
-          empty={entries.loading ? "Loading..." : "No entries."}
+          loading={entries.loading}
+          onRefresh={() => void entries.reload()}
+          empty="No entries."
+          searchPlaceholder="Search period or employee…"
+          statusOf={(r) => String(r.status)}
+          defaultPageSize={50}
           columns={[
-            { header: "Period", cell: (r) => String(r.period_code) },
-            { header: "Employee", cell: (r) => empName(r.employee_id) },
-            { header: "Pieces", align: "right", cell: (r) => String(r.quantity ?? "-") },
-            { header: "Efficiency %", align: "right", cell: (r) => String(r.efficiency_pct ?? "-") },
-            { header: "Amount", align: "right", cell: (r) => money(r.amount) },
-            { header: "Status", cell: (r) => statusBadge(r.status) },
+            { header: "Period", cell: (r) => String(r.period_code), value: (r) => String(r.period_code) },
+            { header: "Employee", cell: (r) => empName(r.employee_id), value: (r) => empName(r.employee_id) },
+            { header: "Pieces", align: "right", cell: (r) => String(r.quantity ?? "-"), value: (r) => (r.quantity == null ? null : Number(r.quantity)), hideOnMobile: true },
+            { header: "Efficiency %", align: "right", cell: (r) => String(r.efficiency_pct ?? "-"), value: (r) => (r.efficiency_pct == null ? null : Number(r.efficiency_pct)), hideOnMobile: true },
+            { header: "Amount", align: "right", cell: (r) => money(r.amount), value: (r) => Number(r.amount) },
+            { header: "Status", cell: (r) => statusBadge(r.status), value: (r) => String(r.status) },
           ]}
         />
       </Card>
@@ -507,16 +518,20 @@ function FestivalBonus() {
             </button>
           </div>
         </div>
-        <SimpleTable<Row>
+        <KitTable<Row>
           rows={lines.data ?? []}
           rowKey={(r) => String(r.id)}
-          empty={declId ? (lines.loading ? "Loading..." : "Not allocated yet.") : "Choose a declaration."}
+          loading={Boolean(declId) && lines.loading}
+          empty={declId ? "Not allocated yet." : "Choose a declaration."}
+          searchPlaceholder="Search employee…"
+          statusOf={(r) => (r.eligible ? "Eligible" : "Not eligible")}
+          defaultPageSize={50}
           columns={[
-            { header: "Employee", cell: (r) => empName(r.employee_id) },
-            { header: "Eligible", cell: (r) => (r.eligible ? "Yes" : `No: ${String(r.eligibility_reason ?? "")}`) },
-            { header: "Basic", align: "right", cell: (r) => money(r.basis_amount) },
-            { header: "Bonus", align: "right", cell: (r) => money(r.amount) },
-            { header: "Status", cell: (r) => statusBadge(r.status) },
+            { header: "Employee", cell: (r) => empName(r.employee_id), value: (r) => empName(r.employee_id) },
+            { header: "Eligible", cell: (r) => (r.eligible ? "Yes" : `No: ${String(r.eligibility_reason ?? "")}`), value: (r) => (r.eligible ? "Yes" : "No") },
+            { header: "Basic", align: "right", cell: (r) => money(r.basis_amount), value: (r) => Number(r.basis_amount), hideOnMobile: true },
+            { header: "Bonus", align: "right", cell: (r) => money(r.amount), value: (r) => Number(r.amount) },
+            { header: "Status", cell: (r) => statusBadge(r.status), value: (r) => String(r.status), hideOnMobile: true },
           ]}
         />
         {(lines.data ?? []).length ? <p className="text-sm font-medium text-text-primary">Total eligible bonus: {money(total)}</p> : null}

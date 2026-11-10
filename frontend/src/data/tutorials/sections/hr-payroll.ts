@@ -29,7 +29,7 @@ export const hrPayrollSection: TutorialSection = {
         "HR payroll",
       ],
       estimatedMinutes: 5,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-10",
       featured: true,
       audience: "hr",
       coverImage: `${S}/hr-payroll-runs.jpg`,
@@ -48,23 +48,26 @@ export const hrPayrollSection: TutorialSection = {
 
 Who uses it: **HR / payroll officers** prepare the run; a **manager or admin** checks, approves and posts it; **accountants** see the posted voucher; **employees** read their own payslips under **My Payslips**.
 
-All payroll screens are in the sidebar under **HR → Payroll**:
+Payroll screens are tabs on three pages in the HR sidebar. Click the page, then the tab:
 
-| Screen | Path | What it is for |
-|---|---|---|
-| **Components** | \`/app/hr/payroll/components\` | Pay items such as Basic, House rent, Overtime, Tax, Advance recovery |
-| **Salary Structures** | \`/app/hr/payroll/salary-structures\` | Grade templates that group components |
-| **Structure Assignments** | \`/app/hr/payroll/assignments\` | Links each employee to a structure from a date, with base salary |
-| **Periods** | \`/app/hr/payroll/periods\` | The payroll month (start, end, payment date); lock it when done |
-| **Runs** | \`/app/hr/payroll/runs\` | Create → Auto-calculate → Finalize → Approve → Post GL → Payslips → Bank CSV |
-| **Advances & Loans** | \`/app/hr/payroll/advances\` | Salary advances and the monthly recovery amount |
-| **Bonuses** | \`/app/hr/payroll/bonuses\` | Festival, attendance and performance bonus declarations |
-| **Accounting Config** | \`/app/hr/payroll/accounting-config\` | Which ledger accounts the payroll voucher uses |
-| **Statutory Config** | \`/app/hr/payroll/statutory\` | PF and other statutory rates (only when **Statutory payroll** is switched on) |
-| **Approvals** | \`/app/hr/payroll/approvals\` | Finalized runs waiting for a manager |
-| **Payslips** | \`/app/hr/payroll/payslips\` | All generated payslips; download as PDF |
+- **HR → Payroll** (\`/app/hr/payroll\`) — the monthly work:
+  - **Periods** — the payroll month (start, end, payment date); lock it when done.
+  - **Runs** — Create → Auto-calculate → Finalize → Approve → Post GL → Payslips → Bank CSV.
+  - **Approvals** — finalized runs waiting for a manager.
+  - **Payslips** — all generated payslips; download as PDF.
+  - **Salary sheets & registers** — frozen salary sheets and statutory registers.
+- **HR → Payroll Extras** (\`/app/hr/payroll-extras\`):
+  - **Advances & loans** — salary advances and the monthly recovery amount.
+  - **Bonuses** — festival, attendance and performance bonus declarations.
+  - **Allowances & bonuses** — meal / night bills and production or festival bonus (only when switched on).
+- **HR → Leave & Payroll Setup** (\`/app/hr/leave-payroll-setup\`) — set up once:
+  - **Salary components** — pay items such as Basic, House rent, Overtime, Tax, Advance recovery.
+  - **Salary structures** — grade templates that group components.
+  - **Structure assignments** — links each employee to a structure from a date, with base salary.
+  - **Accounting** — which ledger accounts the payroll voucher uses.
+  - **Statutory** — PF and other statutory rates (only when **Statutory payroll** is switched on).
 
-Related screens outside the Payroll group: **Overtime Rules** and **Overtime** (HR → Time & Attendance), **Payroll Summary** report (\`/app/reports/payroll\`) and **Settings → Statutory compliance** (\`/app/settings/statutory-compliance\`).
+Related screens outside payroll: **Overtime rules** (HR → Attendance Setup) and **Overtime** (HR → Attendance), **Payroll Summary** report (\`/app/reports/payroll\`) and **Settings → Statutory compliance** (\`/app/settings/statutory-compliance\`).
 
 ## Before you start
 
@@ -72,19 +75,20 @@ Related screens outside the Payroll group: **Overtime Rules** and **Overtime** (
 - **Finalize, Approve, Reject, Post GL, Payslips, Bank CSV** and **locking a period** need the **admin** or **manager** role.
 - Employees must exist and be **active** (see [HR module map](/app/tutorials/hr-overview)). Attendance, leave and overtime for the month should be entered and approved first.
 - **Auto-calculate** needs the tenant switch **Payroll auto-calculate** under **Settings → Configuration** (\`/app/settings/config\`, section **HR payroll**). It is off by default.
+- Optional **Payroll four-eyes approval** (same section, off by default): the person who finalized a run cannot also approve it.
 
 ## Steps
 
 1. **One-time setup** — create **Components**, build **Salary Structures**, then add a **Structure Assignment** for every employee. See [Payroll setup](/app/tutorials/hr-pay-setup).
 2. **Every month** — add the **Period**, create a **Run**, use **Auto-calculate** to preview and apply, then **Finalize**. See [Run monthly payroll](/app/tutorials/hr-pay-monthly-run).
-3. **Manager** — opens **Payroll Approvals** and chooses **Actions → Approve** (or **Reject** with a reason).
-4. **Manager / accounts** — on **Runs** clicks **Post GL** (creates the journal voucher), **Payslips** (generates payslips) and **Bank CSV** (bank advice file).
-5. **Close the month** — on **Periods**, click **Finalize** next to the period so no new run can be created for it.
+3. **Manager** — opens **Payroll → Approvals** and clicks **Approve** on the run (or **Reject** with a reason).
+4. **Manager / accounts** — on **Runs** clicks **Post GL** (creates the journal voucher), **Payslips** (generates payslips) and **Bank CSV** (bank advice file). Each run row shows its next steps as buttons; the other actions are in the row's **Actions** menu.
+5. **Close the month** — on **Periods**, click **Finalize** on the period's row so no new run can be created for it.
 
 ## What happens next
 
 - **Finance**: **Post GL** creates a posted **Journal** voucher numbered like \`PR00012\` (Dr salary expense, Cr salary payable) dated on the period's payment date. Accounts then pays the salary with a payment voucher. See [Finance overview](/app/tutorials/fin-overview).
-- **Employees** see their payslip under **HR → Self-Service → My Payslips** (\`/app/hr/ess/payslips\`).
+- **Employees** see their payslip under **HR → My HR → Payslips** (\`/app/hr/ess/payslips\`).
 - **Reports**: **Reports → Payroll Summary** shows gross, deductions and net by period for a year.
 
 ## Tips
@@ -95,7 +99,7 @@ Related screens outside the Payroll group: **Overtime Rules** and **Overtime** (
 
 ## Common problems
 
-- **"Payroll run … already exists for this period"** → only one active run per period. Reject the old run first (Payroll Approvals → **Actions → Reject**), then create a new one.
+- **"Payroll run … already exists for this period"** → only one active run per period. Reject the old run first (Payroll → Approvals → **Reject**), then create a new one.
 - **Period not in the "Payroll period" list on Runs** → the period is locked (finalized). Create the next period instead.
 - More fixes: [Payroll troubleshooting](/app/tutorials/hr-pay-troubleshooting).`,
       infographics: [
@@ -135,7 +139,7 @@ Related screens outside the Payroll group: **Overtime Rules** and **Overtime** (
       images: [
         {
           src: `${S}/hr-payroll-approvals.jpg`,
-          alt: "Payroll Approvals screen listing finalized runs with an Actions menu",
+          alt: "Payroll Approvals screen listing finalized runs with Approve and Reject buttons",
           caption: "Payroll Approvals — the manager's queue of finalized runs.",
         },
         {
@@ -185,7 +189,7 @@ Related screens outside the Payroll group: **Overtime Rules** and **Overtime** (
         "base salary",
       ],
       estimatedMinutes: 10,
-      lastUpdated: "2026-11-09",
+      lastUpdated: "2026-11-10",
       audience: "hr",
       coverImage: `${S}/hr-payroll-components.jpg`,
       videos: [
@@ -221,7 +225,7 @@ Who uses it: HR / payroll officer (with **hr.payroll.manage** or HR manager acce
 
 ### A. Create components
 
-1. Open **HR → Payroll → Components** (\`/app/hr/payroll/components\`).
+1. Open **HR → Leave & Payroll Setup → Salary components** (\`/app/hr/payroll/components\`).
 2. Click **Add component**.
 3. Fill **Code** (short, e.g. \`BASIC\`, \`HRA\`, \`OT\`, \`ADV\`) and **Name** (e.g. "House rent").
 4. **Component type**: type \`EARNING\` or \`DEDUCTION\` (exactly these words).
@@ -238,17 +242,17 @@ Who uses it: HR / payroll officer (with **hr.payroll.manage** or HR manager acce
 
 6. **Default amount** — used when the structure line has no amount.
 7. **Applies to** — \`ALL\`, \`WORKER\` or \`STAFF\`.
-8. Leave **Active** ticked and click **Save**. To change one later use the row's **Actions → Edit**.
+8. Leave **Active** ticked and click **Save**. To change one later click **Edit** on its row.
 
 ### B. Salary structures
 
-1. Open **HR → Payroll → Salary Structures** (\`/app/hr/payroll/salary-structures\`) to see the structures (grades) that exist.
+1. Open **HR → Leave & Payroll Setup → Salary structures** (\`/app/hr/payroll/salary-structures\`) to see the structures (grades) that exist.
 2. The **Add salary structure** box at the bottom asks for **Name**, **Grade**, **Basic Amount**, **House Rent**, **Medical** and **Transport**, then **Save**.
 3. What Auto-calculate actually pays comes from the structure's **lines** (component + amount + order). There is no screen to add lines yet, so creating a new structure with its lines is currently a one-time job for your **system administrator / implementation team** — see *Common problems* below.
 
 ### C. Assign a structure to each employee
 
-1. Open **HR → Payroll → Structure Assignments** (\`/app/hr/payroll/assignments\`).
+1. Open **HR → Leave & Payroll Setup → Structure assignments** (\`/app/hr/payroll/assignments\`).
 2. In **Assign structure** choose the **Employee** and the **Structure**.
 3. Set **Effective from** (the first day the structure applies).
 4. **Base salary override** — enter the person's base salary (for example the gross or minimum-wage base). This figure is used by **% of base salary** lines, by the piece-rate **minimum-wage check** and by statutory calculations. Leave it empty only if no line depends on it.
@@ -258,7 +262,7 @@ Who uses it: HR / payroll officer (with **hr.payroll.manage** or HR manager acce
 
 ### D. Accounting (once)
 
-Open **HR → Payroll → Accounting Config** (\`/app/hr/payroll/accounting-config\`), enter the **Salary expense GL account ID** and **Salary payable GL account ID** (ask your accountant), and click **Save mapping**. If left empty, posting tries the system's default salary accounts.
+Open **HR → Leave & Payroll Setup → Accounting** (\`/app/hr/payroll/accounting-config\`), enter the **Salary expense GL account ID** and **Salary payable GL account ID** (ask your accountant), and click **Save mapping**. If left empty, posting tries the system's default salary accounts.
 
 ## What happens next
 
@@ -286,7 +290,7 @@ Open **HR → Payroll → Accounting Config** (\`/app/hr/payroll/accounting-conf
               title: "Create components",
               body: "**Add component** → Code, Name, EARNING/DEDUCTION, calculation type → **Save**.",
               imageSrc: `${S}/hr-pay-component-form.jpg`,
-              imageAlt: "Add component dialog with Code OT, Name Overtime and calculation type Per overtime hour",
+              imageAlt: "Add component side panel with Code OT, Name Overtime and calculation type Per overtime hour",
               href: "/app/hr/payroll/components",
             },
             {
@@ -356,7 +360,7 @@ Open **HR → Payroll → Accounting Config** (\`/app/hr/payroll/accounting-conf
         "month end salary",
       ],
       estimatedMinutes: 12,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-10",
       featured: true,
       audience: "hr",
       coverImage: `${S}/hr-payroll-runs.jpg`,
@@ -397,7 +401,7 @@ Once a month the payroll officer prepares a **payroll run** for the month's **pe
 
 ### 3. Preview with Auto-calculate
 
-1. In the run's row click **Auto-calculate**. The **Auto-calculate preview** panel opens below the table. It is read-only.
+1. In the run's row click **Auto-calculate** (shown as a button on DRAFT and REJECTED runs; otherwise in the row's **Actions** menu). The **Auto-calculate preview** panel opens below the table. It is read-only.
 2. For each active employee you see **Base**, **Earnings**, **Deductions**, **Gross**, **Net**, **Status** and **Warnings**.
    - Under **Base**, piece-rate workers show *Piece rate · N pcs · M SAM min*; daily-wage workers show *Daily wage · N days*.
    - **Status** is **Ready**, **Missing Assignment** (skipped, checkbox greyed) or **Manual Override Exists**.
@@ -412,13 +416,14 @@ Once a month the payroll officer prepares a **payroll run** for the month's **pe
 
 ### 5. Finalize
 
-Click **Finalize** in the run's row (manager / admin). The totals are fixed and the status becomes **FINALIZED**. A run with no lines cannot be finalized.
+Click **Finalize** in the run's row (manager / admin) and confirm. The totals are fixed and the status becomes **FINALIZED**. A run with no lines cannot be finalized.
 
 ### 6. Approve (manager)
 
 1. The manager opens **HR → Payroll → Approvals** (\`/app/hr/payroll/approvals\`) — or the company-wide **Approvals** inbox.
-2. Check **Gross** and **Net**, then **Actions → Approve**. Status becomes **APPROVED**.
-3. To send it back choose **Actions → Reject** and type the reason. The preparer gets a notification; the run becomes **REJECTED** and can be auto-calculated and finalized again.
+2. Check **Gross**, **Deductions** and **Net**, then click **Approve**. Status becomes **APPROVED**.
+   - With **Payroll four-eyes approval** switched on (**Settings → Configuration → HR payroll**, off by default), the person who finalized the run cannot approve it: the message is "Four-eyes rule: a different person must approve the payroll run you finalized". A second admin or manager approves instead. The switch can only be turned on when the company has at least 2 active admin or manager users.
+3. To send it back click **Reject** and type the reason. The preparer gets a notification; the run becomes **REJECTED** and can be auto-calculated and finalized again.
 
 ### 7. Post to the books, payslips, bank file
 
@@ -430,12 +435,12 @@ On **Runs**, for the approved run:
 
 ### 8. Lock the period
 
-On **Periods**, in **Finalize period (manager/admin)**, click **Finalize** next to the month. The period becomes **FINALIZED**, **Locked: Yes**, and disappears from the run form.
+On **Periods**, click **Finalize** on the month's row (manager / admin) and confirm. The period becomes **FINALIZED**, **Locked: Yes**, and disappears from the run form.
 
 ## Pay rules Auto-calculate follows
 
 - **Loss of pay** (flag \`payroll_lop_enabled\`, on unless set to false): auto-calculate pays **Fixed amount** and **% of base salary** components only for **payable days** — the days the person was employed in the period (joining / exit date) minus **Absent** days not covered by approved leave and minus approved **unpaid** leave days. People who left during the period are included for the days they worked. The preview shows LOP days and the amount deducted. A run that was already auto-calculated before this switched on keeps its old numbers.
-- **Overtime from salary** (off by default; **HR → HR Settings**): approved overtime is paid as hours × (base salary ÷ 208) × multiplier on an **Overtime (from salary)** line — see [Overtime pay from salary](/app/tutorials/hr-overtime-from-salary).
+- **Overtime from salary** (off by default; **HR → HR Setup → Settings**): approved overtime is paid as hours × (base salary ÷ 208) × multiplier on an **Overtime (from salary)** line — see [Overtime pay from salary](/app/tutorials/hr-overtime-from-salary).
 - **Manual run lines** — gross, deductions and net must be valid amounts, not negative, and **net = gross − deductions** (0.01 rounding allowed). Leave net empty and it is calculated for you.
 
 ## What happens next
@@ -448,7 +453,7 @@ On **Periods**, in **Finalize period (manager/admin)**, click **Finalize** next 
 
 - Make the **Run date** the last day of the month so new joiners and salary changes effective during the month are picked up.
 - Wages in Bangladesh must normally be paid within **seven working days** after the end of the wage period — plan Finalize and Approve early.
-- Download the **Bank CSV** only after approval so the bank never receives unapproved figures.
+- The **Bank CSV** can only be downloaded after approval, so the bank never receives unapproved figures.
 
 ## Common problems
 
@@ -461,7 +466,7 @@ On **Periods**, in **Finalize period (manager/admin)**, click **Finalize** next 
 | "Unpaid leave days in period: N" | Approved unpaid leave exists | With **Loss of pay** on (the default), fixed and % lines are already reduced for those days — check the LOP days in the preview. If \`payroll_lop_enabled\` is set to false, adjust by hand |
 | "Payroll run … already exists for this period" | One active run per period | Reject the old run first |
 | "run_date must be inside payroll period" | Run date outside start–end | Pick a date inside the period |
-| Auto-calculate / Finalize buttons greyed | Run is FINALIZED / APPROVED / POSTED | Reject it (if not posted) to edit again |
+| Auto-calculate / Finalize missing from the row, or greyed in **Actions** | Run is FINALIZED / APPROVED / POSTED | Reject it (if not posted) to edit again |
 
 More: [Payroll troubleshooting](/app/tutorials/hr-pay-troubleshooting).`,
       infographics: [
@@ -485,9 +490,9 @@ More: [Payroll troubleshooting](/app/tutorials/hr-pay-troubleshooting).`,
             },
             {
               title: "Approve",
-              body: "Manager: **Payroll Approvals → Actions → Approve** (or Reject with a reason).",
+              body: "Manager: **Payroll → Approvals → Approve** (or Reject with a reason).",
               imageSrc: `${S}/hr-payroll-approvals.jpg`,
-              imageAlt: "Payroll Approvals list with Actions menu",
+              imageAlt: "Payroll Approvals list with Approve and Reject buttons on each run",
               href: "/app/hr/payroll/approvals",
             },
             {
@@ -624,7 +629,7 @@ The piece-rate worker's line is finalized, approved and posted like everyone els
       images: [
         {
           src: `${S}/hr-pay-component-form.jpg`,
-          alt: "Add component dialog showing the calculation type drop-down",
+          alt: "Add component side panel showing the calculation type drop-down",
           caption: "The calculation type on each component decides the pay basis (here: Per overtime hour; choose Per piece scanned for piece rate).",
         },
       ],
@@ -641,7 +646,7 @@ The piece-rate worker's line is finalized, approved and posted like everyone els
       tags: ["HR", "payroll", "overtime", "OT"],
       keywords: ["overtime", "OT", "extra hours", "OT rate", "OT approval", "double rate", "OT hours", "night duty"],
       estimatedMinutes: 6,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-10",
       audience: "hr",
       coverImage: `${S}/hr-attendance-overtime.jpg`,
       content: `## Overview
@@ -652,7 +657,7 @@ Overtime (OT) pay in P7 ERP has three parts:
 2. **Overtime** entries (\`/app/hr/attendance/overtime\`) — hours per employee per day. New entries are **PENDING**; a manager clicks **Approve**.
 3. A payroll **component** with calculation type **Per overtime hour** — Auto-calculate pays **rate × approved OT hours** in the period.
 
-> **Tip:** Instead of a fixed OT rate, you can let P7 work out the rate from each person's salary (base salary ÷ 208 × multiplier). Turn on **Pay overtime from salary** on **HR → HR Settings** — see [Overtime pay from salary](/app/tutorials/hr-overtime-from-salary). The rest of this page describes the component method (the default).
+> **Tip:** Instead of a fixed OT rate, you can let P7 work out the rate from each person's salary (base salary ÷ 208 × multiplier). Turn on **Pay overtime from salary** on **HR → HR Setup → Settings** — see [Overtime pay from salary](/app/tutorials/hr-overtime-from-salary). The rest of this page describes the component method (the default).
 
 ## Before you start
 
@@ -661,9 +666,9 @@ Overtime (OT) pay in P7 ERP has three parts:
 
 ## Steps
 
-1. **Rules (once):** open **HR → Time & Attendance → Overtime Rules**. Fill **Code**, **Name**, optional **Employee category**, **Weekday mult**, **Weekend mult**, **Holiday mult**, and click **Add rule**. Edit later with **Actions → Edit**.
+1. **Rules (once):** open **HR → Attendance Setup → Overtime rules**. Click **+ Add rule**, fill **Code**, **Name**, optional **Employee category**, **Weekday ×**, **Weekend ×**, **Holiday ×**, and click **Save**. Change it later with **Edit** on the row.
 2. **Daily:** OT hours are recorded as overtime entries (status **PENDING**).
-3. **Approve:** open **HR → Time & Attendance → Overtime**. For each **PENDING** row check **Emp**, **Date** and **Hours**, then click **Approve**. The status becomes **APPROVED**.
+3. **Approve:** open **HR → Attendance → Overtime**. For each **PENDING** row check **Emp**, **Date** and **Hours**, then click **Approve**. The status becomes **APPROVED**.
 4. **Pay:** at month end, **Runs → Auto-calculate** sums all **APPROVED** (and posted) OT hours dated inside the period and multiplies them by the OT component's rate. The OT amount is part of **Earnings / Gross**.
 
 ## How the OT amount is worked out
@@ -734,11 +739,11 @@ The OT amount is stored on the run line (overtime amount) and appears in the pay
       tags: ["HR", "payroll", "overtime", "OT", "salary", "settings"],
       keywords: ["208", "overtime rate", "double rate", "OT_SALARY"],
       estimatedMinutes: 4,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-10",
       audience: "hr",
       content: `## Overview
 
-When **Pay overtime from salary** is on (**HR → HR Settings**, \`/app/hr/settings\`), payroll auto-calculate adds an **Overtime (from salary)** earning line (code \`OT_SALARY\`) for every employee with approved overtime. It is **off** by default.
+When **Pay overtime from salary** is on (**HR → HR Setup → Settings**, \`/app/hr/settings\`), payroll auto-calculate adds an **Overtime (from salary)** earning line (code \`OT_SALARY\`) for every employee with approved overtime. It is **off** by default.
 
 ## How the amount is worked out
 
@@ -781,7 +786,7 @@ When **Pay overtime from salary** is on (**HR → HR Settings**, \`/app/hr/setti
         "deduction",
       ],
       estimatedMinutes: 6,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-10",
       audience: "hr",
       coverImage: `${S}/hr-payroll-bonuses.jpg`,
       content: `## Overview
@@ -793,22 +798,22 @@ Creating bonus declarations and advances needs the **manager** or **admin** role
 
 ## Before you start
 
-- Know the employee's **ID** number (shown on the employee record) — the advance form asks for **Employee ID**.
+- The employee exists in **HR → Employees** — the advance form lets you search the person by code or name.
 - Agree the bonus policy (who is eligible, amount or % of basic) with management.
 
 ## Steps — festival bonus
 
-1. Open **HR → Payroll → Bonuses**.
-2. Choose the type (**Festival**, **Attendance** or **Performance**).
+1. Open **HR → Payroll Extras → Bonuses**.
+2. Click **+ Create declaration** and choose the type (**Festival**, **Attendance** or **Performance**).
 3. Enter **Period code** (e.g. the payroll period the bonus is paid with, \`PR-2027-03\`), a **Title** (e.g. "Eid-ul-Fitr bonus 2027") and **Amount or %**.
-4. Click **Create declaration**. The declaration is listed with status **DRAFT**.
+4. Click **Save**. The declaration is listed with status **DRAFT**.
 5. **Paying it:** the declaration is a record of the decision. Auto-calculate does not read it, so pay the bonus through a **bonus earning component** (for example \`FBONUS\`, **% of base salary** or **Fixed**) in the structure for the bonus month, or as a separate payment agreed with accounts.
 
 ## Steps — salary advance or loan
 
-1. Open **HR → Payroll → Advances & Loans**.
-2. Enter **Employee ID**, **Amount**, **Monthly deduction** and a **Reason**.
-3. Click **Issue advance**. It appears as **ACTIVE** with **Outstanding** = the amount.
+1. Open **HR → Payroll Extras → Advances & loans**.
+2. Click **+ Issue advance**, search the **Employee**, then enter the **Amount**, **Monthly deduction** and a **Reason**.
+3. Click **Save**. It appears as **ACTIVE** with **Outstanding** = the amount.
 4. **Recovering it:** Auto-calculate does not deduct advances on its own yet. Recover the instalment through a **deduction component** (e.g. \`ADV\`, **Fixed**) in the worker's structure, setting the amount per person with **Component overrides** such as \`{"ADV":"1000"}\` on the structure assignment. Remove the override when the advance is fully recovered.
 5. Pay the advance itself from Finance with a payment voucher — see [Voucher entry](/app/tutorials/fin-voucher-entry).
 
@@ -829,7 +834,7 @@ The bonus or advance recovery appears as a line in the Auto-calculate breakdown,
 
 ## Common problems
 
-- **"Employee not found" when issuing an advance** → the Employee ID is the internal number of the employee record, not the employee code.
+- **"Employee not found" when issuing an advance** → the employee was deactivated or removed; pick the person again from the list.
 - **Bonus not in the salary** → declarations are not added automatically; add the bonus component as described above.
 - **"Only manager/admin can perform this action"** → ask a manager to create the declaration or advance.`,
       images: [
@@ -878,18 +883,18 @@ The bonus or advance recovery appears as a line in the Auto-calculate breakdown,
         "salary payable",
       ],
       estimatedMinutes: 6,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-10",
       audience: "hr",
       coverImage: `${S}/hr-payroll-payslips.jpg`,
       content: `## Overview
 
-After a run is **approved**, three outputs come from the **Runs** screen:
+After a run is **approved**, three outputs come from the **Runs** screen. Each run row shows its next one or two steps as buttons (for an approved run: **Post GL** and **Payslips**; for a posted run: **Payslips** and **Bank CSV**). Every other action is in the row's **Actions** menu.
 
-| Button on Runs | Allowed when | Result |
+| Action on a run | Allowed when | Result |
 |---|---|---|
 | **Post GL** | APPROVED | Posted journal voucher; run becomes **POSTED** |
 | **Payslips** | APPROVED or POSTED | One payslip per employee (number like \`PS-0007-0123\`) |
-| **Bank CSV** | Any time (manager / admin) | File \`payroll-run-<id>-bank.csv\` with \`employee_code, net_pay, currency\` (BDT) |
+| **Bank CSV** | APPROVED or POSTED (manager / admin) | File \`payroll-run-<id>-bank.csv\` with \`employee_code, net_pay, currency\` (BDT). Earlier runs show "The bank file is available after the run is approved". |
 
 ## Before you start
 
@@ -900,11 +905,11 @@ After a run is **approved**, three outputs come from the **Runs** screen:
 ## Steps
 
 1. Open **HR → Payroll → Runs** and find the approved run.
-2. Click **Post GL**. The message shows the voucher number. The run's status becomes **POSTED**.
+2. Click **Post GL** on the run's row and confirm. The message shows the voucher number. The run's status becomes **POSTED**. (Clicking Post GL again on a posted run only shows the same voucher — it never posts twice.)
 3. Click **Payslips**. Payslips are created for every line (running it again does not create duplicates).
-4. Click **Bank CSV** and send the file to the bank / wallet provider in the format they need.
-5. Open **HR → Payroll → Payslips** (\`/app/hr/payroll/payslips\`) to see every payslip with **Payroll Run ID**, **Employee ID**, **Gross**, **Deductions**, **Net** and **Status** (*generated*). In the box below the table click **Download** next to a payslip to get the PDF.
-6. Employees open **HR → Self-Service → My Payslips** (\`/app/hr/ess/payslips\`) to download their own.
+4. Click **Bank CSV** (a button on posted runs, otherwise in **Actions**) and send the file to the bank / wallet provider in the format they need.
+5. Open **HR → Payroll → Payslips** (\`/app/hr/payroll/payslips\`) to see every payslip with the **Employee** (name and code), **Payroll run**, **Gross**, **Deductions**, **Net** and **Status** (*generated*). Click **Download PDF** on a row to get that payslip. Managers can also **Export CSV** of the list.
+6. Employees open **HR → My HR → Payslips** (\`/app/hr/ess/payslips\`) to download their own.
 
 ## What Post GL writes in the books
 
@@ -987,7 +992,7 @@ After a run is **approved**, three outputs come from the **Runs** screen:
         "NBR",
       ],
       estimatedMinutes: 7,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-10",
       audience: "hr",
       coverImage: `${S}/hr-pay-settings-statutory-tab.jpg`,
       content: `## Overview
@@ -995,7 +1000,7 @@ After a run is **approved**, three outputs come from the **Runs** screen:
 P7 ERP offers three tools for statutory payroll items:
 
 1. **Settings → Statutory compliance → Payroll statutory** (\`/app/settings/statutory-compliance\`) — a quick **calculator**: enter **Gross pay (BDT)**, **AIT %**, **PF emp %** and **PF er %**, click **Calculate**, and see **Gross total**, **AIT**, **PF (employee)**, **PF (employer)** and **Net payable**. Tick **Save summary for period** (Year, Month) to keep the result.
-2. **HR → Payroll → Statutory Config** (\`/app/hr/payroll/statutory\`) — appears only when the tenant switch **Statutory payroll** is on (**Settings → Configuration**). It stores rates that **Auto-calculate adds to every run**: **PF employee / employer rate %**, **PF wage ceiling**, **ESI** rates and ceiling, **PT state** and **PT slabs**, and **Gratuity days per year**. **Run preview** shows the result for a sample basic and gross.
+2. **HR → Leave & Payroll Setup → Statutory** (\`/app/hr/payroll/statutory\`) — appears only when the tenant switch **Statutory payroll** is on (**Settings → Configuration**). It stores rates that **Auto-calculate adds to every run**: **PF employee / employer rate %**, **PF wage ceiling**, **ESI** rates and ceiling, **PT state** and **PT slabs**, and **Gratuity days per year**. **Run preview** shows the result for a sample basic and gross.
 3. A normal **DEDUCTION component** such as \`TAX\` for monthly salary tax.
 
 ## Before you start
@@ -1012,7 +1017,7 @@ P7 ERP offers three tools for statutory payroll items:
 ## Steps — statutory lines inside payroll (optional)
 
 1. Ask an admin to tick **Statutory payroll** in **Settings → Configuration**.
-2. Open **HR → Payroll → Statutory Config**.
+2. Open **HR → Leave & Payroll Setup → Statutory**.
 3. Set **PF employee rate %** and **PF employer rate %** to your provident fund rules. **ESI** and **PT** (professional tax) are Indian schemes — in Bangladesh set their rates and slabs to **0** unless your adviser says otherwise.
 4. Click **Save config**, then use **Run preview** with a sample basic and gross to check.
 5. In the next **Auto-calculate** preview, employee shares (e.g. *PF Employee Contribution*) appear under **Statutory Deductions** and reduce net pay; employer shares are shown under **Statutory** but are **not** paid to the worker.
@@ -1047,8 +1052,8 @@ When statutory payroll is on and the run is posted, a statutory remittance journ
         },
         {
           src: `${S}/hr-payroll-statutory.jpg`,
-          alt: "HR Payroll Statutory Config screen with provident fund, insurance and tax settings and a Run preview button",
-          caption: "HR → Payroll → Statutory Config. The built-in defaults are samples — confirm every rate with your compliance team.",
+          alt: "Statutory tab with Provident fund, Employee state insurance and Professional tax sections and a Save config bar",
+          caption: "HR → Leave & Payroll Setup → Statutory. The built-in defaults are samples — confirm every rate with your compliance team.",
         },
       ],
       relatedAppRoutes: ["/app/settings/statutory-compliance", "/app/hr/payroll/statutory", "/app/settings/config"],
@@ -1077,14 +1082,14 @@ When statutory payroll is on and the run is posted, a statutory remittance journ
         "clearance",
       ],
       estimatedMinutes: 8,
-      lastUpdated: "2026-11-07",
+      lastUpdated: "2026-11-10",
       audience: "hr",
       coverImage: `${S}/hr-payroll-assignments.jpg`,
       content: `## Overview
 
 When someone leaves, they must receive everything owed: salary up to the last working day, approved overtime and allowances, earned-leave encashment, notice pay and the service benefit (gratuity / resignation / termination / death benefit), minus notice recovery, unpaid advances and clearance recoveries.
 
-**HR → Core HR → Separations & Settlement** (\`/app/hr/separations\`) calculates all of this from attendance, the approved Bangladesh rule set and the employee's pay, and posts one balanced voucher.
+**HR → Cases & Exits → Separations & settlement** (\`/app/hr/separations\`) calculates all of this from attendance, the approved Bangladesh rule set and the employee's pay, and posts one balanced voucher.
 
 **Who uses it:** HR officers (create, clearance, calculate), a manager or admin (approve, post, mark paid, reverse).
 
@@ -1096,7 +1101,7 @@ When someone leaves, they must receive everything owed: salary up to the last wo
 
 ## Steps
 
-1. Open **HR → Core HR → Separations & Settlement** and click **New separation**.
+1. Open **HR → Cases & Exits → Separations & settlement** and click **New separation**.
 2. Choose the employee and the **Type** (resignation, termination, retrenchment, dismissal, retirement, death), then the **Request / notice date**, **Last working day**, **Effective date** and **Notice days served**. Click **Create** (status **DRAFT**).
 3. On the row click **Actions → Approve** (manager / admin).
 4. **Actions → Open** shows two panels. In **Clearance** add one item per department (ID card, tools, locker key…) with any **Recoverable (Tk)** amount, then **Actions → Mark cleared** or **Waive** on each.
@@ -1160,7 +1165,7 @@ When someone leaves, they must receive everything owed: salary up to the last wo
         "help",
       ],
       estimatedMinutes: 6,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-10",
       audience: "hr",
       coverImage: `${S}/hr-payroll-runs.jpg`,
       content: `## Overview
@@ -1191,7 +1196,7 @@ Open the run's **Auto-calculate** preview — its **Warnings** and the **Breakdo
 
 - Days come only from **Daily Entry** records dated inside the period. **Present**, **Late** and **Work from home** count as 1 day, **Half day** as 0.5; **Absent** counts 0.
 - With **Loss of pay** on (flag \`payroll_lop_enabled\`, on unless set to false), **Fixed** and **% of base salary** lines are paid only for payable days: days employed in the period minus unexcused **Absent** days and approved **unpaid** leave. The preview shows the LOP days and amount. With the flag off, fixed lines are not reduced and only **Per day present** lines change with attendance.
-- Fix: enter or regularise attendance (HR → Time & Attendance → Daily Entry / Regularizations), then preview again.
+- Fix: enter or regularise attendance (HR → Attendance → Daily entry / Regularizations), then preview again.
 
 ### Overtime missing
 
@@ -1278,7 +1283,7 @@ After fixing, re-apply and finalize. If the run was already **approved** but not
       tags: ["HR", "payroll", "salary sheet", "wage register", "payslip"],
       keywords: ["salary sheet", "top sheet", "department wise", "wage register", "form 38", "wage slip", "payslip zip", "acknowledgement", "revenue stamp", "bKash salary"],
       estimatedMinutes: 6,
-      lastUpdated: "2026-11-07",
+      lastUpdated: "2026-11-10",
       audience: "hr",
       content: `## Overview
 
@@ -1292,7 +1297,7 @@ After fixing, re-apply and finalize. If the run was already **approved** but not
 
 ## Steps
 
-1. Open **HR → Payroll → Salary Sheets & Registers** (\`/app/hr/payroll/registers\`) and choose the **Payroll run**.
+1. Open **HR → Payroll → Salary sheets & registers** (\`/app/hr/payroll/registers\`) and choose the **Payroll run**.
 2. If it says the run is not frozen, click **Freeze documents**.
 3. **Top sheet** tab: one line per department with employees, present / absent / paid-leave days, OT hours and amount, allowances, gross, deductions and net pay, plus the grand total.
 4. **Department sheets** tab: every employee in each department. Pick a **Department** to see only one.
@@ -1331,7 +1336,7 @@ After fixing, re-apply and finalize. If the run was already **approved** but not
       tags: ["HR", "payroll", "allowance", "bonus", "tiffin bill", "night bill"],
       keywords: ["tiffin bill", "dinner bill", "night bill", "production bonus", "piece rate bonus", "efficiency bonus", "eid bonus", "festival bonus", "utsob bonus"],
       estimatedMinutes: 6,
-      lastUpdated: "2026-11-07",
+      lastUpdated: "2026-11-10",
       audience: "hr",
       content: `## Overview
 
@@ -1355,7 +1360,7 @@ An admin turns on the parts you use under **Settings → Configuration**: **HR t
 
 ## Eid / festival bonus
 
-1. Create the bonus declaration on **HR → Payroll → Bonuses**.
+1. Create the bonus declaration on **HR → Payroll Extras → Bonuses**.
 2. On the **Eid / festival bonus** tab choose the declaration, the **Service cut-off date** and **% of basic** (up to 100), then **Allocate**. Employees with less than one year of service are listed as not eligible.
 3. Check the lines and the total, then **Approve**.
 

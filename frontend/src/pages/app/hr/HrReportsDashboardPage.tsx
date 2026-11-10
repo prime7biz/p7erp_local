@@ -7,8 +7,49 @@ import {
   type HrReportSummaryResponse,
 } from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { HrDataTable, type HrTableColumn } from "@/components/hr/kit/HrDataTable";
+import { useAuth } from "@/context/AuthContext";
+import { canExportHrData } from "@/lib/roles";
+
+function money(value: string | number | null | undefined): string {
+  if (value == null || value === "") return "-";
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : String(value);
+}
+
+const attendanceColumns: HrTableColumn<HrAttendanceReportRow>[] = [
+  { key: "code", header: "Code", render: (r) => r.employee_code, value: (r) => r.employee_code },
+  { key: "name", header: "Name", render: (r) => r.employee_name, value: (r) => r.employee_name },
+  { key: "present", header: "Present", align: "right", render: (r) => r.present_days, value: (r) => r.present_days },
+  { key: "absent", header: "Absent", align: "right", render: (r) => r.absent_days, value: (r) => r.absent_days },
+  { key: "leave", header: "Leave", align: "right", render: (r) => r.leave_days, value: (r) => r.leave_days },
+];
+
+const leaveColumns: HrTableColumn<HrLeaveReportRow>[] = [
+  { key: "type", header: "Leave Type", render: (r) => r.leave_type, value: (r) => r.leave_type },
+  { key: "total", header: "Total", align: "right", render: (r) => r.total_requests, value: (r) => r.total_requests },
+  { key: "approved", header: "Approved", align: "right", render: (r) => r.approved_requests, value: (r) => r.approved_requests },
+  { key: "pending", header: "Pending", align: "right", render: (r) => r.pending_requests, value: (r) => r.pending_requests },
+  { key: "rejected", header: "Rejected", align: "right", render: (r) => r.rejected_requests, value: (r) => r.rejected_requests },
+];
+
+const payrollColumns: HrTableColumn<HrPayrollReportRow>[] = [
+  { key: "period", header: "Period", render: (r) => r.payroll_period, value: (r) => r.payroll_period },
+  { key: "employees", header: "Employees", align: "right", render: (r) => r.total_employees, value: (r) => r.total_employees },
+  { key: "gross", header: "Gross", align: "right", render: (r) => <span className="tabular-nums">{money(r.gross_total)}</span>, value: (r) => r.gross_total },
+  {
+    key: "deductions",
+    header: "Deductions",
+    align: "right",
+    render: (r) => <span className="tabular-nums">{money(r.deduction_total)}</span>,
+    value: (r) => r.deduction_total,
+  },
+  { key: "net", header: "Net", align: "right", render: (r) => <span className="tabular-nums">{money(r.net_total)}</span>, value: (r) => r.net_total },
+];
 
 export function HrReportsDashboardPage() {
+  const { me } = useAuth();
+  const canExport = canExportHrData(me?.role_name);
   const [summary, setSummary] = useState<HrReportSummaryResponse | null>(null);
   const [attendanceRows, setAttendanceRows] = useState<HrAttendanceReportRow[]>([]);
   const [leaveRows, setLeaveRows] = useState<HrLeaveReportRow[]>([]);
@@ -85,94 +126,46 @@ export function HrReportsDashboardPage() {
         </div>
       </div>
 
-      <section className="rounded-xl border border-border bg-surface-raised overflow-hidden">
-        <div className="border-b border-border px-4 py-3">
-          <h2 className="text-base font-semibold text-text-primary">Attendance Report</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-surface-subtle">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Code</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Present</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Absent</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Leave</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-surface-raised">
-              {attendanceRows.map((row) => (
-                <tr key={`${row.employee_code}-${row.employee_name}`}>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{row.employee_code}</td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{row.employee_name}</td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{row.present_days}</td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{row.absent_days}</td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{row.leave_days}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <section className="space-y-2" aria-labelledby="hr-report-attendance">
+        <h2 id="hr-report-attendance" className="text-base font-semibold text-text-primary">Attendance Report</h2>
+        <HrDataTable
+          rows={attendanceRows}
+          rowKey={(r) => `${r.employee_code}-${r.employee_name}`}
+          columns={attendanceColumns}
+          loading={loading}
+          emptyTitle="No attendance data yet."
+          searchPlaceholder="Search employee code or name…"
+          exportFileName="hr-attendance-report"
+          canExport={canExport}
+        />
       </section>
 
-      <section className="rounded-xl border border-border bg-surface-raised overflow-hidden">
-        <div className="border-b border-border px-4 py-3">
-          <h2 className="text-base font-semibold text-text-primary">Leave Report</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-surface-subtle">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Leave Type</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Total</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Approved</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Pending</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Rejected</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-surface-raised">
-              {leaveRows.map((row) => (
-                <tr key={row.leave_type}>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{row.leave_type}</td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{row.total_requests}</td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{row.approved_requests}</td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{row.pending_requests}</td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{row.rejected_requests}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <section className="space-y-2" aria-labelledby="hr-report-leave">
+        <h2 id="hr-report-leave" className="text-base font-semibold text-text-primary">Leave Report</h2>
+        <HrDataTable
+          rows={leaveRows}
+          rowKey={(r) => r.leave_type}
+          columns={leaveColumns}
+          loading={loading}
+          emptyTitle="No leave data yet."
+          searchPlaceholder="Search leave type…"
+          exportFileName="hr-leave-report"
+          canExport={canExport}
+        />
       </section>
 
-      <section className="rounded-xl border border-border bg-surface-raised overflow-hidden">
-        <div className="border-b border-border px-4 py-3">
-          <h2 className="text-base font-semibold text-text-primary">Payroll Report</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-surface-subtle">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Period</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Employees</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Gross</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Deductions</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Net</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-surface-raised">
-              {payrollRows.map((row) => (
-                <tr key={row.payroll_period}>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{row.payroll_period}</td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{row.total_employees}</td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{row.gross_total}</td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{row.deduction_total}</td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{row.net_total}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <section className="space-y-2" aria-labelledby="hr-report-payroll">
+        <h2 id="hr-report-payroll" className="text-base font-semibold text-text-primary">Payroll Report</h2>
+        <HrDataTable
+          rows={payrollRows}
+          rowKey={(r) => `${r.payroll_period}-${payrollRows.indexOf(r)}`}
+          columns={payrollColumns}
+          loading={loading}
+          emptyTitle="No payroll data yet."
+          searchPlaceholder="Search period…"
+          exportFileName="hr-payroll-report"
+          canExport={canExport}
+        />
       </section>
     </div>
   );

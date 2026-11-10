@@ -37,6 +37,9 @@ CAPA_BLOCKS_CHALLAN = "capa_blocks_challan"
 # When true, payroll run auto-calculate apply is allowed (default off — strict True check).
 PAYROLL_AUTO_CALCULATE_ENABLED = "payroll_auto_calculate_enabled"
 
+# When true, the user who finalized a payroll run cannot approve it (default off — strict True check).
+PAYROLL_FOUR_EYES_APPROVAL = "payroll_four_eyes_approval"
+
 # Phase 1.5 demo mode banner + seed marker (seed writes marker object; banner uses bool).
 DEMO_MODE_ENABLED = "demo_mode_enabled"
 DEMO_SEED_PHASE1_V1 = "demo_seed_phase1_v1"
@@ -299,6 +302,11 @@ def is_capa_blocks_challan(feature_flags: Any) -> bool:
 def is_payroll_auto_calculate_enabled(feature_flags: Any) -> bool:
     """Strict: only explicit True enables apply (missing / false / other → off)."""
     return _flag_true(feature_flags, PAYROLL_AUTO_CALCULATE_ENABLED)
+
+
+def is_payroll_four_eyes_enabled(feature_flags: Any) -> bool:
+    """Strict: only explicit True turns on the payroll maker-checker rule."""
+    return _flag_true(feature_flags, PAYROLL_FOUR_EYES_APPROVAL)
 
 
 def is_strict_sensitive_permissions(feature_flags: Any) -> bool:

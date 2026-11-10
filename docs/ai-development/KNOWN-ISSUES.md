@@ -13,6 +13,9 @@ approval. Agents must not re-report these as new findings, but they must flag an
 | KI-05 | Merchandising and production hierarchy | Policy gap | Informational, needs a business decision |
 | KI-06 | HR employee identity fields permission | Open, by user decision (2026-11-09) | Medium (planned special permission) |
 | KI-07 | HR onboarding checklist consent tasks | Open, by user decision (2026-11-09) | Informational |
+| KI-08 | Payroll bank file has no status check | Fixed 2026-11-10 | Low (manager-only download) |
+| KI-09 | Payroll run maker-checker not enforced | Fixed 2026-11-10 (opt-in tenant flag) | Informational, needs a business decision |
+| KI-10 | ESS payslip response uses float money and echoes file_path | Fixed 2026-11-10 | Low |
 
 ## KI-01: `calculate_job_work_cost` loads a record without a tenant check
 
@@ -69,3 +72,32 @@ approval. Agents must not re-report these as new findings, but they must flag an
 - **What:** `IDENTITY_DOCUMENT_CONSENT` and `CV_CONSENT` exist in the schema, but no screen records those privacy
   consents yet, so creating the tasks would leave them pending forever. Evidence matching is already implemented.
 - **Decision (user, 2026-11-09, as recommended):** create them only after a consent-capture screen exists.
+
+## KI-08: payroll bank file has no status check
+
+- **Where:** `GET /hr/payroll/runs/{run_id}/bank-file` in `backend/app/modules/hr_payroll/router.py` (around line 1773).
+- **What:** the bank advice CSV can be downloaded for a run in any status (DRAFT, FINALIZED…), while the payroll guide
+  says to download it after approval. The UI only offers it as a visible button on POSTED runs, but the menu item and the
+  API still allow any status.
+- **Fixed (2026-11-10, user decision):** APPROVED / POSTED only; other statuses get 400 "The bank file is available
+  after the run is approved". The UI disables Bank CSV before approval. Tests `tests/test_hr_payroll_four_eyes.py`.
+
+## KI-09: payroll run maker-checker is not enforced
+
+- **Where:** `approve_run` in `backend/app/modules/hr_payroll/router.py`.
+- **What:** the user who finalized a run can also approve it. Nothing in code requires a different approver.
+- **Fixed (2026-11-10, user decision):** tenant flag `payroll_four_eyes_approval` (default OFF, strict `true`). When on,
+  `approve_run` and the approval decision endpoint (APPROVED only; rejecting stays open) refuse the user who finalized
+  the run (or created it when no finalizer is stored) with 403; admins are not exempt. `approve_run` now locks the run
+  row. Settings → Configuration refuses to switch it on with fewer than 2 active admin / manager users and audits every
+  change (`settings.payroll_four_eyes_approval`). Rollback: switch the flag off.
+
+## KI-10: ESS payslip response uses float money and echoes the internal file path
+
+- **Where:** `my_payslips` in `backend/app/modules/hr_ess/router.py` (`PayslipResponse` in `hr_ess/schemas.py`).
+- **What:** `gross_pay`, `deductions` and `net_pay` are converted with `float()` (display only, nothing is posted from them),
+  and `download_url` returns the stored `file_path` (a server path, not a usable link; the UI downloads through
+  `/hr/payroll/payslips/{id}/pdf` instead).
+- **Fixed (2026-11-10, user decision):** the three amounts are 4-decimal text (same as the payroll API) and
+  `download_url` is always null. The P7 frontend is the only client in this repository. Test
+  `tests/test_hr_ess_payslip_period.py`.

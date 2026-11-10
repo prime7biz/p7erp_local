@@ -1,107 +1,105 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 690" width="960" height="690" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 700" width="960" height="700" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
   <defs>
     <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
       <path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/>
     </marker>
   </defs>
-  <rect width="960" height="690" fill="#ffffff"/>
-  <text x="480" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#334155">HR module map &#8212; the groups under HR in the sidebar</text>
+  <rect width="960" height="700" fill="#ffffff"/>
+  <text x="480" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#334155">HR module map &#8212; six groups, one link per area, tabs inside</text>
   <text x="480" y="56" text-anchor="middle" font-size="13" fill="#64748b">Orange arrows show how data flows: people &#8594; attendance &amp; leave &#8594; payroll &#8594; payslips</text>
 
   <!-- Row 1 -->
   <g>
-    <rect x="25" y="76" width="290" height="214" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="1.5"/>
+    <rect x="25" y="76" width="290" height="236" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="1.5"/>
     <rect x="25" y="76" width="290" height="36" rx="12" fill="#0f766e"/>
     <rect x="25" y="100" width="290" height="12" fill="#0f766e"/>
-    <text x="40" y="99" font-size="14" font-weight="700" fill="#ffffff">1. Core HR (people &amp; organisation)</text>
-    <text x="40" y="136" font-size="13" fill="#334155">&#8226; Departments</text>
-    <text x="40" y="157" font-size="13" fill="#334155">&#8226; Designations</text>
-    <text x="40" y="178" font-size="13" fill="#334155">&#8226; Sections &amp; Lines (floor / line / unit)</text>
-    <text x="40" y="199" font-size="13" fill="#334155">&#8226; Employees (master, tabs, documents)</text>
-    <text x="40" y="220" font-size="13" fill="#334155">&#8226; AI Onboarding (scan CV / NID)</text>
-    <text x="40" y="250" font-size="12" fill="#64748b">Set up first &#8212; every other screen</text>
-    <text x="40" y="267" font-size="12" fill="#64748b">points to an employee.</text>
+    <text x="40" y="99" font-size="14" font-weight="700" fill="#ffffff">1. Main</text>
+    <text x="40" y="136" font-size="13" font-weight="600" fill="#334155">HR Dashboard</text>
+    <text x="40" y="160" font-size="13" font-weight="600" fill="#334155">Employees</text>
+    <text x="52" y="179" font-size="12" fill="#64748b">list, employee record, AI onboarding button</text>
+    <text x="40" y="203" font-size="13" font-weight="600" fill="#334155">My HR (every employee)</text>
+    <text x="52" y="222" font-size="12" fill="#64748b">tabs: Profile &#8226; Attendance &#8226; Leave</text>
+    <text x="52" y="239" font-size="12" fill="#64748b">Payslips &#8226; Tickets</text>
+    <text x="40" y="272" font-size="12" fill="#64748b">My HR needs the login linked</text>
+    <text x="40" y="289" font-size="12" fill="#64748b">to an employee record.</text>
   </g>
   <g>
-    <rect x="335" y="76" width="290" height="214" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="1.5"/>
+    <rect x="335" y="76" width="290" height="236" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="1.5"/>
     <rect x="335" y="76" width="290" height="36" rx="12" fill="#0f766e"/>
     <rect x="335" y="100" width="290" height="12" fill="#0f766e"/>
-    <text x="350" y="99" font-size="14" font-weight="700" fill="#ffffff">2. Time &amp; Attendance</text>
-    <text x="350" y="134" font-size="13" fill="#334155">&#8226; Shifts   &#8226; Holidays   &#8226; Roster</text>
-    <text x="350" y="156" font-size="13" fill="#334155">&#8226; Daily Entry (manual / biometric)</text>
-    <text x="350" y="178" font-size="13" fill="#334155">&#8226; Regularizations (punch fixes)</text>
-    <text x="350" y="200" font-size="13" fill="#334155">&#8226; Overtime Rules   &#8226; Overtime</text>
-    <text x="350" y="222" font-size="13" fill="#334155">&#8226; Summary (present / absent / late)</text>
-    <text x="350" y="252" font-size="12" fill="#64748b">Editing a saved entry needs manager /</text>
-    <text x="350" y="269" font-size="12" fill="#64748b">admin or hr.attendance.manage.</text>
+    <text x="350" y="99" font-size="14" font-weight="700" fill="#ffffff">2. Daily work</text>
+    <text x="350" y="136" font-size="13" font-weight="600" fill="#334155">Attendance</text>
+    <text x="362" y="155" font-size="12" fill="#64748b">Daily entry &#8226; Manual IN / OUT &#8226; Regularizations</text>
+    <text x="362" y="172" font-size="12" fill="#64748b">Overtime &#8226; Summary</text>
+    <text x="350" y="196" font-size="13" font-weight="600" fill="#334155">Leave</text>
+    <text x="362" y="215" font-size="12" fill="#64748b">Requests &#8226; Approvals &#8226; Balances &#8226; Calendar</text>
+    <text x="350" y="239" font-size="13" font-weight="600" fill="#334155">Gate Passes</text>
+    <text x="362" y="258" font-size="12" fill="#64748b">Gate passes &#8226; Gate scan</text>
+    <text x="350" y="282" font-size="13" font-weight="600" fill="#334155">Cases &amp; Exits</text>
+    <text x="362" y="301" font-size="12" fill="#64748b">Notices &amp; cases &#8226; Separations &amp; settlement</text>
   </g>
   <g>
-    <rect x="645" y="76" width="290" height="214" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="1.5"/>
-    <rect x="645" y="76" width="290" height="36" rx="12" fill="#0f766e"/>
-    <rect x="645" y="100" width="290" height="12" fill="#0f766e"/>
-    <text x="660" y="99" font-size="14" font-weight="700" fill="#ffffff">3. Leave</text>
-    <text x="660" y="134" font-size="13" fill="#334155">&#8226; Leave Types (CL, SL, EL &#8230;)</text>
-    <text x="660" y="156" font-size="13" fill="#334155">&#8226; Policies (yearly quota, carry-forward)</text>
-    <text x="660" y="178" font-size="13" fill="#334155">&#8226; Balances (allocated / used / pending)</text>
-    <text x="660" y="200" font-size="13" fill="#334155">&#8226; Requests   &#8226; Approvals</text>
-    <text x="660" y="222" font-size="13" fill="#334155">&#8226; Calendar (approved leave by month)</text>
-    <text x="660" y="252" font-size="12" fill="#64748b">Leave types need manager / admin or</text>
-    <text x="660" y="269" font-size="12" fill="#64748b">hr.leave.types.manage.</text>
+    <rect x="645" y="76" width="290" height="236" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+    <rect x="645" y="76" width="290" height="36" rx="12" fill="#ea580c"/>
+    <rect x="645" y="100" width="290" height="12" fill="#ea580c"/>
+    <text x="660" y="99" font-size="14" font-weight="700" fill="#ffffff">3. Payroll (monthly pay)</text>
+    <text x="660" y="136" font-size="13" font-weight="600" fill="#334155">Payroll</text>
+    <text x="672" y="155" font-size="12" fill="#64748b">Periods &#8226; Runs &#8226; Approvals &#8226; Payslips</text>
+    <text x="672" y="172" font-size="12" fill="#64748b">Salary sheets &amp; registers</text>
+    <text x="660" y="196" font-size="13" font-weight="600" fill="#334155">Payroll Extras</text>
+    <text x="672" y="215" font-size="12" fill="#64748b">Advances &amp; loans &#8226; Bonuses</text>
+    <text x="672" y="232" font-size="12" fill="#64748b">Allowances &amp; bonuses (when switched on)</text>
+    <text x="660" y="272" font-size="12" fill="#64748b">Uses attendance days, leave and</text>
+    <text x="660" y="289" font-size="12" fill="#64748b">overtime from Daily work.</text>
   </g>
 
   <!-- Row 2 -->
   <g>
-    <rect x="25" y="330" width="290" height="250" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
-    <rect x="25" y="330" width="290" height="36" rx="12" fill="#334155"/>
-    <rect x="25" y="354" width="290" height="12" fill="#334155"/>
-    <text x="40" y="353" font-size="14" font-weight="700" fill="#ffffff">5. Talent (performance &amp; hiring)</text>
-    <text x="40" y="390" font-size="13" fill="#334155">&#8226; Performance Cycles</text>
-    <text x="40" y="411" font-size="13" fill="#334155">&#8226; Goals   &#8226; Reviews</text>
-    <text x="40" y="432" font-size="13" fill="#334155">&#8226; Performance Dashboard</text>
-    <text x="40" y="460" font-size="13" fill="#334155">&#8226; Job Requisitions</text>
-    <text x="40" y="481" font-size="13" fill="#334155">&#8226; Candidates   &#8226; Interviews</text>
-    <text x="40" y="502" font-size="13" fill="#334155">&#8226; Offers</text>
-    <text x="40" y="540" font-size="12" fill="#64748b">A hired candidate is then added</text>
-    <text x="40" y="557" font-size="12" fill="#64748b">as an employee in Core HR.</text>
+    <rect x="25" y="352" width="290" height="236" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
+    <rect x="25" y="352" width="290" height="36" rx="12" fill="#334155"/>
+    <rect x="25" y="376" width="290" height="12" fill="#334155"/>
+    <text x="40" y="375" font-size="14" font-weight="700" fill="#ffffff">4. Setup (once, then rarely)</text>
+    <text x="40" y="412" font-size="13" font-weight="600" fill="#334155">HR Setup</text>
+    <text x="52" y="431" font-size="12" fill="#64748b">Settings &#8226; Departments &#8226; Designations</text>
+    <text x="52" y="448" font-size="12" fill="#64748b">Sections &amp; lines &#8226; Bangladesh setup</text>
+    <text x="40" y="472" font-size="13" font-weight="600" fill="#334155">Attendance Setup</text>
+    <text x="52" y="491" font-size="12" fill="#64748b">Shifts &#8226; Roster &#8226; Holidays &#8226; OT rules &#8226; Devices</text>
+    <text x="40" y="515" font-size="13" font-weight="600" fill="#334155">Leave &amp; Payroll Setup</text>
+    <text x="52" y="534" font-size="12" fill="#64748b">Leave types &amp; policies &#8226; Salary components,</text>
+    <text x="52" y="551" font-size="12" fill="#64748b">structures, assignments &#8226; Accounting</text>
+    <text x="40" y="575" font-size="13" font-weight="600" fill="#334155">Bangladesh Rules</text>
   </g>
   <g>
-    <rect x="335" y="330" width="290" height="250" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
-    <rect x="335" y="330" width="290" height="36" rx="12" fill="#ea580c"/>
-    <rect x="335" y="354" width="290" height="12" fill="#ea580c"/>
-    <text x="350" y="353" font-size="14" font-weight="700" fill="#ffffff">4. Payroll (monthly pay)</text>
-    <text x="350" y="388" font-size="13" fill="#334155">&#8226; Components   &#8226; Salary Structures</text>
-    <text x="350" y="409" font-size="13" fill="#334155">&#8226; Structure Assignments   &#8226; Periods</text>
-    <text x="350" y="430" font-size="13" fill="#334155">&#8226; Runs   &#8226; Approvals   &#8226; Payslips</text>
-    <text x="350" y="451" font-size="13" fill="#334155">&#8226; Advances &amp; Loans   &#8226; Bonuses</text>
-    <text x="350" y="472" font-size="13" fill="#334155">&#8226; Accounting Config</text>
-    <text x="350" y="493" font-size="13" fill="#334155">&#8226; Statutory Config (minimum wage)</text>
-    <text x="350" y="540" font-size="12" fill="#64748b">Uses attendance days, leave and</text>
-    <text x="350" y="557" font-size="12" fill="#64748b">overtime from boxes 2 and 3.</text>
+    <rect x="335" y="352" width="290" height="236" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
+    <rect x="335" y="352" width="290" height="36" rx="12" fill="#334155"/>
+    <rect x="335" y="376" width="290" height="12" fill="#334155"/>
+    <text x="350" y="375" font-size="14" font-weight="700" fill="#ffffff">5. Talent</text>
+    <text x="350" y="412" font-size="13" font-weight="600" fill="#334155">Recruitment</text>
+    <text x="362" y="431" font-size="12" fill="#64748b">Job requisitions &#8226; Candidates</text>
+    <text x="362" y="448" font-size="12" fill="#64748b">Interviews &#8226; Offers</text>
+    <text x="350" y="472" font-size="13" font-weight="600" fill="#334155">Performance</text>
+    <text x="362" y="491" font-size="12" fill="#64748b">Dashboard &#8226; Cycles &#8226; Goals &#8226; Reviews</text>
+    <text x="350" y="540" font-size="12" fill="#64748b">A hired candidate is then added</text>
+    <text x="350" y="557" font-size="12" fill="#64748b">on Employees.</text>
   </g>
   <g>
-    <rect x="645" y="330" width="290" height="250" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="1.5"/>
-    <rect x="645" y="330" width="290" height="36" rx="12" fill="#0f766e"/>
-    <rect x="645" y="354" width="290" height="12" fill="#0f766e"/>
-    <text x="660" y="353" font-size="14" font-weight="700" fill="#ffffff">6. Self-Service (every employee)</text>
-    <text x="660" y="390" font-size="13" fill="#334155">&#8226; My Profile</text>
-    <text x="660" y="411" font-size="13" fill="#334155">&#8226; My Attendance</text>
-    <text x="660" y="432" font-size="13" fill="#334155">&#8226; My Leave (apply for leave)</text>
-    <text x="660" y="453" font-size="13" fill="#334155">&#8226; My Payslips</text>
-    <text x="660" y="474" font-size="13" fill="#334155">&#8226; My Tickets (query / complaint)</text>
-    <text x="660" y="510" font-size="12" fill="#64748b">English / &#2476;&#2494;&#2434;&#2482;&#2494; switch on My Leave,</text>
-    <text x="660" y="527" font-size="12" fill="#64748b">My Attendance and My Payslips.</text>
-    <text x="660" y="552" font-size="12" fill="#64748b">The login must be linked to an employee.</text>
+    <rect x="645" y="352" width="290" height="236" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
+    <rect x="645" y="352" width="290" height="36" rx="12" fill="#334155"/>
+    <rect x="645" y="376" width="290" height="12" fill="#334155"/>
+    <text x="660" y="375" font-size="14" font-weight="700" fill="#ffffff">6. Reports</text>
+    <text x="660" y="412" font-size="13" font-weight="600" fill="#334155">Reports &amp; Insights</text>
+    <text x="672" y="431" font-size="12" fill="#64748b">HR reports</text>
+    <text x="672" y="448" font-size="12" fill="#64748b">Compliance (needs a feature flag)</text>
+    <text x="672" y="465" font-size="12" fill="#64748b">AI insights (needs an HR AI flag)</text>
   </g>
 
-  <!-- Row 3 -->
-  <rect x="25" y="606" width="910" height="64" rx="12" fill="#f1f5f9" stroke="#64748b" stroke-width="1.2" stroke-dasharray="5 4"/>
-  <text x="45" y="632" font-size="14" font-weight="700" fill="#334155">7. Analytics  (+ Overview &#8594; HR Dashboard)</text>
-  <text x="45" y="654" font-size="13" fill="#334155">HR Reports &#8226; Compliance (BSCI / WRAP / SEDEX, needs a feature flag) &#8226; AI Insights (attendance, turnover, payroll anomalies)</text>
+  <!-- Bottom note -->
+  <rect x="25" y="616" width="910" height="64" rx="12" fill="#f1f5f9" stroke="#64748b" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <text x="45" y="642" font-size="14" font-weight="700" fill="#334155">Each sidebar link opens one page with tabs along the top.</text>
+  <text x="45" y="664" font-size="13" fill="#334155">Old links and bookmarks still work &#8212; they open the matching tab. Ctrl+K finds any tab by name (for example &#8220;Payslips&#8221;).</text>
 
   <!-- Arrows -->
-  <line x1="315" y1="183" x2="333" y2="183" stroke="#ea580c" stroke-width="2.5" marker-end="url(#arr)"/>
-  <line x1="480" y1="290" x2="480" y2="327" stroke="#ea580c" stroke-width="2.5" marker-end="url(#arr)"/>
-  <path d="M790,290 C790,312 640,306 600,327" fill="none" stroke="#ea580c" stroke-width="2.5" marker-end="url(#arr)"/>
-  <line x1="626" y1="455" x2="643" y2="455" stroke="#ea580c" stroke-width="2.5" marker-end="url(#arr)"/>
-  <path d="M170,330 C170,312 150,300 150,293" fill="none" stroke="#334155" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+  <line x1="315" y1="190" x2="333" y2="190" stroke="#ea580c" stroke-width="2.5" marker-end="url(#arr)"/>
+  <line x1="625" y1="190" x2="643" y2="190" stroke="#ea580c" stroke-width="2.5" marker-end="url(#arr)"/>
+  <path d="M170,352 C170,334 170,326 170,315" fill="none" stroke="#334155" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#arr)"/>
 </svg>

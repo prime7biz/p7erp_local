@@ -6,7 +6,8 @@
 import { useMemo, useState } from "react";
 import { api, type HrPayrollRunResponse } from "@/api/client";
 import { hrBangladeshApi, openBlob, type Row } from "@/api/hrBangladesh";
-import { ActionsMenu, Badge, Banner, Card, Field, Messages, SimpleTable, btnPrimary, btnSecondary, inputCls } from "@/components/hr/bd/BdUi";
+import { KitTable } from "@/components/hr/bd/BdKitTable";
+import { Badge, Banner, Card, Field, Messages, SimpleTable, btnPrimary, btnSecondary, inputCls } from "@/components/hr/bd/BdUi";
 import { money, useAction, useLoad } from "@/components/hr/bd/bdHooks";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
 
@@ -89,22 +90,27 @@ function Acknowledgements({ runId }: { runId: number }) {
       }
     >
       <Messages error={error || list.error} notice={notice} />
-      <SimpleTable<Row>
+      <KitTable<Row>
         rows={list.data?.rows ?? []}
         rowKey={(r) => String(r.run_line_id)}
-        empty={list.loading ? "Loading..." : "No lines."}
+        loading={list.loading}
+        onRefresh={() => void list.reload()}
+        empty="No lines."
+        searchPlaceholder="Search employee or department…"
+        statusOf={(r) => (r.acknowledged ? "Acknowledged" : "Pending")}
+        defaultPageSize={50}
         columns={[
-          { header: "Employee", cell: (r) => `${String(r.employee_code)} - ${String(r.name)}` },
-          { header: "Department", cell: (r) => String(r.department) },
-          { header: "Net pay", align: "right", cell: (r) => money(r.net) },
-          { header: "Paid by", cell: (r) => (r.acknowledged ? `${String(r.payment_method)} ${String(r.payment_reference ?? "")}` : "-") },
-          { header: "Status", cell: (r) => <Badge tone={r.acknowledged ? "green" : "amber"}>{r.acknowledged ? "Acknowledged" : "Pending"}</Badge> },
+          { header: "Employee", cell: (r) => `${String(r.employee_code)} - ${String(r.name)}`, value: (r) => `${String(r.employee_code)} ${String(r.name)}` },
+          { header: "Department", cell: (r) => String(r.department), value: (r) => String(r.department), hideOnMobile: true },
+          { header: "Net pay", align: "right", cell: (r) => money(r.net), value: (r) => Number(r.net) },
+          { header: "Paid by", cell: (r) => (r.acknowledged ? `${String(r.payment_method)} ${String(r.payment_reference ?? "")}` : "-"), hideOnMobile: true },
           {
-            header: "Actions",
-            align: "right",
-            cell: (r) => <ActionsMenu items={[{ label: "Record payment", hidden: Boolean(r.acknowledged) || busy, onClick: () => record(r) }]} />,
+            header: "Status",
+            cell: (r) => <Badge tone={r.acknowledged ? "green" : "amber"}>{r.acknowledged ? "Acknowledged" : "Pending"}</Badge>,
+            value: (r) => (r.acknowledged ? "Acknowledged" : "Pending"),
           },
         ]}
+        actions={(r) => [{ label: "Record payment", primary: true, hidden: Boolean(r.acknowledged), disabled: busy, onClick: () => record(r) }]}
       />
     </Card>
   );
@@ -224,22 +230,24 @@ export function HrPayrollRegistersPage() {
           {view === "departments"
             ? sheet.data.sections.map((s) => (
                 <Card key={s.department} title={s.department} description={`${String(s.subtotal.employees)} employee(s) · net ${money(s.subtotal.net)}`}>
-                  <SimpleTable<Row>
+                  <KitTable<Row>
                     rows={s.lines}
                     rowKey={(r) => String(r.run_line_id)}
                     empty="No lines."
+                    searchPlaceholder="Search number, name or designation…"
+                    defaultPageSize={50}
                     columns={[
-                      { header: "No.", cell: (r) => String(r.employee_code) },
-                      { header: "Name", cell: (r) => String(r.name) },
-                      { header: "Designation", cell: (r) => String(r.designation ?? "") },
-                      { header: "Grade", cell: (r) => String(r.grade ?? "") },
-                      { header: "Present", align: "right", cell: (r) => String(r.days_present) },
-                      { header: "Absent", align: "right", cell: (r) => String(r.absent_days) },
-                      { header: "OT h", align: "right", cell: (r) => String(r.ot_hours) },
-                      { header: "OT", align: "right", cell: (r) => money(r.ot_amount) },
-                      { header: "Gross", align: "right", cell: (r) => money(r.gross) },
-                      { header: "Deductions", align: "right", cell: (r) => money(r.deductions) },
-                      { header: "Net", align: "right", cell: (r) => <span className="font-semibold">{money(r.net)}</span> },
+                      { header: "No.", cell: (r) => String(r.employee_code), value: (r) => String(r.employee_code) },
+                      { header: "Name", cell: (r) => String(r.name), value: (r) => String(r.name) },
+                      { header: "Designation", cell: (r) => String(r.designation ?? ""), value: (r) => String(r.designation ?? ""), hideOnMobile: true },
+                      { header: "Grade", cell: (r) => String(r.grade ?? ""), value: (r) => String(r.grade ?? ""), hideOnMobile: true },
+                      { header: "Present", align: "right", cell: (r) => String(r.days_present), value: (r) => Number(r.days_present), hideOnMobile: true },
+                      { header: "Absent", align: "right", cell: (r) => String(r.absent_days), value: (r) => Number(r.absent_days), hideOnMobile: true },
+                      { header: "OT h", align: "right", cell: (r) => String(r.ot_hours), value: (r) => Number(r.ot_hours), hideOnMobile: true },
+                      { header: "OT", align: "right", cell: (r) => money(r.ot_amount), value: (r) => Number(r.ot_amount), hideOnMobile: true },
+                      { header: "Gross", align: "right", cell: (r) => money(r.gross), value: (r) => Number(r.gross) },
+                      { header: "Deductions", align: "right", cell: (r) => money(r.deductions), value: (r) => Number(r.deductions), hideOnMobile: true },
+                      { header: "Net", align: "right", cell: (r) => <span className="font-semibold">{money(r.net)}</span>, value: (r) => Number(r.net) },
                     ]}
                   />
                 </Card>

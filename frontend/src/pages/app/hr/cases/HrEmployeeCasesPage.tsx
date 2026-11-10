@@ -5,7 +5,8 @@
  */
 import { useState } from "react";
 import { hrBangladeshApi, openBlob, type Row } from "@/api/hrBangladesh";
-import { ActionsMenu, Badge, Banner, Card, Field, Messages, SimpleTable, btnPrimary, btnSecondary, inputCls } from "@/components/hr/bd/BdUi";
+import { KitTable } from "@/components/hr/bd/BdKitTable";
+import { Badge, Banner, Card, Field, Messages, SimpleTable, btnPrimary, btnSecondary, inputCls } from "@/components/hr/bd/BdUi";
 import { employeeLabel, todayIso, useAction, useEmployees, useLoad } from "@/components/hr/bd/bdHooks";
 import { EmployeePicker } from "@/components/hr/bd/EmployeePicker";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
@@ -241,20 +242,18 @@ export function HrEmployeeCasesPage() {
 
       {(candidates.data ?? []).length ? (
         <Card title="Absent more than 10 days" description="Active employees with no attendance or approved leave. Start the s.27(3A) procedure from here.">
-          <SimpleTable<Row>
+          <KitTable<Row>
             rows={candidates.data ?? []}
             rowKey={(r) => String(r.employee_id)}
-            empty=""
+            empty="Nobody is absent more than 10 days."
+            searchPlaceholder="Search employee…"
+            defaultPageSize={50}
             columns={[
-              { header: "Employee", cell: (r) => `${String(r.employee_code)} - ${String(r.name)}` },
-              { header: "Last present", cell: (r) => String(r.last_present) },
-              { header: "Days absent", align: "right", cell: (r) => String(r.days_absent) },
-              {
-                header: "Actions",
-                align: "right",
-                cell: (r) => <ActionsMenu items={[{ label: "Start absence case", onClick: () => startAbsence(r) }]} />,
-              },
+              { header: "Employee", cell: (r) => `${String(r.employee_code)} - ${String(r.name)}`, value: (r) => `${String(r.employee_code)} ${String(r.name)}` },
+              { header: "Last present", cell: (r) => String(r.last_present), value: (r) => String(r.last_present) },
+              { header: "Days absent", align: "right", cell: (r) => String(r.days_absent), value: (r) => Number(r.days_absent) },
             ]}
+            actions={(r) => [{ label: "Start absence case", primary: true, onClick: () => startAbsence(r) }]}
           />
         </Card>
       ) : null}
@@ -321,30 +320,27 @@ export function HrEmployeeCasesPage() {
             </div>
           </form>
         ) : null}
-        <SimpleTable<Row>
+        <KitTable<Row>
           rows={list.data ?? []}
           rowKey={(r) => String(r.id)}
-          empty={list.loading ? "Loading..." : "No cases."}
+          loading={list.loading}
+          onRefresh={() => void list.reload()}
+          empty="No cases."
+          emptyHint="Use New notice / case, or start an absence case from the list above."
+          searchPlaceholder="Search case no., employee or subject…"
+          statusOf={(r) => String(r.status)}
           columns={[
-            { header: "No.", cell: (r) => <span className="font-mono text-xs">{String(r.case_no)}</span> },
-            { header: "Employee", cell: (r) => empName(r.employee_id) },
-            { header: "Type", cell: (r) => CASE_TYPES[String(r.case_type)] ?? String(r.case_type) },
-            { header: "Subject", cell: (r) => String(r.subject) },
-            { header: "Issued", cell: (r) => String(r.issue_date ?? "-") },
-            { header: "Reply due", cell: (r) => String(r.defence_due_date ?? r.reply_due_date ?? "-") },
-            { header: "Status", cell: (r) => <Badge tone={STATUS_TONE[String(r.status)] ?? "gray"}>{String(r.status)}</Badge> },
-            {
-              header: "Actions",
-              align: "right",
-              cell: (r) => (
-                <ActionsMenu
-                  items={[
-                    { label: "Open", onClick: () => setOpenId(Number(r.id)) },
-                    { label: "Print", onClick: () => void run(async () => openBlob(await hrBangladeshApi.casePdf(Number(r.id)), `${String(r.case_no)}.pdf`)) },
-                  ]}
-                />
-              ),
-            },
+            { header: "No.", cell: (r) => <span className="font-mono text-xs">{String(r.case_no)}</span>, value: (r) => String(r.case_no) },
+            { header: "Employee", cell: (r) => empName(r.employee_id), value: (r) => empName(r.employee_id) },
+            { header: "Type", cell: (r) => CASE_TYPES[String(r.case_type)] ?? String(r.case_type), value: (r) => CASE_TYPES[String(r.case_type)] ?? String(r.case_type) },
+            { header: "Subject", cell: (r) => String(r.subject), value: (r) => String(r.subject), hideOnMobile: true },
+            { header: "Issued", cell: (r) => String(r.issue_date ?? "-"), value: (r) => String(r.issue_date ?? ""), hideOnMobile: true },
+            { header: "Reply due", cell: (r) => String(r.defence_due_date ?? r.reply_due_date ?? "-"), value: (r) => String(r.defence_due_date ?? r.reply_due_date ?? "") },
+            { header: "Status", cell: (r) => <Badge tone={STATUS_TONE[String(r.status)] ?? "gray"}>{String(r.status)}</Badge>, value: (r) => String(r.status) },
+          ]}
+          actions={(r) => [
+            { label: "Open", primary: true, onClick: () => setOpenId(Number(r.id)) },
+            { label: "Print", primary: true, onClick: () => void run(async () => openBlob(await hrBangladeshApi.casePdf(Number(r.id)), `${String(r.case_no)}.pdf`)) },
           ]}
         />
       </Card>

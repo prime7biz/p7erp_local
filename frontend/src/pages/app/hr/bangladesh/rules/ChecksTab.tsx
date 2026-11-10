@@ -2,7 +2,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { hrBangladeshApi, type Row } from "@/api/hrBangladesh";
-import { Badge, Banner, Card, Field, Messages, SimpleTable, btnPrimary, btnSecondary, inputCls } from "@/components/hr/bd/BdUi";
+import { KitTable } from "@/components/hr/bd/BdKitTable";
+import { Badge, Banner, Card, Field, Messages, btnPrimary, btnSecondary, inputCls } from "@/components/hr/bd/BdUi";
 import { money, todayIso, useAction, useEmployees, useLoad } from "@/components/hr/bd/bdHooks";
 import { SEPARATION_TYPE_LABELS } from "@/components/hr/bd/bdLabels";
 import { EmployeePicker } from "@/components/hr/bd/EmployeePicker";
@@ -78,19 +79,27 @@ export function ChecksTab() {
           </>
         }
       >
-        <SimpleTable<Row>
+        <KitTable<Row>
           rows={rows}
           rowKey={(r) => String(r.employee_id)}
-          empty={wage.loading ? "Loading..." : "Everyone meets the minimum wage."}
+          loading={wage.loading}
+          empty="Everyone meets the minimum wage."
+          searchPlaceholder="Search employee, structure or grade…"
+          statusOf={(r) => GAP_LABEL[String(r.status)] ?? String(r.status)}
+          defaultPageSize={50}
           columns={[
-            { header: "Employee", cell: (r) => `${String(r.employee_code)} - ${String(r.name)}` },
-            { header: "Structure", cell: (r) => String(r.structure_code ?? "-") },
-            { header: "Grade", cell: (r) => String(r.rate_code ?? "-") },
-            { header: "Basic", align: "right", cell: (r) => money(r.basic) },
-            { header: "Gross", align: "right", cell: (r) => money(r.gross) },
-            { header: "Short (basic)", align: "right", cell: (r) => money(r.shortfall_basic) },
-            { header: "Short (gross)", align: "right", cell: (r) => money(r.shortfall_gross) },
-            { header: "Status", cell: (r) => <Badge tone={GAP_TONE[String(r.status)] ?? "amber"}>{GAP_LABEL[String(r.status)] ?? String(r.status)}</Badge> },
+            { header: "Employee", cell: (r) => `${String(r.employee_code)} - ${String(r.name)}`, value: (r) => `${String(r.employee_code)} ${String(r.name)}` },
+            { header: "Structure", cell: (r) => String(r.structure_code ?? "-"), value: (r) => String(r.structure_code ?? ""), hideOnMobile: true },
+            { header: "Grade", cell: (r) => String(r.rate_code ?? "-"), value: (r) => String(r.rate_code ?? "") },
+            { header: "Basic", align: "right", cell: (r) => money(r.basic), value: (r) => Number(r.basic), hideOnMobile: true },
+            { header: "Gross", align: "right", cell: (r) => money(r.gross), value: (r) => Number(r.gross), hideOnMobile: true },
+            { header: "Short (basic)", align: "right", cell: (r) => money(r.shortfall_basic), value: (r) => Number(r.shortfall_basic) },
+            { header: "Short (gross)", align: "right", cell: (r) => money(r.shortfall_gross), value: (r) => Number(r.shortfall_gross) },
+            {
+              header: "Status",
+              cell: (r) => <Badge tone={GAP_TONE[String(r.status)] ?? "amber"}>{GAP_LABEL[String(r.status)] ?? String(r.status)}</Badge>,
+              value: (r) => GAP_LABEL[String(r.status)] ?? String(r.status),
+            },
           ]}
         />
         <p className="text-xs text-text-muted">

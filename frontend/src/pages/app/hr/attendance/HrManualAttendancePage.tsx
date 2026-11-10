@@ -5,7 +5,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { hrBangladeshApi, type Row } from "@/api/hrBangladesh";
-import { ActionsMenu, Banner, Card, Field, Messages, SimpleTable, btnPrimary, btnSecondary, inputCls } from "@/components/hr/bd/BdUi";
+import { KitTable } from "@/components/hr/bd/BdKitTable";
+import { Banner, Card, Field, Messages, btnPrimary, btnSecondary, inputCls } from "@/components/hr/bd/BdUi";
 import { todayIso, useAction, useLoad } from "@/components/hr/bd/bdHooks";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
 import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
@@ -192,21 +193,32 @@ export function HrManualAttendancePage() {
           }
         >
           {missing.data && missing.data.length > 0 ? <Banner kind="warning">{t("manualAttendance.openWarning")}</Banner> : null}
-          <SimpleTable<Row>
+          <KitTable<Row>
             rows={missing.data ?? []}
             rowKey={(r) => String(r.id)}
-            empty={missing.loading ? "..." : t("manualAttendance.noneMissing")}
+            loading={missing.loading}
+            onRefresh={() => void missing.reload()}
+            empty={t("manualAttendance.noneMissing")}
+            searchPlaceholder={t("manualAttendance.searchMissing")}
+            defaultPageSize={50}
+            labels={{
+              refresh: t("crud.refresh"),
+              exportCsv: t("crud.exportCsv"),
+              retry: t("crud.retry"),
+              clearSearch: t("crud.clearSearch"),
+              all: t("crud.all"),
+              actions: t("crud.actions"),
+              filterByStatus: t("crud.filterByStatus"),
+              loading: t("crud.loading"),
+              noMatch: t("crud.noMatch", { query: "{{query}}", interpolation: { escapeValue: false } }),
+            }}
             columns={[
-              { header: t("manualAttendance.date"), cell: (r) => String(r.attendance_date) },
-              { header: t("manualAttendance.code"), cell: (r) => String(r.employee_code ?? "") },
-              { header: t("manualAttendance.name"), cell: (r) => String(r.employee_name ?? "") },
-              { header: t("manualAttendance.in"), cell: (r) => String(r.in_time ?? "").slice(0, 5) },
-              {
-                header: "Actions",
-                align: "right",
-                cell: (r) => <ActionsMenu items={[{ label: t("manualAttendance.addOut"), onClick: () => startOut(r) }]} />,
-              },
+              { header: t("manualAttendance.date"), cell: (r) => String(r.attendance_date), value: (r) => String(r.attendance_date) },
+              { header: t("manualAttendance.code"), cell: (r) => String(r.employee_code ?? ""), value: (r) => String(r.employee_code ?? "") },
+              { header: t("manualAttendance.name"), cell: (r) => String(r.employee_name ?? ""), value: (r) => String(r.employee_name ?? "") },
+              { header: t("manualAttendance.in"), cell: (r) => String(r.in_time ?? "").slice(0, 5), value: (r) => String(r.in_time ?? "").slice(0, 5) },
             ]}
+            actions={(r) => [{ label: t("manualAttendance.addOut"), primary: true, onClick: () => startOut(r) }]}
           />
         </Card>
       )}

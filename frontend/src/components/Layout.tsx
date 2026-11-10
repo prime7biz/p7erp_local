@@ -6,6 +6,7 @@ import { menuSections } from "@/app/sidebarConfig";
 import { useProductionOptionalUnits } from "@/hooks/useProductionOptionalUnits";
 import { AppBottomNav } from "@/components/navigation/AppBottomNav";
 import { flattenMenuRoutes } from "@/components/shell/flattenMenuRoutes";
+import { hrTabPaletteRoutes } from "@/components/hr/kit/hrHubs";
 import { ShellTopHeader } from "@/components/shell/ShellTopHeader";
 import { ShellBreadcrumbs } from "@/components/shell/ShellBreadcrumbs";
 import { Sidebar } from "@/components/shell/Sidebar";
@@ -58,7 +59,9 @@ export function Layout() {
       featureFlags: me.feature_flags,
       hasPermission,
     });
-    return flattenMenuRoutes(filtered);
+    const rows = flattenMenuRoutes(filtered);
+    // HR pages live as tabs inside hubs; list each tab so it stays searchable in the palette.
+    return filtered.some((s) => s.section === "HR") ? [...rows, ...hrTabPaletteRoutes(me.feature_flags)] : rows;
   }, [me, enabledOptionalUnits, hasPermission]);
 
   if (loading) return <div className="p-6">Loading...</div>;

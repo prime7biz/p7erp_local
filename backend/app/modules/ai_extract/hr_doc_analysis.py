@@ -91,4 +91,10 @@ def analyze_hr_medical_fields(fields: dict[str, ExtractedField]) -> list[dict[st
 
 
 def analyze_hr_birth_fields(fields: dict[str, ExtractedField]) -> list[dict[str, str]]:
-    return analyze_hr_id_fields(fields)
+    alerts = [a for a in analyze_hr_id_fields(fields) if a["code"] != "MISSING_NID"]
+    if not _field_val(fields, "birth_registration_number"):
+        alerts.insert(
+            0,
+            {"severity": "high", "code": "MISSING_BIRTH_REG", "message": "Birth registration number not found."},
+        )
+    return alerts

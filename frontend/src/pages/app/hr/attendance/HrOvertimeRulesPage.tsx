@@ -1,29 +1,49 @@
-import { useCallback, useEffect, useState } from "react";
-import { api, type HrOvertimeRuleResponse, type HrOvertimeRuleUpdate } from "@/api/client";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { api, type HrOvertimeRuleResponse } from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { ActiveBadge } from "@/components/hr/HrListParts";
+import { HrDataTable, type HrTableColumn } from "@/components/hr/kit/HrDataTable";
+import { HrFormDrawer } from "@/components/hr/kit/HrFormDrawer";
 
 const PREFIX = "/app/hr";
+const inputClass = "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm";
+const labelClass = "block text-sm font-medium text-text-secondary";
+
+type RuleForm = {
+  code: string;
+  name: string;
+  employee_category: string;
+  weekday_multiplier: string;
+  weekend_multiplier: string;
+  holiday_multiplier: string;
+  is_active: boolean;
+};
+const EMPTY: RuleForm = {
+  code: "",
+  name: "",
+  employee_category: "",
+  weekday_multiplier: "1.5",
+  weekend_multiplier: "2",
+  holiday_multiplier: "2",
+  is_active: true,
+};
 
 export function HrOvertimeRulesPage() {
   const [rows, setRows] = useState<HrOvertimeRuleResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [editId, setEditId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState<HrOvertimeRuleUpdate>({});
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
-  const [createForm, setCreateForm] = useState({
-    code: "",
-    name: "",
-    employee_category: "",
-    weekday_multiplier: "1.5",
-    weekend_multiplier: "2",
-    holiday_multiplier: "2",
-  });
+  const [formError, setFormError] = useState("");
+  const [editing, setEditing] = useState<HrOvertimeRuleResponse | "new" | null>(null);
+  const [form, setForm] = useState<RuleForm>(EMPTY);
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError("");
     try {
       setRows(await api.listHrOvertimeRules());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load overtime rules");
     } finally {
       setLoading(false);
     }
@@ -33,234 +53,127 @@ export function HrOvertimeRulesPage() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    const close = () => setOpenActionsId(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, []);
-
-  const onCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!createForm.code.trim() || !createForm.name.trim()) return;
-    setError("");
-    try {
-      await api.createHrOvertimeRule({
-        code: createForm.code.trim(),
-        name: createForm.name.trim(),
-        employee_category: createForm.employee_category.trim() || null,
-        weekday_multiplier: createForm.weekday_multiplier,
-        weekend_multiplier: createForm.weekend_multiplier,
-        holiday_multiplier: createForm.holiday_multiplier,
-        is_active: true,
-      });
-      setCreateForm({
-        code: "",
-        name: "",
-        employee_category: "",
-        weekday_multiplier: "1.5",
-        weekend_multiplier: "2",
-        holiday_multiplier: "2",
-      });
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Create failed");
-    }
+  const openNew = () => {
+    setForm(EMPTY);
+    setFormError("");
+    setEditing("new");
   };
-
   const openEdit = (r: HrOvertimeRuleResponse) => {
-    setEditId(r.id);
-    setEditForm({
+    setForm({
       code: r.code,
       name: r.name,
-      employee_category: r.employee_category,
-      weekday_multiplier: r.weekday_multiplier,
-      weekend_multiplier: r.weekend_multiplier,
-      holiday_multiplier: r.holiday_multiplier,
+      employee_category: r.employee_category ?? "",
+      weekday_multiplier: String(r.weekday_multiplier ?? ""),
+      weekend_multiplier: String(r.weekend_multiplier ?? ""),
+      holiday_multiplier: String(r.holiday_multiplier ?? ""),
       is_active: r.is_active,
     });
-    setOpenActionsId(null);
+    setFormError("");
+    setEditing(r);
   };
 
-  const saveEdit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (editId == null) return;
+    if (!form.code.trim() || !form.name.trim()) {
+      setFormError("Code and name are required.");
+      return;
+    }
+    const body = {
+      code: form.code.trim(),
+      name: form.name.trim(),
+      employee_category: form.employee_category.trim() || null,
+      weekday_multiplier: form.weekday_multiplier,
+      weekend_multiplier: form.weekend_multiplier,
+      holiday_multiplier: form.holiday_multiplier,
+      is_active: form.is_active,
+    };
+    setSaving(true);
+    setFormError("");
     try {
-      await api.updateHrOvertimeRule(editId, editForm);
-      setEditId(null);
+      if (editing === "new") await api.createHrOvertimeRule(body);
+      else if (editing) await api.updateHrOvertimeRule(editing.id, body);
+      setEditing(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Update failed");
+      setFormError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <HrPageHeader
-        title="Overtime rules"
-        description="Configure OT multipliers by category."
-        breadcrumbs={[{ label: "HR", href: PREFIX }, { label: "OT Rules" }]}
+  const mult = (v: unknown) => (v == null || v === "" ? "-" : `× ${String(v)}`);
+  const columns: HrTableColumn<HrOvertimeRuleResponse>[] = [
+    { key: "code", header: "Code", render: (r) => <span className="font-medium text-text-primary">{r.code}</span>, value: (r) => r.code },
+    { key: "name", header: "Name", render: (r) => r.name, value: (r) => r.name },
+    { key: "category", header: "Category", render: (r) => r.employee_category || "All", value: (r) => r.employee_category, hideOnMobile: true },
+    { key: "weekday", header: "Weekday", align: "right", render: (r) => mult(r.weekday_multiplier), value: (r) => String(r.weekday_multiplier ?? "") },
+    { key: "weekend", header: "Weekend", align: "right", render: (r) => mult(r.weekend_multiplier), value: (r) => String(r.weekend_multiplier ?? "") },
+    { key: "holiday", header: "Holiday", align: "right", render: (r) => mult(r.holiday_multiplier), value: (r) => String(r.holiday_multiplier ?? ""), hideOnMobile: true },
+    { key: "active", header: "Status", render: (r) => <ActiveBadge active={r.is_active} />, value: (r) => (r.is_active ? "Active" : "Inactive") },
+  ];
+
+  const addButton = (
+    <button type="button" onClick={openNew} className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground hover:opacity-90">
+      + Add rule
+    </button>
+  );
+
+  const field = (key: keyof RuleForm, label: string, required = false) => (
+    <div className="space-y-1">
+      <label className={labelClass} htmlFor={`ot-${key}`}>
+        {required ? `${label} **` : label}
+      </label>
+      <input
+        id={`ot-${key}`}
+        className={inputClass}
+        value={String(form[key])}
+        required={required}
+        onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
       />
-      {error && <div className="text-sm text-status-danger-foreground">{error}</div>}
+    </div>
+  );
 
-      <form onSubmit={onCreate} className="grid gap-2 rounded-xl border border-border bg-surface-raised p-4 sm:grid-cols-2 lg:grid-cols-3">
-        <input
-          className="rounded border px-2 py-1 text-sm"
-          placeholder="Code"
-          value={createForm.code}
-          onChange={(e) => setCreateForm((f) => ({ ...f, code: e.target.value }))}
-          required
-        />
-        <input
-          className="rounded border px-2 py-1 text-sm"
-          placeholder="Name"
-          value={createForm.name}
-          onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
-          required
-        />
-        <input
-          className="rounded border px-2 py-1 text-sm"
-          placeholder="Employee category (optional)"
-          value={createForm.employee_category}
-          onChange={(e) => setCreateForm((f) => ({ ...f, employee_category: e.target.value }))}
-        />
-        <input
-          className="rounded border px-2 py-1 text-sm"
-          placeholder="Weekday mult"
-          value={createForm.weekday_multiplier}
-          onChange={(e) => setCreateForm((f) => ({ ...f, weekday_multiplier: e.target.value }))}
-        />
-        <input
-          className="rounded border px-2 py-1 text-sm"
-          placeholder="Weekend mult"
-          value={createForm.weekend_multiplier}
-          onChange={(e) => setCreateForm((f) => ({ ...f, weekend_multiplier: e.target.value }))}
-        />
-        <input
-          className="rounded border px-2 py-1 text-sm"
-          placeholder="Holiday mult"
-          value={createForm.holiday_multiplier}
-          onChange={(e) => setCreateForm((f) => ({ ...f, holiday_multiplier: e.target.value }))}
-        />
-        <div className="flex items-end">
-          <button type="submit" className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white">
-            Add rule
-          </button>
-        </div>
-      </form>
-
-      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-sm text-text-muted">Loading...</div>
-        ) : (
-          <table className="min-w-full divide-y divide-border">
-            <thead className="bg-surface-subtle">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs uppercase">Code</th>
-                <th className="px-4 py-2 text-left text-xs uppercase">Name</th>
-                <th className="px-4 py-2 text-left text-xs uppercase">Weekday x</th>
-                <th className="px-4 py-2 text-left text-xs uppercase">Weekend x</th>
-                <th className="px-4 py-2 text-right text-xs uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id}>
-                  <td className="px-4 py-2 text-sm">{r.code}</td>
-                  <td className="px-4 py-2 text-sm">{r.name}</td>
-                  <td className="px-4 py-2 text-sm">{r.weekday_multiplier}</td>
-                  <td className="px-4 py-2 text-sm">{r.weekend_multiplier}</td>
-                  <td className="px-4 py-2 text-right">
-                    <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => setOpenActionsId(openActionsId === r.id ? null : r.id)}
-                        className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      >
-                        Actions
-                      </button>
-                      {openActionsId === r.id && (
-                        <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                          <button
-                            type="button"
-                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                            onClick={() => openEdit(r)}
-                          >
-                            Edit
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <HrPageHeader title="Overtime rules" description="Overtime pay multipliers for weekdays, weekends and holidays, optionally per employee category." breadcrumbs={[{ label: "HR", href: PREFIX }, { label: "OT Rules" }]} />
+        {addButton}
       </div>
-
-      {editId != null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <form onSubmit={saveEdit} className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-surface-raised p-6 shadow-xl space-y-3">
-            <h3 className="text-lg font-semibold text-text-primary">Edit OT rule</h3>
-            <label className="block text-sm">
-              Code
-              <input
-                className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
-                value={editForm.code ?? ""}
-                onChange={(e) => setEditForm((f) => ({ ...f, code: e.target.value }))}
-              />
-            </label>
-            <label className="block text-sm">
-              Name
-              <input
-                className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
-                value={editForm.name ?? ""}
-                onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-              />
-            </label>
-            <label className="block text-sm">
-              Weekday multiplier
-              <input
-                className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
-                value={editForm.weekday_multiplier ?? ""}
-                onChange={(e) => setEditForm((f) => ({ ...f, weekday_multiplier: e.target.value }))}
-              />
-            </label>
-            <label className="block text-sm">
-              Weekend multiplier
-              <input
-                className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
-                value={editForm.weekend_multiplier ?? ""}
-                onChange={(e) => setEditForm((f) => ({ ...f, weekend_multiplier: e.target.value }))}
-              />
-            </label>
-            <label className="block text-sm">
-              Holiday multiplier
-              <input
-                className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
-                value={editForm.holiday_multiplier ?? ""}
-                onChange={(e) => setEditForm((f) => ({ ...f, holiday_multiplier: e.target.value }))}
-              />
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={editForm.is_active ?? true}
-                onChange={(e) => setEditForm((f) => ({ ...f, is_active: e.target.checked }))}
-              />
-              Active
-            </label>
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" className="rounded border px-3 py-1.5 text-sm" onClick={() => setEditId(null)}>
-                Cancel
-              </button>
-              <button type="submit" className="rounded bg-brand-primary px-3 py-1.5 text-sm font-semibold text-white">
-                Save
-              </button>
-            </div>
-          </form>
+      <HrDataTable
+        rows={rows}
+        rowKey={(r) => r.id}
+        columns={columns}
+        loading={loading}
+        error={error}
+        onRetry={() => void load()}
+        onRefresh={() => void load()}
+        emptyTitle="No overtime rules yet"
+        emptyHint="Add at least one rule so approved overtime can be paid."
+        emptyAction={addButton}
+        rowActions={(r) => [{ key: "edit", label: "Edit", primary: true, onClick: () => openEdit(r) }]}
+      />
+      <HrFormDrawer
+        open={editing != null}
+        title={editing === "new" ? "Add overtime rule" : "Edit overtime rule"}
+        description="Multipliers are applied to the hourly rate, e.g. 2 = double pay."
+        onClose={() => setEditing(null)}
+        onSubmit={(e) => void onSubmit(e)}
+        submitting={saving}
+        error={formError}
+      >
+        {field("code", "Code", true)}
+        {field("name", "Name", true)}
+        {field("employee_category", "Employee category (leave empty for everyone)")}
+        <div className="grid grid-cols-3 gap-3">
+          {field("weekday_multiplier", "Weekday ×")}
+          {field("weekend_multiplier", "Weekend ×")}
+          {field("holiday_multiplier", "Holiday ×")}
         </div>
-      )}
+        <label className="flex items-center gap-2 text-sm text-text-secondary">
+          <input type="checkbox" checked={form.is_active} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))} />
+          Active
+        </label>
+      </HrFormDrawer>
     </div>
   );
 }

@@ -12,6 +12,9 @@ const extractors: Record<HrDocExtractionKind, (file: File) => Promise<HrDocExtra
   "birth-certificate": api.extractHrBirthCertificate,
 };
 
+/** Start of the backend's fixed "AI service could not read" warning (`_hr_unavailable`). */
+const SERVICE_DOWN_PREFIX = "The AI service could not read";
+
 /**
  * Thin extraction hook for HR onboarding documents (CV, NID, medical, birth cert).
  */
@@ -38,7 +41,11 @@ export function useHrDocExtraction(kind: HrDocExtractionKind) {
           Object.keys(res.fields).length === 0 ||
           res.unmapped_text.length > 0;
         setStatus(res.success ? (partial ? "partial" : "extracted") : "failed");
-        if (!res.success) setError("No data could be extracted from this file.");
+        if (!res.success) {
+          // Only the server's own message is shown; other warnings can be text the AI model wrote.
+          const serviceDown = res.warnings.find((w) => w.startsWith(SERVICE_DOWN_PREFIX));
+          setError(serviceDown ?? "No data could be read from this file. Try a clearer photo or scan.");
+        }
       } catch (e) {
         logApiError(`ai-extract-hr-${kind}`, e);
         setStatus("failed");

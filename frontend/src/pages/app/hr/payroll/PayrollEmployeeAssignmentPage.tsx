@@ -5,7 +5,13 @@ import {
   type HrPayrollAssignmentResponse,
 } from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { HrStatusBadge } from "@/components/hr/HrStatusBadge";
+import { HrDataTable, type HrTableColumn } from "@/components/hr/kit/HrDataTable";
+import { HrEmployeeCell } from "@/components/hr/kit/HrEmployeeFields";
+import { useEmployeeLookup } from "@/components/hr/kit/useEmployeeLookup";
+import { useAuth } from "@/context/AuthContext";
 import { todayLocalISO } from "@/lib/dates";
+import { canExportHrData } from "@/lib/roles";
 
 const PREFIX = "/app/hr";
 
@@ -24,13 +30,13 @@ function assignmentStatus(row: HrPayrollAssignmentResponse): string {
 }
 
 export function PayrollEmployeeAssignmentPage() {
+  const { me } = useAuth();
   const [rows, setRows] = useState<HrPayrollAssignmentResponse[]>([]);
   const [employees, setEmployees] = useState<HrEmployeeResponse[]>([]);
   const [structures, setStructures] = useState<PayrollStructureOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [form, setForm] = useState({
     employee_id: 0,
     structure_id: 0,
@@ -42,6 +48,7 @@ export function PayrollEmployeeAssignmentPage() {
 
   const empById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
   const structById = useMemo(() => new Map(structures.map((s) => [s.id, s])), [structures]);
+  const lookup = useEmployeeLookup(useMemo(() => rows.map((r) => r.employee_id), [rows]));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,12 +73,6 @@ export function PayrollEmployeeAssignmentPage() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    const c = () => setOpenActionsId(null);
-    document.addEventListener("click", c);
-    return () => document.removeEventListener("click", c);
-  }, []);
 
   const onSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
@@ -108,11 +109,11 @@ export function PayrollEmployeeAssignmentPage() {
   };
 
   const endAssignment = async (id: number) => {
+    if (!window.confirm("End this salary structure assignment with today's date as its end date?")) return;
     setMsg("");
     try {
       await api.endHrPayrollAssignment(id, { effective_to: todayLocalISO() });
       setMsg("Assignment ended.");
-      setOpenActionsId(null);
       await load();
     } catch (err) {
       setMsg(err instanceof Error ? err.message : "End failed");
@@ -125,6 +126,36 @@ export function PayrollEmployeeAssignmentPage() {
     return `${code}${s.name}`;
   };
 
+  const employeeText = (id: number) => {
+    const found = lookup(id);
+    if (found) return `${found.employee_code} ${found.full_name}`;
+    const emp = empById.get(id);
+    return emp ? `${emp.employee_code} ${emp.first_name} ${emp.last_name}` : `#${id}`;
+  };
+
+  const columns: HrTableColumn<HrPayrollAssignmentResponse>[] = [
+    {
+      key: "employee",
+      header: "Employee",
+      render: (r) => <HrEmployeeCell id={r.employee_id} lookup={lookup} />,
+      value: (r) => employeeText(r.employee_id),
+    },
+    {
+      key: "structure",
+      header: "Structure",
+      render: (r) => structureLabel(structById.get(r.structure_id), r.structure_id),
+      value: (r) => structureLabel(structById.get(r.structure_id), r.structure_id),
+    },
+    { key: "from", header: "From", render: (r) => r.effective_from, value: (r) => r.effective_from },
+    { key: "to", header: "To", render: (r) => r.effective_to ?? "—", value: (r) => r.effective_to, hideOnMobile: true },
+    {
+      key: "status",
+      header: "Status",
+      render: (r) => <HrStatusBadge status={assignmentStatus(r)} />,
+      value: (r) => assignmentStatus(r),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <HrPageHeader
@@ -132,7 +163,6 @@ export function PayrollEmployeeAssignmentPage() {
         description="Link employees to salary structures with effective dates. Required before auto-calculate."
         breadcrumbs={[{ label: "HR", href: PREFIX }, { label: "Assignments" }]}
       />
-      {error && <div className="text-sm text-status-danger-foreground">{error}</div>}
       {msg && <div className="text-sm text-text-secondary">{msg}</div>}
 
       <form onSubmit={(e) => void onSubmit(e)} className="rounded-xl border border-border bg-surface-raised p-4 space-y-3">
@@ -208,72 +238,30 @@ export function PayrollEmployeeAssignmentPage() {
         </button>
       </form>
 
-      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-sm text-text-muted">Loading…</div>
-        ) : rows.length === 0 ? (
-          <div className="p-8 text-sm text-text-muted">No assignments yet.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-border text-sm">
-              <thead className="bg-surface-subtle">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Employee</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Structure</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">From</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">To</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Status</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => {
-                  const emp = empById.get(row.employee_id);
-                  const st = structById.get(row.structure_id);
-                  const status = assignmentStatus(row);
-                  return (
-                    <tr key={row.id} className="border-t border-border-subtle">
-                      <td className="px-4 py-2">
-                        {emp
-                          ? `${emp.employee_code} — ${emp.first_name} ${emp.last_name}`
-                          : `#${row.employee_id}`}
-                      </td>
-                      <td className="px-4 py-2">{structureLabel(st, row.structure_id)}</td>
-                      <td className="px-4 py-2">{row.effective_from}</td>
-                      <td className="px-4 py-2">{row.effective_to ?? "—"}</td>
-                      <td className="px-4 py-2">{status}</td>
-                      <td className="px-4 py-2 relative">
-                        <button
-                          type="button"
-                          className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenActionsId(openActionsId === row.id ? null : row.id);
-                          }}
-                        >
-                          Actions
-                        </button>
-                        {openActionsId === row.id && (
-                          <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                            <button
-                              type="button"
-                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                              disabled={status === "Ended"}
-                              onClick={() => void endAssignment(row.id)}
-                            >
-                              End assignment
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <HrDataTable
+        rows={rows}
+        rowKey={(r) => r.id}
+        columns={columns}
+        loading={loading}
+        error={error}
+        onRetry={() => void load()}
+        onRefresh={() => void load()}
+        emptyTitle="No assignments yet."
+        emptyHint="Use Assign structure above to link an employee to a salary structure."
+        searchPlaceholder="Search employee or structure…"
+        statusOf={(r) => assignmentStatus(r)}
+        exportFileName="payroll-structure-assignments"
+        canExport={canExportHrData(me?.role_name)}
+        rowActions={(r) => [
+          {
+            key: "end",
+            label: "End assignment",
+            danger: true,
+            disabled: assignmentStatus(r) === "Ended",
+            onClick: () => void endAssignment(r.id),
+          },
+        ]}
+      />
     </div>
   );
 }

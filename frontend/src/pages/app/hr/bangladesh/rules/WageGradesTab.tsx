@@ -1,7 +1,8 @@
 /** Give an employee a Gazette wage grade (used by the minimum-wage check and enforcement). */
 import { useState } from "react";
 import { hrBangladeshApi, type Row } from "@/api/hrBangladesh";
-import { Banner, Card, Field, Messages, SimpleTable, btnPrimary, inputCls } from "@/components/hr/bd/BdUi";
+import { KitTable } from "@/components/hr/bd/BdKitTable";
+import { Banner, Card, Field, Messages, btnPrimary, inputCls } from "@/components/hr/bd/BdUi";
 import { employeeLabel, money, todayIso, useAction, useEmployees, useLoad } from "@/components/hr/bd/bdHooks";
 import { EmployeePicker } from "@/components/hr/bd/EmployeePicker";
 
@@ -62,15 +63,19 @@ export function WageGradesTab() {
         </div>
       </Card>
       <Card title="Wage grade history">
-        <SimpleTable<Row>
+        <KitTable<Row>
           rows={list.data ?? []}
           rowKey={(r) => String(r.id)}
-          empty={list.loading ? "Loading..." : "No wage grades assigned yet."}
+          loading={list.loading}
+          onRefresh={() => void list.reload()}
+          empty="No wage grades assigned yet."
+          searchPlaceholder="Search employee or grade…"
+          exportFileName="wage-grade-history"
           columns={[
-            { header: "Employee", cell: (r) => empName(r.employee_id) },
-            { header: "Grade", cell: (r) => String(r.rate_code) },
-            { header: "From", cell: (r) => String(r.effective_from) },
-            { header: "To", cell: (r) => String(r.effective_to ?? "open") },
+            { header: "Employee", cell: (r) => empName(r.employee_id), value: (r) => empName(r.employee_id) },
+            { header: "Grade", cell: (r) => String(r.rate_code), value: (r) => String(r.rate_code) },
+            { header: "From", cell: (r) => String(r.effective_from), value: (r) => String(r.effective_from) },
+            { header: "To", cell: (r) => String(r.effective_to ?? "open"), value: (r) => String(r.effective_to ?? "") },
           ]}
         />
       </Card>

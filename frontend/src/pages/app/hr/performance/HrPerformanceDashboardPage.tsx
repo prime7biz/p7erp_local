@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type HrPerformanceDashboardResponse } from "@/api/client";
+import { HrPageHeader } from "@/components/hr/HrPageHeader";
 
 export function HrPerformanceDashboardPage() {
   const [data, setData] = useState<HrPerformanceDashboardResponse | null>(null);
@@ -26,10 +27,7 @@ export function HrPerformanceDashboardPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">Performance Dashboard</h1>
-          <p className="text-sm text-text-muted">Quick metrics for goals and reviews.</p>
-        </div>
+        <HrPageHeader title="Performance Dashboard" description="Quick metrics for goals and reviews." />
         <button
           type="button"
           onClick={() => void load()}

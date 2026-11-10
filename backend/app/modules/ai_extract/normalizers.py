@@ -78,7 +78,18 @@ def normalize_date(value: str | None) -> str | None:
     s = sanitize_text(value, 64)
     if not s:
         return None
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%b-%Y", "%Y/%m/%d"):
+    for fmt in (
+        "%Y-%m-%d",
+        "%d/%m/%Y",
+        "%m/%d/%Y",
+        "%d-%b-%Y",
+        "%Y/%m/%d",
+        "%d %b %Y",
+        "%d %B %Y",
+        "%d-%m-%Y",
+        "%d.%m.%Y",
+        "%d-%B-%Y",
+    ):
         try:
             return datetime.strptime(s, fmt).date().isoformat()
         except ValueError:

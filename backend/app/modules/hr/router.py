@@ -74,6 +74,7 @@ from app.modules.hr.schemas import (
     EmployeeCreate,
     EmployeeDocumentCreate,
     EmployeeDocumentResponse,
+    EmployeeLookupItem,
     EmployeeResponse,
     EmployeeStatusHistoryCreate,
     EmployeeStatusHistoryResponse,
@@ -463,6 +464,65 @@ async def employee_access(
         "can_manage_compliance": granted(PERMISSION_HR_COMPLIANCE_MANAGE),
         "masked_fields": access.masked_fields(),
     }
+
+
+EMPLOYEE_LOOKUP_MAX_IDS = 500
+_INT4_MAX = 2**31 - 1
+
+
+# Must stay above "/employees/{employee_id}", otherwise "lookup" is parsed as an employee id (422).
+@router.get("/employees/lookup", response_model=list[EmployeeLookupItem])
+async def lookup_employees(
+    ids: str = Query(..., max_length=6000, description="Comma-separated employee ids (max 500)"),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Code and name for the given ids, so list tables can show people instead of numbers.
+
+    Ids from another tenant (or unknown ids) are simply left out of the answer.
+    """
+    _ensure_user_tenant(user, tenant)
+    wanted: set[int] = set()
+    for part in ids.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        # ASCII digits only (str.isdigit also accepts "²"), and within the database integer range.
+        if not (part.isascii() and part.isdigit() and len(part) <= 10) or not 1 <= int(part) <= _INT4_MAX:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="ids must be whole numbers")
+        wanted.add(int(part))
+    if len(wanted) > EMPLOYEE_LOOKUP_MAX_IDS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"At most {EMPLOYEE_LOOKUP_MAX_IDS} ids per request",
+        )
+    if not wanted:
+        return []
+    rows = (
+        await db.execute(
+            select(
+                Employee.id,
+                Employee.employee_code,
+                Employee.first_name,
+                Employee.last_name,
+                Employee.department_id,
+                Employee.is_active,
+            )
+            .where(Employee.tenant_id == tenant.id, Employee.id.in_(wanted))
+            .order_by(Employee.employee_code)
+        )
+    ).all()
+    return [
+        EmployeeLookupItem(
+            id=r.id,
+            employee_code=r.employee_code,
+            full_name=" ".join(p for p in (r.first_name, r.last_name) if p).strip() or r.employee_code,
+            department_id=r.department_id,
+            is_active=bool(r.is_active),
+        )
+        for r in rows
+    ]
 
 
 # Must stay above "/employees/{employee_id}", otherwise "export" is parsed as an employee id (422).

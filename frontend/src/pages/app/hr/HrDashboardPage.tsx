@@ -10,7 +10,7 @@ const PREFIX = "/app/hr";
 
 const LINK_GROUPS: { title: string; links: { label: string; to: string }[] }[] = [
   {
-    title: "Core HR",
+    title: "People & setup",
     links: [
       { label: "Employees", to: `${PREFIX}/employees` },
       { label: "Departments", to: `${PREFIX}/departments` },
@@ -20,7 +20,7 @@ const LINK_GROUPS: { title: string; links: { label: string; to: string }[] }[] =
     ],
   },
   {
-    title: "Time & attendance",
+    title: "Attendance",
     links: [
       { label: "Daily attendance", to: `${PREFIX}/attendance/entries` },
       { label: "Attendance summary", to: `${PREFIX}/attendance/summary` },

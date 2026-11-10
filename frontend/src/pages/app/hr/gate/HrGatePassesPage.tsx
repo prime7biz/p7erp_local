@@ -5,7 +5,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { hrBangladeshApi, openBlob, type Row } from "@/api/hrBangladesh";
-import { ActionsMenu, Badge, Card, Field, Messages, SimpleTable, btnPrimary, inputCls } from "@/components/hr/bd/BdUi";
+import { KitTable } from "@/components/hr/bd/BdKitTable";
+import { Badge, Card, Field, Messages, btnPrimary, inputCls } from "@/components/hr/bd/BdUi";
 import { useAction, useEmployees, useLoad } from "@/components/hr/bd/bdHooks";
 import { EmployeePicker } from "@/components/hr/bd/EmployeePicker";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
@@ -123,56 +124,66 @@ export function HrGatePassesPage() {
           </select>
         }
       >
-        <SimpleTable<Row>
+        <KitTable<Row>
           rows={list.data ?? []}
           rowKey={(r) => String(r.id)}
-          empty={list.loading ? "Loading..." : "No gate passes."}
+          loading={list.loading}
+          onRefresh={() => void list.reload()}
+          empty="No gate passes."
+          emptyHint="Create a pass above; it starts as a draft until you activate it."
+          searchPlaceholder="Search pass, name, mobile or purpose…"
+          exportFileName="gate-passes"
           columns={[
-            { header: "Pass", cell: (r) => <span className="font-mono text-xs">{String(r.pass_code)}</span> },
-            { header: "Name", cell: (r) => String(r.person_name) },
-            { header: "Mobile", cell: (r) => String(r.mobile) },
-            { header: "Purpose", cell: (r) => String(r.purpose) },
-            { header: "Valid", cell: (r) => `${String(r.valid_from).replace("T", " ").slice(0, 16)} to ${String(r.valid_to).replace("T", " ").slice(0, 16)}` },
+            { header: "Pass", cell: (r) => <span className="font-mono text-xs">{String(r.pass_code)}</span>, value: (r) => String(r.pass_code) },
+            { header: "Name", cell: (r) => String(r.person_name), value: (r) => String(r.person_name) },
+            { header: "Mobile", cell: (r) => String(r.mobile), value: (r) => String(r.mobile), hideOnMobile: true },
+            { header: "Purpose", cell: (r) => String(r.purpose), value: (r) => String(r.purpose) },
+            {
+              header: "Valid",
+              cell: (r) => `${String(r.valid_from).replace("T", " ").slice(0, 16)} to ${String(r.valid_to).replace("T", " ").slice(0, 16)}`,
+              value: (r) => String(r.valid_from),
+              hideOnMobile: true,
+            },
             {
               header: "Status",
               cell: (r) => <Badge tone={r.expired ? "gray" : TONE[String(r.status)] ?? "gray"}>{r.expired ? "EXPIRED" : String(r.status)}</Badge>,
+              value: (r) => (r.expired ? "EXPIRED" : String(r.status)),
             },
+          ]}
+          actions={(r) => [
+            { label: "Activate", primary: true, positive: true, hidden: r.status !== "DRAFT", onClick: () => act(() => hrBangladeshApi.activateGatePass(Number(r.id)), "Pass activated.") },
+            { label: "Print", primary: true, hidden: !["DRAFT", "ACTIVE"].includes(String(r.status)), onClick: () => print(Number(r.id), String(r.pass_code)) },
             {
-              header: "Actions",
-              align: "right",
-              cell: (r) => (
-                <ActionsMenu
-                  items={[
-                    { label: "Activate", hidden: r.status !== "DRAFT", onClick: () => act(() => hrBangladeshApi.activateGatePass(Number(r.id)), "Pass activated.") },
-                    { label: "Print", hidden: !["DRAFT", "ACTIVE"].includes(String(r.status)), onClick: () => print(Number(r.id), String(r.pass_code)) },
-                    {
-                      label: "Revoke",
-                      danger: true,
-                      hidden: r.status === "REVOKED",
-                      onClick: () => {
-                        const reason = window.prompt("Reason for revoking this pass");
-                        if (reason && reason.trim().length >= 2) act(() => hrBangladeshApi.revokeGatePass(Number(r.id), reason.trim()), "Pass revoked.");
-                      },
-                    },
-                  ]}
-                />
-              ),
+              label: "Revoke",
+              danger: true,
+              hidden: r.status === "REVOKED",
+              onClick: () => {
+                const reason = window.prompt("Reason for revoking this pass");
+                if (reason && reason.trim().length >= 2) act(() => hrBangladeshApi.revokeGatePass(Number(r.id), reason.trim()), "Pass revoked.");
+              },
             },
           ]}
         />
       </Card>
 
-      <Card title="Gate log" description="Every scan at the gate, allowed or denied.">
-        <SimpleTable<Row>
+      <Card title="Gate log" description="Every scan at the gate, allowed or denied (latest 100).">
+        <KitTable<Row>
           rows={(events.data ?? []).slice(0, 100)}
           rowKey={(r) => String(r.id)}
-          empty={events.loading ? "Loading..." : "No scans yet."}
+          loading={events.loading}
+          error={events.error}
+          onRetry={() => void events.reload()}
+          onRefresh={() => void events.reload()}
+          empty="No scans yet."
+          searchPlaceholder="Search gate, result or reason…"
+          statusOf={(r) => String(r.result)}
+          exportFileName="gate-log"
           columns={[
-            { header: "Time", cell: (r) => String(r.event_at).replace("T", " ").slice(0, 19) },
-            { header: "Gate", cell: (r) => String(r.gate) },
-            { header: "Direction", cell: (r) => String(r.direction) },
-            { header: "Result", cell: (r) => <Badge tone={r.result === "ALLOWED" ? "green" : "red"}>{String(r.result)}</Badge> },
-            { header: "Reason", cell: (r) => String(r.reason ?? "") },
+            { header: "Time", cell: (r) => String(r.event_at).replace("T", " ").slice(0, 19), value: (r) => String(r.event_at) },
+            { header: "Gate", cell: (r) => String(r.gate), value: (r) => String(r.gate) },
+            { header: "Direction", cell: (r) => String(r.direction), value: (r) => String(r.direction) },
+            { header: "Result", cell: (r) => <Badge tone={r.result === "ALLOWED" ? "green" : "red"}>{String(r.result)}</Badge>, value: (r) => String(r.result) },
+            { header: "Reason", cell: (r) => String(r.reason ?? ""), value: (r) => String(r.reason ?? "") },
           ]}
         />
       </Card>

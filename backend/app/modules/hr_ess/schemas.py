@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
@@ -74,10 +75,11 @@ class PayslipResponse(BaseModel):
     id: int
     period_year: int
     period_month: int
-    gross_pay: float
-    deductions: float
-    net_pay: float
+    gross_pay: Decimal
+    deductions: Decimal
+    net_pay: Decimal
     currency: str
     status: str
     issued_at: str | None
+    # Always null: payslip PDFs download by id through /hr/payroll/payslips/{id}/pdf.
     download_url: str | None

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
   type HrPayrollAutoCalcComponent,
@@ -10,8 +10,14 @@ import {
   type HrPayrollRunResponse,
 } from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { HrStatusBadge } from "@/components/hr/HrStatusBadge";
+import { HrDataTable, type HrTableColumn } from "@/components/hr/kit/HrDataTable";
+import { useAuth } from "@/context/AuthContext";
 import { todayLocalISO } from "@/lib/dates";
 import { saveBlob } from "@/lib/fileSave";
+import { formatMoney } from "@/lib/money";
+import { canExportHrData } from "@/lib/roles";
+import { payrollRunRowActions, type PayrollRunActionKey } from "./payrollRunActions";
 
 const PREFIX = "/app/hr";
 
@@ -86,7 +92,13 @@ function PayrollEmployeeBreakdown({ employee }: { employee: HrPayrollAutoCalcEmp
 
 export function HrPayrollRunsPage() {
   const [runs, setRuns] = useState<HrPayrollRunResponse[]>([]);
+  /** Open periods only: the create-run form must not offer locked periods. */
   const [periods, setPeriods] = useState<HrPayrollPeriodResponse[]>([]);
+  /** Every period (also locked), so finished runs still show their period code. */
+  const [allPeriods, setAllPeriods] = useState<HrPayrollPeriodResponse[]>([]);
+  const { me } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
@@ -110,10 +122,12 @@ export function HrPayrollRunsPage() {
     try {
       const [r, p] = await Promise.all([api.listHrPayrollRuns(), api.listHrPayrollPeriods()]);
       setRuns(r);
+      setAllPeriods(p);
       setPeriods(p.filter((x) => !x.is_locked));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
       setRuns([]);
+      setAllPeriods([]);
       setPeriods([]);
     } finally {
       setLoading(false);
@@ -150,6 +164,10 @@ export function HrPayrollRunsPage() {
   };
 
   const runAction = async (label: string, fn: () => Promise<unknown>) => {
+    // A second click while a run action is in flight is ignored (the server also locks the run).
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
     setMsg("");
     try {
       const r = await fn();
@@ -160,8 +178,64 @@ export function HrPayrollRunsPage() {
       await load();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : `${label} failed`);
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
     }
   };
+
+  const downloadBankFile = async (run: HrPayrollRunResponse) => {
+    setMsg("");
+    try {
+      const blob = await api.downloadHrPayrollRunBankFile(run.id);
+      void saveBlob(blob, `payroll-run-${run.id}-bank.csv`);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Download failed");
+    }
+  };
+
+  const onRunAction = (run: HrPayrollRunResponse, key: PayrollRunActionKey) => {
+    if (busyRef.current) return;
+    switch (key) {
+      case "autocalc":
+        void openAutoCalc(run.id);
+        return;
+      case "finalize":
+        if (!window.confirm(`Finalize payroll run ${run.run_code}? It is sent for approval and can no longer be auto-calculated.`)) return;
+        void runAction("Finalize", () => api.finalizeHrPayrollRun(run.id));
+        return;
+      case "approve":
+        void runAction("Approve", () => api.approveHrPayrollRun(run.id, {}));
+        return;
+      case "post": {
+        const question =
+          run.status === "POSTED"
+            ? `Payroll run ${run.run_code} is already posted. Show its voucher?`
+            : `Post payroll run ${run.run_code} to the general ledger?`;
+        if (!window.confirm(question)) return;
+        void runAction("Post to GL", () => api.postHrPayrollRun(run.id, {}));
+        return;
+      }
+      case "payslips":
+        void runAction("Payslips", () => api.generateHrPayrollPayslips(run.id));
+        return;
+      case "bank":
+        void downloadBankFile(run);
+    }
+  };
+
+  const periodCode = (id: number) => allPeriods.find((p) => p.id === id)?.period_code ?? `#${id}`;
+  const money = (v: string) => formatMoney(v);
+  const runColumns: HrTableColumn<HrPayrollRunResponse>[] = [
+    { key: "run", header: "Run", render: (r) => <span className="font-medium text-text-primary">{r.run_code}</span>, value: (r) => r.run_code },
+    { key: "period", header: "Period", render: (r) => periodCode(r.period_id), value: (r) => periodCode(r.period_id) },
+    { key: "date", header: "Date", render: (r) => r.run_date, value: (r) => r.run_date },
+    { key: "status", header: "Status", render: (r) => <HrStatusBadge status={r.status} />, value: (r) => r.status },
+    // Amounts: formatted for display only; sorting and CSV use the raw decimal strings from the API.
+    { key: "gross", header: "Gross", align: "right", hideOnMobile: true, render: (r) => <span className="tabular-nums">{money(r.gross_total)}</span>, value: (r) => r.gross_total },
+    { key: "deductions", header: "Deductions", align: "right", hideOnMobile: true, render: (r) => <span className="tabular-nums">{money(r.deduction_total)}</span>, value: (r) => r.deduction_total },
+    { key: "net", header: "Net", align: "right", render: (r) => <span className="tabular-nums font-semibold">{money(r.net_total)}</span>, value: (r) => r.net_total },
+  ];
 
   const openAutoCalc = async (runId: number) => {
     setSelectedRunId(runId);
@@ -309,106 +383,19 @@ export function HrPayrollRunsPage() {
         </div>
       </form>
 
-      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-sm text-text-muted">Loading…</div>
-        ) : runs.length === 0 ? (
-          <div className="p-8 text-center text-sm text-text-muted">No payroll runs yet.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-border text-sm">
-              <thead className="bg-surface-subtle">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Run</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Period</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Date</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Status</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Net</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {runs.map((r) => (
-                  <tr key={r.id} className="border-t border-border-subtle">
-                    <td className="px-4 py-2 font-medium">{r.run_code}</td>
-                    <td className="px-4 py-2">{r.period_id}</td>
-                    <td className="px-4 py-2">{r.run_date}</td>
-                    <td className="px-4 py-2">{r.status}</td>
-                    <td className="px-4 py-2">{r.net_total}</td>
-                    <td className="px-4 py-2">
-                      <div className="flex flex-wrap gap-1">
-                        <button
-                          type="button"
-                          className="rounded border px-2 py-0.5 text-xs"
-                          onClick={() => void openAutoCalc(r.id)}
-                          disabled={!["DRAFT", "CHECKED", "REJECTED"].includes(r.status)}
-                        >
-                          Auto-calculate
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded border px-2 py-0.5 text-xs"
-                          onClick={() =>
-                            void runAction("Finalize", () => api.finalizeHrPayrollRun(r.id))
-                          }
-                          disabled={!["DRAFT", "CHECKED", "REJECTED"].includes(r.status)}
-                        >
-                          Finalize
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded border px-2 py-0.5 text-xs"
-                          onClick={() =>
-                            void runAction("Approve", () => api.approveHrPayrollRun(r.id, {}))
-                          }
-                          disabled={!["FINALIZED", "CHECKED"].includes(r.status)}
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded border px-2 py-0.5 text-xs"
-                          onClick={() =>
-                            void runAction("Post to GL", () => api.postHrPayrollRun(r.id, {}))
-                          }
-                          disabled={!["APPROVED", "POSTED"].includes(r.status)}
-                        >
-                          Post GL
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded border px-2 py-0.5 text-xs"
-                          onClick={() =>
-                            void runAction("Payslips", () => api.generateHrPayrollPayslips(r.id))
-                          }
-                          disabled={!["APPROVED", "POSTED"].includes(r.status)}
-                        >
-                          Payslips
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded border px-2 py-0.5 text-xs"
-                          onClick={async () => {
-                            setMsg("");
-                            try {
-                              const blob = await api.downloadHrPayrollRunBankFile(r.id);
-                              void saveBlob(blob, `payroll-run-${r.id}-bank.csv`);
-                            } catch (e) {
-                              setMsg(e instanceof Error ? e.message : "Download failed");
-                            }
-                          }}
-                        >
-                          Bank CSV
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <HrDataTable
+        rows={runs}
+        rowKey={(r) => r.id}
+        columns={runColumns}
+        loading={loading}
+        emptyTitle="No payroll runs yet."
+        emptyHint="Create a run for an open payroll period above."
+        searchPlaceholder="Search run, period or status…"
+        statusOf={(r) => r.status}
+        exportFileName="payroll-runs"
+        canExport={canExportHrData(me?.role_name)}
+        rowActions={(r) => payrollRunRowActions(r.status, (key) => onRunAction(r, key), busy)}
+      />
 
       {(selectedRunId != null || previewLoading) && (
         <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-3">

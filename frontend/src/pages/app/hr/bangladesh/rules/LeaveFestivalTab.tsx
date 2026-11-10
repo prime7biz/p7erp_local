@@ -1,7 +1,8 @@
 /** Earned-leave accrual (1 day per 18 worked days) and festival-holiday work compensation. */
 import { useState } from "react";
 import { hrBangladeshApi, type Row } from "@/api/hrBangladesh";
-import { ActionsMenu, Badge, Banner, Card, Field, Messages, SimpleTable, btnPrimary, btnSecondary, inputCls } from "@/components/hr/bd/BdUi";
+import { KitTable } from "@/components/hr/bd/BdKitTable";
+import { Badge, Banner, Card, Field, Messages, btnPrimary, btnSecondary, inputCls } from "@/components/hr/bd/BdUi";
 import { employeeLabel, money, todayIso, useAction, useEmployees, useLoad } from "@/components/hr/bd/bdHooks";
 
 function yearStart(): string {
@@ -56,15 +57,22 @@ export function LeaveFestivalTab() {
         </div>
         {accrual && !accrual.leave_type_found ? <Banner kind="warning">Leave type BD-EL is missing. Run Bangladesh setup first.</Banner> : null}
         {accrual ? (
-          <SimpleTable<Row>
+          <KitTable<Row>
             rows={accrual.employees}
             rowKey={(r) => String(r.employee_id)}
             empty="No active employees."
+            searchPlaceholder="Search employee…"
+            defaultPageSize={50}
             columns={[
-              { header: "Employee", cell: (r) => empName(r.employee_id) },
-              { header: "Worked days", align: "right", cell: (r) => String(r.worked_days) },
-              { header: "Earned days", align: "right", cell: (r) => String(r.accrued_days) },
-              { header: "Notes", cell: (r) => <span className="text-xs text-text-muted">{((r.warnings ?? []) as string[]).join("; ")}</span> },
+              { header: "Employee", cell: (r) => empName(r.employee_id), value: (r) => empName(r.employee_id) },
+              { header: "Worked days", align: "right", cell: (r) => String(r.worked_days), value: (r) => Number(r.worked_days) },
+              { header: "Earned days", align: "right", cell: (r) => String(r.accrued_days), value: (r) => Number(r.accrued_days) },
+              {
+                header: "Notes",
+                cell: (r) => <span className="text-xs text-text-muted">{((r.warnings ?? []) as string[]).join("; ")}</span>,
+                value: (r) => ((r.warnings ?? []) as string[]).join("; "),
+                hideOnMobile: true,
+              },
             ]}
           />
         ) : null}
@@ -93,50 +101,54 @@ export function LeaveFestivalTab() {
             Find festival work
           </button>
         </div>
-        <SimpleTable<Row>
+        <KitTable<Row>
           rows={festival.data ?? []}
           rowKey={(r) => String(r.id)}
-          empty={festival.loading ? "Loading..." : "No festival-day work found."}
+          loading={festival.loading}
+          onRefresh={() => void festival.reload()}
+          empty="No festival-day work found."
+          searchPlaceholder="Search employee or date…"
+          statusOf={(r) => String(r.status)}
           columns={[
-            { header: "Employee", cell: (r) => empName(r.employee_id) },
-            { header: "Date worked", cell: (r) => String(r.work_date) },
-            { header: "Compensation", align: "right", cell: (r) => money(r.compensation_amount) },
-            { header: "Alt. holiday", cell: (r) => String(r.alternative_holiday_date ?? "-") },
-            { header: "Status", cell: (r) => <Badge tone={r.status === "APPROVED" ? "green" : r.status === "CANCELLED" ? "gray" : "amber"}>{String(r.status)}</Badge> },
-            { header: "Payroll", cell: (r) => (r.payroll_run_line_id ? "Included" : r.final_settlement_id ? "In settlement" : "-") },
+            { header: "Employee", cell: (r) => empName(r.employee_id), value: (r) => empName(r.employee_id) },
+            { header: "Date worked", cell: (r) => String(r.work_date), value: (r) => String(r.work_date) },
+            { header: "Compensation", align: "right", cell: (r) => money(r.compensation_amount), value: (r) => Number(r.compensation_amount) },
+            { header: "Alt. holiday", cell: (r) => String(r.alternative_holiday_date ?? "-"), value: (r) => String(r.alternative_holiday_date ?? ""), hideOnMobile: true },
             {
-              header: "Actions",
-              align: "right",
-              cell: (r) => (
-                <ActionsMenu
-                  items={[
-                    {
-                      label: "Approve",
-                      hidden: r.status !== "PENDING",
-                      onClick: () => {
-                        const alt = window.prompt("Alternative holiday date (YYYY-MM-DD), after the day worked");
-                        if (alt)
-                          void run(async () => {
-                            await hrBangladeshApi.bdApproveFestivalWork(Number(r.id), alt.trim());
-                            await festival.reload();
-                          }, "Approved.");
-                      },
-                    },
-                    {
-                      label: "Cancel",
-                      danger: true,
-                      hidden: r.status === "CANCELLED" || Boolean(r.payroll_run_line_id) || Boolean(r.final_settlement_id),
-                      onClick: () => {
-                        if (window.confirm("Cancel this festival-work entry?"))
-                          void run(async () => {
-                            await hrBangladeshApi.bdCancelFestivalWork(Number(r.id));
-                            await festival.reload();
-                          }, "Cancelled.");
-                      },
-                    },
-                  ]}
-                />
-              ),
+              header: "Status",
+              cell: (r) => <Badge tone={r.status === "APPROVED" ? "green" : r.status === "CANCELLED" ? "gray" : "amber"}>{String(r.status)}</Badge>,
+              value: (r) => String(r.status),
+            },
+            { header: "Payroll", cell: (r) => (r.payroll_run_line_id ? "Included" : r.final_settlement_id ? "In settlement" : "-"), hideOnMobile: true },
+          ]}
+          actions={(r) => [
+            {
+              label: "Approve",
+              primary: true,
+              positive: true,
+              disabled: busy,
+              hidden: r.status !== "PENDING",
+              onClick: () => {
+                const alt = window.prompt("Alternative holiday date (YYYY-MM-DD), after the day worked");
+                if (alt)
+                  void run(async () => {
+                    await hrBangladeshApi.bdApproveFestivalWork(Number(r.id), alt.trim());
+                    await festival.reload();
+                  }, "Approved.");
+              },
+            },
+            {
+              label: "Cancel",
+              danger: true,
+              disabled: busy,
+              hidden: r.status === "CANCELLED" || Boolean(r.payroll_run_line_id) || Boolean(r.final_settlement_id),
+              onClick: () => {
+                if (window.confirm("Cancel this festival-work entry?"))
+                  void run(async () => {
+                    await hrBangladeshApi.bdCancelFestivalWork(Number(r.id));
+                    await festival.reload();
+                  }, "Cancelled.");
+              },
             },
           ]}
         />

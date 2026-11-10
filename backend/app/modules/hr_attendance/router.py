@@ -177,8 +177,9 @@ def _entry_out(row: AttendanceEntry) -> AttendanceEntryOut:
     )
 
 
-def _regularization_out(row: AttendanceRegularizationRequest) -> RegularizationOut:
+def _regularization_out(row: AttendanceRegularizationRequest, employee_id: int | None = None) -> RegularizationOut:
     return RegularizationOut(
+        employee_id=employee_id,
         id=row.id,
         tenant_id=row.tenant_id,
         attendance_entry_id=row.attendance_entry_id,
@@ -478,11 +479,22 @@ async def list_regularizations(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    stmt = select(AttendanceRegularizationRequest).where(AttendanceRegularizationRequest.tenant_id == tenant.id)
+    # One query: the entry's employee comes from a same-tenant outer join (no per-row lookups).
+    stmt = (
+        select(AttendanceRegularizationRequest, AttendanceEntry.employee_id)
+        .outerjoin(
+            AttendanceEntry,
+            and_(
+                AttendanceEntry.id == AttendanceRegularizationRequest.attendance_entry_id,
+                AttendanceEntry.tenant_id == tenant.id,
+            ),
+        )
+        .where(AttendanceRegularizationRequest.tenant_id == tenant.id)
+    )
     if status_filter:
         stmt = stmt.where(AttendanceRegularizationRequest.status == status_filter.strip().upper())
-    rows = (await db.execute(stmt.order_by(AttendanceRegularizationRequest.id.desc()).offset(offset).limit(limit))).scalars().all()
-    return [_regularization_out(x) for x in rows]
+    rows = (await db.execute(stmt.order_by(AttendanceRegularizationRequest.id.desc()).offset(offset).limit(limit))).all()
+    return [_regularization_out(req, employee_id) for req, employee_id in rows]
 
 
 def month_date_condition(column, month: str | None):

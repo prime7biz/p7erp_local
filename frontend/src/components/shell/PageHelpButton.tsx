@@ -2,6 +2,8 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { BookOpen, CircleHelp } from "lucide-react";
 import type { TutorialArticle } from "@/data/tutorials/types";
+import { resolveHrHelpPath } from "@/components/hr/kit/hrHubs";
+import { useAuth } from "@/context/AuthContext";
 import { logApiError } from "@/utils/logApiError";
 
 type FindArticles = (pathname: string) => TutorialArticle[];
@@ -38,7 +40,8 @@ function loadFindArticles(): Promise<FindArticles> {
 
 /** Header "Help" button: guides whose related screens match the current page. Hidden when none match. */
 export function PageHelpButton() {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  const featureFlags = useAuth().me?.feature_flags;
   const [findArticles, setFindArticles] = useState<FindArticles | null>(null);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -79,8 +82,8 @@ export function PageHelpButton() {
 
   const articles = useMemo(() => {
     if (!findArticles || pathname.startsWith("/app/tutorials")) return [];
-    return findArticles(pathname).slice(0, MAX_ARTICLES);
-  }, [findArticles, pathname]);
+    return findArticles(resolveHrHelpPath(pathname, search, featureFlags)).slice(0, MAX_ARTICLES);
+  }, [findArticles, pathname, search, featureFlags]);
 
   if (articles.length === 0) return null;
 

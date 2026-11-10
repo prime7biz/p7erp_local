@@ -1030,6 +1030,8 @@ export interface HrRegularizationResponse {
   decided_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Employee of the attendance entry (list endpoint only). */
+  employee_id?: number | null;
 }
 
 export interface HrRegularizationCreate {
@@ -1225,6 +1227,17 @@ export interface HrLeavePolicyResponse {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+}
+
+/** Matches backend `hr_leave.schemas.LeavePolicyCreate`. */
+export interface HrLeavePolicyCreate {
+  leave_type_id: number;
+  employment_type?: string | null;
+  annual_quota_days?: string;
+  max_carry_forward_days?: string;
+  effective_from: string;
+  effective_to?: string | null;
+  is_active?: boolean;
 }
 
 export interface HrLeavePolicyUpdate {
@@ -1480,39 +1493,64 @@ export interface HrPayslipResponse {
   status: string;
 }
 
+/** Matches backend `hr_performance.schemas.PerformanceGoalResponse`. */
 export interface HrGoalResponse {
   id: number;
+  tenant_id?: number;
+  cycle_id: number;
   employee_id: number;
   title: string;
   description: string | null;
-  target_date: string | null;
+  weight: number | null;
+  target_value: string | null;
   status: string;
-  progress_percent: number;
+  manager_comment: string | null;
+  submitted_at: string | null;
+  created_by_user_id?: number | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
+/** Matches backend `PerformanceGoalCreate` (weight 0–100). */
 export interface HrGoalCreate {
+  cycle_id: number;
   employee_id: number;
   title: string;
   description?: string | null;
-  target_date?: string | null;
+  weight?: number | null;
+  target_value?: string | null;
 }
 
+/** Matches backend `hr_performance.schemas.PerformanceReviewResponse` (ratings 0–5). */
 export interface HrReviewResponse {
   id: number;
+  tenant_id?: number;
+  cycle_id: number;
   employee_id: number;
   reviewer_employee_id: number | null;
-  review_period: string;
-  overall_rating: number;
+  reviewer_user_id?: number | null;
+  review_type: string;
+  self_rating: number | null;
+  manager_rating: number | null;
+  final_rating: number | null;
+  employee_comment: string | null;
+  manager_comment: string | null;
   status: string;
-  comments: string | null;
+  submitted_at: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface HrReviewCreate {
+  cycle_id: number;
   employee_id: number;
   reviewer_employee_id?: number | null;
-  review_period: string;
-  overall_rating: number;
-  comments?: string | null;
+  review_type?: string;
+  self_rating?: number | null;
+  manager_rating?: number | null;
+  final_rating?: number | null;
+  employee_comment?: string | null;
+  manager_comment?: string | null;
 }
 
 export interface HrPerformanceDashboardResponse {
@@ -1581,37 +1619,100 @@ export interface HrCandidateCreate {
   notes?: string | null;
 }
 
+/** Matches backend `hr_recruitment.schemas.InterviewResponse`. Status: scheduled → completed / cancelled. */
 export interface HrInterviewResponse {
   id: number;
+  tenant_id?: number;
   candidate_id: number;
-  interview_date: string;
-  interviewer: string | null;
-  result: string;
-  note: string | null;
+  requisition_id: number | null;
+  interviewer_employee_id: number | null;
+  interviewer_user_id?: number | null;
+  scheduled_at: string;
+  mode: string | null;
+  location: string | null;
+  feedback: string | null;
+  rating: number | null;
+  status: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface HrInterviewCreate {
   candidate_id: number;
-  interview_date: string;
-  interviewer?: string | null;
-  result?: string;
-  note?: string | null;
+  requisition_id?: number | null;
+  interviewer_employee_id?: number | null;
+  /** ISO date-time, e.g. 2026-11-12T10:30 */
+  scheduled_at: string;
+  mode?: string | null;
+  location?: string | null;
 }
 
+/** Matches backend `hr_recruitment.schemas.OfferResponse`. Status: draft → sent → accepted / rejected / withdrawn. */
 export interface HrOfferResponse {
   id: number;
+  tenant_id?: number;
   candidate_id: number;
-  offered_position: string;
-  offered_salary: number;
-  offer_date: string;
+  requisition_id: number | null;
+  offered_role: string;
+  proposed_salary: number | null;
+  currency: string;
+  joining_date: string | null;
+  notes: string | null;
   status: string;
+  sent_at: string | null;
+  responded_at: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface HrOfferCreate {
   candidate_id: number;
-  offered_position: string;
-  offered_salary: number;
-  offer_date: string;
+  requisition_id?: number | null;
+  offered_role: string;
+  proposed_salary?: number | null;
+  currency?: string;
+  joining_date?: string | null;
+  notes?: string | null;
+}
+
+/** Matches backend `hr_ess.schemas.LeaveRequestResponse` (GET /hr/ess/my-leave-requests). */
+export interface HrEssLeaveRequestResponse {
+  id: number;
+  /** The backend sends the leave type id as text (e.g. "3"); look the name up from leave types. */
+  leave_type: string;
+  start_date: string;
+  end_date: string;
+  days_count: number;
+  reason: string | null;
+  status: string;
+  approved_at: string | null;
+  created_at: string;
+}
+
+/** Matches backend `hr_ess.schemas.AttendanceSummaryResponse` (one row per month). */
+export interface HrEssAttendanceSummaryRow {
+  year: number;
+  month: number;
+  present_days: number;
+  absent_days: number;
+  late_days: number;
+  overtime_hours: number;
+}
+
+/** Matches backend `hr_ess.schemas.PayslipResponse`; `id` is the payslip id used by the PDF download.
+ *  `period_year` / `period_month` are the payroll period's month. Money is decimal text. */
+export interface HrEssPayslipResponse {
+  id: number;
+  period_year: number;
+  period_month: number;
+  gross_pay: string;
+  deductions: string;
+  net_pay: string;
+  currency: string;
+  status: string;
+  issued_at: string | null;
+  /** Always null; download the PDF by id. */
+  download_url: string | null;
 }
 
 export interface HrEssProfileResponse {

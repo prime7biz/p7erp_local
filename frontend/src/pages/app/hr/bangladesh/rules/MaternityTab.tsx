@@ -1,7 +1,8 @@
 /** Maternity cases (needs maternity enforcement ON). */
 import { useState } from "react";
 import { hrBangladeshApi, type Row } from "@/api/hrBangladesh";
-import { ActionsMenu, Badge, Card, Field, Messages, SimpleTable, btnPrimary, inputCls } from "@/components/hr/bd/BdUi";
+import { KitTable } from "@/components/hr/bd/BdKitTable";
+import { Badge, Card, Field, Messages, btnPrimary, inputCls } from "@/components/hr/bd/BdUi";
 import { employeeLabel, money, useAction, useEmployees, useLoad } from "@/components/hr/bd/bdHooks";
 import { EmployeePicker } from "@/components/hr/bd/EmployeePicker";
 
@@ -63,41 +64,49 @@ export function MaternityTab() {
         </div>
       </Card>
       <Card title="Maternity cases">
-        <SimpleTable<Row>
+        <KitTable<Row>
           rows={list.data ?? []}
           rowKey={(r) => String(r.id)}
-          empty={list.loading ? "Loading..." : "No maternity cases."}
+          loading={list.loading}
+          onRefresh={() => void list.reload()}
+          empty="No maternity cases."
+          searchPlaceholder="Search employee…"
+          statusOf={(r) => String(r.status)}
           columns={[
-            { header: "Employee", cell: (r) => empName(r.employee_id) },
-            { header: "Leave", cell: (r) => `${String(r.leave_start ?? "")} to ${String(r.leave_end ?? "")}` },
-            { header: "Eligible", cell: (r) => (r.eligible ? "Yes" : `No: ${String(r.eligibility_reason ?? "")}`) },
-            { header: "Daily rate", align: "right", cell: (r) => money(r.daily_rate) },
-            { header: "Benefit", align: "right", cell: (r) => money(r.benefit_amount) },
-            { header: "Status", cell: (r) => <Badge tone={TONE[String(r.status)] ?? "gray"}>{String(r.status)}</Badge> },
+            { header: "Employee", cell: (r) => empName(r.employee_id), value: (r) => empName(r.employee_id) },
+            { header: "Leave", cell: (r) => `${String(r.leave_start ?? "")} to ${String(r.leave_end ?? "")}`, value: (r) => String(r.leave_start ?? "") },
+            { header: "Eligible", cell: (r) => (r.eligible ? "Yes" : `No: ${String(r.eligibility_reason ?? "")}`), hideOnMobile: true },
+            { header: "Daily rate", align: "right", cell: (r) => money(r.daily_rate), value: (r) => Number(r.daily_rate), hideOnMobile: true },
+            { header: "Benefit", align: "right", cell: (r) => money(r.benefit_amount), value: (r) => Number(r.benefit_amount) },
+            { header: "Status", cell: (r) => <Badge tone={TONE[String(r.status)] ?? "gray"}>{String(r.status)}</Badge>, value: (r) => String(r.status) },
+          ]}
+          actions={(r) => [
             {
-              header: "Actions",
-              align: "right",
-              cell: (r) => (
-                <ActionsMenu
-                  items={[
-                    { label: "Approve", hidden: r.status !== "ELIGIBLE", onClick: () => act(() => hrBangladeshApi.bdApproveMaternity(Number(r.id)), "Approved.") },
-                    {
-                      label: "Mark paid",
-                      hidden: r.status !== "APPROVED",
-                      onClick: () => {
-                        const ref = window.prompt("Payment reference (voucher / bank / cash receipt no.)");
-                        if (ref) act(() => hrBangladeshApi.bdPayMaternity(Number(r.id), ref), "Marked paid.");
-                      },
-                    },
-                    {
-                      label: "Cancel",
-                      danger: true,
-                      hidden: ["PAID", "CANCELLED"].includes(String(r.status)),
-                      onClick: () => window.confirm("Cancel this maternity case?") && act(() => hrBangladeshApi.bdCancelMaternity(Number(r.id)), "Cancelled."),
-                    },
-                  ]}
-                />
-              ),
+              label: "Approve",
+              primary: true,
+              positive: true,
+              disabled: busy,
+              hidden: r.status !== "ELIGIBLE",
+              onClick: () =>
+                window.confirm(`Approve the maternity benefit of ${money(r.benefit_amount)} for ${empName(r.employee_id)}?`) &&
+                act(() => hrBangladeshApi.bdApproveMaternity(Number(r.id)), "Approved."),
+            },
+            {
+              label: "Mark paid",
+              primary: true,
+              disabled: busy,
+              hidden: r.status !== "APPROVED",
+              onClick: () => {
+                const ref = window.prompt("Payment reference (voucher / bank / cash receipt no.)");
+                if (ref) act(() => hrBangladeshApi.bdPayMaternity(Number(r.id), ref), "Marked paid.");
+              },
+            },
+            {
+              label: "Cancel",
+              danger: true,
+              disabled: busy,
+              hidden: ["PAID", "CANCELLED"].includes(String(r.status)),
+              onClick: () => window.confirm("Cancel this maternity case?") && act(() => hrBangladeshApi.bdCancelMaternity(Number(r.id)), "Cancelled."),
             },
           ]}
         />

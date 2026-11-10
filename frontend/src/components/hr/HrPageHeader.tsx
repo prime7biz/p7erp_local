@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 interface BreadcrumbItem {
   label: string;
@@ -11,6 +12,10 @@ export function HrPageHeader(props: {
   breadcrumbs?: BreadcrumbItem[];
 }) {
   const { title, description, breadcrumbs } = props;
+  const embedded = useEmbeddedPage();
+  if (embedded) {
+    return description ? <p className="text-sm text-text-muted">{description}</p> : null;
+  }
   return (
     <div className="space-y-1">
       {breadcrumbs && breadcrumbs.length > 0 && (

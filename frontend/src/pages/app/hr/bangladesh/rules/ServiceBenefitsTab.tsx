@@ -2,7 +2,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { hrBangladeshApi, type Row } from "@/api/hrBangladesh";
-import { ActionsMenu, Badge, Card, Field, Messages, SimpleTable, btnPrimary, inputCls } from "@/components/hr/bd/BdUi";
+import { KitTable } from "@/components/hr/bd/BdKitTable";
+import { Badge, Card, Field, Messages, btnPrimary, inputCls } from "@/components/hr/bd/BdUi";
 import { employeeLabel, money, todayIso, useAction, useEmployees, useLoad } from "@/components/hr/bd/bdHooks";
 import { SEPARATION_TYPE_LABELS } from "@/components/hr/bd/bdLabels";
 import { EmployeePicker } from "@/components/hr/bd/EmployeePicker";
@@ -73,35 +74,39 @@ export function ServiceBenefitsTab() {
         </div>
       </Card>
       <Card title="Service-benefit cases">
-        <SimpleTable<Row>
+        <KitTable<Row>
           rows={list.data ?? []}
           rowKey={(r) => String(r.id)}
-          empty={list.loading ? "Loading..." : "No cases."}
+          loading={list.loading}
+          onRefresh={() => void list.reload()}
+          empty="No cases."
+          searchPlaceholder="Search employee or type…"
+          statusOf={(r) => String(r.status)}
           columns={[
-            { header: "Employee", cell: (r) => empName(r.employee_id) },
-            { header: "Type", cell: (r) => SEPARATION_TYPE_LABELS[String(r.benefit_type)] ?? String(r.benefit_type) },
-            { header: "Service", cell: (r) => `${String(r.service_start_date)} to ${String(r.service_end_date)}` },
-            { header: "Basic", align: "right", cell: (r) => money(r.wage_basis) },
-            { header: "Amount", align: "right", cell: (r) => money(r.amount) },
-            { header: "Status", cell: (r) => <Badge tone={r.status === "APPROVED" ? "green" : "amber"}>{String(r.status)}</Badge> },
+            { header: "Employee", cell: (r) => empName(r.employee_id), value: (r) => empName(r.employee_id) },
             {
-              header: "Actions",
-              align: "right",
-              cell: (r) => (
-                <ActionsMenu
-                  items={[
-                    {
-                      label: "Approve",
-                      hidden: r.status !== "DRAFT",
-                      onClick: () =>
-                        void run(async () => {
-                          await hrBangladeshApi.bdApproveServiceBenefit(Number(r.id));
-                          await list.reload();
-                        }, "Approved."),
-                    },
-                  ]}
-                />
-              ),
+              header: "Type",
+              cell: (r) => SEPARATION_TYPE_LABELS[String(r.benefit_type)] ?? String(r.benefit_type),
+              value: (r) => SEPARATION_TYPE_LABELS[String(r.benefit_type)] ?? String(r.benefit_type),
+            },
+            { header: "Service", cell: (r) => `${String(r.service_start_date)} to ${String(r.service_end_date)}`, value: (r) => String(r.service_end_date), hideOnMobile: true },
+            { header: "Basic", align: "right", cell: (r) => money(r.wage_basis), value: (r) => Number(r.wage_basis), hideOnMobile: true },
+            { header: "Amount", align: "right", cell: (r) => money(r.amount), value: (r) => Number(r.amount) },
+            { header: "Status", cell: (r) => <Badge tone={r.status === "APPROVED" ? "green" : "amber"}>{String(r.status)}</Badge>, value: (r) => String(r.status) },
+          ]}
+          actions={(r) => [
+            {
+              label: "Approve",
+              primary: true,
+              positive: true,
+              disabled: busy,
+              hidden: r.status !== "DRAFT",
+              onClick: () =>
+                window.confirm(`Approve the service benefit of ${money(r.amount)} for ${empName(r.employee_id)}?`) &&
+                void run(async () => {
+                  await hrBangladeshApi.bdApproveServiceBenefit(Number(r.id));
+                  await list.reload();
+                }, "Approved."),
             },
           ]}
         />

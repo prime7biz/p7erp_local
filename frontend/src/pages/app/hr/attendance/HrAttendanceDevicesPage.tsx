@@ -11,6 +11,9 @@ import {
 } from "@/api/client";
 import { API_BASE } from "@/api/apiBase";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { ActiveBadge } from "@/components/hr/HrListParts";
+import { HrDataTable, type HrTableColumn } from "@/components/hr/kit/HrDataTable";
+import { HrFormDrawer } from "@/components/hr/kit/HrFormDrawer";
 import { logApiError } from "@/utils/logApiError";
 
 const PREFIX = "/app/hr";
@@ -33,8 +36,6 @@ const EMPTY_FORM: DeviceForm = {
   push_allowed_ips: "",
 };
 
-const MENU_ITEM = "block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50";
-
 function pushUrl(): string {
   const base = API_BASE || (typeof window !== "undefined" ? window.location.origin : "");
   return `${base}/api/v1/hr/attendance/device-push`;
@@ -53,7 +54,6 @@ export function HrAttendanceDevicesPage() {
   const [shifts, setShifts] = useState<HrShiftResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
@@ -88,12 +88,6 @@ export function HrAttendanceDevicesPage() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    const close = () => setOpenActionsId(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, []);
-
   const shiftName = (id: number | null) => {
     if (id == null) return "—";
     const shift = shifts.find((s) => s.id === id);
@@ -117,7 +111,6 @@ export function HrAttendanceDevicesPage() {
       push_allowed_ips: (d.push_allowed_ips ?? "").split(",").join(", "),
     });
     setFormOpen(true);
-    setOpenActionsId(null);
   };
 
   const saveForm = async (e: React.FormEvent) => {
@@ -152,7 +145,7 @@ export function HrAttendanceDevicesPage() {
   };
 
   const toggleActive = async (d: HrAttendanceDevice) => {
-    setOpenActionsId(null);
+    if (d.is_active && !window.confirm(`Deactivate ${d.code}? It stops accepting punches until you activate it again.`)) return;
     try {
       await api.updateHrAttendanceDevice(d.id, { is_active: !d.is_active });
       await load();
@@ -163,7 +156,6 @@ export function HrAttendanceDevicesPage() {
   };
 
   const rotateKey = async (d: HrAttendanceDevice) => {
-    setOpenActionsId(null);
     if (!window.confirm(`Create a new key for ${d.code}? The old key stops working immediately.`)) return;
     try {
       setShownKey(await api.rotateHrAttendanceDeviceKey(d.id));
@@ -191,7 +183,6 @@ export function HrAttendanceDevicesPage() {
     setImportFile(null);
     setImportFormat("");
     setSummary(null);
-    setOpenActionsId(null);
   };
 
   const runImport = async (e: React.FormEvent) => {
@@ -208,6 +199,39 @@ export function HrAttendanceDevicesPage() {
       setImporting(false);
     }
   };
+
+  const columns: HrTableColumn<HrAttendanceDevice>[] = [
+    { key: "code", header: "Code", render: (d) => <span className="font-medium text-text-primary">{d.code}</span>, value: (d) => d.code },
+    { key: "name", header: "Name", render: (d) => d.name, value: (d) => d.name },
+    { key: "type", header: "Type", render: (d) => d.device_type, value: (d) => d.device_type, hideOnMobile: true },
+    { key: "shift", header: "Default shift", render: (d) => shiftName(d.default_shift_id), value: (d) => shiftName(d.default_shift_id), hideOnMobile: true },
+    {
+      key: "key",
+      header: "Key starts with",
+      render: (d) => <span className="font-mono text-xs">p7d_{d.api_key_prefix}_…</span>,
+      noExport: true,
+      hideOnMobile: true,
+    },
+    {
+      key: "last_push",
+      header: "Last push",
+      render: (d) => (
+        <span className="text-xs text-text-muted">{d.last_seen_at ? new Date(`${d.last_seen_at}Z`).toLocaleString() : "Never"}</span>
+      ),
+      value: (d) => d.last_seen_at,
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (d) => (
+        <span>
+          <ActiveBadge active={d.is_active} />
+          {d.iclock_ready && <span className="block text-xs text-text-muted">Cloud push on</span>}
+        </span>
+      ),
+      value: (d) => (d.is_active ? "Active" : "Inactive"),
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -236,181 +260,112 @@ export function HrAttendanceDevicesPage() {
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
-        {loading ? (
-          <div className="p-8 text-sm text-text-muted">Loading...</div>
-        ) : (
-          <table className="min-w-full divide-y divide-border">
-            <thead className="bg-surface-subtle">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs uppercase">Code</th>
-                <th className="px-4 py-2 text-left text-xs uppercase">Name</th>
-                <th className="px-4 py-2 text-left text-xs uppercase">Type</th>
-                <th className="px-4 py-2 text-left text-xs uppercase">Default shift</th>
-                <th className="px-4 py-2 text-left text-xs uppercase">Key starts with</th>
-                <th className="px-4 py-2 text-left text-xs uppercase">Last push</th>
-                <th className="px-4 py-2 text-left text-xs uppercase">Status</th>
-                <th className="px-4 py-2 text-right text-xs uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {devices.map((d) => (
-                <tr key={d.id} className="border-t border-border-subtle">
-                  <td className="px-4 py-2 text-sm font-medium">{d.code}</td>
-                  <td className="px-4 py-2 text-sm">{d.name}</td>
-                  <td className="px-4 py-2 text-sm">{d.device_type}</td>
-                  <td className="px-4 py-2 text-sm">{shiftName(d.default_shift_id)}</td>
-                  <td className="px-4 py-2 font-mono text-xs">p7d_{d.api_key_prefix}_…</td>
-                  <td className="px-4 py-2 text-xs text-text-muted">
-                    {d.last_seen_at ? new Date(`${d.last_seen_at}Z`).toLocaleString() : "Never"}
-                  </td>
-                  <td className="px-4 py-2 text-sm">
-                    {d.is_active ? "Active" : "Inactive"}
-                    {d.iclock_ready && <div className="text-xs text-text-muted">Cloud push on</div>}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => setOpenActionsId(openActionsId === d.id ? null : d.id)}
-                        className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      >
-                        Actions
-                      </button>
-                      {openActionsId === d.id && (
-                        <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                          <button type="button" className={MENU_ITEM} onClick={() => openEdit(d)}>
-                            Edit
-                          </button>
-                          <button type="button" className={MENU_ITEM} onClick={() => openImport(d)}>
-                            Import punches
-                          </button>
-                          <button type="button" className={MENU_ITEM} onClick={() => void rotateKey(d)}>
-                            Rotate key
-                          </button>
-                          <button
-                            type="button"
-                            className={
-                              d.is_active
-                                ? "block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
-                                : MENU_ITEM
-                            }
-                            onClick={() => void toggleActive(d)}
-                          >
-                            {d.is_active ? "Deactivate" : "Activate"}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {devices.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-6 text-center text-sm text-text-muted">
-                    No devices yet. Use Add device to register your first attendance machine.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <HrDataTable
+        rows={devices}
+        rowKey={(d) => d.id}
+        columns={columns}
+        loading={loading}
+        error={devices.length === 0 ? error : undefined}
+        onRetry={() => void load()}
+        onRefresh={() => void load()}
+        emptyTitle="No devices yet."
+        emptyHint="Use Add device to register your first attendance machine."
+        searchPlaceholder="Search code, name, type or shift…"
+        statusOf={(d) => (d.is_active ? "Active" : "Inactive")}
+        rowActions={(d) => [
+          { key: "edit", label: "Edit", primary: true, onClick: () => openEdit(d) },
+          { key: "import", label: "Import punches", primary: true, onClick: () => openImport(d) },
+          { key: "rotate", label: "Rotate key", danger: true, onClick: () => void rotateKey(d) },
+          {
+            key: "toggle",
+            label: d.is_active ? "Deactivate" : "Activate",
+            danger: d.is_active,
+            onClick: () => void toggleActive(d),
+          },
+        ]}
+      />
 
-      {formOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <form
-            onSubmit={saveForm}
-            className="max-h-[90vh] w-full max-w-lg space-y-3 overflow-y-auto rounded-xl border border-border bg-surface-raised p-6 shadow-xl"
+      <HrFormDrawer
+        open={formOpen}
+        title={editId == null ? "Add device" : "Edit device"}
+        onClose={() => setFormOpen(false)}
+        onSubmit={saveForm}
+        submitting={saving}
+        error={error}
+      >
+        <label className="block text-sm">
+          Code
+          <input
+            className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
+            value={form.code}
+            maxLength={32}
+            onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+            required
+          />
+        </label>
+        <label className="block text-sm">
+          Name
+          <input
+            className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
+            value={form.name}
+            maxLength={128}
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            required
+          />
+        </label>
+        <label className="block text-sm">
+          Type
+          <select
+            className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
+            value={form.device_type}
+            onChange={(e) => setForm((f) => ({ ...f, device_type: e.target.value as HrAttendanceDeviceType }))}
           >
-            <h3 className="text-lg font-semibold text-text-primary">{editId == null ? "Add device" : "Edit device"}</h3>
-            <label className="block text-sm">
-              Code
-              <input
-                className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
-                value={form.code}
-                maxLength={32}
-                onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
-                required
-              />
-            </label>
-            <label className="block text-sm">
-              Name
-              <input
-                className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
-                value={form.name}
-                maxLength={128}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                required
-              />
-            </label>
-            <label className="block text-sm">
-              Type
-              <select
-                className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
-                value={form.device_type}
-                onChange={(e) => setForm((f) => ({ ...f, device_type: e.target.value as HrAttendanceDeviceType }))}
-              >
-                <option value="ZKTECO">ZKTeco</option>
-                <option value="FINGERPRINT">Fingerprint terminal</option>
-                <option value="FACE">Face recognition terminal</option>
-                <option value="GENERIC">Other (CSV / JSON)</option>
-              </select>
-            </label>
-            <label className="block text-sm">
-              Serial number (optional)
-              <input
-                className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
-                value={form.serial_number}
-                maxLength={64}
-                onChange={(e) => setForm((f) => ({ ...f, serial_number: e.target.value }))}
-              />
-            </label>
-            <label className="block text-sm">
-              Cloud push: allowed IP addresses (optional)
-              <input
-                className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
-                value={form.push_allowed_ips}
-                maxLength={1024}
-                placeholder="e.g. 103.4.145.10 or 103.4.145.0/24"
-                onChange={(e) => setForm((f) => ({ ...f, push_allowed_ips: e.target.value }))}
-              />
-              <span className="mt-1 block text-xs text-text-muted">
-                For ZKTeco machines with a &quot;Cloud Server&quot; setting: enter the factory&apos;s public internet IP
-                (comma-separated). Cloud push works only when the serial number and this list are both filled in. On the
-                machine, set the server address to <code>{serverHost()}</code>.
-              </span>
-            </label>
-            <label className="block text-sm">
-              Default shift (used when an employee has no roster for the day)
-              <select
-                className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
-                value={form.default_shift_id}
-                onChange={(e) => setForm((f) => ({ ...f, default_shift_id: e.target.value }))}
-              >
-                <option value="">No default shift</option>
-                {shifts.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.code} · {s.name} ({s.start_time.slice(0, 5)}–{s.end_time.slice(0, 5)})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" className="rounded border px-3 py-1.5 text-sm" onClick={() => setFormOpen(false)}>
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded bg-brand-primary px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                {saving ? "Saving..." : "Save"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+            <option value="ZKTECO">ZKTeco</option>
+            <option value="FINGERPRINT">Fingerprint terminal</option>
+            <option value="FACE">Face recognition terminal</option>
+            <option value="GENERIC">Other (CSV / JSON)</option>
+          </select>
+        </label>
+        <label className="block text-sm">
+          Serial number (optional)
+          <input
+            className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
+            value={form.serial_number}
+            maxLength={64}
+            onChange={(e) => setForm((f) => ({ ...f, serial_number: e.target.value }))}
+          />
+        </label>
+        <label className="block text-sm">
+          Cloud push: allowed IP addresses (optional)
+          <input
+            className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
+            value={form.push_allowed_ips}
+            maxLength={1024}
+            placeholder="e.g. 103.4.145.10 or 103.4.145.0/24"
+            onChange={(e) => setForm((f) => ({ ...f, push_allowed_ips: e.target.value }))}
+          />
+          <span className="mt-1 block text-xs text-text-muted">
+            For ZKTeco machines with a &quot;Cloud Server&quot; setting: enter the factory&apos;s public internet IP
+            (comma-separated). Cloud push works only when the serial number and this list are both filled in. On the
+            machine, set the server address to <code>{serverHost()}</code>.
+          </span>
+        </label>
+        <label className="block text-sm">
+          Default shift (used when an employee has no roster for the day)
+          <select
+            className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
+            value={form.default_shift_id}
+            onChange={(e) => setForm((f) => ({ ...f, default_shift_id: e.target.value }))}
+          >
+            <option value="">No default shift</option>
+            {shifts.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.code} · {s.name} ({s.start_time.slice(0, 5)}–{s.end_time.slice(0, 5)})
+              </option>
+            ))}
+          </select>
+        </label>
+      </HrFormDrawer>
 
       {shownKey && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

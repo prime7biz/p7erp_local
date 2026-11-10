@@ -9,6 +9,7 @@ import {
   isMenuPermissionAllowed,
   isVisible,
 } from "@/components/shell/sidebarNavUtils";
+import { hrTabPaletteRoutes } from "@/components/hr/kit/hrHubs";
 import { Landmark, ScanBarcode, Search, Settings, Timer, TriangleAlert, Users, X } from "lucide-react";
 
 function isPathMatch(pathname: string, basePath: string): boolean {
@@ -33,7 +34,7 @@ type DrawerLink = {
 
 const MOBILE_SHORTCUTS: DrawerLink[] = [
   { href: "/app/inventory/stock-inventory-summary", label: "Scan barcode / stock", icon: ScanBarcode, requiresSection: "Inventory" },
-  { href: "/app/hr/ess/attendance", label: "Quick clock-in", icon: Timer },
+  { href: "/app/hr/my?tab=attendance", label: "Quick clock-in", icon: Timer },
   { href: "/app/production/quality", label: "Report defect", icon: TriangleAlert, requiresSection: "Manufacturing" },
 ];
 
@@ -122,6 +123,14 @@ export function AppBottomNav({
     () => filterSectionsByQuery(filteredSections, drawerSearch),
     [drawerSearch, filteredSections],
   );
+  // HR pages are tabs inside hubs, not sidebar items; search them by tab name too.
+  const hrTabMatches = useMemo<DrawerLink[]>(() => {
+    const q = drawerSearch.trim().toLowerCase();
+    if (!q || !visibleSectionNames.has("HR")) return [];
+    return hrTabPaletteRoutes(featureFlags)
+      .filter((r) => r.label.toLowerCase().includes(q))
+      .map((r) => ({ href: r.href, label: `${r.label} · ${r.section.replace(/^HR · /, "")}`, icon: r.icon }));
+  }, [drawerSearch, featureFlags, visibleSectionNames]);
 
   useEffect(() => {
     setIsMoreOpen(false);
@@ -302,8 +311,14 @@ export function AppBottomNav({
                   <div className="space-y-1">{portalLinks.map(renderDrawerLink)}</div>
                 </section>
               )}
-              {drawerSearch.trim() && filteredDrawerSections.length === 0 && (
+              {drawerSearch.trim() && filteredDrawerSections.length === 0 && hrTabMatches.length === 0 && (
                 <p className="px-2 py-6 text-center text-sm text-text-muted">No pages match “{drawerSearch.trim()}”.</p>
+              )}
+              {hrTabMatches.length > 0 && (
+                <section className="rounded-lg border border-border bg-surface-raised p-3">
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">HR tabs</h3>
+                  <div className="space-y-1">{hrTabMatches.map(renderDrawerLink)}</div>
+                </section>
               )}
               {filteredDrawerSections.map((section) => {
                 const SectionIcon = section.icon;

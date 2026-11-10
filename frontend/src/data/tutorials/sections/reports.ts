@@ -419,7 +419,7 @@ Closing a downtime event or a CAPA updates these numbers the next time you open 
 - **Employee Summary** (\`/app/reports/employee\`) — cards **Employees**, **Attendance rate**, **Pending leave**, and **Attendance by employee** (**Present**, **Absent**, **Leave**) for one month.
 - **Payroll Summary** (\`/app/reports/payroll\`) — payroll runs by period for one year, with totals **Gross (listed runs)**, **Deductions** and **Net**.
 
-HR officers and factory managers use them for monthly review and buyer audits. More HR reports are on **HR → HR Reports** (\`/app/hr/reports\`).
+HR officers and factory managers use them for monthly review and buyer audits. More HR reports are on **HR → Reports & Insights → HR reports** (\`/app/hr/insights?tab=reports\`).
 
 ## Before you start
 
@@ -441,7 +441,7 @@ Approving leave or posting a payroll run changes these numbers immediately.
 ## Tips
 
 - Run Employee Summary after the month's attendance is complete, before payroll.
-- Use **HR → HR Reports** for department-wise and statutory views.
+- Use **HR → Reports & Insights → HR reports** for department-wise and statutory views.
 
 ## Common problems
 
@@ -450,7 +450,7 @@ Approving leave or posting a payroll run changes these numbers immediately.
       tags: ["reports", "HR", "employee", "attendance", "payroll", "headcount"],
       keywords: ["staff report", "worker report", "salary report", "monthly attendance", "leave report", "payroll total"],
       estimatedMinutes: 3,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-10",
       coverImage: "/tutorials/screens/reports-employee.jpg",
       images: [
         {
@@ -466,7 +466,7 @@ Approving leave or posting a payroll run changes these numbers immediately.
         {
           src: "/tutorials/screens/reports-hr-dashboard.jpg",
           alt: "HR Reports dashboard in the HR module",
-          caption: "More HR reports: HR → HR Reports.",
+          caption: "More HR reports: HR → Reports & Insights → HR reports.",
         },
       ],
       relatedAppRoutes: ["/app/reports/employee", "/app/reports/payroll", "/app/hr/reports"],

@@ -1,15 +1,26 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type HrRegularizationResponse } from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { HrStatusBadge } from "@/components/hr/HrStatusBadge";
+import { HrDataTable, type HrTableColumn } from "@/components/hr/kit/HrDataTable";
+import { HrEmployeeCell } from "@/components/hr/kit/HrEmployeeFields";
+import { useEmployeeLookup } from "@/components/hr/kit/useEmployeeLookup";
+import type { HrRowAction } from "@/components/hr/kit/rowActions";
+import { useAuth } from "@/context/AuthContext";
+import { canExportHrData } from "@/lib/roles";
 
 const PREFIX = "/app/hr";
+const hhmm = (t: string | null | undefined) => (t ? t.slice(0, 5) : "-");
 
 export function HrRegularizationsPage() {
+  const { me } = useAuth();
   const [rows, setRows] = useState<HrRegularizationResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [msg, setMsg] = useState("");
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  const [info, setInfo] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const lookup = useEmployeeLookup(useMemo(() => rows.map((r) => r.employee_id), [rows]));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -28,119 +39,106 @@ export function HrRegularizationsPage() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    const close = () => setOpenActionsId(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, []);
-
   const approve = async (id: number) => {
-    setMsg("");
+    if (busyId != null) return;
+    setBusyId(id);
+    setInfo("");
+    setActionError("");
     try {
       await api.approveHrRegularization(id, {});
-      setMsg("Request approved.");
+      setInfo("Request approved.");
       await load();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Approve failed");
+      setActionError(e instanceof Error ? e.message : "Approve failed");
+    } finally {
+      setBusyId(null);
     }
   };
 
   const reject = async (id: number) => {
-    setMsg("");
+    if (busyId != null) return;
+    const entered = window.prompt("Reason for rejecting this request:", "Rejected");
+    if (entered == null) return;
+    setBusyId(id);
+    setInfo("");
+    setActionError("");
     try {
-      await api.rejectHrRegularization(id, { decision_note: "Rejected" });
-      setMsg("Request rejected.");
+      await api.rejectHrRegularization(id, { decision_note: entered.trim() || "Rejected" });
+      setInfo("Request rejected.");
       await load();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Reject failed");
+      setActionError(e instanceof Error ? e.message : "Reject failed");
+    } finally {
+      setBusyId(null);
     }
   };
 
+  const columns: HrTableColumn<HrRegularizationResponse>[] = [
+    {
+      key: "employee",
+      header: "Employee",
+      render: (r) => <HrEmployeeCell id={r.employee_id} lookup={lookup} />,
+      value: (r) => {
+        const e = lookup(r.employee_id);
+        return e ? `${e.full_name} ${e.employee_code}` : r.employee_id ? `#${r.employee_id}` : "";
+      },
+    },
+    { key: "id", header: "Request", render: (r) => <span className="font-medium text-text-primary">#{r.id}</span>, value: (r) => r.id, hideOnMobile: true },
+    { key: "entry", header: "Attendance entry", render: (r) => `#${r.attendance_entry_id}`, value: (r) => r.attendance_entry_id, hideOnMobile: true },
+    {
+      key: "times",
+      header: "Requested in / out",
+      render: (r) => `${hhmm(r.requested_in_time)} – ${hhmm(r.requested_out_time)}`,
+      value: (r) => `${hhmm(r.requested_in_time)} - ${hhmm(r.requested_out_time)}`,
+    },
+    { key: "reason", header: "Reason", render: (r) => <span className="line-clamp-2 max-w-xs">{r.reason}</span>, value: (r) => r.reason },
+    { key: "status", header: "Status", render: (r) => <HrStatusBadge status={r.status} />, value: (r) => r.status },
+    { key: "note", header: "Decision note", render: (r) => r.decision_note || "-", value: (r) => r.decision_note, hideOnMobile: true },
+    { key: "created", header: "Requested on", render: (r) => r.created_at.slice(0, 10), value: (r) => r.created_at, hideOnMobile: true },
+  ];
+
+  const rowActions = (r: HrRegularizationResponse): HrRowAction[] =>
+    r.status === "PENDING"
+      ? [
+          { key: "approve", label: "Approve", primary: true, tone: "positive", disabled: busyId != null, onClick: () => void approve(r.id) },
+          { key: "reject", label: "Reject", primary: true, disabled: busyId != null, onClick: () => void reject(r.id) },
+        ]
+      : [];
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <HrPageHeader
         title="Attendance regularizations"
         description="Employees request corrections to punch times; managers approve or reject."
         breadcrumbs={[{ label: "HR", href: PREFIX }, { label: "Regularizations" }]}
       />
-      <div className="flex justify-end">
-        <button
-          type="button"
-          className="rounded border border-border-strong px-3 py-1.5 text-sm text-text-secondary"
-          onClick={() => void load()}
-        >
-          Refresh
-        </button>
-      </div>
-      {error && <div className="text-sm text-status-danger-foreground">{error}</div>}
-      {msg && <div className="text-sm text-text-secondary">{msg}</div>}
-
-      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-sm text-text-muted">Loading…</div>
-        ) : rows.length === 0 ? (
-          <div className="p-8 text-center text-sm text-text-muted">No regularization requests.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-border text-sm">
-              <thead className="bg-surface-subtle">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs uppercase">ID</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Entry ID</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Status</th>
-                  <th className="px-4 py-2 text-left text-xs uppercase">Reason</th>
-                  <th className="px-4 py-2 text-right text-xs uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id} className="border-t border-border-subtle">
-                    <td className="px-4 py-2">{row.id}</td>
-                    <td className="px-4 py-2">{row.attendance_entry_id}</td>
-                    <td className="px-4 py-2">{row.status}</td>
-                    <td className="px-4 py-2 max-w-xs truncate">{row.reason}</td>
-                    <td className="px-4 py-2 text-right">
-                      <div className="relative inline-block text-left" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => setOpenActionsId(openActionsId === row.id ? null : row.id)}
-                          className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                        >
-                          Actions
-                        </button>
-                        {openActionsId === row.id && row.status === "PENDING" && (
-                          <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                            <button
-                              type="button"
-                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                              onClick={() => {
-                                setOpenActionsId(null);
-                                void approve(row.id);
-                              }}
-                            >
-                              Approve
-                            </button>
-                            <button
-                              type="button"
-                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
-                              onClick={() => {
-                                setOpenActionsId(null);
-                                void reject(row.id);
-                              }}
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {info ? (
+        <div role="status" className="rounded-lg border border-status-success/20 bg-status-success-subtle px-4 py-2 text-sm text-status-success-foreground">
+          {info}
+        </div>
+      ) : null}
+      {actionError ? (
+        <div role="alert" className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-2 text-sm text-status-danger-foreground">
+          {actionError}
+        </div>
+      ) : null}
+      <HrDataTable
+        rows={rows}
+        rowKey={(r) => r.id}
+        columns={columns}
+        loading={loading}
+        error={error}
+        onRetry={() => void load()}
+        onRefresh={() => void load()}
+        emptyTitle="No regularization requests"
+        emptyHint="Requests appear here when employees ask to correct their punch times."
+        searchPlaceholder="Search reason, entry or status…"
+        initialSort={{ key: "created", dir: "desc" }}
+        statusOf={(r) => r.status}
+        exportFileName="hr-regularizations"
+        canExport={canExportHrData(me?.role_name)}
+        rowActions={rowActions}
+      />
     </div>
   );
 }

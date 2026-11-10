@@ -1,26 +1,30 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, type HrShiftCreate, type HrShiftResponse } from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { ActiveBadge } from "@/components/hr/HrListParts";
+import { HrDataTable, type HrTableColumn } from "@/components/hr/kit/HrDataTable";
+import { HrFormDrawer } from "@/components/hr/kit/HrFormDrawer";
+import { useAuth } from "@/context/AuthContext";
+import { canExportHrData } from "@/lib/roles";
 
 const PREFIX = "/app/hr";
+const inputClass = "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm";
+const labelClass = "block text-sm font-medium text-text-secondary";
+
+const EMPTY_FORM: HrShiftCreate = { code: "", name: "", start_time: "", end_time: "", is_night_shift: false, is_active: true };
+const hhmm = (t: string | null | undefined) => (t ? t.slice(0, 5) : "");
 
 export function HrShiftsPage() {
+  const { me } = useAuth();
   const [rows, setRows] = useState<HrShiftResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<HrShiftResponse | null>(null);
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
-  const [form, setForm] = useState<HrShiftCreate>({
-    code: "",
-    name: "",
-    start_time: "",
-    end_time: "",
-    is_night_shift: false,
-    is_active: true,
-  });
+  const [formError, setFormError] = useState("");
+  const [drawer, setDrawer] = useState<{ mode: "create" } | { mode: "edit"; row: HrShiftResponse } | null>(null);
+  const [form, setForm] = useState<HrShiftCreate>(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
@@ -30,196 +34,126 @@ export function HrShiftsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void load();
-  }, []);
-
-  useEffect(() => {
-    const close = () => setOpenActionsId(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, []);
+  }, [load]);
 
   const openCreate = () => {
-    setEditing(null);
-    setForm({ code: "", name: "", start_time: "", end_time: "", is_night_shift: false, is_active: true });
-    setModalOpen(true);
+    setForm(EMPTY_FORM);
+    setFormError("");
+    setDrawer({ mode: "create" });
   };
 
   const openEdit = (row: HrShiftResponse) => {
-    setEditing(row);
     setForm({
       code: row.code,
       name: row.name,
-      start_time: row.start_time,
-      end_time: row.end_time,
+      start_time: hhmm(row.start_time),
+      end_time: hhmm(row.end_time),
       is_night_shift: row.is_night_shift,
       is_active: row.is_active,
     });
-    setModalOpen(true);
+    setFormError("");
+    setDrawer({ mode: "edit", row });
   };
 
-  const closeModal = () => {
-    setModalOpen(false);
-    setEditing(null);
-  };
-
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!form.code.trim() || !form.name.trim() || !form.start_time || !form.end_time) return;
-    setError("");
+    if (!drawer) return;
+    if (!form.code.trim() || !form.name.trim() || !form.start_time || !form.end_time) {
+      setFormError("Code, name, start time and end time are required.");
+      return;
+    }
+    setSaving(true);
+    setFormError("");
     try {
-      if (editing) {
-        await api.updateHrShift(editing.id, form);
-      } else {
-        await api.createHrShift(form);
-      }
-      closeModal();
+      if (drawer.mode === "edit") await api.updateHrShift(drawer.row.id, form);
+      else await api.createHrShift(form);
+      setDrawer(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+      setFormError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
     }
   };
 
+  const columns: HrTableColumn<HrShiftResponse>[] = [
+    { key: "code", header: "Code", render: (r) => <span className="font-medium text-text-primary">{r.code}</span>, value: (r) => r.code },
+    { key: "name", header: "Name", render: (r) => r.name, value: (r) => r.name },
+    { key: "start", header: "Start", render: (r) => hhmm(r.start_time), value: (r) => hhmm(r.start_time) },
+    { key: "end", header: "End", render: (r) => hhmm(r.end_time), value: (r) => hhmm(r.end_time) },
+    { key: "night", header: "Night", render: (r) => (r.is_night_shift ? "Yes" : "No"), value: (r) => (r.is_night_shift ? "Yes" : "No"), hideOnMobile: true },
+    { key: "active", header: "Status", render: (r) => <ActiveBadge active={r.is_active} />, value: (r) => (r.is_active ? "Active" : "Inactive") },
+  ];
+
+  const addButton = (
+    <button type="button" onClick={openCreate} className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground hover:opacity-90">
+      + Add shift
+    </button>
+  );
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <HrPageHeader
-          title="Shifts"
-          description="Shift templates for roster and attendance."
-          breadcrumbs={[{ label: "HR", href: PREFIX }, { label: "Shifts" }]}
-        />
-        <button type="button" onClick={openCreate} className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-semibold text-white">
-          Add shift
-        </button>
+        <HrPageHeader title="Shifts" description="Shift templates for roster and attendance." breadcrumbs={[{ label: "HR", href: PREFIX }, { label: "Shifts" }]} />
+        {addButton}
       </div>
+      <HrDataTable
+        rows={rows}
+        rowKey={(r) => r.id}
+        columns={columns}
+        loading={loading}
+        error={error}
+        onRetry={() => void load()}
+        onRefresh={() => void load()}
+        emptyTitle="No shifts yet"
+        emptyHint="Add a shift (for example General 08:00–17:00) so it can be used in the roster."
+        emptyAction={addButton}
+        searchPlaceholder="Search code or name…"
+        initialSort={{ key: "code", dir: "asc" }}
+        exportFileName="hr-shifts"
+        canExport={canExportHrData(me?.role_name)}
+        rowActions={(r) => [{ key: "edit", label: "Edit", primary: true, onClick: () => openEdit(r) }]}
+      />
 
-      {error && <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-2 text-sm text-status-danger-foreground">{error}</div>}
-
-      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
-        {loading ? (
-          <div className="p-10 text-center text-sm text-text-muted">Loading shifts...</div>
-        ) : rows.length === 0 ? (
-          <div className="p-10 text-center text-sm text-text-muted">No shifts found.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-border">
-              <thead className="bg-surface-subtle">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Code</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Name</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Start</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">End</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Night</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Status</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-text-muted">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {rows.map((row) => (
-                  <tr key={row.id}>
-                    <td className="px-4 py-3 text-sm font-medium text-text-primary">{row.code}</td>
-                    <td className="px-4 py-3 text-sm text-text-secondary">{row.name}</td>
-                    <td className="px-4 py-3 text-sm text-text-secondary">{row.start_time}</td>
-                    <td className="px-4 py-3 text-sm text-text-secondary">{row.end_time}</td>
-                    <td className="px-4 py-3 text-sm text-text-secondary">{row.is_night_shift ? "Yes" : "No"}</td>
-                    <td className="px-4 py-3 text-sm text-text-secondary">{row.is_active ? "Active" : "Inactive"}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => setOpenActionsId(openActionsId === row.id ? null : row.id)}
-                          className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
-                        >
-                          Actions
-                        </button>
-                        {openActionsId === row.id && (
-                          <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                openEdit(row);
-                                setOpenActionsId(null);
-                              }}
-                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
-                            >
-                              Edit
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <HrFormDrawer
+        open={drawer != null}
+        title={drawer?.mode === "edit" ? "Edit shift" : "Add shift"}
+        onClose={() => setDrawer(null)}
+        onSubmit={(e) => void onSubmit(e)}
+        submitting={saving}
+        error={formError}
+      >
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="shift-code">Code **</label>
+          <input id="shift-code" className={inputClass} value={form.code} onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))} required />
+        </div>
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="shift-name">Name **</label>
+          <input id="shift-name" className={inputClass} value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} required />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className={labelClass} htmlFor="shift-start">Start time **</label>
+            <input id="shift-start" type="time" className={inputClass} value={form.start_time} onChange={(e) => setForm((p) => ({ ...p, start_time: e.target.value }))} required />
           </div>
-        )}
-      </div>
-
-      {modalOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4" onClick={closeModal}>
-          <div className="w-full max-w-md rounded-xl bg-surface-raised p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="mb-4 text-lg font-semibold text-text-primary">{editing ? "Edit shift" : "Add shift"}</h2>
-            <form onSubmit={onSubmit} className="space-y-3">
-              <input
-                className="w-full rounded border border-border-strong px-3 py-2 text-sm"
-                placeholder="Code"
-                value={form.code}
-                onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))}
-                required
-              />
-              <input
-                className="w-full rounded border border-border-strong px-3 py-2 text-sm"
-                placeholder="Name"
-                value={form.name}
-                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                required
-              />
-              <input
-                className="w-full rounded border border-border-strong px-3 py-2 text-sm"
-                placeholder="Start time (HH:MM)"
-                value={form.start_time}
-                onChange={(e) => setForm((p) => ({ ...p, start_time: e.target.value }))}
-                required
-              />
-              <input
-                className="w-full rounded border border-border-strong px-3 py-2 text-sm"
-                placeholder="End time (HH:MM)"
-                value={form.end_time}
-                onChange={(e) => setForm((p) => ({ ...p, end_time: e.target.value }))}
-                required
-              />
-              <label className="flex items-center gap-2 text-sm text-text-secondary">
-                <input
-                  type="checkbox"
-                  checked={form.is_night_shift ?? false}
-                  onChange={(e) => setForm((p) => ({ ...p, is_night_shift: e.target.checked }))}
-                />
-                Night shift
-              </label>
-              <label className="flex items-center gap-2 text-sm text-text-secondary">
-                <input
-                  type="checkbox"
-                  checked={form.is_active ?? true}
-                  onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))}
-                />
-                Active
-              </label>
-              <div className="flex justify-end gap-2 pt-1">
-                <button type="button" onClick={closeModal} className="rounded border border-border-strong px-3 py-1.5 text-sm text-text-secondary">
-                  Cancel
-                </button>
-                <button type="submit" className="rounded bg-brand-primary px-4 py-1.5 text-sm font-semibold text-white">
-                  Save
-                </button>
-              </div>
-            </form>
+          <div className="space-y-1">
+            <label className={labelClass} htmlFor="shift-end">End time **</label>
+            <input id="shift-end" type="time" className={inputClass} value={form.end_time} onChange={(e) => setForm((p) => ({ ...p, end_time: e.target.value }))} required />
           </div>
         </div>
-      )}
+        <label className="flex items-center gap-2 text-sm text-text-secondary">
+          <input type="checkbox" checked={form.is_night_shift ?? false} onChange={(e) => setForm((p) => ({ ...p, is_night_shift: e.target.checked }))} />
+          Night shift
+        </label>
+        <label className="flex items-center gap-2 text-sm text-text-secondary">
+          <input type="checkbox" checked={form.is_active ?? true} onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))} />
+          Active
+        </label>
+      </HrFormDrawer>
     </div>
   );
 }

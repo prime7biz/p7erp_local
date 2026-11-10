@@ -764,19 +764,19 @@
     },
     {
       "name": "hr-departments",
-      "route": "/app/hr/departments",
+      "route": "/app/hr/setup?tab=departments",
       "section": "HR",
       "label": "Departments"
     },
     {
       "name": "hr-designations",
-      "route": "/app/hr/designations",
+      "route": "/app/hr/setup?tab=designations",
       "section": "HR",
       "label": "Designations"
     },
     {
       "name": "hr-sections",
-      "route": "/app/hr/sections",
+      "route": "/app/hr/setup?tab=sections",
       "section": "HR",
       "label": "Sections & Lines"
     },
@@ -794,247 +794,247 @@
     },
     {
       "name": "hr-attendance-shifts",
-      "route": "/app/hr/attendance/shifts",
+      "route": "/app/hr/attendance-setup?tab=shifts",
       "section": "HR",
       "label": "Shifts"
     },
     {
       "name": "hr-attendance-holidays",
-      "route": "/app/hr/attendance/holidays",
+      "route": "/app/hr/attendance-setup?tab=holidays",
       "section": "HR",
       "label": "Holidays"
     },
     {
       "name": "hr-attendance-roster",
-      "route": "/app/hr/attendance/roster",
+      "route": "/app/hr/attendance-setup?tab=roster",
       "section": "HR",
       "label": "Roster"
     },
     {
       "name": "hr-attendance-entries",
-      "route": "/app/hr/attendance/entries",
+      "route": "/app/hr/attendance?tab=entries",
       "section": "HR",
       "label": "Daily Entry"
     },
     {
       "name": "hr-attendance-regularizations",
-      "route": "/app/hr/attendance/regularizations",
+      "route": "/app/hr/attendance?tab=regularizations",
       "section": "HR",
       "label": "Regularizations"
     },
     {
       "name": "hr-attendance-overtime-rules",
-      "route": "/app/hr/attendance/overtime-rules",
+      "route": "/app/hr/attendance-setup?tab=overtime-rules",
       "section": "HR",
       "label": "Overtime Rules"
     },
     {
       "name": "hr-attendance-overtime",
-      "route": "/app/hr/attendance/overtime",
+      "route": "/app/hr/attendance?tab=overtime",
       "section": "HR",
       "label": "Overtime"
     },
     {
       "name": "hr-attendance-summary",
-      "route": "/app/hr/attendance/summary",
+      "route": "/app/hr/attendance?tab=summary",
       "section": "HR",
       "label": "Summary"
     },
     {
       "name": "hr-leave-types",
-      "route": "/app/hr/leave/types",
+      "route": "/app/hr/leave-payroll-setup?tab=leave-types",
       "section": "HR",
       "label": "Leave Types"
     },
     {
       "name": "hr-leave-policies",
-      "route": "/app/hr/leave/policies",
+      "route": "/app/hr/leave-payroll-setup?tab=leave-policies",
       "section": "HR",
       "label": "Policies"
     },
     {
       "name": "hr-leave-balances",
-      "route": "/app/hr/leave/balances",
+      "route": "/app/hr/leave?tab=balances",
       "section": "HR",
       "label": "Balances"
     },
     {
       "name": "hr-leave-requests",
-      "route": "/app/hr/leave/requests",
+      "route": "/app/hr/leave?tab=requests",
       "section": "HR",
       "label": "Requests"
     },
     {
       "name": "hr-leave-approvals",
-      "route": "/app/hr/leave/approvals",
+      "route": "/app/hr/leave?tab=approvals",
       "section": "HR",
       "label": "Approvals"
     },
     {
       "name": "hr-leave-calendar",
-      "route": "/app/hr/leave/calendar",
+      "route": "/app/hr/leave?tab=calendar",
       "section": "HR",
       "label": "Calendar"
     },
     {
       "name": "hr-payroll-components",
-      "route": "/app/hr/payroll/components",
+      "route": "/app/hr/leave-payroll-setup?tab=components",
       "section": "HR",
       "label": "Components"
     },
     {
       "name": "hr-payroll-salary-structures",
-      "route": "/app/hr/payroll/salary-structures",
+      "route": "/app/hr/leave-payroll-setup?tab=structures",
       "section": "HR",
       "label": "Salary Structures"
     },
     {
       "name": "hr-payroll-assignments",
-      "route": "/app/hr/payroll/assignments",
+      "route": "/app/hr/leave-payroll-setup?tab=assignments",
       "section": "HR",
       "label": "Structure Assignments"
     },
     {
       "name": "hr-payroll-periods",
-      "route": "/app/hr/payroll/periods",
+      "route": "/app/hr/payroll?tab=periods",
       "section": "HR",
       "label": "Periods"
     },
     {
       "name": "hr-payroll-runs",
-      "route": "/app/hr/payroll/runs",
+      "route": "/app/hr/payroll?tab=runs",
       "section": "HR",
       "label": "Runs"
     },
     {
       "name": "hr-payroll-advances",
-      "route": "/app/hr/payroll/advances",
+      "route": "/app/hr/payroll-extras?tab=advances",
       "section": "HR",
       "label": "Advances & Loans"
     },
     {
       "name": "hr-payroll-bonuses",
-      "route": "/app/hr/payroll/bonuses",
+      "route": "/app/hr/payroll-extras?tab=bonuses",
       "section": "HR",
       "label": "Bonuses"
     },
     {
       "name": "hr-payroll-accounting-config",
-      "route": "/app/hr/payroll/accounting-config",
+      "route": "/app/hr/leave-payroll-setup?tab=accounting",
       "section": "HR",
       "label": "Accounting Config"
     },
     {
       "name": "hr-payroll-statutory",
-      "route": "/app/hr/payroll/statutory",
+      "route": "/app/hr/leave-payroll-setup?tab=statutory",
       "section": "HR",
       "label": "Statutory Config"
     },
     {
       "name": "hr-payroll-approvals",
-      "route": "/app/hr/payroll/approvals",
+      "route": "/app/hr/payroll?tab=approvals",
       "section": "HR",
       "label": "Approvals"
     },
     {
       "name": "hr-payroll-payslips",
-      "route": "/app/hr/payroll/payslips",
+      "route": "/app/hr/payroll?tab=payslips",
       "section": "HR",
       "label": "Payslips"
     },
     {
       "name": "hr-performance-cycles",
-      "route": "/app/hr/performance/cycles",
+      "route": "/app/hr/performance?tab=cycles",
       "section": "HR",
       "label": "Performance Cycles"
     },
     {
       "name": "hr-performance-goals",
-      "route": "/app/hr/performance/goals",
+      "route": "/app/hr/performance?tab=goals",
       "section": "HR",
       "label": "Goals"
     },
     {
       "name": "hr-performance-reviews",
-      "route": "/app/hr/performance/reviews",
+      "route": "/app/hr/performance?tab=reviews",
       "section": "HR",
       "label": "Reviews"
     },
     {
       "name": "hr-performance-dashboard",
-      "route": "/app/hr/performance/dashboard",
+      "route": "/app/hr/performance?tab=dashboard",
       "section": "HR",
       "label": "Performance Dashboard"
     },
     {
       "name": "hr-recruitment-requisitions",
-      "route": "/app/hr/recruitment/requisitions",
+      "route": "/app/hr/recruitment?tab=requisitions",
       "section": "HR",
       "label": "Job Requisitions"
     },
     {
       "name": "hr-recruitment-candidates",
-      "route": "/app/hr/recruitment/candidates",
+      "route": "/app/hr/recruitment?tab=candidates",
       "section": "HR",
       "label": "Candidates"
     },
     {
       "name": "hr-recruitment-interviews",
-      "route": "/app/hr/recruitment/interviews",
+      "route": "/app/hr/recruitment?tab=interviews",
       "section": "HR",
       "label": "Interviews"
     },
     {
       "name": "hr-recruitment-offers",
-      "route": "/app/hr/recruitment/offers",
+      "route": "/app/hr/recruitment?tab=offers",
       "section": "HR",
       "label": "Offers"
     },
     {
       "name": "hr-ess-profile",
-      "route": "/app/hr/ess/profile",
+      "route": "/app/hr/my?tab=profile",
       "section": "HR",
       "label": "My Profile"
     },
     {
       "name": "hr-ess-attendance",
-      "route": "/app/hr/ess/attendance",
+      "route": "/app/hr/my?tab=attendance",
       "section": "HR",
       "label": "My Attendance"
     },
     {
       "name": "hr-ess-leave",
-      "route": "/app/hr/ess/leave",
+      "route": "/app/hr/my?tab=leave",
       "section": "HR",
       "label": "My Leave"
     },
     {
       "name": "hr-ess-payslips",
-      "route": "/app/hr/ess/payslips",
+      "route": "/app/hr/my?tab=payslips",
       "section": "HR",
       "label": "My Payslips"
     },
     {
       "name": "hr-ess-tickets",
-      "route": "/app/hr/ess/tickets",
+      "route": "/app/hr/my?tab=tickets",
       "section": "HR",
       "label": "My Tickets"
     },
     {
       "name": "hr-compliance",
-      "route": "/app/hr/compliance",
+      "route": "/app/hr/insights?tab=compliance",
       "section": "HR",
       "label": "Compliance"
     },
     {
       "name": "hr-ai-insights",
-      "route": "/app/hr/ai-insights",
+      "route": "/app/hr/insights?tab=ai",
       "section": "HR",
       "label": "AI Insights"
     },
     {
       "name": "hr-reports",
-      "route": "/app/hr/reports",
+      "route": "/app/hr/insights?tab=reports",
       "section": "HR",
       "label": "HR Reports"
     },

@@ -6,6 +6,11 @@ import {
   type HrSalaryStructureResponse,
 } from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { HrDataTable, type HrTableColumn } from "@/components/hr/kit/HrDataTable";
+import { HrFormDrawer } from "@/components/hr/kit/HrFormDrawer";
+import { useAuth } from "@/context/AuthContext";
+import { fromMoneyUnits, toMoneyUnits } from "@/lib/money";
+import { canExportHrData } from "@/lib/roles";
 import { logApiError } from "@/utils/logApiError";
 
 interface ComponentRow {
@@ -35,6 +40,7 @@ function money(value: string | number): string {
 }
 
 export function HrSalaryStructuresPage() {
+  const { me } = useAuth();
   const [structures, setStructures] = useState<HrSalaryStructureResponse[]>([]);
   const [components, setComponents] = useState<ComponentRow[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -43,7 +49,6 @@ export function HrSalaryStructuresPage() {
   const [linesLoading, setLinesLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [structureModal, setStructureModal] = useState<"create" | "edit" | null>(null);
   const [structureForm, setStructureForm] = useState<HrSalaryStructureCreate>({ code: "", name: "", description: "", is_active: true });
   const [lineForm, setLineForm] = useState<{ component_id: string; amount: string }>({ component_id: "", amount: "" });
@@ -89,26 +94,20 @@ export function HrSalaryStructuresPage() {
   }, [loadStructures]);
 
   useEffect(() => {
+    setLines([]);
     if (selectedId != null) void loadLines(selectedId);
-    else setLines([]);
   }, [selectedId, loadLines]);
 
-  useEffect(() => {
-    const close = () => setOpenActionsId(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, []);
-
-  const fixedTotal = useMemo(
-    () =>
-      lines.reduce((sum, l) => {
-        const c = componentMap.get(l.component_id);
-        if (!c || c.calculation_type !== "FIXED") return sum;
-        const v = Number(l.amount) || 0;
-        return c.component_type === "DEDUCTION" ? sum - v : sum + v;
-      }, 0),
-    [lines, componentMap]
-  );
+  const fixedTotal = useMemo(() => {
+    // Exact integer money units, so many lines cannot drift (0.1 + 0.2 ≠ 0.3 in floats).
+    const units = lines.reduce((sum, l) => {
+      const c = componentMap.get(l.component_id);
+      if (!c || c.calculation_type !== "FIXED") return sum;
+      const v = toMoneyUnits(l.amount);
+      return c.component_type === "DEDUCTION" ? sum - v : sum + v;
+    }, 0);
+    return fromMoneyUnits(units);
+  }, [lines, componentMap]);
   const percentLines = lines.filter((l) => componentMap.get(l.component_id)?.calculation_type === "PERCENT_OF_BASE");
 
   const run = async (fn: () => Promise<void>, ok: string) => {
@@ -195,6 +194,63 @@ export function HrSalaryStructuresPage() {
 
   const usedComponentIds = new Set(lines.map((l) => l.component_id));
 
+  const componentOf = (line: HrPayrollStructureLineResponse) => componentMap.get(line.component_id);
+  const typeLabel = (line: HrPayrollStructureLineResponse) => (componentOf(line)?.component_type === "DEDUCTION" ? "Deduction" : "Earning");
+  const calcLabel = (line: HrPayrollStructureLineResponse) => {
+    const calc = componentOf(line)?.calculation_type;
+    return CALC_LABEL[calc ?? ""] ?? calc;
+  };
+  const amountLabel = (line: HrPayrollStructureLineResponse) =>
+    componentOf(line)?.calculation_type === "PERCENT_OF_BASE" ? `${money(line.amount)}%` : money(line.amount);
+
+  const lineColumns: HrTableColumn<HrPayrollStructureLineResponse>[] = [
+    {
+      key: "component",
+      header: "Component",
+      render: (line) => (
+        <span className="text-text-primary">
+          {componentOf(line)?.name ?? `Component #${line.component_id}`}
+          <span className="block text-xs text-text-muted">{componentOf(line)?.code}</span>
+        </span>
+      ),
+      value: (line) => {
+        const c = componentOf(line);
+        return c ? `${c.name} ${c.code}` : `Component #${line.component_id}`;
+      },
+    },
+    { key: "type", header: "Type", render: typeLabel, value: typeLabel },
+    { key: "calculation", header: "Calculation", render: calcLabel, value: calcLabel, hideOnMobile: true },
+    {
+      key: "amount",
+      header: "Amount / rate",
+      align: "right",
+      value: (line) => line.amount,
+      render: (line) =>
+        editingLine?.id === line.id ? (
+          <form onSubmit={saveLineAmount} className="flex items-center justify-end gap-2">
+            <input
+              aria-label="New amount"
+              type="number"
+              min="0"
+              step="0.01"
+              autoFocus
+              className="w-28 rounded border border-border-strong px-2 py-1 text-right text-sm"
+              value={editingLine.amount}
+              onChange={(e) => setEditingLine({ id: line.id, amount: e.target.value })}
+            />
+            <button type="submit" disabled={saving} className="text-xs font-semibold text-brand-primary">
+              Save
+            </button>
+            <button type="button" onClick={() => setEditingLine(null)} className="text-xs text-text-muted">
+              Cancel
+            </button>
+          </form>
+        ) : (
+          <span className="tabular-nums text-text-primary">{amountLabel(line)}</span>
+        ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -267,107 +323,27 @@ export function HrSalaryStructuresPage() {
                 </button>
               </div>
 
-              <div className="overflow-x-auto rounded-lg border border-border">
-                {linesLoading ? (
-                  <div className="p-6 text-center text-sm text-text-muted">Loading component lines...</div>
-                ) : lines.length === 0 ? (
-                  <div className="p-6 text-center text-sm text-text-muted">No component lines. Add basic, house rent and allowances below.</div>
-                ) : (
-                  <table className="min-w-full divide-y divide-gray-200 text-sm">
-                    <thead className="bg-surface-subtle">
-                      <tr>
-                        <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Component</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Type</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Calculation</th>
-                        <th className="px-3 py-2 text-right text-xs font-medium uppercase text-text-muted">Amount / rate</th>
-                        <th className="px-3 py-2 text-right text-xs font-medium uppercase text-text-muted">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {lines.map((line) => {
-                        const c = componentMap.get(line.component_id);
-                        const isPct = c?.calculation_type === "PERCENT_OF_BASE";
-                        return (
-                          <tr key={line.id}>
-                            <td className="px-3 py-2 text-text-primary">
-                              {c?.name ?? `Component #${line.component_id}`}
-                              <span className="block text-xs text-text-muted">{c?.code}</span>
-                            </td>
-                            <td className="px-3 py-2 text-text-secondary">{c?.component_type === "DEDUCTION" ? "Deduction" : "Earning"}</td>
-                            <td className="px-3 py-2 text-text-secondary">{CALC_LABEL[c?.calculation_type ?? ""] ?? c?.calculation_type}</td>
-                            <td className="px-3 py-2 text-right tabular-nums text-text-primary">
-                              {editingLine?.id === line.id ? (
-                                <form onSubmit={saveLineAmount} className="flex items-center justify-end gap-2">
-                                  <label className="sr-only" htmlFor={`amt-${line.id}`}>
-                                    New amount
-                                  </label>
-                                  <input
-                                    id={`amt-${line.id}`}
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    autoFocus
-                                    className="w-28 rounded border border-border-strong px-2 py-1 text-right text-sm"
-                                    value={editingLine.amount}
-                                    onChange={(e) => setEditingLine({ id: line.id, amount: e.target.value })}
-                                  />
-                                  <button type="submit" disabled={saving} className="text-xs font-semibold text-brand-primary">
-                                    Save
-                                  </button>
-                                  <button type="button" onClick={() => setEditingLine(null)} className="text-xs text-text-muted">
-                                    Cancel
-                                  </button>
-                                </form>
-                              ) : (
-                                <>{isPct ? `${money(line.amount)}%` : money(line.amount)}</>
-                              )}
-                            </td>
-                            <td className="px-3 py-2 text-right">
-                              <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
-                                <button
-                                  type="button"
-                                  aria-haspopup="menu"
-                                  aria-expanded={openActionsId === line.id}
-                                  onClick={() => setOpenActionsId(openActionsId === line.id ? null : line.id)}
-                                  className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                                >
-                                  Actions
-                                </button>
-                                {openActionsId === line.id && (
-                                  <div role="menu" className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                                    <button
-                                      type="button"
-                                      role="menuitem"
-                                      onClick={() => {
-                                        setEditingLine({ id: line.id, amount: String(Number(line.amount)) });
-                                        setOpenActionsId(null);
-                                      }}
-                                      className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                                    >
-                                      Edit amount
-                                    </button>
-                                    <button
-                                      type="button"
-                                      role="menuitem"
-                                      onClick={() => {
-                                        setOpenActionsId(null);
-                                        deleteLine(line);
-                                      }}
-                                      className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
-                                    >
-                                      Delete
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                )}
-              </div>
+              <HrDataTable
+                rows={lines}
+                rowKey={(line) => line.id}
+                columns={lineColumns}
+                loading={linesLoading}
+                onRefresh={() => void loadLines(selected.id)}
+                emptyTitle="No component lines."
+                emptyHint="Add basic, house rent and allowances below."
+                searchPlaceholder="Search components…"
+                exportFileName={`salary-structure-${selected.code}`}
+                canExport={canExportHrData(me?.role_name)}
+                rowActions={(line) => [
+                  {
+                    key: "edit",
+                    label: "Edit amount",
+                    primary: true,
+                    onClick: () => setEditingLine({ id: line.id, amount: String(Number(line.amount)) }),
+                  },
+                  { key: "delete", label: "Delete", danger: true, onClick: () => deleteLine(line) },
+                ]}
+              />
 
               <p className="text-sm text-text-secondary">
                 Fixed amounts total: <strong className="tabular-nums">{money(fixedTotal)}</strong>
@@ -421,79 +397,62 @@ export function HrSalaryStructuresPage() {
         </div>
       )}
 
-      {structureModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4" onClick={() => setStructureModal(null)}>
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="structure-modal-title"
-            className="w-full max-w-md rounded-xl bg-surface-raised p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.key === "Escape" && setStructureModal(null)}
-          >
-            <h2 id="structure-modal-title" className="mb-4 text-lg font-semibold text-text-primary">
-              {structureModal === "create" ? "Add salary structure" : "Edit salary structure"}
-            </h2>
-            <form onSubmit={saveStructure} className="space-y-3">
-              <div>
-                <label htmlFor="structure-code" className="mb-1 block text-xs font-medium text-text-secondary">
-                  Code ** {structureModal === "edit" && "(cannot change)"}
-                </label>
-                <input
-                  id="structure-code"
-                  className={inputCls}
-                  value={structureForm.code}
-                  maxLength={24}
-                  disabled={structureModal === "edit"}
-                  onChange={(e) => setStructureForm((f) => ({ ...f, code: e.target.value }))}
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="structure-name" className="mb-1 block text-xs font-medium text-text-secondary">
-                  Name **
-                </label>
-                <input
-                  id="structure-name"
-                  className={inputCls}
-                  value={structureForm.name}
-                  maxLength={128}
-                  onChange={(e) => setStructureForm((f) => ({ ...f, name: e.target.value }))}
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="structure-desc" className="mb-1 block text-xs font-medium text-text-secondary">
-                  Description
-                </label>
-                <textarea
-                  id="structure-desc"
-                  rows={3}
-                  className={inputCls}
-                  value={structureForm.description ?? ""}
-                  onChange={(e) => setStructureForm((f) => ({ ...f, description: e.target.value }))}
-                />
-              </div>
-              <label className="flex items-center gap-2 text-sm text-text-secondary">
-                <input
-                  type="checkbox"
-                  checked={structureForm.is_active ?? true}
-                  onChange={(e) => setStructureForm((f) => ({ ...f, is_active: e.target.checked }))}
-                />
-                Active
-              </label>
-              <div className="flex justify-end gap-2 pt-1">
-                <button type="button" onClick={() => setStructureModal(null)} className={btnSecondary}>
-                  Cancel
-                </button>
-                <button type="submit" disabled={saving} className="rounded bg-brand-primary px-4 py-1.5 text-sm font-semibold text-brand-primary-foreground">
-                  Save
-                </button>
-              </div>
-            </form>
-          </div>
+      <HrFormDrawer
+        open={structureModal != null}
+        title={structureModal === "create" ? "Add salary structure" : "Edit salary structure"}
+        onClose={() => setStructureModal(null)}
+        onSubmit={saveStructure}
+        submitting={saving}
+        error={error}
+      >
+        <div>
+          <label htmlFor="structure-code" className="mb-1 block text-xs font-medium text-text-secondary">
+            Code ** {structureModal === "edit" && "(cannot change)"}
+          </label>
+          <input
+            id="structure-code"
+            className={inputCls}
+            value={structureForm.code}
+            maxLength={24}
+            disabled={structureModal === "edit"}
+            onChange={(e) => setStructureForm((f) => ({ ...f, code: e.target.value }))}
+            required
+          />
         </div>
-      )}
+        <div>
+          <label htmlFor="structure-name" className="mb-1 block text-xs font-medium text-text-secondary">
+            Name **
+          </label>
+          <input
+            id="structure-name"
+            className={inputCls}
+            value={structureForm.name}
+            maxLength={128}
+            onChange={(e) => setStructureForm((f) => ({ ...f, name: e.target.value }))}
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="structure-desc" className="mb-1 block text-xs font-medium text-text-secondary">
+            Description
+          </label>
+          <textarea
+            id="structure-desc"
+            rows={3}
+            className={inputCls}
+            value={structureForm.description ?? ""}
+            onChange={(e) => setStructureForm((f) => ({ ...f, description: e.target.value }))}
+          />
+        </div>
+        <label className="flex items-center gap-2 text-sm text-text-secondary">
+          <input
+            type="checkbox"
+            checked={structureForm.is_active ?? true}
+            onChange={(e) => setStructureForm((f) => ({ ...f, is_active: e.target.checked }))}
+          />
+          Active
+        </label>
+      </HrFormDrawer>
     </div>
   );
 }

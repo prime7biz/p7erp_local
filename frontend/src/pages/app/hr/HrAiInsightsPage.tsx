@@ -205,6 +205,24 @@ export function HrAiInsightsPage() {
         </div>
       )}
 
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Insight summary">
+        {(
+          [
+            ["Critical alerts", criticalAlerts.length],
+            ["Attendance anomalies", attendanceAnomalies.length],
+            ["At-risk employees", turnoverRows.length],
+            ["Compliance risks", complianceRisks.length],
+          ] as const
+        ).map(([label, n]) => (
+          <div key={label} className="rounded-xl border border-border bg-surface-raised p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-text-muted">{label}</p>
+            <p className={`mt-1 text-2xl font-semibold tabular-nums ${n > 0 && label === "Critical alerts" ? "text-status-danger-foreground" : "text-text-primary"}`}>
+              {loading ? "…" : n}
+            </p>
+          </div>
+        ))}
+      </div>
+
       <div className="rounded-xl border border-status-warning/30 bg-status-warning-subtle p-4">
         <p className="text-sm font-medium text-text-primary">Critical alerts</p>
         {loading ? (
@@ -322,7 +340,8 @@ export function HrAiInsightsPage() {
           <>
             <div className="flex flex-wrap items-end gap-2">
               <select
-                className="rounded border border-border px-3 py-2 text-sm min-w-[220px]"
+                aria-label="Payroll run"
+                className="rounded-lg border border-border-strong px-3 py-2 text-sm min-w-[220px]"
                 value={runId}
                 onChange={(e) => setRunId(e.target.value ? Number(e.target.value) : "")}
               >
@@ -336,7 +355,8 @@ export function HrAiInsightsPage() {
               <button
                 type="button"
                 onClick={() => void loadPayrollAnomalies()}
-                className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white"
+                disabled={runId === ""}
+                className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Analyze run
               </button>
@@ -365,7 +385,8 @@ export function HrAiInsightsPage() {
         ) : (
           <>
             <select
-              className="rounded border border-border px-3 py-2 text-sm"
+              aria-label="Compliance framework"
+              className="rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={frameworkId}
               onChange={(e) => setFrameworkId(e.target.value ? Number(e.target.value) : "")}
             >

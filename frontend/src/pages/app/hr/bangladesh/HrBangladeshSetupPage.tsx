@@ -6,7 +6,8 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { hrBangladeshApi, type BdApplyResult, type BdPresetItem } from "@/api/hrBangladesh";
-import { Badge, Banner, Card, Messages, SimpleTable, btnPrimary, btnSecondary } from "@/components/hr/bd/BdUi";
+import { KitTable } from "@/components/hr/bd/BdKitTable";
+import { Badge, Banner, Card, Messages, btnPrimary, btnSecondary } from "@/components/hr/bd/BdUi";
 import { useAction, useLoad } from "@/components/hr/bd/bdHooks";
 import { EmployeeNumberFormatCard } from "@/components/hr/bd/EmployeeNumberFormatCard";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
@@ -156,16 +157,18 @@ export function HrBangladeshSetupPage() {
               </select>
             }
           >
-            <SimpleTable<BdPresetItem>
+            <KitTable<BdPresetItem>
               rows={items}
               rowKey={(r) => `${r.area}-${r.code}`}
               empty="Nothing to show."
+              searchPlaceholder="Search area, code or name…"
+              defaultPageSize={50}
               columns={[
-                { header: "Area", cell: (r) => AREA_LABELS[r.area] ?? r.area },
-                { header: "Code", cell: (r) => <span className="font-mono text-xs">{r.code}</span> },
-                { header: "Name", cell: (r) => r.label },
-                { header: "Status", cell: (r) => <Badge tone={STATE_TONE[r.state]}>{STATE_LABEL[r.state]}</Badge> },
-                { header: "Detail", cell: (r) => <span className="text-xs text-text-muted">{r.detail}</span> },
+                { header: "Area", cell: (r) => AREA_LABELS[r.area] ?? r.area, value: (r) => AREA_LABELS[r.area] ?? r.area },
+                { header: "Code", cell: (r) => <span className="font-mono text-xs">{r.code}</span>, value: (r) => r.code },
+                { header: "Name", cell: (r) => r.label, value: (r) => r.label },
+                { header: "Status", cell: (r) => <Badge tone={STATE_TONE[r.state]}>{STATE_LABEL[r.state]}</Badge>, value: (r) => STATE_LABEL[r.state] },
+                { header: "Detail", cell: (r) => <span className="text-xs text-text-muted">{r.detail}</span>, value: (r) => r.detail, hideOnMobile: true },
               ]}
             />
           </Card>

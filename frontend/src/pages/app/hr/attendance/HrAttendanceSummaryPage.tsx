@@ -9,13 +9,15 @@ export function HrAttendanceSummaryPage() {
   return (
     <HrSimpleCrudPage<HrAttendanceSummaryRow, HrAttendanceSummaryFilter>
       title="Attendance Summary"
-      description="View monthly attendance summary by employee."
+      description="Monthly present, absent, late and leave days per employee."
       emptyMessage="No attendance summary data found."
+      emptyHint="Enter attendance on the Daily entry tab or import it from devices."
       breadcrumbs={[{ label: "HR", href: "/app/hr" }, { label: "Attendance summary" }]}
       loadItems={() => api.listHrAttendanceSummary()}
+      rowKey={(row) => row.employee_id}
+      exportFileName="attendance-summary"
       columns={[
-        { header: "Employee Code", cell: (row) => row.employee_code },
-        { header: "Employee Name", cell: (row) => row.employee_name },
+        { header: "Employee", cell: (row) => row.employee_id, kind: "employee" },
         { header: "Present", cell: (row) => row.present_days },
         { header: "Absent", cell: (row) => row.absent_days },
         { header: "Late", cell: (row) => row.late_days },

@@ -16,6 +16,7 @@ import type {
   HrOnboardingSteps,
   HrSalaryPaymentMethod,
 } from "@/api/models";
+import { readExtractedField, type HrExtractionTarget } from "@/lib/hrExtractedFields";
 
 export type WorkspaceMode = "create" | "edit";
 
@@ -271,14 +272,15 @@ export function aiAutofillEnabled(flags: Record<string, unknown> | null | undefi
   return AI_OCR_FLAGS.some((f) => flags?.[f] === true);
 }
 
-/** OCR field key -> workspace field. Only these fields are ever filled by AI. */
-export const AI_FIELD_MAP: Record<string, keyof EmployeeFormState> = {
+/** Extraction target (see `HR_EXTRACTION_SOURCES`) -> workspace field. Only these fields are ever filled by AI. */
+export const AI_FIELD_MAP: Record<HrExtractionTarget, keyof EmployeeFormState> = {
   first_name: "first_name",
   last_name: "last_name",
   email: "email",
   phone: "phone",
   date_of_birth: "date_of_birth",
   gender: "gender",
+  blood_group: "blood_group",
   national_id: "national_id",
   birth_registration_no: "birth_registration_no",
   father_name: "father_name",
@@ -289,15 +291,6 @@ export const AI_FIELD_MAP: Record<string, keyof EmployeeFormState> = {
   joining_date: "joining_date",
   employment_type: "employment_type",
 };
-
-function extractedValue(raw: unknown): string {
-  if (raw == null) return "";
-  if (typeof raw === "object" && "value" in (raw as Record<string, unknown>)) {
-    const v = (raw as { value: unknown }).value;
-    return v == null ? "" : String(v).trim();
-  }
-  return String(raw).trim();
-}
 
 export type AiMergeResult = {
   form: EmployeeFormState;
@@ -319,8 +312,8 @@ export function mergeExtraction(
   const next = { ...form } as Record<string, unknown>;
   const filled: (keyof EmployeeFormState)[] = [];
   const conflicts: AiMergeResult["conflicts"] = [];
-  for (const [src, dest] of Object.entries(AI_FIELD_MAP)) {
-    const value = extractedValue(fields[src]);
+  for (const [target, dest] of Object.entries(AI_FIELD_MAP) as [HrExtractionTarget, keyof EmployeeFormState][]) {
+    const value = readExtractedField(fields, target);
     if (!value) continue;
     const current = String(next[dest] ?? "");
     if (current === value) continue;

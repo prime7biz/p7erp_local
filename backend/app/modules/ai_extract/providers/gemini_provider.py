@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 import re
 from typing import Any
 
@@ -13,6 +14,31 @@ import httpx
 from app.common.gemini_client import generate_multimodal_sync
 from app.config import get_settings
 from app.modules.ai_extract.providers.base import BaseExtractionProvider
+
+logger = logging.getLogger(__name__)
+
+
+_URL_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9+.-]*://\S+")
+
+
+def _log_provider_failure(provider: str, exc: Exception) -> None:
+    """Why a provider gave no answer. Never logs the document, the prompt, URLs (they may carry credentials) or keys."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        detail = f"status={exc.response.status_code}"
+    else:
+        detail = " ".join(_URL_RE.sub("<url>", str(exc)).split())[:200]
+    logger.warning("ai_extract_provider_failed provider=%s error=%s detail=%s", provider, type(exc).__name__, detail)
+
+
+def _hr_unavailable(document: str) -> dict[str, Any]:
+    return {
+        "_confidences": {},
+        "_unmapped_text": [],
+        "_warnings": [
+            f"The AI service could not read this {document}, so nothing was filled. "
+            "Try again in a minute, or type the details yourself."
+        ],
+    }
 
 
 def _parse_json_object(text: str) -> dict[str, Any] | None:
@@ -239,7 +265,8 @@ def _ollama_multimodal_sync(prompt: str, file_bytes: bytes, mime_type: str) -> s
             data = resp.json()
         txt = str(data.get("response") or "").strip()
         return txt or None
-    except Exception:
+    except Exception as exc:
+        _log_provider_failure("ollama", exc)
         return None
 
 
@@ -304,7 +331,8 @@ def _openrouter_multimodal_sync(prompt: str, file_bytes: bytes, mime_type: str) 
             resp.raise_for_status()
             data = resp.json()
         return _openrouter_message_text(data)
-    except Exception:
+    except Exception as exc:
+        _log_provider_failure("openrouter", exc)
         return None
 
 
@@ -456,9 +484,9 @@ class GeminiExtractionProvider(BaseExtractionProvider):
             parsed = _parse_json_object(text or "") if text else None
             if isinstance(parsed, dict) and parsed:
                 return parsed
-        except Exception:
-            pass
-        return {"_confidences": {}, "_unmapped_text": [], "_warnings": ["CV extraction unavailable"]}
+        except Exception as exc:
+            _log_provider_failure("hr_cv", exc)
+        return _hr_unavailable("CV")
 
     async def extract_hr_national_id_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
         ct = (content_type or "application/octet-stream").lower().split(";")[0].strip()
@@ -467,9 +495,9 @@ class GeminiExtractionProvider(BaseExtractionProvider):
             parsed = _parse_json_object(text or "") if text else None
             if isinstance(parsed, dict) and parsed:
                 return parsed
-        except Exception:
-            pass
-        return {"_confidences": {}, "_unmapped_text": [], "_warnings": ["National ID extraction unavailable"]}
+        except Exception as exc:
+            _log_provider_failure("hr_national_id", exc)
+        return _hr_unavailable("National ID")
 
     async def extract_hr_medical_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
         ct = (content_type or "application/octet-stream").lower().split(";")[0].strip()
@@ -478,9 +506,9 @@ class GeminiExtractionProvider(BaseExtractionProvider):
             parsed = _parse_json_object(text or "") if text else None
             if isinstance(parsed, dict) and parsed:
                 return parsed
-        except Exception:
-            pass
-        return {"_confidences": {}, "_unmapped_text": [], "_warnings": ["Medical certificate extraction unavailable"]}
+        except Exception as exc:
+            _log_provider_failure("hr_medical", exc)
+        return _hr_unavailable("medical certificate")
 
     async def extract_hr_birth_certificate_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
         ct = (content_type or "application/octet-stream").lower().split(";")[0].strip()
@@ -489,6 +517,6 @@ class GeminiExtractionProvider(BaseExtractionProvider):
             parsed = _parse_json_object(text or "") if text else None
             if isinstance(parsed, dict) and parsed:
                 return parsed
-        except Exception:
-            pass
-        return {"_confidences": {}, "_unmapped_text": [], "_warnings": ["Birth certificate extraction unavailable"]}
+        except Exception as exc:
+            _log_provider_failure("hr_birth_certificate", exc)
+        return _hr_unavailable("birth certificate")

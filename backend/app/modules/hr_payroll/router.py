@@ -25,6 +25,7 @@ from app.common.permissions import (
     assert_soft_permission_allowed,
 )
 from app.common.tenant import require_tenant
+from app.common.tenant_feature_keys import is_payroll_four_eyes_enabled
 from app.database import get_db, safe_async_session_rollback
 from app.models import (
     AccountingPeriod,
@@ -158,6 +159,32 @@ async def _run_or_404(db: AsyncSession, tenant_id: int, run_id: int) -> PayrollR
     if not row or row.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="Payroll run not found")
     return row
+
+
+async def _locked_run_or_404(db: AsyncSession, tenant_id: int, run_id: int) -> PayrollRun:
+    row = (
+        await db.execute(
+            select(PayrollRun)
+            .where(PayrollRun.id == run_id, PayrollRun.tenant_id == tenant_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Payroll run not found")
+    return row
+
+
+def _assert_not_maker(tenant: Tenant, run: PayrollRun, user: User) -> None:
+    """Four-eyes rule (tenant flag, default off): whoever finalized the run cannot approve it."""
+    if not is_payroll_four_eyes_enabled(tenant.feature_flags):
+        return
+    maker_id = run.finalized_by or run.created_by
+    if maker_id is not None and maker_id == user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Four-eyes rule: a different person must approve the payroll run you finalized",
+        )
 
 
 def _component_out(row: PayrollComponent) -> PayrollComponentOut:
@@ -1120,9 +1147,10 @@ async def approve_run(
 ):
     _ensure_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
-    run = await _run_or_404(db, tenant.id, run_id)
+    run = await _locked_run_or_404(db, tenant.id, run_id)
     if run.status not in {"FINALIZED", "CHECKED"}:
         raise HTTPException(status_code=400, detail="Only finalized run can be approved")
+    _assert_not_maker(tenant, run, user)
     run.status = "APPROVED"
     db.add(
         PayrollApproval(
@@ -1502,6 +1530,8 @@ async def decide_approval(
             status_code=400,
             detail=f"Cannot mark a {run.status} payroll run as {decision}",
         )
+    if decision == "APPROVED":
+        _assert_not_maker(tenant, run, user)
     if decision == "REJECTED":
         from app.modules.hr_payroll.register_service import invalidate_snapshots
 
@@ -1780,6 +1810,8 @@ async def download_bank_file(
     _ensure_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
     run = await _run_or_404(db, tenant.id, run_id)
+    if (run.status or "").upper() not in {"APPROVED", "POSTED"}:
+        raise HTTPException(status_code=400, detail="The bank file is available after the run is approved")
     lines = (
         await db.execute(select(PayrollRunLine).where(PayrollRunLine.tenant_id == tenant.id, PayrollRunLine.run_id == run.id))
     ).scalars().all()

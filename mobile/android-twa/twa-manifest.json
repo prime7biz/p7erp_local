@@ -22,13 +22,14 @@
   "isChromeOSOnly": false,
   "isMetaQuest": false,
   "fullScopeUrl": "https://prime7erp.com/",
-  "minSdkVersion": 21,
+  "minSdkVersion": 24,
   "signingKey": {
     "path": "../../../../../Prime7-Keys/prime7-upload.keystore",
     "alias": "prime7"
   },
-  "appVersionName": "1.0.0",
+  "appVersion": "1.0.0",
   "appVersionCode": 1,
+  "splashScreenFadeOutDuration": 300,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
   "features": {},

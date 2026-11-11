@@ -27,12 +27,21 @@ download is the **Google-signed universal APK** from Play Console. Background:
 Needs the live site to have the mobile app switched on (`https://prime7erp.com/manifest.webmanifest` must open).
 
 ```powershell
-cd mobile\android-twa
-npx @bubblewrap/cli update --skipVersionUpgrade   # (re)creates the Android project from twa-manifest.json
-npx @bubblewrap/cli build                          # asks for the upload key password
+./mobile/android-twa/build-android.ps1
 ```
 
-Results: `app-release-bundle.aab` (for Play) and `app-release-signed.apk` (for a quick test on your own phone only).
+Results in `C:\p7-android\release\<version>\`: `prime7erp-<version>.aab` (upload this to Play) and
+`...-upload-signed-TEST-ONLY.apk` (only for a quick test on your own phone; it is signed with the upload key, so it
+cannot be updated by the Play / website version).
+
+One-time tool setup on this PC (done 2026-11-11): Java 17 (Eclipse Temurin) in `%USERPROFILE%\.bubblewrap\jdk`, Android
+command-line tools + `build-tools;36.1.0` + `platforms;android-36` in `%USERPROFILE%\.bubblewrap\android_sdk`, Bubblewrap
+CLI 1.27 in `%USERPROFILE%\.bubblewrap\cli`, folder links `C:\p7-android\jdk`, `C:\p7-android\sdk` and
+`android_sdk\tools` (Bubblewrap needs space-free paths and the old `tools` folder name). The script builds in
+`C:\p7-android\build` because antivirus folder protection on Documents removed generated Gradle files.
+
+Upload key: `Documents\Prime7-Keys\prime7-upload.keystore`, alias `prime7`, password in `PRIME7-UPLOAD-KEY.txt` (move it to
+a password manager). SHA-256: `C7:EA:14:64:09:A7:20:E7:11:10:C0:90:F9:32:63:B5:5E:DB:81:E9:33:CD:5E:CE:F8:10:10:6F:DA:78:6C:99`.
 
 ## 2. Google Play Console (owner)
 
@@ -60,7 +69,7 @@ Results: `app-release-bundle.aab` (for Play) and `app-release-signed.apk` (for a
 
 ## Updating the app file later
 
-Raise `appVersionCode` (and `appVersionName`) in `twa-manifest.json`, build, upload to Play, download the new universal
+Raise `appVersionCode` (and `appVersion`, the version name) in `twa-manifest.json`, build, upload to Play, download the new universal
 APK and replace the file. Website changes alone never need a new app file.
 
 Android developer verification (Google, 2026–2027): your Play Console account covers it; keep the package

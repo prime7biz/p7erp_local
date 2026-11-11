@@ -1,7 +1,8 @@
 # Recommended implementation plan
 
-**Status:** approved 2026-11-11. Phase 1 (prerequisites) is implemented locally and tested, **not committed or deployed**.
-See section 8 for decisions and progress.
+**Status:** **live in v1.18.0** (deployed 2026-11-11, mobile app switched on with GitHub variable `VITE_PWA_ENABLED=true`,
+Android only). Android app bundle `com.prime7erp.app` 1.0.0 (1) built and signed with the upload key; next steps are in
+Google Play Console (`mobile/android-twa/PLAY-CONSOLE-GUIDE.md`). See section 8 for decisions and progress.
 
 Related documents: `EXISTING-ERP-AUDIT.md` (what exists), `MOBILE-ARCHITECTURE-COMPARISON.md` (why this option),
 `ANDROID-IOS-PRIVATE-DISTRIBUTION.md` (install rules), `AUTOMATIC-UPDATE-STRATEGY.md` (update design),

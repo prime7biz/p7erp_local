@@ -13,6 +13,8 @@ const NOINDEX_EXACT = new Set([
   "/reset-password",
   "/accept-invite",
   "/verify/proforma",
+  "/install",
+  "/account-deletion",
 ]);
 
 /**

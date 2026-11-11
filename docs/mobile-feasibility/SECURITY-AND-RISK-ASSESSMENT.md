@@ -51,11 +51,16 @@ Severity is for the **PWA** unless stated. "Prerequisite" means it must be done 
   copy (`core.ts:36-39`); a token is valid for 60 minutes (`config.py:10`).
 - **Mobile impact:** a lost or stolen phone that is still signed in stays usable until the token expires (up to 60 minutes),
   unless an admin acts.
-- **Available today (document in the runbook):** an admin can **deactivate the user** (blocked at the next request,
-  `auth.py:197`) or **reset the password** (bumps the session version, `auth/router.py:573`). A new login on another device
-  also ends the old session.
+- **Available before Phase 1:** an admin can **deactivate the user** (blocked at the next request, `auth.py:197`). The
+  user's own **forgot-password reset** bumps the session version (`auth/router.py:573`). A new login on another device also
+  ends the old session. Note: an admin typing a new password in **Settings → User Mgmt → Edit** does **not** end existing
+  sessions.
 - **Mitigation:** add `POST /auth/logout` that bumps `auth_session_version`, and an admin "sign out all devices" action
   (also a session-version bump). **Recommended before wide rollout; required before any longer mobile session (R6).**
+- **Status (2026-11-11, Phase 1, not yet deployed):** done. `POST /api/v1/auth/logout` (skips the bump during platform-admin
+  impersonation) is called by the Logout button; `POST /api/v1/settings/users/{id}/sign-out-devices` (tenant admin, own
+  tenant only, audited as `SETTINGS_USER_SIGN_OUT_DEVICES`, 409 when single-session is off) is in **Actions → Sign out
+  devices**. Tests: `backend/tests/test_auth_logout_and_device_signout.py`.
 
 ### R3 — MEDIUM — Authenticated responses do not say `no-store`
 
@@ -67,6 +72,11 @@ Severity is for the **PWA** unless stated. "Prerequisite" means it must be done 
 - **Mitigation:** `Cache-Control: private, no-store` on `/api/` and `/media/` (Nginx `add_header ... always`, without
   overriding stricter backend values) and on the generic file route — **prerequisite**. The POC inspects both the service
   worker cache **and** the browser HTTP/disk cache (section 6).
+- **Status (2026-11-11, Phase 1, not yet deployed):** done in the backend instead of Nginx (avoids Nginx dropping the
+  server-level security headers in a location with its own `add_header`): `backend/app/common/cache_headers.py`
+  (`ApiNoStoreMiddleware`) adds `Cache-Control: private, no-store` to every `/api/` response that has none, and the file
+  route sets it explicitly. There is no backend `/media` mount; files go through `/api/v1/files`. Trade-off: logos and style
+  pictures are downloaded again on each view instead of coming from the browser cache.
 
 ### R4 — MEDIUM — Data left on shared phones after logout
 
@@ -78,12 +88,21 @@ Severity is for the **PWA** unless stated. "Prerequisite" means it must be done 
 - **Mitigation:** clear KPI snapshots and alert dismissals in `clearInternalSessionStorage`; key the scan queue by tenant
   and user and warn before logout when unsent scans exist (do not silently delete them; they are real production records)
   — **prerequisite for shared devices**; business owner decides the scan-queue rule.
+- **Status (2026-11-11, Phase 1, not yet deployed):** done with the approved rule. Sign-out and a new login remove KPI
+  snapshots and alert dismissals (`frontend/src/api/authStorage.ts`). Scan queues are kept per company and user
+  (`p7_scan_queue:<tenant>:<user>`, `scanQueue.ts`); scans under the old shared key go once to the next person who opens
+  the scan station (today's behaviour); Logout warns when the user still has unsent scans.
 
 ### R5 — MEDIUM — Service worker could cache sensitive data if built carelessly (new with PWA)
 
 - **Mitigation by design** (`AUTOMATIC-UPDATE-STRATEGY.md` section 3.2): the worker caches only hashed `/assets/`, icons and
   `offline.html`; it never touches `/api/`, `/media/`, `/health`, `/iclock/`, blobs, PDFs or requests with `Authorization`;
   HTML is network-first and never cached. A CI check and the POC verify this. A kill-switch worker is kept ready.
+- **Status (2026-11-11, not yet deployed):** implemented (`frontend/public/sw.js`; it also refuses to store an HTML
+  response under an asset name). Verified in Microsoft Edge: after API calls with `Authorization`, Cache Storage held only
+  `/assets`, icons and `offline.html`. Independent security screen: PASS WITH FINDINGS; all findings fixed (previous-image
+  file filter and digest pin, update applied after route change instead of intercepting clicks, `^~` on proxy locations,
+  workflow and deploy-script input checks).
 
 ### R6 — MEDIUM — Session length decision
 
@@ -92,6 +111,19 @@ Severity is for the **PWA** unless stated. "Prerequisite" means it must be done 
 - **Mitigation:** do not raise `jwt_expire_minutes` alone. If longer sessions are wanted, ship them only together with R2
   (server logout, device sign-out) and the refresh-cookie design from R1, and keep the access token short. Needs a business
   decision and its own security review.
+
+### Live edge facts (checked on the server 2026-11-11, read-only)
+
+- **Cloudflare** is in front of `prime7erp.com` (the host Nginx requires Cloudflare Authenticated Origin Pulls,
+  `/etc/nginx/sites-enabled/prime7erp`). Cloudflare caches files such as `.js` and `.apk` by default unless the origin
+  says otherwise; `sw.js` is sent `no-store` and `/downloads/` `no-cache` for that reason. Verify `cf-cache-status` after
+  each release.
+- **The host Nginx enforces a CSP** on every page (`default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'
+  https://static.cloudflareinsights.com; ...`). So the live site is **not** "Report-Only only" as R1 assumed: an enforced
+  policy exists, but `'unsafe-inline'` and `'unsafe-eval'` weaken its XSS protection. Removing them is the real R1 fix.
+  The service worker and manifest work under this policy (`worker-src` / `manifest-src` fall back to `'self'`).
+- The host Nginx sends `/api/` straight to the backend (port 8000), skipping the frontend container, which is why
+  `no-store` is set in the backend (`ApiNoStoreMiddleware`) and not in the container Nginx.
 
 ### R7 — MEDIUM — TLS and HSTS at the edge are unverified
 
@@ -133,6 +165,7 @@ Severity is for the **PWA** unless stated. "Prerequisite" means it must be done 
 - **Evidence:** `camera=()` (`nginx.prod.conf:35`) blocks the in-page webcam on every device.
 - **Mitigation (functional, not a weakness):** if in-page camera is wanted, use `camera=(self)` only; never allow third-party
   origins.
+- **Status (2026-11-11, approved, not yet deployed):** `camera=(self)` in `frontend/nginx.prod.conf`.
 
 ### R13 — Public install entry points
 

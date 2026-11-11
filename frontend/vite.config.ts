@@ -1,8 +1,39 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
 const isProduction = process.env.NODE_ENV === "production";
+
+/**
+ * Installable mobile app (docs/mobile-feasibility). Off unless VITE_PWA_ENABLED=true at build time.
+ * - On: index.html (and every page shell copied from it) links the web app manifest and iPhone tags.
+ * - Always: the build writes version.json, which installed apps poll to notice a new release.
+ */
+function p7MobileAppPlugin(): Plugin {
+  const enabled = process.env.VITE_PWA_ENABLED === "true";
+  const version = process.env.VITE_APP_VERSION || "dev";
+  return {
+    name: "p7-mobile-app",
+    transformIndexHtml() {
+      if (!enabled) return [];
+      return [
+        { tag: "link", attrs: { rel: "manifest", href: "/manifest.webmanifest" }, injectTo: "head" },
+        { tag: "link", attrs: { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" }, injectTo: "head" },
+        { tag: "meta", attrs: { name: "mobile-web-app-capable", content: "yes" }, injectTo: "head" },
+        { tag: "meta", attrs: { name: "apple-mobile-web-app-capable", content: "yes" }, injectTo: "head" },
+        { tag: "meta", attrs: { name: "apple-mobile-web-app-title", content: "Prime7 ERP" }, injectTo: "head" },
+        { tag: "meta", attrs: { name: "apple-mobile-web-app-status-bar-style", content: "default" }, injectTo: "head" },
+      ];
+    },
+    generateBundle() {
+      this.emitFile({
+        type: "asset",
+        fileName: "version.json",
+        source: `${JSON.stringify({ version, built_at: new Date().toISOString() })}\n`,
+      });
+    },
+  };
+}
 const allowedHosts = (process.env.VITE_ALLOWED_HOSTS ?? "")
   .split(",")
   .map((host) => host.trim())
@@ -24,6 +55,7 @@ export default defineConfig(async ({ mode }) => {
   return {
   plugins: [
     react(),
+    p7MobileAppPlugin(),
     ...analyzePlugins,
   ],
   resolve: {

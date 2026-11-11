@@ -50,6 +50,20 @@ jobs:
           username: prime7biz
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # Same as deploy.yml: keep the live release's hashed files in the new frontend image.
+      - name: Resolve previous frontend image
+        id: previous
+        run: |
+          git fetch --tags --force --quiet || true
+          prev_tag=$(git tag --list 'v*' --sort=-v:refname | grep -vxF -- "${GITHUB_REF_NAME}" | head -n1 || true)
+          image="nginx:1.27-alpine"
+          if [[ -n "${prev_tag}" ]]; then
+            digest=$(docker buildx imagetools inspect "prime7biz/p7erp-frontend:${prev_tag}" --format '{{.Manifest.Digest}}' 2>/dev/null || true)
+            if [[ "${digest}" == sha256:* ]]; then image="prime7biz/p7erp-frontend@${digest}"; fi
+          fi
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "Previous frontend image: ${prev_tag:-none} -> $image"
+
       - name: Build and push backend
         uses: docker/build-push-action@v5
         with:
@@ -73,6 +87,10 @@ jobs:
           build-args: |
             VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
             VITE_APP_VERSION=${{ github.ref_name }}
+            VITE_PWA_ENABLED=${{ vars.VITE_PWA_ENABLED || 'false' }}
+            VITE_ANDROID_APK_URL=${{ vars.VITE_ANDROID_APK_URL || '' }}
+            VITE_PLAY_STORE_URL=${{ vars.VITE_PLAY_STORE_URL || '' }}
+            PREVIOUS_FRONTEND_IMAGE=${{ steps.previous.outputs.image }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

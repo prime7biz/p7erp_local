@@ -41,7 +41,25 @@ jobs:
 
       - name: Resolve image tag
         id: tag
-        run: echo "value=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: echo "value=${REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      # Live release's frontend image: its hashed files are kept in the new image so open apps keep
+      # working (docs/mobile-feasibility/AUTOMATIC-UPDATE-STRATEGY.md 3.3). Only released v* tags are
+      # used (never :latest), pinned by digest; falls back to plain nginx (copies nothing).
+      - name: Resolve previous frontend image
+        id: previous
+        run: |
+          git fetch --tags --force --quiet || true
+          prev_tag=$(git tag --list 'v*' --sort=-v:refname | grep -vxF -- "${GITHUB_REF_NAME}" | head -n1 || true)
+          image="nginx:1.27-alpine"
+          if [[ -n "${prev_tag}" ]]; then
+            digest=$(docker buildx imagetools inspect "prime7biz/p7erp-frontend:${prev_tag}" --format '{{.Manifest.Digest}}' 2>/dev/null || true)
+            if [[ "${digest}" == sha256:* ]]; then image="prime7biz/p7erp-frontend@${digest}"; fi
+          fi
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "Previous frontend image: ${prev_tag:-none} -> $image"
 
       - name: Build and push backend
         uses: docker/build-push-action@v5
@@ -66,5 +84,9 @@ jobs:
           build-args: |
             VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
             VITE_APP_VERSION=${{ steps.tag.outputs.value }}
+            VITE_PWA_ENABLED=${{ vars.VITE_PWA_ENABLED || 'false' }}
+            VITE_ANDROID_APK_URL=${{ vars.VITE_ANDROID_APK_URL || '' }}
+            VITE_PLAY_STORE_URL=${{ vars.VITE_PLAY_STORE_URL || '' }}
+            PREVIOUS_FRONTEND_IMAGE=${{ steps.previous.outputs.image }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

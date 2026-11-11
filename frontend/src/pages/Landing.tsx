@@ -28,6 +28,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { ModuleCardMotif, type ModuleMotif } from "@/components/public/landing/ModuleCardMotif";
+import { InstallAppLink } from "@/components/public/InstallAppLink";
+import { PWA_ENABLED } from "@/lib/pwa/appUpdate";
 import {
   BeforeAfterSection,
   HeroEnhancedSection,
@@ -534,6 +536,10 @@ export function Landing() {
             <Link to="/features" className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-surface-raised border border-brand-primary/20 text-sm font-medium text-text-secondary hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary/5 transition-colors shadow-sm">
               Blog & Resources <ArrowRight className="h-3.5 w-3.5" />
             </Link>
+            <InstallAppLink
+              from="landing_explore"
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-surface-raised border border-brand-primary/20 text-sm font-medium text-text-secondary hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary/5 transition-colors shadow-sm"
+            />
           </div>
         </div>
       </section>
@@ -565,6 +571,14 @@ export function Landing() {
               Book a Demo
             </Link>
           </div>
+          {PWA_ENABLED ? (
+            <div className="mt-6 flex justify-center">
+              <InstallAppLink
+                from="landing_final_cta"
+                className="inline-flex min-h-[44px] items-center gap-2 text-sm font-medium text-white/85 underline-offset-4 hover:text-white hover:underline"
+              />
+            </div>
+          ) : null}
           <div className="mt-10 flex flex-col items-center justify-center gap-3 text-sm text-white/80 sm:flex-row sm:gap-8">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-brand-primary" />

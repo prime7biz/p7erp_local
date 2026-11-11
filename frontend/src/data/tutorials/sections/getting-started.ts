@@ -233,6 +233,68 @@ Everyone signs in on the same page: \`/login\`.
       relatedArticleIds: ["gs-session-replaced", "gs-dashboard", "gs-at-a-glance", "gs-profile-and-signature"],
     },
     {
+      id: "gs-install-mobile-app",
+      title: "Install the Prime7 ERP Android app",
+      summary:
+        "Install Prime7 ERP on an Android phone or tablet from Google Play, the APK download or Chrome. The app updates itself, and your unsaved forms are never reloaded.",
+      estimatedMinutes: 3,
+      audience: "everyone",
+      content: `## Overview
+
+Prime7 ERP has an **Android app**. It opens full screen from the home screen and picks up every new version by itself — there is nothing to update by hand.
+
+On the sign-in page you see **Install the app** (and **Download Android app** once the app file is available); the website shows **Get the mobile app**. They open the **Prime7 ERP for Android** page.
+
+**iPhone and iPad:** there is no app yet. Keep using **prime7erp.com** in Safari; install links are not shown on iPhones.
+
+## Before you start
+
+- Your normal **Company Code**, email and password.
+- An Android phone or tablet.
+
+## Steps: Google Play (when your company has the link)
+
+1. On the **Prime7 ERP for Android** page tap **Get it on Google Play**.
+2. Tap **Install**, then open **Prime7 ERP** and sign in.
+
+## Steps: download the app file (APK)
+
+1. Tap **Download Android app** under the sign-in form (or on the Android page).
+2. Open the downloaded **prime7erp-android.apk**. If Android asks, allow **Install unknown apps** for your browser or file manager (once).
+3. Tap **Install**, then open **Prime7 ERP** and sign in.
+4. Download the app only from **prime7erp.com** or Google Play. Both are the same app, signed by Google.
+
+## Steps: install from Chrome
+
+1. Open **prime7erp.com** in **Chrome** and tap **Install the app** under the sign-in form.
+2. Tap **Install Prime7 ERP**, then **Install** in Chrome's window.
+3. No button? Tap Chrome's menu **⋮** → **Install app** (on some phones **Add to home screen**).
+
+## What happens next
+
+- **New versions arrive by themselves.** When you open the app after a release you already have the new version. If the app was left open, a dark strip at the top says **A new version of Prime7 ERP is ready**; tap **Reload now**, or just carry on — it switches the next time you open another page.
+- **Unsaved forms are safe.** While a form has changes you have not saved, the app never reloads. The strip asks you to **save your work first**.
+- Sessions work as on a computer: one device at a time, and you sign in again after about an hour.
+
+## Tips
+
+- On a shared phone, always tap your name → **Logout** when you finish.
+- Lost your phone? Ask your admin to use **Settings → User Mgmt → Actions → Sign out devices**.
+- Without a connection the app shows **You are offline**; nothing you saved is lost.
+- Want your login account deleted? Use **Delete account** at the bottom of the sign-in page (\`/account-deletion\`).
+
+## Common problems
+
+- **No Install button in Chrome** → use Chrome's menu **⋮ → Install app**, or open the page in Chrome instead of another browser.
+- **"App not installed" when opening the APK** → an older Prime7 app from another source is installed; uninstall it first, then install again.
+- **Signed out right after installing** → expected the first time; the installed app keeps its own sign-in.`,
+      tags: ["mobile", "phone", "install", "android", "app"],
+      keywords: ["mobile app", "android app", "install app", "apk", "google play", "home screen", "pwa", "update", "offline", "delete account"],
+      lastUpdated: "2026-11-11",
+      relatedAppRoutes: ["/login"],
+      relatedArticleIds: ["gs-login", "gs-session-replaced"],
+    },
+    {
       id: "gs-session-replaced",
       title: "Signed out: \"this account signed in on another device\"",
       summary:
@@ -256,6 +318,8 @@ For security, **one user can be signed in on only one device at a time**. When t
 The older screen then shows the sign-in page with this note above the form:
 
 > **You were logged out because this account signed in on another device.**
+
+The same note appears when your admin used **Sign out devices** for your account (for example after a lost phone), and after you click **Logout** on another device — Logout now ends your session on the server too.
 
 This is different from:
 
@@ -282,15 +346,16 @@ This is different from:
 
 - Use **one browser** for P7 ERP. Opening it in a second browser (for example Chrome and Edge) also counts as a second device.
 - Several tabs in the **same** browser are fine — they share one session.
-- Shared office PC? Click your name → **Logout** when you leave, so the next person signs in as themselves.
+- Shared office PC or phone? Click your name → **Logout** when you leave, so the next person signs in as themselves. If you still have production scans waiting to send, Logout asks first; they stay on that device under your login and are sent the next time you sign in there.
+- Lost your phone? Ask your admin to use **Settings → User Mgmt → Actions → Sign out devices** straight away.
 
 ## Common problems
 
 - **I keep getting signed out every few minutes** → two people are using the same login. Ask your admin to create a separate user for each person (**Settings → User Mgmt**).
 - **Signed out on my phone after using my laptop** → expected. Sign in on the device you are using now.`,
       tags: ["login", "session", "security", "signed out", "device"],
-      keywords: ["logged out", "kicked out", "session replaced", "another device", "single session", "session expired", "auto logout"],
-      lastUpdated: "2026-11-06",
+      keywords: ["logged out", "kicked out", "session replaced", "another device", "single session", "session expired", "auto logout", "lost phone", "sign out devices"],
+      lastUpdated: "2026-11-11",
       relatedAppRoutes: ["/login", "/forgot-password", "/app/settings/users"],
       relatedArticleIds: ["gs-login", "sup-create-ticket"],
     },

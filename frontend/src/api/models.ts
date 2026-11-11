@@ -7,7 +7,7 @@
 import { request, requestPublic } from "@/api/core";
 import { type CustomerExtractionResponse, type InquiryExtractionResponse, type VendorExtractionResponse } from "@/types/extraction";
 
-export const APP_VERSION = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? "dev";
+export const APP_VERSION = (import.meta.env.VITE_APP_VERSION as string | undefined) || "dev";
 
 export type TenantType = "manufacturer" | "buying_house" | "both";
 export type CommissionMode = "INCLUDE" | "EXCLUDE";

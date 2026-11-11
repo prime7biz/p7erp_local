@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { ExternalAccessGuard } from "@/components/external-access/ExternalAccessGuard";
 import { PortalLegacyLoginRedirect } from "@/components/external-access/PortalLegacyLoginRedirect";
+import { PWA_ENABLED } from "@/lib/pwa/appUpdate";
 
 // Public, legal and auth pages are loaded on demand so each route only downloads its own code.
 const Landing = lazy(() => import("@/pages/Landing").then((m) => ({ default: m.Landing })));
@@ -20,6 +21,10 @@ const PricingPage = lazy(() => import("@/pages/public/PricingPage").then((m) => 
 const AboutPage = lazy(() => import("@/pages/public/AboutPage").then((m) => ({ default: m.AboutPage })));
 const ContactPage = lazy(() => import("@/pages/public/ContactPage").then((m) => ({ default: m.ContactPage })));
 const BookDemoPage = lazy(() => import("@/pages/public/BookDemoPage").then((m) => ({ default: m.BookDemoPage })));
+const InstallAppPage = lazy(() => import("@/pages/public/InstallAppPage").then((m) => ({ default: m.InstallAppPage })));
+const AccountDeletionPage = lazy(() =>
+  import("@/pages/public/AccountDeletionPage").then((m) => ({ default: m.AccountDeletionPage })),
+);
 const RoiCalculatorPage = lazy(() =>
   import("@/pages/public/RoiCalculatorPage").then((m) => ({ default: m.RoiCalculatorPage })),
 );
@@ -270,6 +275,8 @@ export function AppRouter() {
         <Route path="/resources/:slug" element={<PublicLayout><ResourcesPage /></PublicLayout>} />
         <Route path="/support" element={<PublicLayout><SupportPage /></PublicLayout>} />
         <Route path="/sitemap" element={<PublicLayout><SitemapPage /></PublicLayout>} />
+        {PWA_ENABLED ? <Route path="/install" element={<PublicLayout><InstallAppPage /></PublicLayout>} /> : null}
+        <Route path="/account-deletion" element={<PublicLayout><AccountDeletionPage /></PublicLayout>} />
         <Route path="/login" element={<UnifiedLoginPage />} />
         <Route path="/forgot-password" element={<UnifiedForgotPasswordPage />} />
         <Route path="/accept-invite" element={<StaffAcceptInvitePage />} />

@@ -1,0 +1,23 @@
+# Signing keys and build output never go into Git (the repository is public).
+*.keystore
+*.jks
+*.p12
+*.pem
+*.key
+keystore.properties
+signing.properties
+*.apk
+*.aab
+*.idsig
+app/
+build/
+.gradle/
+gradle/
+gradlew
+gradlew.bat
+settings.gradle
+build.gradle
+gradle.properties
+local.properties
+store_icon.png
+manifest-checksum.txt

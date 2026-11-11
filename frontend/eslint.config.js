@@ -24,6 +24,15 @@ export default tseslint.config(
     },
   },
   {
+    // Service workers (installable mobile app): `self`, `caches`, `clients` instead of `window`.
+    files: ["public/sw.js", "pwa/**/*.js"],
+    languageOptions: {
+      ecmaVersion: 2019,
+      sourceType: "script",
+      globals: globals.serviceworker,
+    },
+  },
+  {
     files: ["scripts/**/*.ts"],
     languageOptions: {
       ecmaVersion: 2022,

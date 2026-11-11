@@ -151,6 +151,16 @@ export const SEO_BY_PATH: Record<string, SeoMeta> = {
     description:
       "Browse all public pages, legal documents, and resource articles on Prime7 ERP for garments manufacturers and buying houses.",
   },
+  "/install": {
+    title: "Android App – Prime7 ERP",
+    description:
+      "Install Prime7 ERP on your Android phone or tablet from Google Play, the APK download or Chrome. The app updates itself with every release.",
+  },
+  "/account-deletion": {
+    title: "Delete Your Account – Prime7 ERP",
+    description:
+      "Ask us to delete your Prime7 ERP login account and personal profile, and see which business records your company keeps.",
+  },
   "/login": {
     title: "Login – Prime7 ERP",
     description:

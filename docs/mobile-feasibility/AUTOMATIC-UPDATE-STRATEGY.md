@@ -1,6 +1,10 @@
 # Automatic update strategy
 
-**Status:** design only (2026-11-10). Nothing here is implemented yet. Service-worker behaviour comes from web.dev
+**Status:** implemented 2026-11-11 behind the build switch `VITE_PWA_ENABLED` (default off), not yet deployed. Code:
+`frontend/public/sw.js`, `frontend/src/lib/pwa/appUpdate.ts`, `frontend/src/lib/pwa/installPrompt.ts`,
+`frontend/src/components/shell/AppUpdateBanner.tsx`, `p7MobileAppPlugin` in `frontend/vite.config.ts`, kill switch
+`frontend/pwa/sw-kill-switch.js`. Test guide: `LOCAL-AND-PHONE-TEST-GUIDE.md`. Two deliberate differences from the first
+design are marked "Implemented:" below. Service-worker behaviour comes from web.dev
 (Google) documentation, accessed 2026-11-08 to 2026-11-10 (sources at the end). Repository facts come from
 `EXISTING-ERP-AUDIT.md`.
 
@@ -71,6 +75,9 @@ server.
     carrying `Authorization`: **not touched** (browser default network handling).
 - `message`: on `{type: "SKIP_WAITING"}` call `self.skipWaiting()`. The worker never calls `skipWaiting()` on its own.
 - `activate`: `clients.claim()` and delete caches from older worker versions.
+- **Implemented:** `sw.js` does **not** change with every release; it changes only when its caching rules change
+  (`CACHE_VERSION`). Because HTML is network-first, a release is detected through `version.json`, and switching is a plain
+  reload; the `SKIP_WAITING` path is used only in the rare release that also ships a new worker.
 
 ### 3.3 Keeping old open apps working (asset continuity)
 
@@ -85,6 +92,11 @@ Options evaluated:
 | a. Full precache in the worker | Old worker holds all of N | Rejected with Design 1 (above) |
 | b. **Keep previous release assets on the server** (recommended) | The frontend image build copies the `/assets/` files listed by the previous release into the new image (multi-stage `COPY --from=<previous frontend image>`), so N and N-1 files are both served | Helps every user (website and installed app), no service-worker dependency, small images. Needs the previous tag as a build argument and a per-release asset list so files do not pile up forever |
 | c. Shared host volume for assets | Assets accumulate on the server disk | Rejected: breaks the immutable image model and the rollback-by-tag model |
+
+**Implemented (option b):** `frontend/Dockerfile.prod` copies only plain file names directly under `assets/` with known
+asset extensions from the previous image (nothing with `..`, no sub-folders, no `.html`), and the workflows take the
+previous image only from the last released `v*` tag, pinned by digest (never `:latest`). Checked with planted bad entries
+on 2026-11-11.
 
 With option b, an app left open across **one** deploy keeps working. If it stays open across **two or more** deploys and
 then loads a page it never visited, the chunk can still be missing; section 4 explains how that case is handled without
@@ -165,12 +177,18 @@ nothing app-wide knows whether a form is dirty. Plan:
   `version.json` differ from their running version and switch back at the next safe moment, exactly like an update.
 - **Database:** rollback is only as safe as the migrations. Prime7 migrations are phased and backward-compatible
   (`.cursor/rules/live-server-stability.mdc`), which is what allows an older backend to run on a newer schema.
+- **Implemented, switching off:** a build with `VITE_PWA_ENABLED=false` makes the app unregister any service worker it
+  finds (`startMobileApp` in `appUpdate.ts`). This is the normal "off" path.
 - **Broken service worker (kill switch):** keep a ready "self-destroying" `sw.js` in the repository. It deletes its caches,
   calls `self.registration.unregister()` and reloads controlled pages. Deploying it returns every device to plain website
   behaviour within one check. Because HTML is never cached, users are never stuck on an old app while it propagates.
 - **Script hardening (recommended):** save the previous `BACKEND_IMAGE` / `FRONTEND_IMAGE` values before editing `.env`,
   and restore them automatically if the health/version check fails (today the script only exits;
   `scripts/deploy_production_remote.sh:31-62`).
+- **Implemented:** the script saves the previous release in `.env.previous-release`, checks after start-up that the
+  backend `/health` version **and** the frontend `/version.json` equal the requested tag, and on failure prints the exact
+  rollback command. It does **not** roll back by itself: the backend runs `alembic upgrade head` when it starts, so the
+  database may already be migrated, and an older backend can fail to start on a newer schema. A person decides.
 
 ### 3.9 Registration scope and install prompt capture
 
@@ -206,7 +224,7 @@ locking and idempotency. Queuing them on a phone would bypass these controls. Th
 | Situation | Expected result | Target (measure in POC) | Manual action? |
 |---|---|---|---|
 | App closed, then opened after the deploy | New version on that launch | 100% of trials | No |
-| App in background, then resumed (no dirty form) | Detected on resume; applied automatically if it was hidden 5+ minutes | Detected within 30 s of resume in 95% of trials | No |
+| App in background, then resumed (no dirty form) | Detected on resume; applied automatically if it was hidden 5+ minutes | Applied within 30 s of resume in at least 9 of 10 trials per device (POC test P9) | No |
 | App in foreground, user browsing | Detected within 10 minutes; applied at the next page change | Within 10 min + next navigation | No |
 | App in foreground with a dirty form | Banner only; applied after save/discard | No reload until clean, 100% of trials | User saves |
 | Device offline during deploy | Updated after the network returns | First check after reconnect | No |

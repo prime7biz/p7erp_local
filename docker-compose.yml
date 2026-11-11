@@ -278,6 +278,10 @@ services:
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
       VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS:-localhost,127.0.0.1}
       VITE_DEV_PROXY_TARGET: ${VITE_DEV_PROXY_TARGET:-http://backend:8000}
+      # Installable mobile app (docs/mobile-feasibility). Set VITE_PWA_ENABLED=true in .env to try it locally.
+      VITE_PWA_ENABLED: ${VITE_PWA_ENABLED:-false}
+      VITE_ANDROID_APK_URL: ${VITE_ANDROID_APK_URL:-}
+      VITE_PLAY_STORE_URL: ${VITE_PLAY_STORE_URL:-}
       CHOKIDAR_USEPOLLING: true
       CHOKIDAR_INTERVAL: 1000
     volumes:

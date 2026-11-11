@@ -10,6 +10,7 @@ import { useAuth } from "@/context/AuthContext";
 import { portalHomePath } from "@/lib/externalAccess";
 import { isExternalPrincipalType, type ExternalPrincipalType } from "@/types/externalAccess";
 import { PasswordFieldInput } from "@/components/auth/PasswordFieldInput";
+import { AndroidApkLink, InstallAppLink } from "@/components/public/InstallAppLink";
 import {
   AlertCircle,
   ArrowLeft,
@@ -337,14 +338,28 @@ export function UnifiedLoginPage() {
                 <Link to="/trust-center" className="hover:text-brand-primary transition-colors">
                   Trust
                 </Link>
+                <Link to="/account-deletion" className="hover:text-brand-primary transition-colors">
+                  Delete account
+                </Link>
               </div>
-              <Link
-                to="/"
-                className="text-sm text-text-muted hover:text-brand-primary transition-colors inline-flex items-center gap-1.5"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Back to Website
-              </Link>
+              <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+                <Link
+                  to="/"
+                  className="text-sm text-text-muted hover:text-brand-primary transition-colors inline-flex items-center gap-1.5"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  Back to Website
+                </Link>
+                <InstallAppLink
+                  from="login_footer"
+                  label="Install the app"
+                  className="text-sm text-text-muted hover:text-brand-primary transition-colors inline-flex min-h-[44px] items-center gap-1.5"
+                />
+                <AndroidApkLink
+                  from="login_footer"
+                  className="text-sm text-text-muted hover:text-brand-primary transition-colors inline-flex min-h-[44px] items-center gap-1.5"
+                />
+              </div>
             </div>
           </div>
         </div>

@@ -10,8 +10,10 @@ import "@fontsource-variable/crimson-pro";
 import "./index.css";
 import "@/lib/theme";
 import { installChunkErrorRecovery } from "@/lib/chunkReload";
+import { startMobileApp } from "@/lib/pwa/appUpdate";
 
 installChunkErrorRecovery();
+startMobileApp();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>

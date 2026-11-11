@@ -11,6 +11,8 @@ env/
 .env
 .env.local
 .env.*.local
+# Written on the server by scripts/deploy_production_remote.sh (last release's image tags).
+.env.previous-release
 
 # Build / dist
 dist/

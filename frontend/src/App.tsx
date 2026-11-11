@@ -4,6 +4,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { AppRouter } from "@/app/router";
 import { Seo } from "@/components/Seo";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
+import { AppUpdateBanner } from "@/components/shell/AppUpdateBanner";
 import { AiChatProvider } from "@/context/AiChatContext";
 import { queryClient } from "@/lib/queryClient";
 
@@ -19,6 +20,7 @@ export default function App() {
         <AuthProvider>
           <AiChatProvider>
             <Seo />
+            <AppUpdateBanner />
             <Suspense fallback={pageLoadingFallback}>
               <AppRouter />
             </Suspense>

@@ -1,11 +1,25 @@
 # syntax=docker/dockerfile:1
 # npm ci is cached unless package-lock.json / package.json change.
+
+# Image of the release that is live now. Its hashed /assets files are copied into this image so
+# phones and tabs still running that release can open pages they have not opened yet
+# (docs/mobile-feasibility/AUTOMATIC-UPDATE-STRATEGY.md, section 3.3). Default = plain nginx = copy nothing.
+ARG PREVIOUS_FRONTEND_IMAGE=nginx:1.27-alpine
+
 FROM node:20-alpine AS build
 
 ARG VITE_API_BASE_URL
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 ARG VITE_APP_VERSION=dev
 ENV VITE_APP_VERSION=${VITE_APP_VERSION}
+# Installable mobile app (service worker, manifest, install pages). Off unless "true".
+ARG VITE_PWA_ENABLED=false
+ENV VITE_PWA_ENABLED=${VITE_PWA_ENABLED}
+# Android app download buttons; empty = hidden (frontend/src/lib/pwa/androidApp.ts).
+ARG VITE_ANDROID_APK_URL=
+ENV VITE_ANDROID_APK_URL=${VITE_ANDROID_APK_URL}
+ARG VITE_PLAY_STORE_URL=
+ENV VITE_PLAY_STORE_URL=${VITE_PLAY_STORE_URL}
 
 WORKDIR /app
 COPY package*.json ./
@@ -13,11 +27,34 @@ COPY package*.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --include=dev
 COPY . .
-RUN npm run build
+# release-assets.txt lists only this build's own files, so copied old files never pile up.
+RUN npm run build && (cd dist && find assets -type f | sort > ../release-assets.txt)
+
+FROM ${PREVIOUS_FRONTEND_IMAGE} AS previous
 
 FROM nginx:1.27-alpine
 COPY nginx.prod.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
+COPY --from=build /app/release-assets.txt /usr/share/nginx/release-assets.txt
+# Only plain files directly under assets/ are taken (no sub-folders, no "..", no other file types),
+# so the previous image can never add pages or anything outside /assets to the new one.
+RUN --mount=type=bind,from=previous,source=/usr/share/nginx,target=/previous \
+    set -e; \
+    keep() { \
+      n="$1"; \
+      case "$n" in *[!A-Za-z0-9._-]*|.*|*..*|"") return 0;; esac; \
+      case "$n" in *.js|*.css|*.woff|*.woff2|*.svg|*.png|*.jpg|*.webp|*.ico|*.json|*.map) ;; *) return 0;; esac; \
+      if [ -f "/previous/html/assets/$n" ] && [ ! -e "/usr/share/nginx/html/assets/$n" ]; then \
+        cp "/previous/html/assets/$n" "/usr/share/nginx/html/assets/$n"; \
+      fi; \
+    }; \
+    if [ -f /previous/release-assets.txt ]; then \
+      while read -r f || [ -n "$f" ]; do \
+        case "$f" in assets/*) keep "${f#assets/}";; esac; \
+      done < /previous/release-assets.txt; \
+    elif [ -d /previous/html/assets ]; then \
+      for p in /previous/html/assets/*; do keep "$(basename "$p")"; done; \
+    fi
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

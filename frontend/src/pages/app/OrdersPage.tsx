@@ -11,7 +11,9 @@ import {
 } from "@/api/client";
 import { useListPagination } from "@/hooks/useListPagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useFormDirty } from "@/hooks/useFormDirty";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { logApiError } from "@/utils/logApiError";
 import { toast } from "sonner";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
@@ -159,6 +161,8 @@ export function OrdersPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<OrderResponse | null>(null);
   const [form, setForm] = useState<OrderCreate>({ customer_id: 0 });
+  const editFormDirty = useFormDirty(form, editing);
+  useUnsavedChangesGuard(modalOpen && editing != null && editFormDirty);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [quotations, setQuotations] = useState<QuotationResponse[]>([]);

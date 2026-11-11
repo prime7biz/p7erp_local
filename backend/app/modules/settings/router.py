@@ -15,6 +15,7 @@ from app.common.authz import ensure_user_is_tenant_admin
 from app.common.tenant import require_tenant
 from app.common.tenant_feature_keys import (
     is_payroll_four_eyes_enabled,
+    is_single_session_enforced,
     normalize_feature_flags,
     with_effective_default_flags,
 )
@@ -597,6 +598,48 @@ async def deactivate_settings_user(
         action="SETTINGS_USER_DEACTIVATE",
         resource="settings.user",
         details=f"Deactivated user {target.username}",
+    )
+    return SettingsUserResponse(
+        id=target.id,
+        tenant_id=target.tenant_id,
+        role_id=target.role_id,
+        email=target.email,
+        username=target.username,
+        first_name=target.first_name,
+        last_name=target.last_name,
+        is_active=target.is_active,
+        role_name=role.display_name,
+    )
+
+
+@router.post("/users/{target_user_id}/sign-out-devices", response_model=SettingsUserResponse)
+async def sign_out_settings_user_devices(
+    target_user_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """End every signed-in session of a user (for example a lost phone). The account stays active."""
+    _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
+    target = await _get_tenant_user(db, tenant.id, target_user_id)
+    if not is_single_session_enforced(tenant.feature_flags):
+        # Tokens carry no session version while single-session is off, so there is nothing to end.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Signing out devices needs single-session enforcement. Deactivate the user instead.",
+        )
+    target.auth_session_version = int(target.auth_session_version or 0) + 1
+    await db.flush()
+    await db.refresh(target)
+    role = await _get_tenant_role(db, tenant.id, target.role_id)
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="SETTINGS_USER_SIGN_OUT_DEVICES",
+        resource="settings.user",
+        details=f"Signed out all devices of user {target.username}",
     )
     return SettingsUserResponse(
         id=target.id,

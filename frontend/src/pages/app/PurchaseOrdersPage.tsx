@@ -41,6 +41,8 @@ import {
   listPageTableCardClass,
 } from "@/components/app/listPageLayout";
 import { useListPagination } from "@/hooks/useListPagination";
+import { useFormDirty } from "@/hooks/useFormDirty";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { cn } from "@/lib/utils";
 import { getInventoryItemsCached, getVendorsCached, getWarehousesCached } from "@/lib/masterData";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
@@ -72,6 +74,8 @@ export function PurchaseOrdersPage() {
     status: "DRAFT",
     items: [],
   });
+  const formDirty = useFormDirty(form);
+  useUnsavedChangesGuard(formDirty);
   const [line, setLine] = useState<PurchaseOrderItemCreate>({ item_id: 0, warehouse_id: null, quantity: "0", unit_price: "0" });
   const [lineHint, setLineHint] = useState("");
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);

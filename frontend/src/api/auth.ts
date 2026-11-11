@@ -2,10 +2,34 @@
  * Sign-in related API calls used by the app shell (AuthContext, login pages).
  * Also merged into `api` in `api/client.ts`, so `api.me()` / `api.login()` still work.
  */
-import { request, requestPublic, getTenantId } from "@/api/core";
+import { API_BASE } from "@/api/apiBase";
+import { request, requestPublic, getTenantId, getToken } from "@/api/core";
 import type { MeResponse, ResolveTenantResponse, TokenResponse } from "@/api/models";
 
+export const LOGOUT_TIMEOUT_MS = 4000;
+
 export const authApi = {
+  /**
+   * End the session on the server so a copied token stops working (lost or shared phone).
+   * Never throws and gives up after a few seconds, so signing out still works offline.
+   * Plain fetch on purpose: `request` would redirect to /login on a 401.
+   */
+  async logout(timeoutMs = LOGOUT_TIMEOUT_MS): Promise<void> {
+    const token = getToken();
+    if (!token) return;
+    const tid = getTenantId();
+    const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+    if (tid) headers["X-Tenant-Id"] = tid;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      await fetch(`${API_BASE}/api/v1/auth/logout`, { method: "POST", headers, signal: controller.signal });
+    } catch {
+      /* offline or timed out: the token still expires on its own */
+    } finally {
+      clearTimeout(timer);
+    }
+  },
   /** Reference-style: companyCode + username + password. Or tenant_id + email + password. */
   async login(params: {
     company_code?: string;

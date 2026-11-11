@@ -3,6 +3,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { authApi } from "@/api/auth";
 import { ApiError, clearAuth } from "@/api/core";
 import type { MeResponse } from "@/api/client";
+import { useConfirm } from "@/components/app/useConfirm";
+import { loadQueue, scanKeys } from "@/pages/app/production/scan/scanQueue";
 
 interface AuthState {
   me: MeResponse | null;
@@ -11,7 +13,7 @@ interface AuthState {
 }
 
 const AuthContext = createContext<
-  AuthState & { logout: () => void; refetch: () => Promise<void>; hasPermission: (key: string) => boolean }
+  AuthState & { logout: () => Promise<void>; refetch: () => Promise<void>; hasPermission: (key: string) => boolean }
  | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -54,13 +56,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void refetch();
   }, [refetch]);
 
-  const logout = useCallback(() => {
+  const confirm = useConfirm();
+
+  const logout = useCallback(async () => {
+    const unsentScans = me ? loadQueue(localStorage, scanKeys(me.tenant_id, me.user_id)).length : 0;
+    if (unsentScans > 0) {
+      const ok = await confirm({
+        title: `${unsentScans} production scan${unsentScans === 1 ? "" : "s"} not sent yet`,
+        description:
+          "They stay on this device under your login and are sent the next time you sign in here and open the scan station. Sign out anyway?",
+        confirmLabel: "Sign out",
+        cancelLabel: "Stay signed in",
+      });
+      if (!ok) return;
+    }
+    await authApi.logout();
     clearAuth();
     setMe(null);
     setError(null);
     // Full page load so every in-memory store (AI chat, component state) from this user is dropped.
     window.location.assign("/login");
-  }, []);
+  }, [me, confirm]);
 
   const hasPermission = useCallback(
     (key: string) => {

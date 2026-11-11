@@ -19,6 +19,18 @@ export const EXTERNAL_PRINCIPAL_KEY = "p7_ext_principal_type";
 /** Platform admin token (bulk onboarding). Kept in sessionStorage so it dies with the tab. */
 export const PLATFORM_ADMIN_TOKEN_KEY = "p7_platform_admin_token";
 const AI_LAST_SESSION_KEY = "p7_ai_last_session_id";
+/** Menu module the user opened (desktop sidebar + phone More menu). Kept until the next sign-in. */
+export const MENU_OPEN_SECTION_KEY = "p7_sidebar_open_section";
+/**
+ * Company figures some pages keep between visits (inventory KPI comparisons, dismissed cost
+ * alerts). They are not keyed by company, so they go at sign-out; on a shared phone the next
+ * person must not see them. Per-user scan queues are kept on purpose (see scanQueue.ts).
+ */
+const TENANT_DATA_KEYS = [
+  "p7_inventory_kpi_snapshot",
+  "p7_inventory_overview_snapshot",
+  "p7_owner_cost_alerts_dismissed",
+];
 
 /**
  * Sent on every portal auth call. Tells the API this client understands the HttpOnly refresh
@@ -37,7 +49,14 @@ function removeKeys(storage: Storage, keys: string[]): void {
 }
 
 export function clearInternalSessionStorage(): void {
-  removeKeys(localStorage, [INTERNAL_TOKEN_KEY, INTERNAL_TENANT_KEY, PLATFORM_ADMIN_TOKEN_KEY, AI_LAST_SESSION_KEY]);
+  removeKeys(localStorage, [
+    INTERNAL_TOKEN_KEY,
+    INTERNAL_TENANT_KEY,
+    PLATFORM_ADMIN_TOKEN_KEY,
+    AI_LAST_SESSION_KEY,
+    MENU_OPEN_SECTION_KEY,
+    ...TENANT_DATA_KEYS,
+  ]);
   removeKeys(sessionStorage, [PLATFORM_ADMIN_TOKEN_KEY]);
 }
 

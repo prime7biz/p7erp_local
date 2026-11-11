@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { CloudOff, RefreshCw, ScanLine, Wifi } from "lucide-react";
@@ -6,7 +6,17 @@ import { api } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 import { logApiError } from "@/utils/logApiError";
-import { applyResults, clearProblems, deviceId, enqueue, loadProblems, loadQueue, type ScanProblem } from "./scanQueue";
+import {
+  adoptLegacyScans,
+  applyResults,
+  clearProblems,
+  deviceId,
+  enqueue,
+  loadProblems,
+  loadQueue,
+  scanKeys,
+  type ScanProblem,
+} from "./scanQueue";
 
 type Setup = Awaited<ReturnType<typeof api.getScanSetup>>;
 type Ops = Awaited<ReturnType<typeof api.getScanOperations>>["operations"];
@@ -31,12 +41,15 @@ export function ScanStationPage() {
   const { t } = useTranslation();
   const { me } = useAuth();
   const enabled = me?.feature_flags?.shop_floor_scan_enabled === true;
+  const tenantId = me?.tenant_id;
+  const userId = me?.user_id;
+  const keys = useMemo(() => (tenantId != null && userId != null ? scanKeys(tenantId, userId) : null), [tenantId, userId]);
   const [setup, setSetup] = useState<Setup | null>(null);
   const [ops, setOps] = useState<Ops>([]);
   const [station, setStation] = useState<Station>(loadStation);
   const [barcode, setBarcode] = useState("");
-  const [queued, setQueued] = useState(() => loadQueue().length);
-  const [problems, setProblems] = useState<ScanProblem[]>(() => loadProblems());
+  const [queued, setQueued] = useState(0);
+  const [problems, setProblems] = useState<ScanProblem[]>([]);
   const [online, setOnline] = useState(() => navigator.onLine);
   const [syncing, setSyncing] = useState(false);
   const [last, setLast] = useState<{ text: string; tone: "ok" | "warn" | "bad" } | null>(null);
@@ -48,6 +61,13 @@ export function ScanStationPage() {
     if (!enabled) return;
     api.getScanSetup().then(setSetup).catch((e) => logApiError("ScanStation.setup", e));
   }, [enabled]);
+
+  useEffect(() => {
+    if (!keys) return;
+    adoptLegacyScans(keys);
+    setQueued(loadQueue(localStorage, keys).length);
+    setProblems(loadProblems(localStorage, keys));
+  }, [keys]);
 
   useEffect(() => {
     localStorage.setItem(STATION_KEY, JSON.stringify(station));
@@ -73,17 +93,17 @@ export function ScanStationPage() {
   }, [enabled, station.lineId]);
 
   const sync = useCallback(async () => {
-    if (syncingRef.current || !navigator.onLine) return;
+    if (!keys || syncingRef.current || !navigator.onLine) return;
     syncingRef.current = true;
     setSyncing(true);
     try {
-      let queue = loadQueue();
+      let queue = loadQueue(localStorage, keys);
       while (queue.length) {
         const res = await api.uploadScans({ device_id: deviceId(), scans: queue.slice(0, BATCH) });
-        applyResults(res.results);
+        applyResults(res.results, localStorage, keys);
         const bad = res.results.filter((r) => r.status === "error");
         if (bad.length) setLast({ text: t("scan.rejectedSome", { count: bad.length }), tone: "bad" });
-        queue = loadQueue();
+        queue = loadQueue(localStorage, keys);
       }
       refreshSummary();
     } catch (e) {
@@ -92,10 +112,10 @@ export function ScanStationPage() {
     } finally {
       syncingRef.current = false;
       setSyncing(false);
-      setQueued(loadQueue().length);
-      setProblems(loadProblems());
+      setQueued(loadQueue(localStorage, keys).length);
+      setProblems(loadProblems(localStorage, keys));
     }
-  }, [refreshSummary, t]);
+  }, [keys, refreshSummary, t]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -137,18 +157,22 @@ export function ScanStationPage() {
     const code = barcode.trim();
     setBarcode("");
     inputRef.current?.focus();
-    if (!code || !ready) return;
-    const item = enqueue({
-      barcode: code,
-      ob_op_id: Number(station.opId),
-      operator_code: station.operator.trim() || null,
-      sewing_line_id: Number(station.lineId),
-    });
+    if (!code || !ready || !keys) return;
+    const item = enqueue(
+      {
+        barcode: code,
+        ob_op_id: Number(station.opId),
+        operator_code: station.operator.trim() || null,
+        sewing_line_id: Number(station.lineId),
+      },
+      localStorage,
+      keys,
+    );
     if (!item) {
       setLast({ text: t("scan.queueFull"), tone: "bad" });
       return;
     }
-    setQueued(loadQueue().length);
+    setQueued(loadQueue(localStorage, keys).length);
     setLast({ text: t("scan.recorded", { code, op: opName ?? t("scan.operationFallback") }), tone: navigator.onLine ? "ok" : "warn" });
     void sync();
   }
@@ -232,7 +256,7 @@ export function ScanStationPage() {
         <section className="rounded-xl border border-status-danger/30 bg-status-danger-subtle p-4" aria-label={t("scan.rejectedTitle", { count: problems.length })}>
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-status-danger-foreground">{t("scan.rejectedTitle", { count: problems.length })}</h2>
-            <button type="button" onClick={() => { clearProblems(); setProblems([]); }} className="text-xs underline">{t("common.clear")}</button>
+            <button type="button" onClick={() => { if (keys) clearProblems(localStorage, keys); setProblems([]); }} className="text-xs underline">{t("common.clear")}</button>
           </div>
           <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-xs text-status-danger-foreground">
             {problems.slice(-50).reverse().map((p) => (

@@ -18,10 +18,13 @@ import {
   type StyleResponse,
 } from "@/api/client";
 import { canConvertInquiryToQuotation, isInquiryOpenForQuotationLink } from "@/features/merch/workflow";
+import { useFormDirty } from "@/hooks/useFormDirty";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { logApiError } from "@/utils/logApiError";
 import { buildQuotationFullUpdatePayload } from "./mappers/buildQuotationFullUpdatePayload";
 import { calculateQuotationTotals } from "./mappers/calculateQuotationTotals";
 import { resolveRate } from "./mappers/currencyFx";
+import { quotationDirtyValues } from "./mappers/quotationDirtyValues";
 import {
   applyOtherCostCalculation,
   computeManufacturingLineAmounts,
@@ -70,6 +73,7 @@ export function useQuotationWorkspaceController(id?: string) {
   const [useManualQuotedPrice, setUseManualQuotedPrice] = useState(false);
   const [manualQuotedPrice, setManualQuotedPrice] = useState("");
   const [revisions, setRevisions] = useState<QuotationResponse[]>([]);
+  const [formBaseline, setFormBaseline] = useState(0);
 
   useEffect(() => {
     const load = async () => {
@@ -159,6 +163,7 @@ export function useQuotationWorkspaceController(id?: string) {
           setManufacturing(q.manufacturing ?? []);
           setOtherCosts(q.other_costs ?? []);
           setSizeRatios(q.size_ratios ?? []);
+          setFormBaseline((n) => n + 1);
           const [cust, inq] = await Promise.all([
             api.getCustomer(q.customer_id),
             q.inquiry_id ? api.getInquiry(q.inquiry_id) : Promise.resolve(null),
@@ -173,6 +178,7 @@ export function useQuotationWorkspaceController(id?: string) {
         setError(e instanceof Error ? e.message : "Failed to load quotation");
       } finally {
         setLoading(false);
+        setFormBaseline((n) => n + 1);
       }
     };
     load();
@@ -215,6 +221,20 @@ export function useQuotationWorkspaceController(id?: string) {
   // Older (replaced) revisions are read-only; the server also rejects edits with 409.
   const isSuperseded = Boolean(quotation?.superseded_at);
 
+  const formDirty = useFormDirty(
+    quotationDirtyValues({
+      quotation,
+      materials,
+      manufacturing,
+      otherCosts,
+      sizeRatios,
+      useManualQuotedPrice,
+      manualQuotedPrice,
+    }),
+    `${isEditing}:${formBaseline}`,
+  );
+  useUnsavedChangesGuard(isEditing && !isSuperseded && formDirty);
+
   const reloadQuotationDetail = useCallback(async () => {
     if (isNew || !id) return;
     try {
@@ -224,6 +244,7 @@ export function useQuotationWorkspaceController(id?: string) {
       setManufacturing(q.manufacturing ?? []);
       setOtherCosts(q.other_costs ?? []);
       setSizeRatios(q.size_ratios ?? []);
+      setFormBaseline((n) => n + 1);
       const [cust, inq] = await Promise.all([
         api.getCustomer(q.customer_id),
         q.inquiry_id ? api.getInquiry(q.inquiry_id) : Promise.resolve(null),

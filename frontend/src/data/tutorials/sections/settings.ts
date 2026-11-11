@@ -267,8 +267,9 @@ Two ways to add someone:
 
 1. Find the person in the table and click **Actions**.
 2. **Edit** loads them into the form (now called **Edit user**). Change the role, name, or type a **New password (optional)** — at least **8 characters** — then click **Update user** (or **Cancel edit**). Existing passwords that are shorter keep working until they are changed.
-3. **Deactivate** blocks login but keeps their history — use this for leavers. **Activate** brings them back.
-4. **Delete** removes the user permanently (*"This cannot be undone."*). Prefer **Deactivate**.
+3. **Sign out devices** ends every signed-in session of an active user, for example after a **lost or stolen phone**. Confirm the question; the account stays active and the person simply signs in again. (Needs one-device sign-in, which is on by default.)
+4. **Deactivate** blocks login but keeps their history — use this for leavers. **Activate** brings them back.
+5. **Delete** removes the user permanently (*"This cannot be undone."*). Prefer **Deactivate**.
 
 ## What happens next
 
@@ -284,7 +285,8 @@ The user sees only the menus their role allows. Every change is written to **Act
 - **"Failed to send invitation"** → the email already belongs to a user, or the mail server is not set up. Create the user directly instead.
 - **Password refused when creating or editing a user** → new or changed passwords need at least **8 characters**.
 - **User cannot see a menu** → check their role in **Roles**, and the feature switch in **Configuration**.
-- **"Session replaced" message for a user** → they logged in somewhere else. Only the newest login stays active.`,
+- **"Session replaced" message for a user** → they logged in somewhere else, or an admin used **Sign out devices**. Only the newest login stays active.
+- **A staff phone was lost** → **Actions → Sign out devices** at once (logged as \`SETTINGS_USER_SIGN_OUT_DEVICES\`). If the password may be known, also set a new password, or **Deactivate** the user.`,
       tags: ["settings", "users", "invite", "staff", "login", "deactivate", "password"],
       keywords: [
         "add user",
@@ -297,9 +299,12 @@ The user sees only the menus their role allows. Every change is written to **Act
         "change role",
         "accept invite",
         "user management",
+        "lost phone",
+        "stolen phone",
+        "sign out devices",
       ],
       estimatedMinutes: 5,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-11",
       featured: true,
       coverImage: "/tutorials/screens/settings-users.jpg",
       videos: [
@@ -336,7 +341,7 @@ The user sees only the menus their role allows. Every change is written to **Act
             },
             {
               title: "Manage later with Actions",
-              body: "**Edit**, **Deactivate** / **Activate** or **Delete**.",
+              body: "**Edit**, **Sign out devices**, **Deactivate** / **Activate** or **Delete**.",
               imageSrc: "/tutorials/screens/settings-users-row-actions.jpg",
               imageAlt: "Actions menu on a user row showing Edit, Deactivate and Delete",
             },

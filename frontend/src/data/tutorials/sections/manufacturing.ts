@@ -1055,6 +1055,7 @@ The **Scan station** (\`/app/production/scan-station\`) turns a tablet or PC wit
 ## Tips
 
 - Keep this page open all shift; the setup and the waiting queue survive a page reload on the same device.
+- Waiting scans belong to the person signed in. On a shared tablet, another login does not see or send them. If you click **Logout** while scans are still waiting, P7 ERP asks first; the scans stay on the tablet and are sent the next time you sign in there and open the scan station.
 - Use the **English / বাংলা** switch at the top for operators who prefer Bangla.
 - Mount the tablet where the operator can see the green / red message.
 
@@ -1079,7 +1080,7 @@ The **Scan station** (\`/app/production/scan-station\`) turns a tablet or PC wit
         "বাংলা",
       ],
       estimatedMinutes: 6,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-11",
       audience: "supervisor",
       coverImage: "/tutorials/screens/production-scan-station.jpg",
       infographics: [

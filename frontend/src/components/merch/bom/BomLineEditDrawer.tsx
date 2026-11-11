@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { fetchInventoryItemPage, fetchVendorPage, hydrateInventoryItem, hydrateVendor } from "@/lib/remoteSelectFetchers";
 import type { OrderDrivenBomLine, OrderDrivenBomLinePatch } from "@/api/client";
+import { useFormDirty } from "@/hooks/useFormDirty";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 
 export function BomLineEditDrawer({
   open,
@@ -23,8 +25,12 @@ export function BomLineEditDrawer({
   const [vendorId, setVendorId] = useState<number | "">("");
   const [itemId, setItemId] = useState<number | "">("");
   const [remarks, setRemarks] = useState("");
+  const [formBaseline, setFormBaseline] = useState(0);
+  const formDirty = useFormDirty({ net, wastage, processLoss, price, vendorId, itemId, remarks }, formBaseline);
+  useUnsavedChangesGuard(open && line != null && formDirty);
 
   useEffect(() => {
+    setFormBaseline((n) => n + 1);
     if (!line || !open) return;
     setNet(line.bom_net_consumption_per_unit != null ? String(line.bom_net_consumption_per_unit) : "");
     setWastage(line.wastage_pct != null ? String(line.wastage_pct) : "0");

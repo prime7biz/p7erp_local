@@ -10,6 +10,8 @@ import { BomLinePoDrawer } from "@/components/merch/bom/BomLinePoDrawer";
 import { BomLinkedPosDrawer } from "@/components/merch/bom/BomLinkedPosDrawer";
 import { useBomPage } from "@/components/merch/bom/useBomPage";
 import type { OrderDrivenBomLine } from "@/api/client";
+import { useFormDirty } from "@/hooks/useFormDirty";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 
 export function BomBuilderPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -51,6 +53,11 @@ export function BomBuilderPage() {
   const [manualWastage, setManualWastage] = useState("0");
   const [manualLoss, setManualLoss] = useState("0");
   const [manualPrice, setManualPrice] = useState("0");
+  const [manualBaseline, setManualBaseline] = useState(0);
+  const manualLineDirty = useFormDirty(
+    { manualDesc, manualNet, manualWastage, manualLoss, manualPrice },
+    manualBaseline,
+  );
 
   const orderIdParam = Number(searchParams.get("orderId") || 0);
   const styleIdParam = Number(searchParams.get("styleId") || 0);
@@ -96,6 +103,7 @@ export function BomBuilderPage() {
 
   const bom = detail?.bom;
   const st = (bom?.status || "DRAFT").toUpperCase();
+  useUnsavedChangesGuard(bom != null && st === "DRAFT" && manualLineDirty);
 
   return (
     <div className="space-y-6">
@@ -309,6 +317,7 @@ export function BomBuilderPage() {
                       category: "MATERIAL",
                     });
                     setManualDesc("");
+                    setManualBaseline((n) => n + 1);
                   }}
                 >
                   Add line

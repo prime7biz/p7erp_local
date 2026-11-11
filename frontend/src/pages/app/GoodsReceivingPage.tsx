@@ -33,8 +33,10 @@ import {
 } from "@/components/app/listPageLayout";
 import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useFormDirty } from "@/hooks/useFormDirty";
 import { useListPagination } from "@/hooks/useListPagination";
 import { useSubmitGuard } from "@/hooks/useSubmitGuard";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { cn } from "@/lib/utils";
 
 /** Phase 3.4: ~44px min touch targets for warehouse floor / mobile use */
@@ -72,6 +74,9 @@ export function GoodsReceivingPage() {
     status: "DRAFT",
     items: [],
   }));
+  const [formBaseline, setFormBaseline] = useState(0);
+  const formDirty = useFormDirty(form, formBaseline);
+  useUnsavedChangesGuard(formDirty);
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [expandedGrnId, setExpandedGrnId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -94,6 +99,7 @@ export function GoodsReceivingPage() {
   useEffect(() => {
     if (poFilterFromUrl != null) {
       setForm((p) => ({ ...p, purchase_order_id: poFilterFromUrl, source_type: "PO" }));
+      setFormBaseline((n) => n + 1);
     }
   }, [poFilterFromUrl]);
 
@@ -251,6 +257,7 @@ export function GoodsReceivingPage() {
         status: "DRAFT",
         items: [],
       });
+      setFormBaseline((n) => n + 1);
       await load();
     } catch (err) {
       logApiError("GoodsReceivingPage.createGoodsReceiving", err);

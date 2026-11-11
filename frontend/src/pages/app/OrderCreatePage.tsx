@@ -16,7 +16,9 @@ import {
 } from "@/api/client";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { OrderAiPanel } from "@/components/orders/OrderAiPanel";
+import { useFormDirty } from "@/hooks/useFormDirty";
 import { useOrderAi } from "@/hooks/useOrderAi";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { logApiError } from "@/utils/logApiError";
 import {
   COMMISSION_MODE_OPTIONS,
@@ -99,6 +101,8 @@ export function OrderCreatePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const formDirty = useFormDirty(form);
+  useUnsavedChangesGuard(formDirty);
 
   const orderAiFormSnapshot = useMemo(
     () => ({

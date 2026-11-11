@@ -1,5 +1,32 @@
-import { describe, expect, it } from "vitest";
-import { isChunkLoadError } from "./chunkReload";
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { isChunkLoadError, reloadOnceForNewVersion } from "./chunkReload";
+import { clearFormDirty, isAnyFormDirty, markFormDirty } from "./unsavedChanges";
+
+describe("reloadOnceForNewVersion", () => {
+  const form = Symbol("form");
+  afterEach(() => {
+    clearFormDirty(form);
+    sessionStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it("does not reload while a form has unsaved changes, and keeps the one-time reload for later", () => {
+    const reload = vi.fn();
+    vi.spyOn(window, "location", "get").mockReturnValue({ ...window.location, reload } as Location);
+    markFormDirty(form);
+    expect(isAnyFormDirty()).toBe(true);
+    expect(reloadOnceForNewVersion()).toBe(false);
+    expect(reload).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem("p7_chunk_reload_done")).toBeNull();
+
+    clearFormDirty(form);
+    expect(reloadOnceForNewVersion()).toBe(true);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(reloadOnceForNewVersion()).toBe(false);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("isChunkLoadError", () => {
   it("recognises stale-chunk errors from Chrome, Firefox and Safari", () => {

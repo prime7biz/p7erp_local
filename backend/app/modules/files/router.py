@@ -81,6 +81,7 @@ async def download_tenant_file(
 
     headers = {
         "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "private, no-store",
     }
     return FileResponse(
         path=str(path),

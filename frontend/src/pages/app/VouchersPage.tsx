@@ -46,6 +46,8 @@ import {
 } from "@/lib/remoteSelectFetchers";
 import { logApiError } from "@/utils/logApiError";
 import { useSubmitGuard } from "@/hooks/useSubmitGuard";
+import { useFormDirty } from "@/hooks/useFormDirty";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { useAuth } from "@/context/AuthContext";
 import { resolveRole } from "@/lib/roles";
 import type { TaxPreviewResponse } from "@/api/client";
@@ -139,6 +141,9 @@ export function VouchersPage() {
     btb_lc_id: undefined,
     lines: [makeLine(0, "BDT", "1", "DEBIT")],
   });
+  const [formBaseline, setFormBaseline] = useState(0);
+  const formDirty = useFormDirty(form, formBaseline);
+  useUnsavedChangesGuard(showCreate && formDirty);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -419,6 +424,7 @@ export function VouchersPage() {
       btb_lc_id: undefined,
       lines: [makeLine(0, "BDT", "1", "DEBIT")],
     });
+    setFormBaseline((n) => n + 1);
   }, [voucherTypes]);
 
   async function fetchLiveRate() {
@@ -616,6 +622,7 @@ export function VouchersPage() {
         cost_nature_override: line.cost_nature_override ?? null,
       })),
     });
+    setFormBaseline((n) => n + 1);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 

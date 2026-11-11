@@ -3,7 +3,7 @@ import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from app.common.jwt_compat import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy import func
@@ -308,6 +308,25 @@ async def login(
     await log_action(db, tenant_id=user.tenant_id, action="LOGIN", user_id=user.id, resource="auth")
     token = create_access_token(subject=user.id, session_version=session_version, tenant_id=tenant.id)
     return TokenResponse(access_token=token, tenant_id=tenant.id)
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """End this user's session on the server, so the token stops working even if a copy was kept.
+
+    Raising auth_session_version invalidates every token issued before it (only checked while
+    single-session enforcement is on, which is the default). A platform admin who is
+    impersonating the user only ends the impersonation in the browser; the user stays signed in.
+    """
+    if getattr(request.state, "impersonator_admin_id", None) is None:
+        user.auth_session_version = int(user.auth_session_version or 0) + 1
+        await db.flush()
+        await log_action(db, tenant_id=user.tenant_id, action="LOGOUT", user_id=user.id, resource="auth")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/accept-staff-invite", response_model=TokenResponse)

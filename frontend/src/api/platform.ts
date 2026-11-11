@@ -162,6 +162,12 @@ export const platformApi = {
       method: "POST",
     });
   },
+  /** Ends every signed-in session of the user (lost phone); the account stays active. */
+  async settingsSignOutUserDevices(userId: number): Promise<UserWithRoleResponse> {
+    return request<UserWithRoleResponse>(`/api/v1/settings/users/${userId}/sign-out-devices`, {
+      method: "POST",
+    });
+  },
   async settingsDeleteUser(userId: number): Promise<void> {
     return request<void>(`/api/v1/settings/users/${userId}`, {
       method: "DELETE",

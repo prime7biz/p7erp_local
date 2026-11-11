@@ -154,6 +154,24 @@ export function UsersPage() {
     }
   };
 
+  const handleSignOutDevices = async (u: UserWithRoleResponse) => {
+    if (
+      !window.confirm(
+        `Sign out "${userLabel(u)}" on every device? Use this for a lost or stolen phone. The account stays active; they can sign in again.`,
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setSuccess(null);
+    try {
+      await api.settingsSignOutUserDevices(u.id);
+      setSuccess(`"${userLabel(u)}" was signed out on every device.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to sign out devices");
+    }
+  };
+
   const handleActivate = async (u: UserWithRoleResponse) => {
     setError(null);
     setSuccess(null);
@@ -415,16 +433,28 @@ export function UsersPage() {
                         Edit
                       </button>
                       {u.is_active ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handleDeactivate(u);
-                            setOpenActionsId(null);
-                          }}
-                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
-                        >
-                          Deactivate
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenActionsId(null);
+                              void handleSignOutDevices(u);
+                            }}
+                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
+                          >
+                            Sign out devices
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleDeactivate(u);
+                              setOpenActionsId(null);
+                            }}
+                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
+                          >
+                            Deactivate
+                          </button>
+                        </>
                       ) : (
                         <button
                           type="button"

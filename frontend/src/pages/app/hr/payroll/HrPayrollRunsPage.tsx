@@ -13,6 +13,8 @@ import { HrPageHeader } from "@/components/hr/HrPageHeader";
 import { HrStatusBadge } from "@/components/hr/HrStatusBadge";
 import { HrDataTable, type HrTableColumn } from "@/components/hr/kit/HrDataTable";
 import { useAuth } from "@/context/AuthContext";
+import { useFormDirty } from "@/hooks/useFormDirty";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { todayLocalISO } from "@/lib/dates";
 import { saveBlob } from "@/lib/fileSave";
 import { formatMoney } from "@/lib/money";
@@ -107,6 +109,9 @@ export function HrPayrollRunsPage() {
     run_date: todayLocalISO(),
     run_code: "",
   });
+  const [formBaseline, setFormBaseline] = useState(0);
+  const formDirty = useFormDirty(form, formBaseline);
+  useUnsavedChangesGuard(formDirty);
   const [submitting, setSubmitting] = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
   const [preview, setPreview] = useState<HrPayrollAutoCalcPreview | null>(null);
@@ -155,6 +160,7 @@ export function HrPayrollRunsPage() {
       await api.createHrPayrollRun(payload);
       setMsg("Payroll run created.");
       setForm((f) => ({ ...f, run_code: "" }));
+      setFormBaseline((n) => n + 1);
       await load();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Create failed");

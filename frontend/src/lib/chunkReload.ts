@@ -13,6 +13,8 @@
  *   "new version available" message (see `isChunkLoadError`).
  */
 
+import { isAnyFormDirty } from "@/lib/unsavedChanges";
+
 const RELOAD_KEY = "p7_chunk_reload_done";
 let prefetchesInFlight = 0;
 
@@ -30,8 +32,13 @@ export function isChunkLoadError(err: unknown): boolean {
   return CHUNK_ERROR_PATTERNS.some((re) => re.test(text));
 }
 
-/** Reload the tab unless we already did so for a chunk error in this session. Returns true if reloading. */
+/**
+ * Reload the tab unless we already did so for a chunk error in this session, or a form on screen
+ * has unsaved changes (then the "new version" message asks the user to save first).
+ * Returns true if reloading.
+ */
 export function reloadOnceForNewVersion(): boolean {
+  if (isAnyFormDirty()) return false;
   try {
     if (sessionStorage.getItem(RELOAD_KEY)) return false;
     sessionStorage.setItem(RELOAD_KEY, String(Date.now()));

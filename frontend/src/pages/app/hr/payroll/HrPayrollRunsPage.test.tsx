@@ -24,6 +24,7 @@ vi.mock("@/api/client", () => ({ api }));
 
 import { HrPayrollRunsPage } from "./HrPayrollRunsPage";
 import { isPayrollRunActionEnabled, payrollRunRowActions } from "./payrollRunActions";
+import { isAnyFormDirty } from "@/lib/unsavedChanges";
 
 const run = (id: number, status: string, period_id = 1) => ({
   id,
@@ -194,6 +195,21 @@ describe("HrPayrollRunsPage runs table", () => {
     await user.click(within(await rowOf("RUN-13")).getByRole("button", { name: "Bank CSV" }));
     expect(await screen.findByText("The bank file is available after the run is approved")).toBeTruthy();
     expect(saveBlob).not.toHaveBeenCalled();
+  });
+
+  it("warns about an unsaved new run only after the user types, and not after it is created", async () => {
+    const user = userEvent.setup();
+    api.createHrPayrollRun.mockResolvedValue(run(15, "DRAFT", 2));
+    render(<MemoryRouter><HrPayrollRunsPage /></MemoryRouter>);
+    await rowOf("RUN-11");
+    expect(isAnyFormDirty()).toBe(false);
+    await user.selectOptions(screen.getByLabelText(/Payroll period/), "2");
+    await user.type(screen.getByLabelText(/Run code/), "NOV-A");
+    expect(isAnyFormDirty()).toBe(true);
+    await user.click(screen.getByRole("button", { name: "Create run" }));
+    expect(await screen.findByText("Payroll run created.")).toBeTruthy();
+    expect(api.createHrPayrollRun).toHaveBeenCalledTimes(1);
+    expect(isAnyFormDirty()).toBe(false);
   });
 
   it("offers Export CSV to managers only", async () => {

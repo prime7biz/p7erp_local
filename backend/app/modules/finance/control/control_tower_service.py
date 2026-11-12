@@ -19,6 +19,11 @@ from typing import Any
 from sqlalchemy import Date, Numeric, and_, case, cast, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.tenant_feature_keys import (
+    AR_AP_DUE_SOURCE_BILL_REFERENCES,
+    AR_AP_DUE_SOURCE_PARTY_LEDGER,
+    get_finance_ar_ap_due_source,
+)
 from app.database import safe_async_session_rollback
 from app.models.finance import Budget, OutstandingBill, Voucher, VoucherLine
 from app.models.finance import VendorBill, VendorBillLine
@@ -52,6 +57,7 @@ from app.modules.finance.control.constants import (
 from app.modules.finance.control.schemas import ControlCard, ControlTowerResponse, ExceptionListResponse, ExceptionRow
 from app.modules.finance.fiscal_year import fiscal_year_bounds, fy_start_month
 from app.modules.finance.posting_core import line_base_amount_sql
+from app.modules.finance.statements.ar_ap_due_service import SOURCE_NOTES, overdue_select
 from app.modules.finance.statements.constants import BANK_ACCOUNTS, CASH_IN_HAND
 from app.modules.finance.statements.ledger_aggregate_service import build_ledger_calcs
 from app.modules.finance.statements.stock_gl_service import build_stock_gl
@@ -83,6 +89,27 @@ class CardResult:
     rows: list[dict] = field(default_factory=list)  # standard row dicts (only when a page was requested)
     source: str | None = None
     note: str | None = None
+    flagged: int = 0  # rows carrying a currency_note (amount used at rate 1 because the rate is missing)
+
+
+RATE_MISSING_NOTE = "No exchange rate to base on the document; the amount is counted at rate 1."
+
+
+def _rate_missing_note(currency_col, rate_col, base_ccy: str):
+    """Row-level disclosure: a foreign-currency document without a rate (a missing currency is read as base)."""
+    return case(
+        (
+            and_(rate_col.is_(None), currency_col.is_not(None), func.upper(currency_col) != base_ccy),
+            literal(RATE_MISSING_NOTE),
+        ),
+        else_=None,
+    )
+
+
+def _rate_missing_suffix(flagged: int) -> str:
+    if not flagged:
+        return ""
+    return f" {flagged} foreign-currency document(s) have no exchange rate and are counted at rate 1 (see currency_note)."
 
 
 def _row(ref_id, reference, ref_date, party, amount, details: dict | None = None) -> dict:
@@ -97,15 +124,27 @@ def _row(ref_id, reference, ref_date, party, amount, details: dict | None = None
 
 
 # ---- generic SQL card ------------------------------------------------------------------------------------
-async def _sql_card(db: AsyncSession, base, *, as_of: date, limit: int, offset: int) -> CardResult:
-    """`base` is a select with columns ref_id, reference, ref_date, party, amount (+ optional detail columns)."""
+async def _sql_card(
+    db: AsyncSession, base, *, as_of: date, limit: int, offset: int, flag_column: str | None = None
+) -> CardResult:
+    """`base` is a select with columns ref_id, reference, ref_date, party, amount (+ optional detail columns).
+
+    `flag_column`: a nullable detail column; rows where it is not null are counted into `flagged` (same statement).
+    """
     sub = base.subquery("exc")
-    count, amount, oldest = (
+    flagged = (
+        func.coalesce(func.sum(case((sub.c[flag_column].is_not(None), 1), else_=0)), 0)
+        if flag_column
+        else literal(0)
+    )
+    count, amount, oldest, flagged_count = (
         await db.execute(
-            select(func.count(), func.coalesce(func.sum(sub.c.amount), 0), func.min(sub.c.ref_date)).select_from(sub)
+            select(
+                func.count(), func.coalesce(func.sum(sub.c.amount), 0), func.min(sub.c.ref_date), flagged
+            ).select_from(sub)
         )
     ).one()
-    result = CardResult(total=int(count), amount=_q(amount), oldest=oldest)
+    result = CardResult(total=int(count), amount=_q(amount), oldest=oldest, flagged=int(flagged_count or 0))
     if limit > 0 and result.total:
         page = (
             select(sub)
@@ -133,6 +172,7 @@ def _slice_card(rows: list[dict], *, limit: int, offset: int) -> CardResult:
 # ---- SQL cards ---------------------------------------------------------------------------------------------
 async def _grn_not_billed(db, tenant: Tenant, as_of: date, limit: int, offset: int) -> CardResult:
     conds = exc_svc.grn_not_billed_conditions(tenant.id)
+    base_ccy = (tenant.base_currency or "BDT").upper()
     value = (
         select(
             GoodsReceivingItem.goods_receiving_id.label("grn_id"),
@@ -162,6 +202,9 @@ async def _grn_not_billed(db, tenant: Tenant, as_of: date, limit: int, offset: i
             (func.coalesce(value.c.v, 0) * func.coalesce(PurchaseOrder.exchange_rate_to_base, 1)).label("amount"),
             PurchaseOrder.po_code.label("po_code"),
             GoodsReceiving.supplier_invoice_no.label("supplier_invoice_no"),
+            _rate_missing_note(PurchaseOrder.currency, PurchaseOrder.exchange_rate_to_base, base_ccy).label(
+                "currency_note"
+            ),
         )
         .outerjoin(Vendor, and_(Vendor.id == GoodsReceiving.vendor_id, Vendor.tenant_id == tenant.id))
         .outerjoin(
@@ -171,8 +214,9 @@ async def _grn_not_billed(db, tenant: Tenant, as_of: date, limit: int, offset: i
         .outerjoin(value, value.c.grn_id == GoodsReceiving.id)
         .where(*conds)
     )
-    result = await _sql_card(db, base, as_of=as_of, limit=limit, offset=offset)
+    result = await _sql_card(db, base, as_of=as_of, limit=limit, offset=offset, flag_column="currency_note")
     result.note = "Amount = received quantity x PO unit price in base currency; GRNs without a PO line count as 0."
+    result.note += _rate_missing_suffix(result.flagged)
     return result
 
 
@@ -191,6 +235,7 @@ async def _challan_not_invoiced(db, tenant: Tenant, as_of: date, limit: int, off
 
 async def _vendor_bill_variance(db, tenant: Tenant, as_of: date, limit: int, offset: int) -> CardResult:
     tid = tenant.id
+    base_ccy = (tenant.base_currency or "BDT").upper()
     price_var = case(
         (PurchaseOrderItem.id.is_not(None), func.abs(VendorBillLine.unit_price - PurchaseOrderItem.unit_price) * VendorBillLine.quantity),
         else_=0,
@@ -219,6 +264,7 @@ async def _vendor_bill_variance(db, tenant: Tenant, as_of: date, limit: int, off
             Vendor.name.label("party"),
             (func.sum(price_var + qty_var) * rate).label("variance"),
             (func.sum(expected) * rate).label("expected"),
+            _rate_missing_note(VendorBill.currency, VendorBill.exchange_rate_to_base, base_ccy).label("currency_note"),
         )
         .select_from(VendorBill)
         .join(VendorBillLine, and_(VendorBillLine.vendor_bill_id == VendorBill.id, VendorBillLine.tenant_id == tid))
@@ -232,7 +278,9 @@ async def _vendor_bill_variance(db, tenant: Tenant, as_of: date, limit: int, off
         )
         .outerjoin(Vendor, and_(Vendor.id == VendorBill.vendor_id, Vendor.tenant_id == tid))
         .where(VendorBill.tenant_id == tid, func.upper(VendorBill.status).notin_(exc_svc.CANCELLED))
-        .group_by(VendorBill.id, VendorBill.bill_code, bill_date, Vendor.name, VendorBill.exchange_rate_to_base)
+        .group_by(
+            VendorBill.id, VendorBill.bill_code, bill_date, Vendor.name, VendorBill.exchange_rate_to_base, VendorBill.currency
+        )
         .subquery("bill_var")
     )
     tolerance = func.greatest(inner.c.expected * VARIANCE_TOLERANCE_PERCENT, VARIANCE_TOLERANCE_MIN_AMOUNT)
@@ -244,16 +292,25 @@ async def _vendor_bill_variance(db, tenant: Tenant, as_of: date, limit: int, off
         inner.c.variance.label("amount"),
         inner.c.expected.label("expected_value"),
         tolerance.label("tolerance"),
+        inner.c.currency_note,
     ).where(inner.c.variance > tolerance)
-    result = await _sql_card(db, base, as_of=as_of, limit=limit, offset=offset)
+    result = await _sql_card(db, base, as_of=as_of, limit=limit, offset=offset, flag_column="currency_note")
     result.note = (
         "Informational only: price (bill vs PO) plus quantity (bill vs GRN) difference, flagged above the greater of "
         f"{VARIANCE_TOLERANCE_PERCENT * 100:.0f}% or {VARIANCE_TOLERANCE_MIN_AMOUNT} base currency. Never blocks a bill."
     )
+    result.note += _rate_missing_suffix(result.flagged)
     return result
 
 
 async def _overdue(db, tenant: Tenant, as_of: date, limit: int, offset: int, *, bill_type: str) -> CardResult:
+    source = get_finance_ar_ap_due_source(tenant.feature_flags)
+    if source in (AR_AP_DUE_SOURCE_PARTY_LEDGER, AR_AP_DUE_SOURCE_BILL_REFERENCES):
+        base = overdue_select(tenant, source, as_of=as_of, bill_type=bill_type)
+        result = await _sql_card(db, base, as_of=as_of, limit=limit, offset=offset)
+        result.source = source
+        result.note = SOURCE_NOTES[source]
+        return result
     base_ccy = (tenant.base_currency or "BDT").upper()
     due = OutstandingBill.amount - OutstandingBill.paid_amount
     conds = [

@@ -432,6 +432,32 @@ def is_stock_hierarchy_enabled(feature_flags: Any) -> bool:
 def is_batch_tracking_enabled(feature_flags: Any) -> bool:
     """Physical batch create/allocate on GRN/DC (default off). Independent of hierarchy flag."""
     return _flag_true(feature_flags, BATCH_TRACKING_ENABLED)
+# Bill-wise AR/AP source for "Sundry Debtors / Creditors due till today" (Ratio Analysis) and the Control Tower
+# overdue receivable / payable cards (PLAN open question 8). Unset = not decided: ratios show null + reason and
+# the Control Tower keeps its own sources.
+FINANCE_AR_AP_DUE_SOURCE = "finance_ar_ap_due_source"
+AR_AP_DUE_SOURCE_OUTSTANDING_BILLS = "outstanding_bills"
+AR_AP_DUE_SOURCE_PARTY_LEDGER = "party_ledger"
+AR_AP_DUE_SOURCE_BILL_REFERENCES = "bill_references"
+FINANCE_AR_AP_DUE_SOURCES: tuple[str, str, str] = (
+    AR_AP_DUE_SOURCE_OUTSTANDING_BILLS,
+    AR_AP_DUE_SOURCE_PARTY_LEDGER,
+    AR_AP_DUE_SOURCE_BILL_REFERENCES,
+)
+
+
+def get_finance_ar_ap_due_source(feature_flags: Any) -> str | None:
+    """The chosen AR/AP due source, or None when unset / not one of FINANCE_AR_AP_DUE_SOURCES."""
+    if not isinstance(feature_flags, dict):
+        return None
+    raw = feature_flags.get(FINANCE_AR_AP_DUE_SOURCE)
+    if isinstance(raw, str):
+        normalized = raw.strip().lower()
+        if normalized in FINANCE_AR_AP_DUE_SOURCES:
+            return normalized
+    return None
+
+
 
 
 def is_gst_system_enabled(feature_flags: Any) -> bool:
@@ -742,6 +768,7 @@ def normalize_feature_flag_value(key: str, value: Any) -> Any:
     if not isinstance(value, str):
         raise ValueError(
             f"feature_flags['{key}'] must be one of {sorted(allowed)} "
+    FINANCE_AR_AP_DUE_SOURCE: frozenset(FINANCE_AR_AP_DUE_SOURCES),
             f"(got {type(value).__name__})"
         )
     normalized = value.strip().lower()

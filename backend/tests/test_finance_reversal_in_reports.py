@@ -307,3 +307,115 @@ async def test_budget_enforcement_v2_counts_reversed_pair_as_zero_used(db_sessio
     assert result.has_budget
     assert result.used_amount == 0.0  # original (+X) and reversal (-X) cancel out
     assert result.projected == 100.0
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# GST returns: tax lines live in voucher_tax_lines, which the reverse endpoint does not copy. A reversed pair is
+# left out on BOTH sides (original by status, reversal voucher by reverses_voucher_id), so it nets to zero.
+# ---------------------------------------------------------------------------------------------------------------
+
+
+async def _add_tax_lines(db, tenant_id: int, voucher: Voucher, ledgers: dict, base: str, tax_each: str) -> None:
+    from app.models.gst_tax import VoucherTaxLine
+
+    for tax_type in ("CGST", "SGST"):
+        db.add(
+            VoucherTaxLine(
+                tenant_id=tenant_id,
+                voucher_id=voucher.id,
+                tax_ledger_id=ledgers[tax_type].id,
+                taxable_amount=D(base),
+                tax_amount=D(tax_each),
+                tax_rate_applied=D("9"),
+                hsn_code="6109",
+                direction="OUTWARD",
+            )
+        )
+    await db.flush()
+
+
+@pytest.mark.asyncio
+async def test_gst_returns_leave_out_a_reversed_pair(db_session_integration):
+    from app.modules.finance.gst_return_service import generate_gstr1, generate_gstr3b
+    from tests.test_gst_tax_system import _tax_ledgers
+
+    db = db_session_integration
+    tenant, user, w, cc, _budget, today = await _setup(db)
+    ledgers = await _tax_ledgers(db, tenant.id)
+    kept = await _post_expense(db, tenant, w, cc, today, amount=D("1180"))
+    await _add_tax_lines(db, tenant.id, kept, ledgers, "1000", "90")
+    gone = await _post_expense(db, tenant, w, cc, today, amount=D("590"))
+    await _add_tax_lines(db, tenant.id, gone, ledgers, "500", "45")
+    span = (today - timedelta(days=1), today + timedelta(days=1))
+
+    before = await generate_gstr1(db, tenant.id, *span)
+    assert before["summary"]["line_count"] == 4
+    assert D(before["summary"]["tax_total"]) == D("270")
+
+    async with api_client(db, tenant, user) as ac:
+        r = await _reverse(ac, gone.id)
+        assert r.status_code == 200, r.text
+    reversal_id = r.json()["id"]
+    reversal = await db.get(Voucher, reversal_id)
+    # Even if a reversal voucher ever carried tax lines, it is left out together with its original.
+    await _add_tax_lines(db, tenant.id, reversal, ledgers, "500", "45")
+
+    after = await generate_gstr1(db, tenant.id, *span)
+    assert {s["voucher_id"] for s in after["supplies"]} == {kept.id}
+    assert D(after["summary"]["taxable_total"]) == D("1000")
+    assert D(after["summary"]["tax_total"]) == D("180")
+    assert D((await generate_gstr3b(db, tenant.id, *span))["outward_tax"]) == D("180")
+
+    # Another tenant's posted tax lines never appear.
+    tenant2, _u2, w2, cc2, _b2, today2 = await _setup(db)
+    ledgers2 = await _tax_ledgers(db, tenant2.id)
+    foreign = await _post_expense(db, tenant2, w2, cc2, today2, amount=D("11800"))
+    await _add_tax_lines(db, tenant2.id, foreign, ledgers2, "10000", "900")
+    assert D((await generate_gstr1(db, tenant.id, *span))["summary"]["tax_total"]) == D("180")
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Old order costing variance (/profitability/variance/{order_id}): vouchers matched by reference == order code.
+# A reversal's reference is the original's voucher number, so it is followed through reverses_voucher_id.
+# ---------------------------------------------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_order_costing_variance_nets_reversed_pair_to_zero(db_session_integration):
+    from tests.finance_control_fixtures import make_customer, make_order, make_quotation
+
+    db = db_session_integration
+    tenant, user, w, cc, _budget, today = await _setup(db)
+    customer = await make_customer(db, tenant.id, "Buyer")
+    quotation = await make_quotation(db, tenant.id, customer, total_cost=D("1000"))
+    order = await make_order(db, tenant.id, customer, quotation_id=quotation.id)
+
+    async def tagged(amount: str, status: str = "POSTED", tenant_=tenant, w_=w, cc_=cc) -> Voucher:
+        v = await _post_expense(db, tenant_, w_, cc_, today, amount=D(amount), status=status)
+        v.reference = order.order_code
+        await db.flush()
+        return v
+
+    await tagged("300")
+    gone = await tagged("700")
+    await tagged("50000", status="REVERSED")  # legacy bare flip: never counted
+    await tagged("40000", status="DRAFT")
+    tenant2, _u2, w2, cc2, _b2, _t2 = await _setup(db)
+    await tagged("90000", tenant_=tenant2, w_=w2, cc_=cc2)  # same reference text, other tenant
+
+    url = f"{FIN}/profitability/variance/{order.id}"
+    async with api_client(db, tenant, user) as ac:
+        body = (await ac.get(url)).json()
+        assert set(body) == {"order_id", "order_code", "planned_cost", "actual_cost", "variance", "variance_pct"}
+        assert body["actual_cost"] == 1000.0 and body["variance"] == 0.0
+
+        r = await _reverse(ac, gone.id)
+        assert r.status_code == 200, r.text
+        body = (await ac.get(url)).json()
+        assert body["actual_cost"] == 300.0  # 300 + 700 - 700
+        assert body["variance"] == -700.0
+
+        # Reversing the reversal brings the original's cost back.
+        r2 = await _reverse(ac, r.json()["id"])
+        assert r2.status_code == 200, r2.text
+        assert (await ac.get(url)).json()["actual_cost"] == 1000.0

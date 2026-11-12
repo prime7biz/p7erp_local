@@ -131,6 +131,18 @@ def generate_text_sync(
     return text
 
 
+_DEFAULT_GEMINI_FALLBACK_TIMEOUT_SECONDS = 35.0
+
+
+def _gemini_fallback_timeout_seconds(settings: Any) -> float:
+    """Bound for the tenant-text Gemini call: ``AI_TIMEOUT_HEAVY_SECONDS`` (reports / narratives can be long)."""
+    try:
+        value = float(getattr(settings, "ai_timeout_heavy_seconds", _DEFAULT_GEMINI_FALLBACK_TIMEOUT_SECONDS))
+    except (TypeError, ValueError):
+        return _DEFAULT_GEMINI_FALLBACK_TIMEOUT_SECONDS
+    return value if value > 0 else _DEFAULT_GEMINI_FALLBACK_TIMEOUT_SECONDS
+
+
 async def generate_text_for_tenant(
     db: AsyncSession,
     tenant_id: int,
@@ -175,10 +187,20 @@ async def generate_text_for_tenant(
         return None
     if not await allow_gemini_for_tenant(db, tenant_id):
         return None
-    # The Gemini SDK is blocking (network call, seconds); run it off the event loop.
-    text, model_name, pt, ct, tt = await asyncio.to_thread(
-        _raw_generate_text_sync, prompt, model_override=model_override
-    )
+    # The Gemini SDK is blocking (network call, seconds); run it off the event loop. The SDK call has no timeout of
+    # its own, so the request stops waiting after the bound (the worker thread finishes on its own in the background).
+    timeout_s = _gemini_fallback_timeout_seconds(s)
+    try:
+        text, model_name, pt, ct, tt = await asyncio.wait_for(
+            asyncio.to_thread(_raw_generate_text_sync, prompt, model_override=model_override),
+            timeout=timeout_s,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "gemini_tenant_text_timeout",
+            extra={"feature": feature, "tenant_id": tenant_id, "timeout_seconds": timeout_s},
+        )
+        return None
     if text:
         await record_gemini_usage(
             db,

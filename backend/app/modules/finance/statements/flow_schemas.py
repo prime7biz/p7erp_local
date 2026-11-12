@@ -102,6 +102,10 @@ class PrincipalGroup(BaseModel):
     value: OptMoney = None  # derived figure (turnover); `unit` explains it
     unit: str | None = None
     reason: str | None = None
+    # "Due till today" lines only (tenant setting finance_ar_ap_due_source): all open bills, the source and caveats.
+    total_open: OptMoney = None
+    source: str | None = None
+    note: str | None = None
 
 
 class PrincipalRatio(BaseModel):

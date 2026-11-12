@@ -6066,24 +6066,66 @@ async def costing_variance(
     quotation = await db.get(Quotation, order.quotation_id) if order.quotation_id else None
     planned = _to_float(quotation.total_cost if quotation else "0")
     # P7 currently has no actual-cost ledger bridge; use posted voucher amount as actual baseline.
-    posted = list(
+    # A reversal voucher carries the original's voucher number as reference (not the order code) and mirrors its
+    # lines, so it is followed through reverses_voucher_id: a voucher one reversal step away subtracts its CREDIT
+    # lines (= the original's DEBIT lines), two steps away adds its DEBIT lines again. A reversed pair nets to zero.
+    from app.modules.finance.advanced_voucher_service import voucher_counts_in_books_status_clause
+
+    matched = list(
         (
             await db.execute(
-                select(Voucher).where(
+                select(Voucher.id, Voucher.status, Voucher.reversed_by_voucher_id).where(
                     Voucher.tenant_id == tenant.id,
-                    Voucher.status == "POSTED",
+                    voucher_counts_in_books_status_clause(),
+                    Voucher.reverses_voucher_id.is_(None),
                     Voucher.reference == order.order_code,
                 )
             )
-        ).scalars().all()
+        ).all()
     )
-    actual = 0.0
-    if posted:
-        v_ids = [v.id for v in posted]
-        vl_rows = list(
-            (await db.execute(select(VoucherLine).where(VoucherLine.voucher_id.in_(v_ids)))).scalars().all()
+    signed_ids: dict[int, int] = {row.id: 1 for row in matched}
+    frontier = {row.id: 1 for row in matched if row.status == "REVERSED"}
+    for _depth in range(5):
+        if not frontier:
+            break
+        chain = list(
+            (
+                await db.execute(
+                    select(Voucher.id, Voucher.status, Voucher.reverses_voucher_id).where(
+                        Voucher.tenant_id == tenant.id,
+                        voucher_counts_in_books_status_clause(),
+                        Voucher.reverses_voucher_id.in_(list(frontier)),
+                    )
+                )
+            ).all()
         )
-        actual = sum(_to_float(line.amount) for line in vl_rows if line.entry_type == "DEBIT")
+        next_frontier: dict[int, int] = {}
+        for row in chain:
+            if row.id in signed_ids:
+                continue
+            sign = -frontier[row.reverses_voucher_id]
+            signed_ids[row.id] = sign
+            if row.status == "REVERSED":
+                next_frontier[row.id] = sign
+        frontier = next_frontier
+    actual = 0.0
+    if signed_ids:
+        vl_rows = list(
+            (
+                await db.execute(
+                    select(VoucherLine).where(
+                        VoucherLine.tenant_id == tenant.id,
+                        VoucherLine.voucher_id.in_(list(signed_ids)),
+                    )
+                )
+            ).scalars().all()
+        )
+        for line in vl_rows:
+            sign = signed_ids[line.voucher_id]
+            if sign > 0 and line.entry_type == "DEBIT":
+                actual += _to_float(line.amount)
+            elif sign < 0 and line.entry_type == "CREDIT":
+                actual -= _to_float(line.amount)
     return {
         "order_id": order.id,
         "order_code": order.order_code,

@@ -1,4 +1,4 @@
-"""Ratio Analysis (REFERENCE_REPORTS.md section 6, PLAN acceptance 2.9). SQL: 6 statements (limit 10).
+"""Ratio Analysis (REFERENCE_REPORTS.md section 6, PLAN acceptance 2.9). SQL: 6 statements, 7 with a due source (limit 10).
 
 Balance-sheet figures are the GL balances at `to_date`; income-statement figures cover from_date..to_date.
 Nett / gross result come from the P&L service (GL only, perpetual COGS). A ratio whose denominator is zero returns
@@ -13,8 +13,9 @@ Formulas (all on the figures above; CA / CL / Stock as in `flow_common`):
   ROI %                    = Nett / (Capital + Nett) * 100  Return on WC % = Nett / Working Capital * 100
   WC Turnover              = Sales / Working Capital        Inventory Turnover = Sales / Closing Stock
 Loans (Liability) = LONG_TERM_LOANS + SHORT_TERM_BORROWINGS + BANK_OD (credit balances positive).
-"Due till today" for debtors / creditors needs one authoritative bill-wise source (PLAN open question 8, not
-decided), so those two lines return null with a reason.
+"Due till today" for debtors / creditors needs one authoritative bill-wise source (PLAN open question 8). Until the
+tenant setting `finance_ar_ap_due_source` names one, those two lines return null with a reason; once set, they show
+the bills due on or before the to-date (plus `total_open`) from that source (`ar_ap_due_service`, +1 statement).
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.tenant import Tenant
 from app.modules.finance.fiscal_year import fiscal_year_bounds, fy_start_month
 from app.modules.finance.posting_core import BALANCE_TOLERANCE  # noqa: F401  (kept for symmetry with siblings)
+from app.modules.finance.statements.ar_ap_due_service import ArApDue, ar_ap_due_totals
 from app.modules.finance.statements.constants import (
     BANK_ACCOUNTS,
     BANK_OD,
@@ -50,7 +52,10 @@ from app.modules.finance.statements.ledger_aggregate_service import build_ledger
 from app.modules.finance.statements.profit_loss_service import build_profit_loss
 from app.modules.finance.statements.schemas import Reconciliation, StatementWarning
 
-DUE_REASON = "Bill-wise due dates need one authoritative AR/AP source, which is not decided yet (PLAN open question 8)."
+DUE_REASON = (
+    "Bill-wise due dates need one authoritative AR/AP source, which is not chosen yet (PLAN open question 8; "
+    "tenant setting finance_ar_ap_due_source)."
+)
 HUNDRED = Decimal("100")
 
 
@@ -89,6 +94,14 @@ def _group(code: str, label: str, net: Decimal | None, *, credit_normal: bool = 
     return PrincipalGroup(code=code, label=label, amount=abs(net), dr_cr=dr_cr_of(signed_debit))
 
 
+def _due_group(code: str, label: str, due: ArApDue | None, *, credit_normal: bool) -> PrincipalGroup:
+    if due is None:
+        return PrincipalGroup(code=code, label=label, reason=DUE_REASON)
+    amount, total_open = (due.creditors_due, due.creditors_open) if credit_normal else (due.debtors_due, due.debtors_open)
+    group = _group(code, label, amount, credit_normal=credit_normal)
+    return group.model_copy(update={"total_open": q4(total_open), "source": due.source, "note": due.note})
+
+
 async def build_ratio_analysis(
     db: AsyncSession, tenant: Tenant, *, from_date: date, to_date: date
 ) -> RatioAnalysisResponse:
@@ -122,6 +135,7 @@ async def build_ratio_analysis(
     equity = capital + nett
     days = Decimal((to_date - from_date).days + 1)
 
+    due = await ar_ap_due_totals(db, tenant, as_of=to_date)
     wc_turnover = _div(sales, working_capital)
     inv_turnover = _div(sales, stock)
     groups_out = [
@@ -130,9 +144,9 @@ async def build_ratio_analysis(
         _group("CASH_AT_BANK", "Cash at Bank", bank),
         _group("BANK_OD", "Bank OD A/c", bank_od, credit_normal=True),
         _group("SUNDRY_DEBTORS", "Sundry Debtors", debtors),
-        PrincipalGroup(code="SUNDRY_DEBTORS_DUE", label="Sundry Debtors due till today", reason=DUE_REASON),
+        _due_group("SUNDRY_DEBTORS_DUE", "Sundry Debtors due till today", due, credit_normal=False),
         _group("SUNDRY_CREDITORS", "Sundry Creditors", creditors, credit_normal=True),
-        PrincipalGroup(code="SUNDRY_CREDITORS_DUE", label="Sundry Creditors due till today", reason=DUE_REASON),
+        _due_group("SUNDRY_CREDITORS_DUE", "Sundry Creditors due till today", due, credit_normal=True),
         _group("SALES_ACCOUNTS", "Sales Accounts", sales, credit_normal=True),
         _group("PURCHASE_ACCOUNTS", "Purchase Accounts", purchases),
         _group("STOCK_IN_HAND", "Stock-in-hand", stock),

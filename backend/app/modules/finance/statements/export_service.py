@@ -18,6 +18,7 @@ import io
 from dataclasses import dataclass, field
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
+from app.common.spreadsheet_safety import neutralize_formula
 from app.modules.finance.statements.flow_schemas import (
     CashFlowResponse,
     FundsFlowResponse,
@@ -243,8 +244,8 @@ def table_ratios(r: RatioAnalysisResponse) -> ExportTable:
 
 # ---- writers -------------------------------------------------------------------------------------------
 def _safe_text(text: str) -> str:
-    """Spreadsheet formula injection guard: a cell that starts with = + - @ is stored as text."""
-    return "'" + text if text[:1] in ("=", "+", "-", "@") else text
+    """Spreadsheet formula injection guard (shared rule in `app.common.spreadsheet_safety`)."""
+    return neutralize_formula(text)
 
 
 def render_xlsx(table: ExportTable) -> bytes:

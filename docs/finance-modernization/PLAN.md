@@ -434,6 +434,15 @@ Done 2026-11-12: helper `voucher_counts_in_books_status_clause()` in `finance/ad
 `tests/test_finance_reversal_in_reports.py`. Open decisions: GST return lines (`gst_return_service`), order
 profitability by `reference` match, legacy budget enforcement (`budget_enforcement_v2=false`).
 
+Follow-up 2026-11-12: GST returns read `voucher_tax_lines`, which the reverse endpoint does not copy, so a reversed
+pair is left out on both sides (original by status, reversal voucher by `reverses_voucher_id`); limitation: reversing
+a reversal does not bring the original's tax back. `/finance/profitability/variance/{order_id}` uses the helper and
+follows the reversal chain (`reverses_voucher_id`, the reversal's reference is the original's voucher number), so a
+reversed pair nets to zero and a reversed reversal counts again. Legacy budget enforcement is unchanged.
+AR/AP "due till today" (open question 8): tenant setting `finance_ar_ap_due_source`
+(`outstanding_bills` | `party_ledger` | `bill_references`, unset = null + reason) in `statements/ar_ap_due_service.py`,
+also used by the Control Tower overdue cards when set.
+
 ### Phase 1 — Finance hubs and navigation compaction
 
 Size: **L**  

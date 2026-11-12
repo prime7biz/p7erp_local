@@ -24,6 +24,7 @@ from typing import Any
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.spreadsheet_safety import neutralize_formula
 from app.common.tenant_feature_keys import get_budget_enforcement_mode
 from app.models.finance import ChartOfAccount, CostCenter, Voucher, VoucherLine
 from app.modules.finance.budget_analytics.common import (
@@ -320,8 +321,8 @@ async def build_drilldown(
 
 # ---- CSV export ------------------------------------------------------------------------------------------------------
 def _csv_safe(text: str) -> str:
-    """Stop spreadsheet formula injection: a leading = + - @ (or tab / CR) is neutralised with a quote."""
-    return "'" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text
+    """Stop spreadsheet formula injection (shared rule in `app.common.spreadsheet_safety`)."""
+    return neutralize_formula(text)
 
 
 def analytics_to_csv(data: BudgetAnalyticsResponse) -> str:

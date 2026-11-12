@@ -27,6 +27,13 @@ async def _tax_rows_in_period(
     *,
     direction: str | None = None,
 ) -> list[tuple[VoucherTaxLine, Voucher, TaxLedger]]:
+    """Tax lines of POSTED, non-reversal vouchers in the period.
+
+    Returns read ``voucher_tax_lines``, which POST /vouchers/{id}/reverse does NOT copy to the reversal voucher.
+    So a reversed pair is left out on both sides (net zero): the original is REVERSED (excluded by status) and the
+    reversal voucher (``reverses_voucher_id`` set) is excluded explicitly. Counting the original with
+    ``voucher_counts_in_books_status_clause()`` here would report tax that the reversal cancelled in the GL.
+    """
     q = (
         select(VoucherTaxLine, Voucher, TaxLedger)
         .join(Voucher, Voucher.id == VoucherTaxLine.voucher_id)
@@ -37,6 +44,7 @@ async def _tax_rows_in_period(
             Voucher.voucher_date >= period_from,
             Voucher.voucher_date <= period_to,
             Voucher.status == "POSTED",
+            Voucher.reverses_voucher_id.is_(None),
         )
         .order_by(Voucher.voucher_date, Voucher.id, VoucherTaxLine.id)
     )

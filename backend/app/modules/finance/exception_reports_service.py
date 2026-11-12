@@ -53,17 +53,71 @@ def _iso(d: date | None) -> str | None:
     return d.isoformat() if d else None
 
 
-async def grn_not_billed(db: AsyncSession, tenant_id: int, *, limit: int, offset: int) -> tuple[list[dict], int]:
+def grn_not_billed_conditions(tenant_id: int) -> list:
+    """WHERE conditions of the "GRN not billed" check (shared with the Finance Control Tower cards)."""
     billed = exists().where(
         VendorBill.tenant_id == tenant_id,
         VendorBill.goods_receiving_id == GoodsReceiving.id,
         func.upper(VendorBill.status).notin_(CANCELLED),
     )
+    return [GoodsReceiving.tenant_id == tenant_id, GoodsReceiving.status == "RECEIVED", ~billed]
+
+
+def challan_not_invoiced_conditions(tenant_id: int) -> list:
+    """WHERE conditions of the "challan not invoiced" check (shared with the Finance Control Tower cards)."""
+    direct = exists().where(
+        CommercialInvoice.tenant_id == tenant_id,
+        CommercialInvoice.source_delivery_challan_id == DeliveryChallan.id,
+        func.upper(CommercialInvoice.status).notin_(CANCELLED),
+    )
+    via_order = exists().where(
+        DeliveryChallanOrder.tenant_id == tenant_id,
+        DeliveryChallanOrder.delivery_challan_id == DeliveryChallan.id,
+        CommercialInvoiceLine.order_id == DeliveryChallanOrder.order_id,
+        CommercialInvoiceLine.commercial_invoice_id == CommercialInvoice.id,
+        CommercialInvoice.tenant_id == tenant_id,
+        func.upper(CommercialInvoice.status).notin_(CANCELLED),
+    )
+    return [
+        DeliveryChallan.tenant_id == tenant_id,
+        DeliveryChallan.status == "POSTED",
+        ~direct,
+        ~via_order,
+    ]
+
+
+def negative_stock_select(tenant_id: int):
+    """Grouped item + warehouse on-hand query (negative only), unbounded. Columns: item_id, warehouse_id, on_hand,
+    item_code, item_name, warehouse_name, default_cost. Same rule as the inventory stock summary."""
+    qty = cast(StockMovement.quantity, Numeric)
+    signed = case((StockMovement.movement_type == "IN", qty), else_=-qty)
+    on_hand = func.coalesce(func.sum(signed), 0)
+    return (
+        select(
+            StockMovement.item_id,
+            StockMovement.warehouse_id,
+            on_hand.label("on_hand"),
+            Item.item_code,
+            Item.name,
+            Warehouse.name,
+            Item.default_cost,
+        )
+        .join(Item, and_(Item.id == StockMovement.item_id, Item.tenant_id == tenant_id))
+        .outerjoin(Warehouse, and_(Warehouse.id == StockMovement.warehouse_id, Warehouse.tenant_id == tenant_id))
+        .where(StockMovement.tenant_id == tenant_id)
+        .group_by(
+            StockMovement.item_id, StockMovement.warehouse_id, Item.item_code, Item.name, Warehouse.name, Item.default_cost
+        )
+        .having(on_hand < 0)
+    )
+
+
+async def grn_not_billed(db: AsyncSession, tenant_id: int, *, limit: int, offset: int) -> tuple[list[dict], int]:
     base = (
         select(GoodsReceiving, Vendor.name, PurchaseOrder.po_code)
         .outerjoin(Vendor, Vendor.id == GoodsReceiving.vendor_id)
         .outerjoin(PurchaseOrder, PurchaseOrder.id == GoodsReceiving.purchase_order_id)
-        .where(GoodsReceiving.tenant_id == tenant_id, GoodsReceiving.status == "RECEIVED", ~billed)
+        .where(*grn_not_billed_conditions(tenant_id))
     )
     total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
     rows = (
@@ -89,25 +143,7 @@ async def grn_not_billed(db: AsyncSession, tenant_id: int, *, limit: int, offset
 
 
 async def challan_not_invoiced(db: AsyncSession, tenant_id: int, *, limit: int, offset: int) -> tuple[list[dict], int]:
-    direct = exists().where(
-        CommercialInvoice.tenant_id == tenant_id,
-        CommercialInvoice.source_delivery_challan_id == DeliveryChallan.id,
-        func.upper(CommercialInvoice.status).notin_(CANCELLED),
-    )
-    via_order = exists().where(
-        DeliveryChallanOrder.tenant_id == tenant_id,
-        DeliveryChallanOrder.delivery_challan_id == DeliveryChallan.id,
-        CommercialInvoiceLine.order_id == DeliveryChallanOrder.order_id,
-        CommercialInvoiceLine.commercial_invoice_id == CommercialInvoice.id,
-        CommercialInvoice.tenant_id == tenant_id,
-        func.upper(CommercialInvoice.status).notin_(CANCELLED),
-    )
-    base = select(DeliveryChallan).where(
-        DeliveryChallan.tenant_id == tenant_id,
-        DeliveryChallan.status == "POSTED",
-        ~direct,
-        ~via_order,
-    )
+    base = select(DeliveryChallan).where(*challan_not_invoiced_conditions(tenant_id))
     total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
     rows = (
         await db.execute(
@@ -172,19 +208,8 @@ async def negative_cash_bank(db: AsyncSession, tenant_id: int, *, as_of: date) -
 
 async def negative_stock(db: AsyncSession, tenant_id: int, *, limit: int) -> list[dict]:
     # Same rule as the inventory stock summary: IN adds, every other movement type subtracts.
-    qty = cast(StockMovement.quantity, Numeric)
-    signed = case((StockMovement.movement_type == "IN", qty), else_=-qty)
-    on_hand = func.coalesce(func.sum(signed), 0)
-    stmt = (
-        select(StockMovement.item_id, StockMovement.warehouse_id, on_hand.label("on_hand"), Item.item_code, Item.name, Warehouse.name)
-        .join(Item, and_(Item.id == StockMovement.item_id, Item.tenant_id == tenant_id))
-        .outerjoin(Warehouse, Warehouse.id == StockMovement.warehouse_id)
-        .where(StockMovement.tenant_id == tenant_id)
-        .group_by(StockMovement.item_id, StockMovement.warehouse_id, Item.item_code, Item.name, Warehouse.name)
-        .having(on_hand < 0)
-        .order_by(on_hand.asc())
-        .limit(limit)
-    )
+    stmt = negative_stock_select(tenant_id)
+    stmt = stmt.order_by(stmt.selected_columns.on_hand.asc()).limit(limit)
     return [
         {
             "item_id": item_id,
@@ -194,7 +219,7 @@ async def negative_stock(db: AsyncSession, tenant_id: int, *, limit: int) -> lis
             "warehouse_name": wh_name,
             "on_hand": round(_f(oh), 4),
         }
-        for item_id, wh_id, oh, code, name, wh_name in (await db.execute(stmt)).all()
+        for item_id, wh_id, oh, code, name, wh_name, _cost in (await db.execute(stmt)).all()
     ]
 
 

@@ -7984,3 +7984,8 @@ async def finance_maturity_ladder(
 from app.modules.finance.statements.router import router as _statements_router  # noqa: E402
 
 router.include_router(_statements_router)
+
+# Control Tower + GL profitability (finance_control_tower_v2, read-only). Also mounted from here; main.py untouched.
+from app.modules.finance.control.router import router as _control_router  # noqa: E402
+
+router.include_router(_control_router)

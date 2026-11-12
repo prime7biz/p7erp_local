@@ -1,26 +1,29 @@
 """XLSX / PDF export of the six statements (PLAN "Export", acceptance 2.17).
 
 The export is built from the SAME response object the JSON endpoint returns (no separate math): each statement is
-flattened into one `ExportTable` of text cells (lakh / crore grouping, `(-)` for negatives, Dr / Cr suffix on
-balances), and the table is written to openpyxl (xlsx) or reportlab (pdf). Both libraries are already in
-requirements.txt and are imported lazily so a missing package cannot stop the app from starting.
+flattened into one `ExportTable`, and the table is written to openpyxl (xlsx) or reportlab (pdf). Both libraries
+are already in requirements.txt and are imported lazily so a missing package cannot stop the app from starting.
 
-Amounts in the files are text rounded to 2 places for reading (JSON keeps 4 places); a spreadsheet cannot sum them,
-which is the price of the lakh / crore display.
+Amount cells are `Amt` objects. The PDF prints them as text (lakh / crore grouping, `(-)` for negatives, Dr / Cr suffix
+on balances). The XLSX stores them as NUMBERS (Decimal rounded half-up to 2 places, so Excel can sum them; JSON keeps
+4 places) and shows the same lakh / crore text through a per-cell Excel number format (`excel_number_format`).
+Excel formats allow only two conditions and cannot group by 2 digits, so the format is chosen per cell from the digit
+count of its rounded value, with exactly that many digit slots (`##\\,##\\,##0.00` for 7 digits) plus a negative section.
+Balances keep their sign in the value (debit positive, credit negative) and show it as " Dr" / " Cr".
 """
 
 from __future__ import annotations
 
 import io
 from dataclasses import dataclass, field
-from decimal import Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
 from app.modules.finance.statements.flow_schemas import (
     CashFlowResponse,
     FundsFlowResponse,
     RatioAnalysisResponse,
 )
-from app.modules.finance.statements.money_format import format_dr_cr, format_indian
+from app.modules.finance.statements.money_format import format_dr_cr, format_indian, group_indian_digits
 from app.modules.finance.statements.schemas import (
     BalanceSheetResponse,
     Envelope,
@@ -41,9 +44,47 @@ REPORT_TITLES = {
 }
 
 
+@dataclass(frozen=True)
+class Amt:
+    """An amount cell. `drcr=True`: a debit-minus-credit balance shown with a Dr / Cr suffix."""
+
+    value: Decimal
+    drcr: bool = False
+
+    @property
+    def rounded(self) -> Decimal:
+        return Decimal(self.value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    def text(self) -> str:
+        return format_dr_cr(self.value) if self.drcr else format_indian(self.value)
+
+
+Cell = str | Amt
+
+
+def cell_text(cell: Cell) -> str:
+    return cell.text() if isinstance(cell, Amt) else cell
+
+
+def excel_number_format(amount: Amt) -> str:
+    """Excel number format that shows the rounded value with lakh / crore grouping.
+
+    Digit slots equal the digit count of the rounded integer part, so no leading comma appears:
+    1,23,456.00 -> `#\\,##\\,##0.00`, 12,34,567.00 -> `##\\,##\\,##0.00`. Negative section: `"(-)"` + the same pattern, or
+    " Cr" for a Dr / Cr balance (the value is debit minus credit, so a negative value is a credit).
+    """
+    rounded = amount.rounded
+    digits = len(format(abs(rounded).quantize(Decimal(1), rounding=ROUND_DOWN), "f"))
+    slots = group_indian_digits("x" * digits)
+    body = slots[:-1].replace("x", "#").replace(",", "\\,") + "0.00"
+    if amount.drcr and rounded != ZERO:
+        return f'{body}" Dr";{body}" Cr"'
+    return f'{body};"(-)"{body}'
+
+
 @dataclass
 class ExportRow:
-    cells: list[str]
+    cells: list[Cell]
     bold: bool = False
     indent: int = 0
 
@@ -79,8 +120,12 @@ def _new(env: Envelope, report: str, columns: list[str]) -> ExportTable:
     )
 
 
-def _money(value: Decimal | None) -> str:
-    return format_indian(value) if value is not None else ""
+def _money(value: Decimal | None) -> Cell:
+    return Amt(value) if value is not None else ""
+
+
+def _drcr(value: Decimal | None) -> Cell:
+    return Amt(value, drcr=True) if value is not None else ""
 
 
 # ---- flatteners ----------------------------------------------------------------------------------------
@@ -91,7 +136,7 @@ def table_trial_balance(r: TrialBalanceResponse) -> ExportTable:
         net_close = row.closing_debit - row.closing_credit
         t.rows.append(
             ExportRow(
-                [row.name, format_dr_cr(net_open), _money(row.period_debit), _money(row.period_credit), format_dr_cr(net_close)],
+                [row.name, _drcr(net_open), _money(row.period_debit), _money(row.period_credit), _drcr(net_close)],
                 bold=row.row_type in ("primary", "profit_and_loss"),
                 indent=row.depth,
             )
@@ -101,10 +146,10 @@ def table_trial_balance(r: TrialBalanceResponse) -> ExportTable:
         ExportRow(
             [
                 "Grand Total",
-                f"{format_indian(tot.opening_debit)} Dr",
+                _drcr(tot.opening_debit),
                 _money(tot.period_debit),
                 _money(tot.period_credit),
-                f"{format_indian(tot.closing_debit)} Dr",
+                _drcr(tot.closing_debit),
             ],
             bold=True,
         )
@@ -152,12 +197,12 @@ def table_profit_loss(r: ProfitLossResponse) -> ExportTable:
 
 def table_cash_flow(r: CashFlowResponse) -> ExportTable:
     t = _new(r, "cash-flow-monthly", ["Month", "Inflow", "Outflow", "Nett Flow", "Closing Cash"])
-    t.rows.append(ExportRow(["Opening Cash", "", "", "", format_dr_cr(r.opening_cash)], bold=True))
+    t.rows.append(ExportRow(["Opening Cash", "", "", "", _drcr(r.opening_cash)], bold=True))
     for m in r.months:
-        t.rows.append(ExportRow([m.label, _money(m.inflow), _money(m.outflow), _money(m.nett_flow), format_dr_cr(m.closing_cash)]))
+        t.rows.append(ExportRow([m.label, _money(m.inflow), _money(m.outflow), _money(m.nett_flow), _drcr(m.closing_cash)]))
     g = r.grand_total
     t.rows.append(
-        ExportRow(["Grand Total", _money(g.inflow), _money(g.outflow), _money(g.nett_flow), format_dr_cr(g.closing_cash)], bold=True)
+        ExportRow(["Grand Total", _money(g.inflow), _money(g.outflow), _money(g.nett_flow), _drcr(g.closing_cash)], bold=True)
     )
     return t
 
@@ -166,12 +211,12 @@ def table_funds_flow(r: FundsFlowResponse) -> ExportTable:
     t = _new(r, "funds-flow-monthly", ["Month", "Working Capital Opening", "Working Capital Closing", "Funds Flow"])
     for m in r.months:
         t.rows.append(
-            ExportRow([m.label, format_dr_cr(m.working_capital_opening), format_dr_cr(m.working_capital_closing), _money(m.funds_flow)])
+            ExportRow([m.label, _drcr(m.working_capital_opening), _drcr(m.working_capital_closing), _money(m.funds_flow)])
         )
     g = r.grand_total
     t.rows.append(
         ExportRow(
-            ["Grand Total", format_dr_cr(g.working_capital_opening), format_dr_cr(g.working_capital_closing), _money(g.funds_flow)],
+            ["Grand Total", _drcr(g.working_capital_opening), _drcr(g.working_capital_closing), _money(g.funds_flow)],
             bold=True,
         )
     )
@@ -222,10 +267,14 @@ def render_xlsx(table: ExportTable) -> bytes:
         ws.cell(row=header_row, column=c).font = Font(bold=True)
         ws.cell(row=header_row, column=c).alignment = Alignment(horizontal="left" if c == 1 else "right")
     for row in table.rows:
-        ws.append([_safe_text(row.cells[0])] + [_safe_text(c) for c in row.cells[1:]])
+        # amounts are written as numbers (Decimal, 2 places); only text cells get the formula-injection guard
+        ws.append([_safe_text(row.cells[0])] + [c.rounded if isinstance(c, Amt) else _safe_text(c) for c in row.cells[1:]])
         r = ws.max_row
         for c in range(1, len(table.columns) + 1):
             cell = ws.cell(row=r, column=c)
+            source = row.cells[c - 1] if c - 1 < len(row.cells) else ""
+            if isinstance(source, Amt):
+                cell.number_format = excel_number_format(source)
             cell.font = Font(bold=row.bold)
             cell.alignment = Alignment(horizontal="left" if c == 1 else "right", indent=row.indent if c == 1 else 0)
     ws.column_dimensions["A"].width = 44
@@ -265,7 +314,9 @@ def render_pdf(table: ExportTable) -> bytes:
         buf, pagesize=page, leftMargin=15 * mm, rightMargin=15 * mm, topMargin=36 * mm, bottomMargin=16 * mm,
         title=f"{table.company} - {table.title}",
     )
-    data = [table.columns] + [[("  " * row.indent) + row.cells[0]] + row.cells[1:] for row in table.rows]
+    data = [table.columns] + [
+        [("  " * row.indent) + cell_text(row.cells[0])] + [cell_text(c) for c in row.cells[1:]] for row in table.rows
+    ]
     grid = Table(data, repeatRows=1)
     style = [
         ("FONTSIZE", (0, 0), (-1, -1), 8),

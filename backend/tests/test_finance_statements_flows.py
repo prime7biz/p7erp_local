@@ -502,11 +502,25 @@ async def test_drill_cash_flow_month_ledgers_equal_the_month_row(db_session_inte
 EXPORTS = ("trial-balance", "balance-sheet", "profit-loss", "cash-flow-monthly", "funds-flow-monthly", "ratio-analysis")
 
 
-def _xlsx_rows(content: bytes) -> list[list[str]]:
+def _xlsx_rows(content: bytes) -> list[list]:
+    """Raw cell values: text stays text, amounts are numbers (Excel can sum them)."""
     from openpyxl import load_workbook
 
     ws = load_workbook(io.BytesIO(content)).active
-    return [[("" if c is None else str(c)) for c in row] for row in ws.iter_rows(values_only=True)]
+    return [[("" if c is None else c) for c in row] for row in ws.iter_rows(values_only=True)]
+
+
+def _xlsx_formats(content: bytes) -> list[list[str]]:
+    from openpyxl import load_workbook
+
+    ws = load_workbook(io.BytesIO(content)).active
+    return [[c.number_format for c in row] for row in ws.iter_rows()]
+
+
+def _num(cell) -> Decimal:
+    """An amount cell must be a real number, never text."""
+    assert isinstance(cell, (int, float, Decimal)) and not isinstance(cell, bool), repr(cell)
+    return Decimal(str(cell))
 
 
 @pytest.mark.asyncio
@@ -518,13 +532,14 @@ async def test_export_xlsx_totals_equal_json_for_every_statement(db_session_inte
     await db.flush()
     params = {"fiscal_year": 2026}
     async with api_client(db, tenant, user) as ac:
-        files = {}
+        files, formats = {}, {}
         for report in EXPORTS:
             r = await ac.get(f"{API}/{report}/export", params={"format": "xlsx", **params})
             assert r.status_code == 200, (report, r.text)
             assert r.headers["content-type"].startswith("application/vnd.openxmlformats")
             assert f'{report}-2026.xlsx' in r.headers["content-disposition"] and r.headers["cache-control"] == "no-store"
             files[report] = _xlsx_rows(r.content)
+            formats[report] = _xlsx_formats(r.content)
         tb = (await _get(ac, "trial-balance", **params)).json()
         bs = (await _get(ac, "balance-sheet", **params)).json()
         cash = (await _get(ac, "cash-flow-monthly", **params)).json()
@@ -535,29 +550,79 @@ async def test_export_xlsx_totals_equal_json_for_every_statement(db_session_inte
         assert "2026" in rows[3][0] and "BDT" in rows[3][0]
     # Trial Balance: Grand Total row equals the JSON totals
     grand = next(r for r in files["trial-balance"] if r[0] == "Grand Total")
-    assert parse_indian(grand[1]) == D(tb["totals"]["opening_debit"]).quantize(D("0.01"))
-    assert parse_indian(grand[2]) == D(tb["totals"]["period_debit"]) and parse_indian(grand[3]) == D(tb["totals"]["period_credit"])
-    assert parse_indian(grand[4]) == D(tb["totals"]["closing_debit"])
-    assert grand[4].endswith(" Dr")
+    assert _num(grand[1]) == D(tb["totals"]["opening_debit"]).quantize(D("0.01"))
+    assert _num(grand[2]) == D(tb["totals"]["period_debit"]) and _num(grand[3]) == D(tb["totals"]["period_credit"])
+    assert _num(grand[4]) == D(tb["totals"]["closing_debit"])
+    assert _num(grand[4]) > 0  # debit-minus-credit balance: positive = Dr, shown by the number format
+    tb_fmt = {r[0]: f for r, f in zip(files["trial-balance"], formats["trial-balance"])}
+    gt_pos, gt_neg = tb_fmt["Grand Total"][4].split(";")
+    assert gt_pos.endswith(' Dr"') and gt_neg.endswith(' Cr"')  # sign of the value decides Dr / Cr
     cash_row = next(r for r in files["trial-balance"] if r[0] == "Cash in Hand")
-    assert cash_row[4] == "92,100.00 Dr"
+    assert _num(cash_row[4]) == D("92100") and tb_fmt["Cash in Hand"][4] == r'##\,##0.00" Dr";##\,##0.00" Cr"' # 5 digits
     # Balance Sheet
-    assert parse_indian(next(r for r in files["balance-sheet"] if r[0] == "Total Liabilities")[2]) == D(bs["totals"]["liabilities"])
-    assert parse_indian(next(r for r in files["balance-sheet"] if r[0] == "Total Assets")[2]) == D(bs["totals"]["assets"])
+    assert _num(next(r for r in files["balance-sheet"] if r[0] == "Total Liabilities")[2]) == D(bs["totals"]["liabilities"])
+    assert _num(next(r for r in files["balance-sheet"] if r[0] == "Total Assets")[2]) == D(bs["totals"]["assets"])
     # Cash flow: lakh formatting in the sheet, values equal JSON
     g = next(r for r in files["cash-flow-monthly"] if r[0] == "Grand Total")
-    assert parse_indian(g[1]) == D(cash["grand_total"]["inflow"]) and parse_indian(g[3]) == D(cash["grand_total"]["nett_flow"])
-    assert g[4] == "98,700.00 Dr"
+    assert _num(g[1]) == D(cash["grand_total"]["inflow"]) and _num(g[3]) == D(cash["grand_total"]["nett_flow"])
+    assert _num(g[4]) == D("98700")
     june = next(r for r in files["cash-flow-monthly"] if r[0] == "Jun 2026")
-    assert (parse_indian(june[1]), parse_indian(june[2])) == (D(1000), D(6100))
+    assert (_num(june[1]), _num(june[2])) == (D(1000), D(6100))
     # Funds flow and ratios
     fg = next(r for r in files["funds-flow-monthly"] if r[0] == "Grand Total")
-    assert parse_indian(fg[3]) == D(funds["grand_total"]["funds_flow"]) == D(33200)
+    assert _num(fg[3]) == D(funds["grand_total"]["funds_flow"]) == D(33200)
     cr = next(r for r in files["ratio-analysis"] if r[0] == "Current Ratio")
     assert cr[1] == "9.66 : 1" and next(q for q in ratios["principal_ratios"] if q["code"] == "CURRENT_RATIO")["display"] == cr[1]
     # P&L carries its gross and nett result lines
-    assert any(r[0] == "Nett Profit" and parse_indian(r[2]) == D(32100) for r in files["profit-loss"])
+    assert any(r[0] == "Nett Profit" and _num(r[2]) == D(32100) for r in files["profit-loss"])
 
+def test_excel_number_format_picks_exact_lakh_crore_slots_per_cell():
+    from app.modules.finance.statements.export_service import Amt, excel_number_format
+
+    cases = {
+        "0": r'0.00;"(-)"0.00',
+        "999.99": r'##0.00;"(-)"##0.00',
+        "1234.5": r'#\,##0.00;"(-)"#\,##0.00',
+        "123456": r'#\,##\,##0.00;"(-)"#\,##\,##0.00',
+        "1234567": r'##\,##\,##0.00;"(-)"##\,##\,##0.00',
+        "12345678": r'#\,##\,##\,##0.00;"(-)"#\,##\,##\,##0.00',
+        "-1234567": r'##\,##\,##0.00;"(-)"##\,##\,##0.00',
+        "99999.999": r'#\,##\,##0.00;"(-)"#\,##\,##0.00',  # rounds to 100,000.00 -> 6 digits
+    }
+    for value, fmt in cases.items():
+        assert excel_number_format(Amt(Decimal(value))) == fmt, value
+    # Dr / Cr balances: the sign of the value picks the suffix; zero has none.
+    assert excel_number_format(Amt(Decimal("1234567"), drcr=True)) == r'##\,##\,##0.00" Dr";##\,##\,##0.00" Cr"'
+    assert excel_number_format(Amt(Decimal("-5"), drcr=True)) == r'0.00" Dr";0.00" Cr"'
+    assert excel_number_format(Amt(Decimal("0"), drcr=True)) == r'0.00;"(-)"0.00'
+
+
+@pytest.mark.asyncio
+async def test_export_xlsx_amounts_are_numbers_and_sum_to_the_json_total(db_session_integration):
+    """Excel can sum the amount cells: every amount is numeric, and the column adds up to the JSON total."""
+    pytest.importorskip("openpyxl")
+    db = db_session_integration
+    tenant, user, _w = await seed_cash_world(db)
+    async with api_client(db, tenant, user) as ac:
+        x = await ac.get(f"{API}/cash-flow-monthly/export", params={"fiscal_year": 2026, "format": "xlsx"})
+        cash = (await _get(ac, "cash-flow-monthly", fiscal_year=2026)).json()
+        tbx = await ac.get(f"{API}/trial-balance/export", params={"fiscal_year": 2026, "format": "xlsx"})
+        tb = (await _get(ac, "trial-balance", fiscal_year=2026)).json()
+    rows = _xlsx_rows(x.content)
+    month_rows = [r for r in rows if isinstance(r[0], str) and r[0][:3] in ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                                                          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+                  and r[0][-4:].isdigit()]
+    assert len(month_rows) == 12
+    for col in (1, 2, 3):  # inflow, outflow, nett flow are numbers in every month row
+        assert all(isinstance(r[col], (int, float)) for r in month_rows)
+    assert sum(_num(r[1]) for r in month_rows) == D(cash["grand_total"]["inflow"]).quantize(D("0.01"))
+    assert sum(_num(r[3]) for r in month_rows) == D(cash["grand_total"]["nett_flow"]).quantize(D("0.01"))
+    # Trial Balance: summing the ledger rows' Debit column (leaf rows) is not asserted (groups nest), but the Grand Total
+    # is numeric and equals the JSON total.
+    tb_rows = _xlsx_rows(tbx.content)
+    grand = next(r for r in tb_rows if r[0] == "Grand Total")
+    assert all(isinstance(grand[c], (int, float)) for c in (1, 2, 3, 4))
+    assert _num(grand[2]) == D(tb["totals"]["period_debit"]).quantize(D("0.01"))
 
 @pytest.mark.asyncio
 async def test_export_pdf_and_lakh_crore_in_files(db_session_integration):
@@ -575,9 +640,10 @@ async def test_export_pdf_and_lakh_crore_in_files(db_session_integration):
     assert x.status_code == 200
     rows = _xlsx_rows(x.content)
     dec = next(r for r in rows if r[0] == "Dec 2026")
-    assert dec[1] == "18,13,86,300.26"  # crore grouping
+    assert _num(dec[1]) == D("181386300.26")  # a real number, not text
+    assert _xlsx_formats(x.content)[rows.index(dec)][1] == r'##\,##\,##\,##0.00;"(-)"##\,##\,##\,##0.00'  # 9 digits: crore grouping
     closing = D("98700") + D("181386300.26")
-    assert next(r for r in rows if r[0] == "Grand Total")[4] == f"{format_indian(closing)} Dr"
+    assert _num(next(r for r in rows if r[0] == "Grand Total")[4]) == closing
 
 
 @pytest.mark.asyncio
@@ -589,7 +655,9 @@ async def test_export_negative_values_use_tally_style(db_session_integration):
     async with api_client(db, tenant, user) as ac:
         x = await ac.get(f"{API}/cash-flow-monthly/export", params={"fiscal_year": 2026, "format": "xlsx"})
     dec = next(r for r in _xlsx_rows(x.content) if r[0] == "Dec 2026")
-    assert dec[2] == "1,23,456.00" and dec[3] == "(-)1,23,456.00"  # nett flow negative -> (-)
+    fmt = _xlsx_formats(x.content)[_xlsx_rows(x.content).index(dec)]
+    assert _num(dec[2]) == D(123456) and _num(dec[3]) == D(-123456)  # numbers: nett flow keeps its minus sign
+    assert fmt[2] == r'#\,##\,##0.00;"(-)"#\,##\,##0.00'  # 6 digits -> 1,23,456.00; negatives show "(-)" through the format
 
 
 @pytest.mark.asyncio

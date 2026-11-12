@@ -26,7 +26,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.business_date import today_local
@@ -36,7 +36,10 @@ from app.common.tenant_feature_keys import (
     is_budget_enforcement_v2_enabled,
 )
 from app.models.finance import AccountGroup, Budget, BudgetLine, ChartOfAccount, Voucher, VoucherLine
-from app.modules.finance.advanced_voucher_service import voucher_in_books_clause
+from app.modules.finance.advanced_voucher_service import (
+    voucher_counts_in_books_status_clause,
+    voucher_in_books_clause,
+)
 from app.modules.finance.budget_vs_actual_service import (
     RULE_DEBIT_MINUS_CREDIT,
     budget_line_period,
@@ -238,7 +241,7 @@ async def _evaluate_v2(
             VoucherLine.tenant_id == tenant_id,
             Voucher.tenant_id == tenant_id,
             Voucher.id != voucher.id,
-            Voucher.status.in_(("POSTED", *PENDING_STATUSES)),
+            or_(voucher_counts_in_books_status_clause(), Voucher.status.in_(PENDING_STATUSES)),
             voucher_in_books_clause(),
             VoucherLine.cost_center_id.in_({int(t[0].cost_center_id) for t in touched}),
             Voucher.voucher_date >= min(t[2] for t in touched),
@@ -273,7 +276,7 @@ async def _evaluate_v2(
             if not applies(line, cc, acct) or not (start <= month_start <= end):
                 continue
             spend = _signed_spend(rule_of(acct), entry_type, amount)
-            if status == "POSTED":
+            if status in ("POSTED", "REVERSED"):  # REVERSED rows here always carry a reversal link
                 used += spend
             else:
                 pending += spend

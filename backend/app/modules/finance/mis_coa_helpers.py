@@ -11,7 +11,10 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.finance import AccountGroup, ChartOfAccount, Voucher, VoucherLine
-from app.modules.finance.advanced_voucher_service import voucher_in_books_clause
+from app.modules.finance.advanced_voucher_service import (
+    voucher_counts_in_books_status_clause,
+    voucher_in_books_clause,
+)
 from app.modules.finance.posting_core import line_base_amount_sql
 
 ZERO = Decimal("0")
@@ -42,7 +45,7 @@ def _posted_lines_filters(tenant_id: int, last_date: date) -> list[Any]:
     return [
         VoucherLine.tenant_id == tenant_id,
         Voucher.tenant_id == tenant_id,
-        Voucher.status == "POSTED",
+        voucher_counts_in_books_status_clause(),
         voucher_in_books_clause(),
         Voucher.voucher_date <= last_date,
     ]

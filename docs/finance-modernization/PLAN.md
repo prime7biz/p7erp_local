@@ -430,21 +430,9 @@ cost-centre dashboard, budget vs actual and budget enforcement, MIS snapshot hel
 link (legacy bare flips) stays excluded. Response shapes unchanged. Tests: post, reverse, and assert every report
 nets to zero; legacy bare `REVERSED` excluded; cross-tenant.
 
-### Phase 0b — Reversed vouchers in classic reports (found during Phase 2, 2026-11-12)
-
-Size: **M**. No flag (defect fix). CRITICAL.
-
-Reversing a voucher sets the original to `REVERSED` (`reversed_by_voucher_id` set) and posts a new opposite voucher
-(`router.py` ~6690-6750). Classic reports filter `Voucher.status == "POSTED"` (for example
-`_posted_movement_by_account`, `router.py` ~3258), so they drop the original but keep the reversal: a reversed
-voucher shows as **minus** its amount instead of zero. The new statements count `POSTED` plus `REVERSED` with a
-reversal link (`statements/ledger_aggregate_service.py`).
-
-Scope: one shared SQL helper for "counts in the books" status, used by every classic GL report and calculation that
-today filters `status == "POSTED"` for balances (trial balance, financial statements, ledger activity, cash flow,
-cost-centre dashboard, budget vs actual and budget enforcement, MIS snapshot helpers). `REVERSED` without a reversal
-link (legacy bare flips) stays excluded. Response shapes unchanged. Tests: post, reverse, and assert every report
-nets to zero; legacy bare `REVERSED` excluded; cross-tenant.
+Done 2026-11-12: helper `voucher_counts_in_books_status_clause()` in `finance/advanced_voucher_service.py`; test
+`tests/test_finance_reversal_in_reports.py`. Open decisions: GST return lines (`gst_return_service`), order
+profitability by `reference` match, legacy budget enforcement (`budget_enforcement_v2=false`).
 
 ### Phase 1 — Finance hubs and navigation compaction
 

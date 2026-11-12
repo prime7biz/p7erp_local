@@ -23,7 +23,10 @@ from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.finance import ChartOfAccount, Voucher, VoucherLine
-from app.modules.finance.advanced_voucher_service import voucher_in_books_clause
+from app.modules.finance.advanced_voucher_service import (
+    voucher_counts_in_books_status_clause,
+    voucher_in_books_clause,
+)
 from app.modules.finance.posting_core import line_base_amount_sql
 from app.modules.finance.statements.classification_service import GroupInfo, load_group_classification
 from app.modules.finance.statements.constants import (
@@ -66,10 +69,7 @@ def _q(value: Decimal | None) -> Decimal:
 
 
 def _in_statement_status():
-    return or_(
-        Voucher.status == "POSTED",
-        and_(Voucher.status == "REVERSED", Voucher.reversed_by_voucher_id.is_not(None)),
-    )
+    return voucher_counts_in_books_status_clause()
 
 
 async def build_ledger_calcs(

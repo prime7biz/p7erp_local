@@ -45,7 +45,11 @@ from app.common.permissions import (
     require_internal_permission,
 )
 from app.common.authz import get_user_role_scoped_to_tenant
-from app.modules.finance.advanced_voucher_service import voucher_book_impact_applied, voucher_in_books_clause
+from app.modules.finance.advanced_voucher_service import (
+    voucher_book_impact_applied,
+    voucher_counts_in_books_status_clause,
+    voucher_in_books_clause,
+)
 from app.modules.audit.service import log_action
 from app.modules.finance.budget_enforcement_service import evaluate_voucher_budget
 from app.modules.finance.statements.schemas import validate_statement_class
@@ -3271,7 +3275,7 @@ async def _posted_movement_by_account(
         .where(
             VoucherLine.tenant_id == tenant_id,
             Voucher.tenant_id == tenant_id,
-            Voucher.status == "POSTED",
+            voucher_counts_in_books_status_clause(),
             voucher_in_books_clause(),
             Voucher.voucher_date <= as_of_date,
         )
@@ -3520,7 +3524,7 @@ async def cash_flow_statement(
                     VoucherLine.account_id.in_(list(cash_accounts)),
                     Voucher.tenant_id == tenant.id,
                     Voucher.voucher_date < from_date,
-                    Voucher.status == "POSTED",
+                    voucher_counts_in_books_status_clause(),
                     voucher_in_books_clause(),
                 )
                 .group_by(VoucherLine.account_id)
@@ -3538,7 +3542,7 @@ async def cash_flow_statement(
                 select(Voucher)
                 .where(
                     Voucher.tenant_id == tenant.id,
-                    Voucher.status == "POSTED",
+                    voucher_counts_in_books_status_clause(),
                     voucher_in_books_clause(),
                     Voucher.voucher_date >= from_date,
                     Voucher.voucher_date <= to_date,
@@ -4521,7 +4525,7 @@ async def cost_center_dashboard(
             VoucherLine.tenant_id == tenant.id,
             VoucherLine.cost_center_id.isnot(None),
             Voucher.tenant_id == tenant.id,
-            Voucher.status == "POSTED",
+            voucher_counts_in_books_status_clause(),
             voucher_in_books_clause(),
             *([Voucher.voucher_date >= from_date] if from_date is not None else []),
             *([Voucher.voucher_date <= to_date] if to_date is not None else []),
@@ -4853,7 +4857,7 @@ async def _bank_book_balance(db: AsyncSession, tenant_id: int, bank: BankAccount
                 VoucherLine.tenant_id == tenant_id,
                 Voucher.tenant_id == tenant_id,
                 VoucherLine.account_id == account.id,
-                Voucher.status == "POSTED",
+                voucher_counts_in_books_status_clause(),
                 voucher_in_books_clause(),
                 Voucher.voucher_date <= as_of,
             )
@@ -7061,7 +7065,7 @@ async def ledger_activity_report(
             VoucherLine.account_id == account_id,
             Voucher.voucher_date >= from_date,
             Voucher.voucher_date <= to_date,
-            Voucher.status == "POSTED",
+            voucher_counts_in_books_status_clause(),
             voucher_in_books_clause(),
         )
         .order_by(Voucher.voucher_date.asc(), Voucher.id.asc(), VoucherLine.id.asc())
@@ -7081,7 +7085,7 @@ async def ledger_activity_report(
                 VoucherLine.account_id == account_id,
                 Voucher.tenant_id == tenant.id,
                 Voucher.voucher_date < from_date,
-                Voucher.status == "POSTED",
+                voucher_counts_in_books_status_clause(),
                 voucher_in_books_clause(),
             )
         )

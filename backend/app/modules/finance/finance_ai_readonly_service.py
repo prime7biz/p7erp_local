@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.business_date import today_local
 from app.models import PaymentRun, Voucher, VoucherLine
+from app.modules.finance.advanced_voucher_service import voucher_counts_in_books_status_clause
 
 
 def _margin_proxy_from_rows(rows: list[tuple[Any, Any, Any, Any]]) -> list[dict[str, Any]]:
@@ -114,7 +115,7 @@ async def build_finance_readonly_insights(
         .where(
             Voucher.tenant_id == tenant_id,
             VoucherLine.tenant_id == tenant_id,
-            Voucher.status == "POSTED",
+            voucher_counts_in_books_status_clause(),
             Voucher.voucher_date >= start_date,
         )
         .group_by("y", "m")

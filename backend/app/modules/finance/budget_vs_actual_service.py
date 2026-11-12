@@ -24,7 +24,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.finance import AccountGroup, Budget, BudgetLine, ChartOfAccount, Voucher, VoucherLine
-from app.modules.finance.advanced_voucher_service import voucher_in_books_clause
+from app.modules.finance.advanced_voucher_service import (
+    voucher_counts_in_books_status_clause,
+    voucher_in_books_clause,
+)
 from app.modules.finance.fiscal_year import fiscal_year_bounds_from_label, fy_start_month
 from app.modules.finance.posting_core import line_base_amount_sql
 
@@ -120,7 +123,7 @@ async def compute_budget_vs_actual(db: AsyncSession, tenant: Any, budget: Budget
                 func.coalesce(func.sum(line_base_amount_sql()), 0),
             )
             .join(Voucher, VoucherLine.voucher_id == Voucher.id)
-            .where(VoucherLine.tenant_id == tenant.id, Voucher.status == "POSTED", voucher_in_books_clause())
+            .where(VoucherLine.tenant_id == tenant.id, voucher_counts_in_books_status_clause(), voucher_in_books_clause())
             .group_by(VoucherLine.account_id, VoucherLine.cost_center_id, VoucherLine.entry_type, year_col, month_col)
         )
         if all(start is not None for _, start, _ in periods.values()):

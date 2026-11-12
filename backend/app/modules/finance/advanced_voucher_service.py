@@ -86,6 +86,20 @@ def voucher_in_books_clause():
     )
 
 
+def voucher_counts_in_books_status_clause():
+    """SQL status rule for GL balance / report maths (Phase 0b).
+
+    POST /vouchers/{id}/reverse keeps the original's book impact, flips it to REVERSED (with
+    ``reversed_by_voucher_id``) and posts an opposite POSTED voucher. Both must count so the pair nets to zero.
+    A REVERSED voucher WITHOUT a reversal link (legacy bare flip) stays excluded. Combine with
+    ``voucher_in_books_clause()``. Do NOT use this for workflow / state checks.
+    """
+    return or_(
+        Voucher.status == "POSTED",
+        and_(Voucher.status == "REVERSED", Voucher.reversed_by_voucher_id.is_not(None)),
+    )
+
+
 def voucher_visible_in_day_book(voucher: Voucher, *, as_of: date | None = None) -> bool:
     """Active books vouchers (and posted CN/DN etc.) appear in day book; memo/held registers do not."""
     as_of = as_of or today_local()

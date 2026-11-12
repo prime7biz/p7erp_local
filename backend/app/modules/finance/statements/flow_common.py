@@ -17,7 +17,10 @@ from sqlalchemy import and_, case, func, or_
 from sqlalchemy import Integer, cast
 
 from app.models.finance import Voucher
-from app.modules.finance.advanced_voucher_service import voucher_in_books_clause
+from app.modules.finance.advanced_voucher_service import (
+    voucher_counts_in_books_status_clause,
+    voucher_in_books_clause,
+)
 from app.modules.finance.statements.classification_service import GroupInfo
 from app.modules.finance.statements.constants import (
     BANK_ACCOUNTS,
@@ -69,7 +72,7 @@ def year_month_sql(column=Voucher.voucher_date):
 def voucher_statement_clause():
     """POSTED, or REVERSED with its reversal posted (same rule as ledger_aggregate_service), and in the books."""
     return and_(
-        or_(Voucher.status == "POSTED", and_(Voucher.status == "REVERSED", Voucher.reversed_by_voucher_id.is_not(None))),
+        voucher_counts_in_books_status_clause(),
         voucher_in_books_clause(),
     )
 

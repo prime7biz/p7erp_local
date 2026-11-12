@@ -7994,3 +7994,8 @@ router.include_router(_control_router)
 from app.modules.finance.budget_analytics.router import router as _budget_analytics_router  # noqa: E402
 
 router.include_router(_budget_analytics_router)
+
+# Governed read-only finance AI: statement commentary (finance_ai_insights_v2). main.py untouched.
+from app.modules.finance.ai_insights.router import router as _ai_insights_router  # noqa: E402
+
+router.include_router(_ai_insights_router)

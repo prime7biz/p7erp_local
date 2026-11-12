@@ -73,6 +73,7 @@ def test_newly_gated_routers_use_expected_keys():
         f"{API}/inventory/stock-groups": "inventory.access",
         f"{API}/finance/party-ledgers": "finance.access",
         f"{API}/finance/statements": "finance.access",
+        f"{API}/finance/statements/commentary": "finance.access",
         f"{API}/finance/control-tower": "finance.access",
         f"{API}/finance/profitability/orders": "finance.access",
         f"{API}/finance/budget-analytics": "finance.access",

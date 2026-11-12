@@ -10,15 +10,22 @@ from __future__ import annotations
 
 import json
 from datetime import date
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.business_date import today_local
-from app.common.permissions import PERMISSION_MIS_REPORT_VIEW, assert_soft_permission_allowed, require_internal_permission
+from app.common.pagination import MAX_PAGE_SIZE
+from app.common.permissions import (
+    PERMISSION_MIS_REPORT_EXPORT,
+    PERMISSION_MIS_REPORT_VIEW,
+    assert_soft_permission_allowed,
+    require_internal_permission,
+)
 from app.common.tenant import require_tenant
 from app.common.tenant_feature_keys import is_finance_statements_v2_enabled
 from app.database import get_db
@@ -34,7 +41,22 @@ from app.modules.finance.statements.classification_service import (
     load_group_classification,
 )
 from app.modules.finance.statements.constants import MAX_GROUP_DEPTH, STATEMENT_CLASS_SET
+from app.modules.finance.statements.cash_flow_service import build_cash_flow
+from app.modules.finance.statements.drill_service import drill_cash_flow_month, drill_group, drill_ledger
+from app.modules.finance.statements.export_service import build_table, render_pdf, render_xlsx
+from app.modules.finance.statements.flow_schemas import (
+    CashFlowResponse,
+    DrillCashFlowResponse,
+    DrillGroupResponse,
+    DrillLedgerResponse,
+    FundsFlowResponse,
+    RatioAnalysisResponse,
+    StockGlResponse,
+)
+from app.modules.finance.statements.funds_flow_service import build_funds_flow
 from app.modules.finance.statements.profit_loss_service import build_profit_loss
+from app.modules.finance.statements.ratio_service import build_ratio_analysis
+from app.modules.finance.statements.stock_gl_service import build_stock_gl
 from app.modules.finance.statements.schemas import (
     AffectedGroup,
     BalanceSheetResponse,
@@ -138,6 +160,167 @@ async def profit_loss(
     await _report_gate(db, tenant, user)
     start, end = _fiscal_range(tenant, from_date, to_date, fiscal_year)
     return await build_profit_loss(db, tenant, from_date=start, to_date=end, include_zero=include_zero)
+
+
+# ---- reports: monthly flows, ratios, stock control (second half) ---------------------------------------
+@router.get("/statements/cash-flow-monthly", response_model=CashFlowResponse)
+async def cash_flow_monthly(
+    fiscal_year: int | None = Query(default=None, ge=1900, le=9990),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _report_gate(db, tenant, user)
+    return await build_cash_flow(db, tenant, fiscal_year=fiscal_year, today=today_local(tenant))
+
+
+@router.get("/statements/funds-flow-monthly", response_model=FundsFlowResponse)
+async def funds_flow_monthly(
+    fiscal_year: int | None = Query(default=None, ge=1900, le=9990),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _report_gate(db, tenant, user)
+    return await build_funds_flow(db, tenant, fiscal_year=fiscal_year, today=today_local(tenant))
+
+
+def _ratio_range(
+    tenant: Tenant, from_date: date | None, to_date: date | None, as_of_date: date | None, fiscal_year: int | None
+) -> tuple[date, date]:
+    if as_of_date is not None:
+        if from_date is not None or to_date is not None or fiscal_year is not None:
+            raise HTTPException(status_code=422, detail="Use as_of_date alone, or from_date/to_date, or fiscal_year")
+        return fiscal_year_bounds(as_of_date, fy_start_month(tenant.feature_flags))[0], as_of_date
+    return _fiscal_range(tenant, from_date, to_date, fiscal_year)
+
+
+@router.get("/statements/ratio-analysis", response_model=RatioAnalysisResponse)
+async def ratio_analysis(
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
+    as_of_date: date | None = Query(default=None),
+    fiscal_year: int | None = Query(default=None, ge=1900, le=9990),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _report_gate(db, tenant, user)
+    start, end = _ratio_range(tenant, from_date, to_date, as_of_date, fiscal_year)
+    return await build_ratio_analysis(db, tenant, from_date=start, to_date=end)
+
+
+@router.get("/statements/stock-gl-reconciliation", response_model=StockGlResponse)
+async def stock_gl_reconciliation(
+    as_of_date: date | None = Query(default=None),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _report_gate(db, tenant, user)
+    return await build_stock_gl(db, tenant, as_of_date=as_of_date or today_local(tenant))
+
+
+# ---- drill-down ----------------------------------------------------------------------------------------
+@router.get("/statements/drill/group", response_model=DrillGroupResponse)
+async def drill_group_level(
+    group_id: int = Query(ge=1),
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _report_gate(db, tenant, user)
+    return await drill_group(
+        db, tenant, group_id=group_id, from_date=from_date, to_date=to_date, today=today_local(tenant)
+    )
+
+
+@router.get("/statements/drill/ledger", response_model=DrillLedgerResponse)
+async def drill_ledger_level(
+    account_id: int = Query(ge=1),
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _report_gate(db, tenant, user)
+    return await drill_ledger(
+        db, tenant, account_id=account_id, from_date=from_date, to_date=to_date,
+        today=today_local(tenant), limit=limit, offset=offset,
+    )
+
+
+@router.get("/statements/drill/cash-flow", response_model=DrillCashFlowResponse)
+async def drill_cash_flow_level(
+    month: str = Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$", description="YYYY-MM inside the fiscal year"),
+    fiscal_year: int | None = Query(default=None, ge=1900, le=9990),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _report_gate(db, tenant, user)
+    return await drill_cash_flow_month(db, tenant, fiscal_year=fiscal_year, month=month, today=today_local(tenant))
+
+
+# ---- export (xlsx / pdf) -------------------------------------------------------------------------------
+_EXPORT_TYPES = {
+    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "pdf": "application/pdf",
+}
+
+
+@router.get("/statements/{report}/export")
+async def export_statement(
+    report: Literal["trial-balance", "balance-sheet", "profit-loss", "cash-flow-monthly", "funds-flow-monthly", "ratio-analysis"],
+    format: Literal["xlsx", "pdf"] = Query(default="xlsx"),
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
+    as_of_date: date | None = Query(default=None),
+    fiscal_year: int | None = Query(default=None, ge=1900, le=9990),
+    include_zero: bool = Query(default=False),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Same numbers as the JSON report (built by the same service), written as XLSX or PDF."""
+    await _report_gate(db, tenant, user)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_MIS_REPORT_EXPORT)
+    today = today_local(tenant)
+    if report == "trial-balance":
+        start, end = _fiscal_range(tenant, from_date, to_date, fiscal_year)
+        data = await build_trial_balance(db, tenant, from_date=start, to_date=end, include_zero=include_zero)
+    elif report == "balance-sheet":
+        if fiscal_year is not None and as_of_date is not None:
+            raise HTTPException(status_code=422, detail="Use either fiscal_year or as_of_date, not both")
+        if fiscal_year is not None:
+            month = fy_start_month(tenant.feature_flags)
+            as_of_date = fiscal_year_bounds(date(fiscal_year, month, 1), month)[1]
+        data = await build_balance_sheet(db, tenant, as_of_date=as_of_date or today, include_zero=include_zero)
+    elif report == "profit-loss":
+        start, end = _fiscal_range(tenant, from_date, to_date, fiscal_year)
+        data = await build_profit_loss(db, tenant, from_date=start, to_date=end, include_zero=include_zero)
+    elif report == "cash-flow-monthly":
+        data = await build_cash_flow(db, tenant, fiscal_year=fiscal_year, today=today)
+    elif report == "funds-flow-monthly":
+        data = await build_funds_flow(db, tenant, fiscal_year=fiscal_year, today=today)
+    else:
+        start, end = _ratio_range(tenant, from_date, to_date, as_of_date, fiscal_year)
+        data = await build_ratio_analysis(db, tenant, from_date=start, to_date=end)
+    table = build_table(report, data)
+    content = render_xlsx(table) if format == "xlsx" else render_pdf(table)
+    return Response(
+        content=content,
+        media_type=_EXPORT_TYPES[format],
+        headers={
+            "Content-Disposition": f'attachment; filename="{report}-{data.period.fiscal_year}.{format}"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 # ---- setup: account group statement class --------------------------------------------------------------

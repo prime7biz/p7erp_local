@@ -1502,6 +1502,34 @@ export const tutorialHelpIndex: TutorialHelpEntry[] = [
     ]
   },
   {
+    "id": "fin-tally-statements",
+    "title": "Tally-style statements",
+    "summary": "Trial Balance, Balance Sheet, Trading and Profit & Loss, monthly Cash Flow and Funds Flow, Ratio Analysis and Stock vs Ledger in the classic Tally layout, with drill-down, Excel, PDF and print.",
+    "relatedAppRoutes": [
+      "/app/finance/statements",
+      "/app/finance/statements/trial-balance",
+      "/app/finance/statements/balance-sheet",
+      "/app/finance/statements/profit-loss",
+      "/app/finance/statements/cash-flow",
+      "/app/finance/statements/funds-flow",
+      "/app/finance/statements/ratio-analysis",
+      "/app/finance/statements/stock-vs-ledger",
+      "/app/accounts/groups"
+    ]
+  },
+  {
+    "id": "fin-control-tower-profitability",
+    "title": "Finance Control Tower and profitability",
+    "summary": "A Finance Home of exception cards (GRNs not billed, overdue bills, negative cash, budget breaches...) and real order, style, LC and buyer profit taken from the posted books.",
+    "relatedAppRoutes": [
+      "/app/finance/home",
+      "/app/finance/profitability",
+      "/app/finance/profitability/orders",
+      "/app/finance/profitability/entity",
+      "/app/accounts/groups"
+    ]
+  },
+  {
     "id": "fin-rpt-overview",
     "title": "Finance books & reports map",
     "summary": "Which finance report answers which question, where to find it in the sidebar, and how all reports come from posted vouchers.",

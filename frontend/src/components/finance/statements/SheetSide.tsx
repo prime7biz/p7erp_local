@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { SheetNode } from "@/api/financeStatements";
+import { isOpeningDifferenceRow, OPENING_DIFFERENCE_ROW_CLASS } from "./openingDifference";
 import { formatCell, formatIndian } from "./statementFormat";
 
 export interface FlatSheetRow {
@@ -57,23 +58,30 @@ export function SheetSide({ title, nodes, totalLabel, total, onDrill, emptyText 
             </tr>
           ) : (
             rows.map(({ key, depth, node }) => {
-              const drillable = !!onDrill && node.id != null && (node.row_type === "group" || node.row_type === "ledger");
+              const openingDiff = isOpeningDifferenceRow(node);
+              const drillable =
+                !!onDrill && !openingDiff && node.id != null && (node.row_type === "group" || node.row_type === "ledger");
               const strong = node.row_type === "primary" || node.row_type === "result";
+              const tone = openingDiff ? OPENING_DIFFERENCE_ROW_CLASS : "text-text-primary";
               return (
-                <tr key={key} className={`border-t border-border-subtle ${node.row_type === "primary" ? "bg-surface-subtle/50" : ""}`}>
+                <tr
+                  key={key}
+                  data-testid={openingDiff ? "opening-difference-row" : undefined}
+                  className={`border-t border-border-subtle ${node.row_type === "primary" ? "bg-surface-subtle/50" : ""}`}
+                >
                   <td className="px-3 py-1.5" style={{ paddingLeft: 12 + depth * 16 }}>
                     {drillable ? (
                       <button type="button" className="text-left text-brand-primary hover:underline print:text-inherit" onClick={() => onDrill?.(node)}>
                         {node.name}
                       </button>
                     ) : (
-                      <span className={`${strong ? "font-semibold" : ""} ${node.row_type === "result" ? "italic" : ""} text-text-primary`}>
+                      <span className={`${strong ? "font-semibold" : ""} ${node.row_type === "result" ? "italic" : ""} ${tone}`}>
                         {node.name}
                       </span>
                     )}
                   </td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-text-secondary">{formatCell(node.inner_amount)}</td>
-                  <td className={`px-3 py-1.5 text-right tabular-nums ${strong ? "font-semibold" : ""} text-text-primary`}>
+                  <td className={`px-3 py-1.5 text-right tabular-nums ${strong ? "font-semibold" : ""} ${tone}`}>
                     {formatCell(node.outer_amount)}
                   </td>
                 </tr>

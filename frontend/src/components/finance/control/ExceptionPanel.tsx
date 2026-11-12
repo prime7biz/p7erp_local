@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { RefreshCw, X } from "lucide-react";
 import type { ControlCard } from "@/api/financeControl";
+import { DUE_SOURCE_CHANGE_HINT, dueSourceText } from "@/components/finance/settings/arApDueSource";
 import { EXCEPTION_PAGE_SIZE, useExceptionList } from "@/hooks/useFinanceControl";
 import { amountText, currencyNote, detailPairs, exceptionRowHref, isLastPage, SEVERITY_CHIP, SEVERITY_LABEL } from "./controlLogic";
 
@@ -39,6 +40,8 @@ export function ExceptionPanel({ card, asOf, currency, onClose }: Props) {
   if (!card) return null;
   const severity = data?.severity ?? card.severity;
   const note = data?.note ?? card.note;
+  const source = data?.source ?? card.source;
+  const sourceAutomatic = data ? data.source_automatic : card.source_automatic;
   const countChanged = !!data && data.total !== card.count;
 
   return (
@@ -74,6 +77,12 @@ export function ExceptionPanel({ card, asOf, currency, onClose }: Props) {
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto">
+          {source ? (
+            <p className="border-b border-border-subtle px-4 py-2 text-xs text-text-muted" data-testid="exception-source">
+              <span className="rounded bg-surface-subtle px-1.5 py-0.5">{dueSourceText(source, sourceAutomatic)}</span>
+              {sourceAutomatic === true ? <span className="ml-2">{DUE_SOURCE_CHANGE_HINT}</span> : null}
+            </p>
+          ) : null}
           {note ? (
             <p className="border-b border-border-subtle px-4 py-2 text-xs text-status-warning-foreground" data-testid="exception-note">
               {note}

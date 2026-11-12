@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { SheetNode } from "@/api/financeStatements";
 import { DrillPanel, type DrillTarget } from "@/components/finance/statements/DrillPanel";
+import { isOpeningDifferenceRow } from "@/components/finance/statements/openingDifference";
 import { SheetSide } from "@/components/finance/statements/SheetSide";
 import { fiscalYearStartOf } from "@/components/finance/statements/statementPeriod";
 import { StatementPageFrame } from "@/components/finance/statements/StatementPageFrame";
@@ -19,7 +20,7 @@ export function BalanceSheetStatementPage() {
   const resource = useBalanceSheetStatement(query, enabled);
 
   const openDrill = (node: SheetNode) => {
-    if (node.id == null) return;
+    if (node.id == null || isOpeningDifferenceRow(node)) return;
     setDrill(node.row_type === "ledger" ? { kind: "ledger", id: node.id, name: node.name } : { kind: "group", id: node.id, name: node.name });
   };
 

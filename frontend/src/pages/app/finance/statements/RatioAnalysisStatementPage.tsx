@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { PrincipalGroup, PrincipalRatio } from "@/api/financeStatements";
+import { DUE_SOURCE_CHANGE_HINT, dueSourceText } from "@/components/finance/settings/arApDueSource";
 import { formatIndian, formatWithSide } from "@/components/finance/statements/statementFormat";
 import { initialPeriod, rangeQuery } from "@/components/finance/statements/statementPeriod";
 import { StatementPageFrame } from "@/components/finance/statements/StatementPageFrame";
@@ -15,28 +16,12 @@ function groupText(g: PrincipalGroup): string {
   return NO_VALUE;
 }
 
-/** "Due till today" lines get their amount from the bill source chosen in Settings. */
-const DUE_GROUP_CODES = new Set(["SUNDRY_DEBTORS_DUE", "SUNDRY_CREDITORS_DUE"]);
-const DUE_SOURCE_HINT = "Choose the bill source in Settings → Configuration → Finance.";
-
-const SOURCE_LABELS: Record<string, string> = {
-  outstanding_bills: "Outstanding bills",
-  party_ledger: "Party ledgers",
-  bill_references: "Bill references",
-};
-
-function dueSourceLabel(source: string): string {
-  return SOURCE_LABELS[source] ?? source;
-}
-
-/** Extra lines under a principal group: total open, bill source and note (or the setting hint). */
+/** Extra lines under a principal group: total open, bill source and note (plus the setting hint when chosen automatically). */
 function GroupDetails({ g }: { g: PrincipalGroup }) {
   const missing = g.amount == null && g.value == null;
-  const isDue = DUE_GROUP_CODES.has(g.code);
   return (
     <>
       {missing && g.reason ? <p className="text-xs text-text-muted">{g.reason}</p> : null}
-      {missing && isDue ? <p className="text-xs text-text-muted">{DUE_SOURCE_HINT}</p> : null}
       {g.total_open != null ? (
         <p className="text-xs text-text-secondary" data-testid={`total-open-${g.code}`}>
           Total open: <span className="tabular-nums">{formatIndian(g.total_open)}</span>
@@ -47,10 +32,15 @@ function GroupDetails({ g }: { g: PrincipalGroup }) {
           className="mt-0.5 inline-block rounded bg-surface-subtle px-1.5 py-0.5 text-[11px] text-text-muted"
           data-testid={`source-${g.code}`}
         >
-          Source: {dueSourceLabel(g.source)}
+          {dueSourceText(g.source, g.source_automatic)}
         </span>
       ) : null}
       {g.note ? <p className="text-[11px] text-text-muted">{g.note}</p> : null}
+      {g.source && g.source_automatic === true ? (
+        <p className="text-[11px] text-text-muted" data-testid={`source-hint-${g.code}`}>
+          {DUE_SOURCE_CHANGE_HINT}
+        </p>
+      ) : null}
     </>
   );
 }

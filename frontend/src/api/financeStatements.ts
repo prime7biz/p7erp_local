@@ -37,6 +37,20 @@ export interface StatementWarning {
 export interface StatementReconciliation {
   balanced: boolean;
   difference: Money;
+  /**
+   * Trial Balance / Balance Sheet only: stored debit-side minus credit-side opening balances (signed).
+   * Non-zero = the sheet carries a "Difference in opening balances" line and `difference` is what is left after it.
+   */
+  opening_difference?: Money;
+}
+
+/**
+ * Trial Balance / Balance Sheet reconciliation (always carries the opening difference).
+ * The synthetic line has code DIFFERENCE_IN_OPENING_BALANCES and the warning code is OPENING_BALANCE_DIFFERENCE
+ * (constants in `components/finance/statements/openingDifference.ts`).
+ */
+export interface SheetReconciliation extends StatementReconciliation {
+  opening_difference: Money;
 }
 
 export interface StatementEnvelope {
@@ -51,7 +65,9 @@ export interface StatementEnvelope {
 
 // ---------------------------------------------------------------- Trial Balance
 export interface TrialBalanceRow {
-  row_type: "primary" | "group" | "ledger" | "profit_and_loss";
+  row_type: "primary" | "group" | "ledger" | "profit_and_loss" | "opening_difference";
+  /** DIFFERENCE_IN_OPENING_BALANCES on the synthetic opening-difference row. */
+  code?: string | null;
   id?: number | null;
   parent_id?: number | null;
   name: string;
@@ -64,7 +80,10 @@ export interface TrialBalanceRow {
   closing_debit: Money;
   closing_credit: Money;
   dr_cr: DrCr;
-  drilldown: { kind: "primary" | "group" | "ledger" | "unclassified" | "profit_and_loss"; id?: number | null };
+  drilldown: {
+    kind: "primary" | "group" | "ledger" | "unclassified" | "profit_and_loss" | "opening_difference";
+    id?: number | null;
+  };
 }
 
 export interface TrialBalanceTotals {
@@ -79,12 +98,15 @@ export interface TrialBalanceTotals {
 export interface TrialBalanceStatement extends StatementEnvelope {
   rows: TrialBalanceRow[];
   totals: TrialBalanceTotals;
+  reconciliation: SheetReconciliation;
 }
 
 // ---------------------------------------------------------------- two-sided statements
 export interface SheetNode {
   name: string;
-  row_type: "primary" | "group" | "ledger" | "result";
+  row_type: "primary" | "group" | "ledger" | "result" | "opening_difference";
+  /** DIFFERENCE_IN_OPENING_BALANCES on the synthetic opening-difference line. */
+  code?: string | null;
   id?: number | null;
   inner_amount?: Money | null;
   outer_amount?: Money | null;
@@ -96,6 +118,7 @@ export interface BalanceSheetStatement extends StatementEnvelope {
   assets: SheetNode[];
   profit_and_loss: { opening: Money; current_period: Money; amount: Money; side: "liabilities" | "assets" };
   totals: { liabilities: Money; assets: Money; difference: Money };
+  reconciliation: SheetReconciliation;
 }
 
 export interface StockMemo {
@@ -188,6 +211,8 @@ export interface PrincipalGroup {
   /** "Due till today" lines only (tenant setting finance_ar_ap_due_source): all open bills, the bill source and caveats. */
   total_open?: Money | null;
   source?: string | null;
+  /** True = no bill source set in Settings; the standard one was chosen automatically (the note says so). */
+  source_automatic?: boolean | null;
   note?: string | null;
 }
 

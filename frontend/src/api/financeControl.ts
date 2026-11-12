@@ -23,6 +23,8 @@ export interface ControlCard {
   oldest_date?: string | null;
   href: string;
   source?: string | null;
+  /** Overdue cards: true = no AR/AP bill source set in Settings, the standard one was chosen automatically. */
+  source_automatic?: boolean | null;
   note?: string | null;
 }
 
@@ -56,6 +58,7 @@ export interface ExceptionListResponse {
   limit: number;
   offset: number;
   source?: string | null;
+  source_automatic?: boolean | null;
   note?: string | null;
   rows: ExceptionRow[];
 }

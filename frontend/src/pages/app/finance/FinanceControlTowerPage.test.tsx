@@ -149,6 +149,57 @@ describe("Finance Control Tower page", () => {
     expect(within(dialog).queryByText(/currency note:/)).toBeNull();
   });
 
+  it("labels an automatically chosen bill source on the overdue card and its list, with the Settings hint", async () => {
+    const AR = card("AR_OVERDUE", {
+      label: "Receivables overdue",
+      severity: "high",
+      count: 1,
+      amount: "700.0000",
+      source: "party_ledger",
+      source_automatic: true,
+      note: "Chosen automatically (no AR/AP source set in Settings): the party ledger when it is switched on, else outstanding bills.",
+    });
+    h.api.getControlTower.mockResolvedValue(tower([AR, GRN]));
+    h.api.getExceptions.mockResolvedValue(
+      exceptionList(AR, [{ id: 3, reference: "PLB-003", date: "2026-10-01", party: "Buyer A", amount: "700.0000", details: {} }], {
+        source: "party_ledger",
+        source_automatic: true,
+        note: AR.note,
+      }),
+    );
+    renderPage();
+    expect(await screen.findByTestId("source-AR_OVERDUE")).toHaveTextContent("Source: Party ledgers (automatic)");
+    expect(screen.getByTestId("source-hint-AR_OVERDUE")).toHaveTextContent("Change the bill source in Settings → Configuration → Finance");
+    expect(screen.getByTestId("note-AR_OVERDUE")).toHaveTextContent("Chosen automatically");
+    // Cards without a bill source show neither.
+    expect(screen.queryByTestId("source-GRN_NOT_BILLED")).toBeNull();
+    expect(screen.queryByTestId("source-hint-GRN_NOT_BILLED")).toBeNull();
+    expect(screen.queryByText(/Choose the bill source/)).toBeNull();
+
+    fireEvent.click(screen.getByTestId("card-AR_OVERDUE"));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText("PLB-003");
+    const source = within(dialog).getByTestId("exception-source");
+    expect(source).toHaveTextContent("Source: Party ledgers (automatic)");
+    expect(source).toHaveTextContent("Change the bill source in Settings → Configuration → Finance");
+  });
+
+  it("shows a bill source chosen in Settings without '(automatic)' or the hint", async () => {
+    const AP = card("AP_OVERDUE", { label: "Payables overdue", severity: "high", count: 1, amount: "50.0000", source: "bill_references", source_automatic: false });
+    h.api.getControlTower.mockResolvedValue(tower([AP]));
+    h.api.getExceptions.mockResolvedValue(exceptionList(AP, [], { source: "bill_references", source_automatic: false }));
+    renderPage();
+    expect((await screen.findByTestId("source-AP_OVERDUE")).textContent).toBe("Source: Bill references");
+    expect(screen.queryByTestId("source-hint-AP_OVERDUE")).toBeNull();
+    fireEvent.click(screen.getByTestId("card-AP_OVERDUE"));
+    const dialog = await screen.findByRole("dialog");
+    await waitFor(() => expect(h.api.getExceptions).toHaveBeenCalled());
+    const source = await within(dialog).findByTestId("exception-source");
+    expect(source).toHaveTextContent("Source: Bill references");
+    expect(source).not.toHaveTextContent("automatic");
+    expect(source).not.toHaveTextContent("Change the bill source");
+  });
+
   it("opens a card straight from the address (?exception=)", async () => {
     h.api.getExceptions.mockResolvedValue(exceptionList(GRN, [], { total: 3 }));
     renderPage("/app/finance/home?tab=control-tower&exception=GRN_NOT_BILLED");

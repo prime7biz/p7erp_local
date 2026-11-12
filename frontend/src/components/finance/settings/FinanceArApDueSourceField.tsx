@@ -10,15 +10,15 @@ export const FINANCE_AR_AP_DUE_SOURCE_OPTIONS = [
   { value: "bill_references", label: "Bill references" },
 ] as const;
 
-const NOT_CHOSEN_LABEL = "Not chosen (ratios show no due amount)";
+const AUTOMATIC_LABEL = "Automatic (recommended): party ledgers when switched on, otherwise outstanding bills";
 
 const selectClass =
   "w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:opacity-80";
 
 interface Props {
-  /** Saved choice; undefined (or an unknown value) means "not chosen". */
+  /** Saved choice; undefined (or an unknown value) means "Automatic" (the backend picks the standard source). */
   value: string | undefined;
-  /** Called with the new choice, or undefined when the user picks "Not chosen" (the caller removes the key). */
+  /** Called with the new choice, or undefined when the user picks "Automatic" (the caller removes the key). */
   onChange: (next: string | undefined) => void;
   disabled?: boolean;
 }
@@ -45,7 +45,7 @@ export function FinanceArApDueSourceField({ value, onChange, disabled = false }:
         aria-describedby={helpId}
         onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)}
       >
-        <option value="">{NOT_CHOSEN_LABEL}</option>
+        <option value="">{AUTOMATIC_LABEL}</option>
         {FINANCE_AR_AP_DUE_SOURCE_OPTIONS.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
@@ -53,7 +53,8 @@ export function FinanceArApDueSourceField({ value, onChange, disabled = false }:
         ))}
       </select>
       <p id={helpId} className="text-xs text-text-muted">
-        Which bill records Ratio Analysis and the Finance Control Tower use for amounts due till today.
+        Which bill records Ratio Analysis and the Finance Control Tower use for amounts due till today. Leave it on
+        Automatic unless your company keeps its bills in one specific place.
       </p>
     </div>
   );

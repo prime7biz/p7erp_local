@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { TrialBalanceRow } from "@/api/financeStatements";
 import { DrillPanel, type DrillTarget } from "@/components/finance/statements/DrillPanel";
+import { isOpeningDifferenceRow, OPENING_DIFFERENCE_ROW_CLASS } from "@/components/finance/statements/openingDifference";
 import { formatCell } from "@/components/finance/statements/statementFormat";
 import { initialPeriod, rangeQuery } from "@/components/finance/statements/statementPeriod";
 import { StatementPageFrame } from "@/components/finance/statements/StatementPageFrame";
@@ -11,7 +12,7 @@ import { useStatementsEnabled, useTrialBalanceStatement } from "@/hooks/useFinan
 const th = "px-3 py-2 text-xs font-semibold uppercase tracking-wide text-text-muted";
 
 function drillTargetOf(row: TrialBalanceRow): DrillTarget | null {
-  if (row.id == null) return null;
+  if (row.id == null || isOpeningDifferenceRow(row)) return null;
   if (row.row_type === "group") return { kind: "group", id: row.id, name: row.name };
   if (row.row_type === "ledger") return { kind: "ledger", id: row.id, name: row.name };
   return null;
@@ -73,15 +74,20 @@ export function TrialBalanceStatementPage() {
                   data.rows.map((r, i) => {
                     const target = drillTargetOf(r);
                     const strong = r.row_type === "primary";
+                    const openingDiff = isOpeningDifferenceRow(r);
                     return (
-                      <tr key={`${r.row_type}-${r.id ?? i}-${i}`} className={`border-t border-border-subtle ${strong ? "bg-surface-subtle/60 font-semibold" : ""}`}>
+                      <tr
+                        key={`${r.row_type}-${r.id ?? i}-${i}`}
+                        data-testid={openingDiff ? "opening-difference-row" : undefined}
+                        className={`border-t border-border-subtle ${strong ? "bg-surface-subtle/60 font-semibold" : ""} ${openingDiff ? OPENING_DIFFERENCE_ROW_CLASS : ""}`}
+                      >
                         <td className="px-3 py-1.5" style={{ paddingLeft: 12 + r.depth * 16 }}>
                           {target ? (
                             <button type="button" className="text-left text-brand-primary hover:underline print:text-inherit" onClick={() => setDrill(target)}>
                               {r.name}
                             </button>
                           ) : (
-                            <span className={r.row_type === "profit_and_loss" ? "italic" : ""}>{r.name}</span>
+                            <span className={r.row_type === "profit_and_loss" || openingDiff ? "italic" : ""}>{r.name}</span>
                           )}
                         </td>
                         {[r.opening_debit, r.opening_credit, r.period_debit, r.period_credit, r.closing_debit, r.closing_credit].map((v, c) => (

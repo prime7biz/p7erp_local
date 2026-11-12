@@ -115,6 +115,60 @@ describe("Trial Balance statement", () => {
     expect(h.api.getTrialBalance).not.toHaveBeenCalled();
   });
 
+  it("shows the 'Difference in opening balances' row in italics without a drill-down, plus the notice and badge", async () => {
+    const base = tb();
+    h.api.getTrialBalance.mockResolvedValue({
+      ...base,
+      warnings: [{ code: "OPENING_BALANCE_DIFFERENCE", count: 1, amount: "1234.5000" }],
+      reconciliation: { balanced: true, difference: "0.0000", opening_difference: "1234.5000" },
+      rows: [
+        ...base.rows,
+        {
+          row_type: "opening_difference", code: "DIFFERENCE_IN_OPENING_BALANCES", id: null, name: "Difference in opening balances", depth: 0,
+          opening_debit: "0.0000", opening_credit: "1234.5000", period_debit: "0.0000", period_credit: "0.0000",
+          closing_debit: "0.0000", closing_credit: "1234.5000", dr_cr: "Cr", drilldown: { kind: "opening_difference", id: null },
+        },
+      ],
+    });
+    renderPage(<TrialBalanceStatementPage />);
+    const row = await screen.findByTestId("opening-difference-row");
+    expect(row).toHaveTextContent("Difference in opening balances");
+    expect(row.className).toContain("italic");
+    expect(row.className).toContain("text-status-warning-foreground");
+    expect(within(row).queryByRole("button")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Difference in opening balances" })).toBeNull();
+    fireEvent.click(within(row).getByText("Difference in opening balances"));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(h.api.drillGroup).not.toHaveBeenCalled();
+    expect(h.api.drillLedger).not.toHaveBeenCalled();
+
+    const notice = screen.getByTestId("opening-difference-notice");
+    expect(notice).toHaveTextContent(
+      'Opening balances do not match by 1,234.50 Dr. Tally shows this as "Difference in opening balances". A finance admin should correct the ledgers\' opening balances in Chart of Accounts.',
+    );
+    expect(within(notice).getByRole("link", { name: "Chart of Accounts" })).toHaveAttribute("href", "/app/accounts");
+    expect(screen.getByTestId("reconciliation-badge")).toHaveTextContent("Balanced (after opening difference)");
+  });
+
+  it("writes a credit-heavy opening difference as Cr", async () => {
+    h.api.getTrialBalance.mockResolvedValue({
+      ...tb(),
+      warnings: [{ code: "OPENING_BALANCE_DIFFERENCE", count: 1, amount: "-500.0000" }],
+      reconciliation: { balanced: true, difference: "0.0000", opening_difference: "-500.0000" },
+    });
+    renderPage(<TrialBalanceStatementPage />);
+    expect(await screen.findByTestId("opening-difference-notice")).toHaveTextContent("Opening balances do not match by 500.00 Cr.");
+  });
+
+  it("keeps the plain 'Balanced' badge when there is no opening difference", async () => {
+    h.api.getTrialBalance.mockResolvedValue({ ...tb(), reconciliation: { balanced: true, difference: "0.0000", opening_difference: "0.0000" } });
+    renderPage(<TrialBalanceStatementPage />);
+    const badge = await screen.findByTestId("reconciliation-badge");
+    expect(badge.textContent).toBe("Balanced");
+    expect(screen.queryByTestId("opening-difference-notice")).toBeNull();
+    expect(screen.queryByTestId("opening-difference-row")).toBeNull();
+  });
+
   it("opens the drill-down panel when a group is clicked", async () => {
     h.api.getTrialBalance.mockResolvedValue(tb());
     h.api.drillGroup.mockResolvedValue({
@@ -152,6 +206,37 @@ describe("Balance Sheet statement", () => {
     h.api.getBalanceSheet.mockResolvedValue(bs("5.0000", false));
     renderPage(<BalanceSheetStatementPage />);
     expect(await screen.findByText("Difference 5.00")).toBeInTheDocument();
+  });
+
+  it("shows the opening difference line without a drill-down, with the notice and badge", async () => {
+    const base = bs("0.0000", true);
+    h.api.getBalanceSheet.mockResolvedValue({
+      ...base,
+      warnings: [{ code: "OPENING_BALANCE_DIFFERENCE", count: 1, amount: "250.0000" }],
+      reconciliation: { balanced: true, difference: "0.0000", opening_difference: "250.0000" },
+      liabilities: [
+        { ...node("Current Liabilities", "250.0000"), children: [{ name: "Creditors", row_type: "group", id: 7, outer_amount: "250.0000", inner_amount: null, children: [] }] },
+        // id set on purpose: the line must still not open a drill-down.
+        { name: "Difference in opening balances", row_type: "opening_difference", code: "DIFFERENCE_IN_OPENING_BALANCES", id: 99, outer_amount: "250.0000", inner_amount: null, children: [] },
+      ],
+    });
+    renderPage(<BalanceSheetStatementPage />);
+    const row = await screen.findByTestId("opening-difference-row");
+    expect(row).toHaveTextContent("Difference in opening balances");
+    expect(row).toHaveTextContent("250.00");
+    const label = within(row).getByText("Difference in opening balances");
+    expect(label.className).toContain("italic");
+    expect(label.className).toContain("text-status-warning-foreground");
+    expect(within(row).queryByRole("button")).toBeNull();
+    // Normal groups still drill.
+    expect(screen.getByRole("button", { name: "Creditors" })).toBeInTheDocument();
+    fireEvent.click(label);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(h.api.drillGroup).not.toHaveBeenCalled();
+
+    expect(screen.getByTestId("opening-difference-notice")).toHaveTextContent("Opening balances do not match by 250.00 Dr.");
+    expect(screen.getByRole("link", { name: "Chart of Accounts" })).toHaveAttribute("href", "/app/accounts");
+    expect(screen.getByTestId("reconciliation-badge")).toHaveTextContent("Balanced (after opening difference)");
   });
 });
 
@@ -293,11 +378,40 @@ describe("Ratio Analysis statement", () => {
     expect(within(null1).getByText("Sales are zero")).toBeInTheDocument();
     expect(screen.getByTestId("group-SUNDRY_DEBTORS_DUE")).toHaveTextContent("—");
     expect(screen.getByText("No authoritative due-date source yet.")).toBeInTheDocument();
-    // No bill source chosen: tell the user where to choose one; nothing else is made up.
-    expect(screen.getByTestId("group-SUNDRY_DEBTORS_DUE")).toHaveTextContent("Choose the bill source in Settings → Configuration → Finance.");
+    // No source in the answer: nothing is made up and the old "Choose the bill source" hint is gone.
     expect(screen.queryByTestId("total-open-SUNDRY_DEBTORS_DUE")).toBeNull();
     expect(screen.queryByTestId("source-SUNDRY_DEBTORS_DUE")).toBeNull();
-    expect(screen.getByTestId("group-WORKING_CAPITAL")).not.toHaveTextContent("Choose the bill source");
+    expect(screen.queryByTestId("source-hint-SUNDRY_DEBTORS_DUE")).toBeNull();
+    expect(screen.queryByText(/Choose the bill source/)).toBeNull();
+  });
+
+  it("labels an automatically chosen bill source and says where to change it", async () => {
+    h.api.getRatioAnalysis.mockResolvedValue({
+      ...envelope("ratio_analysis"),
+      principal_groups: [
+        {
+          code: "SUNDRY_DEBTORS_DUE",
+          label: "Sundry Debtors due till today",
+          amount: "1000.0000",
+          dr_cr: "Dr",
+          total_open: "1500.0000",
+          source: "party_ledger",
+          source_automatic: true,
+          note: "Chosen automatically (no AR/AP source set in Settings): the party ledger when it is switched on, else outstanding bills.",
+        },
+        { code: "WORKING_CAPITAL", label: "Working Capital", amount: "100.0000", dr_cr: "Dr" },
+      ],
+      principal_ratios: [],
+    });
+    renderPage(<RatioAnalysisStatementPage />);
+    const debtors = await screen.findByTestId("group-SUNDRY_DEBTORS_DUE");
+    expect(screen.getByTestId("source-SUNDRY_DEBTORS_DUE")).toHaveTextContent("Source: Party ledgers (automatic)");
+    expect(debtors).toHaveTextContent("Chosen automatically");
+    expect(screen.getByTestId("source-hint-SUNDRY_DEBTORS_DUE")).toHaveTextContent(
+      "Change the bill source in Settings → Configuration → Finance",
+    );
+    expect(screen.queryByTestId("source-hint-WORKING_CAPITAL")).toBeNull();
+    expect(screen.queryByText(/Choose the bill source/)).toBeNull();
   });
 
   it("shows due till today, total open, the bill source and its note once a source is chosen", async () => {
@@ -311,6 +425,7 @@ describe("Ratio Analysis statement", () => {
           dr_cr: "Dr",
           total_open: "250000.0000",
           source: "outstanding_bills",
+          source_automatic: false,
           note: "Amounts count only BDT bills; 2 open foreign-currency bill(s) are left out.",
         },
         {
@@ -331,8 +446,11 @@ describe("Ratio Analysis statement", () => {
     expect(screen.getByTestId("total-open-SUNDRY_DEBTORS_DUE")).toHaveTextContent("Total open: 2,50,000.00");
     expect(screen.getByTestId("source-SUNDRY_DEBTORS_DUE")).toHaveTextContent("Source: Outstanding bills");
     expect(debtors).toHaveTextContent("2 open foreign-currency bill(s) are left out.");
-    expect(debtors).not.toHaveTextContent("Choose the bill source");
-    expect(screen.getByTestId("source-SUNDRY_CREDITORS_DUE")).toHaveTextContent("Source: Party ledgers");
+    // Chosen in Settings: no "(automatic)" label and no hint.
+    expect(screen.getByTestId("source-SUNDRY_DEBTORS_DUE").textContent).toBe("Source: Outstanding bills");
+    expect(screen.queryByTestId("source-hint-SUNDRY_DEBTORS_DUE")).toBeNull();
+    expect(screen.getByTestId("source-SUNDRY_CREDITORS_DUE").textContent).toBe("Source: Party ledgers");
+    expect(screen.queryByTestId("source-hint-SUNDRY_CREDITORS_DUE")).toBeNull();
   });
 });
 

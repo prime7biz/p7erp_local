@@ -7,6 +7,7 @@ import { FinanceAiCommentaryPanel } from "@/components/finance/ai/FinanceAiComme
 import { listPageRootClass } from "@/components/app/listPageLayout";
 import { amountText, SEVERITY_CHIP, SEVERITY_LABEL } from "@/components/finance/control/controlLogic";
 import { ExceptionPanel } from "@/components/finance/control/ExceptionPanel";
+import { DUE_SOURCE_CHANGE_HINT, dueSourceText } from "@/components/finance/settings/arApDueSource";
 import { StatementPeriodPicker } from "@/components/finance/statements/StatementPeriodPicker";
 import { useControlTower, useControlTowerEnabled } from "@/hooks/useFinanceControl";
 import { todayLocalISO } from "@/lib/dates";
@@ -179,9 +180,19 @@ function ControlCardButton({ card, currency, onOpen }: { card: ControlCard; curr
       <span className="mt-1 text-sm tabular-nums" data-testid={`amount-${card.code}`}>
         {currency} {amountText(card.amount)}
       </span>
+      {card.source ? (
+        <span className="mt-1 self-start rounded bg-surface-subtle px-1.5 py-0.5 text-[11px] text-text-muted" data-testid={`source-${card.code}`}>
+          {dueSourceText(card.source, card.source_automatic)}
+        </span>
+      ) : null}
       {card.note ? (
         <span className="mt-1 text-[11px] text-status-warning-foreground" data-testid={`note-${card.code}`}>
           {card.note}
+        </span>
+      ) : null}
+      {card.source && card.source_automatic === true ? (
+        <span className="mt-1 text-[11px] text-text-muted" data-testid={`source-hint-${card.code}`}>
+          {DUE_SOURCE_CHANGE_HINT}
         </span>
       ) : null}
       <span className="mt-auto pt-2 text-xs text-text-muted">

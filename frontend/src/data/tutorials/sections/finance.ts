@@ -1492,11 +1492,11 @@ Only **posted** vouchers are counted. Nothing here changes a voucher or a balanc
 
 1. An admin switches on **Tally-style statements** in **Settings → Configuration → More features → Finance navigation**. It is off by default. The old reports stay available (they are marked **Classic**).
 2. You need permission to view the finance reports. To download Excel or PDF you also need the export permission; without it the **Excel** and **PDF** buttons are greyed out.
-3. A **manager or admin** gives each account group a **Statement class** (see below). Groups without a class are shown as **Unclassified**; the program never guesses from names.
+3. A **manager or admin** classifies the account groups in **Account Groups → Statement class** (see below). The standard classes are filled in automatically for the system groups, so usually only your own groups need a class. Groups without a class are shown as **Unclassified**; the program never guesses from names.
 
 ## Steps — give every group a Statement class
 
-1. Open **Finance → Setup → Account Groups** (\`/app/accounts/groups\`).
+1. Open **Finance → Setup → Account Groups** (\`/app/accounts/groups\`). System groups already carry their standard class; check your own groups first.
 2. Click **Actions → Edit** on a group. In the **Statement class** box choose a class, for example **Sundry Debtors**, **Cash In Hand**, **Sales Accounts** or **Indirect Expenses**.
 3. Read the **Preview**: it tells you how many sub-groups and ledgers follow this group and how their class changes.
 4. Click **Save statement class**. Sub-groups and ledgers follow the group unless they have their own class. **Inherit / Unclassified** removes the group's own class.
@@ -1511,13 +1511,14 @@ Open **Finance → Statements** (\`/app/finance/statements\`). The new tabs come
 
 - **Trial Balance** (\`/app/finance/statements/trial-balance\`): Opening, Period (Debit, Credit) and Closing for each group and ledger. The Grand Total debit equals the credit. Tick **Show zero balances** to list empty ledgers.
 - **Balance Sheet** (\`/app/finance/statements/balance-sheet\`): Liabilities on the left and Assets on the right (stacked on a phone). Inner amounts are ledgers, outer amounts are groups. The **Profit & Loss A/c** line carries the result of earlier years and this year: a profit sits on the liabilities side, a loss on the assets side.
+- **Difference in opening balances**: when the ledgers' opening balances do not add up (more debit than credit, or the other way round), the Trial Balance and Balance Sheet show one extra line, **Difference in opening balances**, in amber italics — the same line Tally shows. It is not a ledger, so it cannot be clicked. A yellow notice says by how much the openings differ (**Dr** or **Cr**) and links to **Chart of Accounts**, where a finance admin corrects the ledgers' opening balances. The badge then reads **Balanced (after opening difference)**; once the openings are corrected the line and the notice go away.
 - **Profit & Loss** (\`/app/finance/statements/profit-loss\`): the **Trading Account** first (gross profit or loss carried over), then the **Profit & Loss Account** (nett profit or loss). The **Memo: opening and closing stock** box is for information only and is never inside a total.
 - **Cash Flow** (\`/app/finance/statements/cash-flow\`): twelve months of Inflow, Outflow and Nett flow plus the year total. Transfers between two cash or bank ledgers (contra) are **not counted** and the page shows how much was left out. The **Cash without overdraft** figure shows cash and bank money before the bank overdraft.
 - **Funds Flow** (\`/app/finance/statements/funds-flow\`): opening and closing working capital for each month and the flow between them.
-- **Ratio Analysis** (\`/app/finance/statements/ratio-analysis\`): **Principal Groups** on the left and **Principal Ratios** on the right. A **—** means the figure cannot be worked out (for example sales are zero); the reason is written under it. **Sundry Debtors / Creditors due till today** need a bill source: an admin picks it under **Bill source for amounts due** in **Settings → Configuration → Finance** (**Outstanding bills**, **Party ledgers** or **Bill references**). Once chosen, the line shows the amount due till today, the **Total open** of all open bills, a small **Source** label and a note (for example foreign-currency bills that were left out). Until then the line shows **—** and a hint to choose the source.
+- **Ratio Analysis** (\`/app/finance/statements/ratio-analysis\`): **Principal Groups** on the left and **Principal Ratios** on the right. A **—** means the figure cannot be worked out (for example sales are zero); the reason is written under it. **Operating Cost %** follows Tally: **(Sales − Nett Profit) ÷ Sales**, which is the same as 100 − Nett Profit % (a nett loss gives more than 100%). **Sundry Debtors / Creditors due till today** read their bills from the **Bill source for amounts due** in **Settings → Configuration → Finance**. It is **Automatic (recommended)** by default: party ledgers when they are switched on, otherwise outstanding bills. The line shows the amount due till today, the **Total open** of all open bills, a small **Source** label (for example **Source: Party ledgers (automatic)**) and a note (for example foreign-currency bills that were left out). When the source was chosen automatically, a hint says you can **change the bill source in Settings → Configuration → Finance** (**Outstanding bills**, **Party ledgers** or **Bill references**).
 - **Stock vs Ledger** (\`/app/finance/statements/stock-vs-ledger\`): the stock value from the stock records against the stock ledgers in the books. A difference is shown as it is.
 
-Pick a **Financial year** or type **From** and **To** dates (the Balance Sheet and Stock vs Ledger use one **As of** date). A green **Balanced** badge means the statement agrees with itself; a red badge shows the **Difference**.
+Pick a **Financial year** or type **From** and **To** dates (the Balance Sheet and Stock vs Ledger use one **As of** date). A green **Balanced** badge means the statement agrees with itself (**Balanced (after opening difference)** when it balances only with the **Difference in opening balances** line); a red badge shows the **Difference**.
 
 ## Steps — drill down
 
@@ -1542,7 +1543,8 @@ Pick a **Financial year** or type **From** and **To** dates (the Balance Sheet a
 - **A statement says it is switched off** → ask an admin to turn on **Tally-style statements** in Settings → Configuration.
 - **Excel / PDF is greyed out** → your role does not have the export permission.
 - **"You do not have permission to view this statement"** → your role is not allowed to view finance reports.
-- **Balance Sheet shows a Difference** → check the **Unclassified** banner first; a group with no class can put an amount on the wrong side.`,
+- **Balance Sheet shows a Difference** → check the **Unclassified** banner first; a group with no class can put an amount on the wrong side.
+- **"Difference in opening balances" line** → the ledgers' opening balances do not match. Ask a finance admin to correct them in **Chart of Accounts**; the line disappears once debit and credit openings are equal.`,
       tags: [
         "tally",
         "trial balance",
@@ -1559,9 +1561,19 @@ Pick a **Financial year** or type **From** and **To** dates (the Balance Sheet a
         "crore",
         "export",
       ],
-      keywords: ["statements", "unclassified", "dr cr", "tally style", "classic reports", "finance_statements_v2"],
+      keywords: [
+        "statements",
+        "unclassified",
+        "dr cr",
+        "tally style",
+        "classic reports",
+        "finance_statements_v2",
+        "difference in opening balances",
+        "operating cost",
+        "bill source",
+      ],
       estimatedMinutes: 8,
-      lastUpdated: "2026-11-12",
+      lastUpdated: "2026-11-13",
       audience: "finance",
       infographics: [
         {
@@ -1569,7 +1581,11 @@ Pick a **Financial year** or type **From** and **To** dates (the Balance Sheet a
           title: "Switch on and use the statements",
           steps: [
             { title: "Switch on", body: "Settings → Configuration → **Tally-style statements**.", href: "/app/settings/config" },
-            { title: "Classify groups", body: "Account Groups → Edit → **Statement class** → Save.", href: "/app/accounts/groups" },
+            {
+              title: "Classify groups",
+              body: "Account Groups → Edit → **Statement class** → Save (system groups already have their standard class).",
+              href: "/app/accounts/groups",
+            },
             { title: "Read", body: "Finance → **Statements** → pick a tab and a financial year.", href: "/app/finance/statements" },
             { title: "Drill down", body: "Click a group, ledger or month; click a voucher to open it." },
             { title: "Export or print", body: "**Excel**, **PDF** or **Print** (A4)." },
@@ -1607,7 +1623,7 @@ Both are **read-only**: nothing here posts, edits or deletes a voucher or a stoc
 1. An admin switches on **Finance Control Tower and GL profitability** in **Settings → Configuration → More features → Finance navigation**. It is off by default.
 2. Use the **Finance hubs** menu to find the pages: **Finance Home → Control Tower** and **Profitability → Order P&L (GL)** / **Style / LC / Buyer P&L (GL)**. Without the hubs menu, the classic Finance menu has **Reports → Finance Control Tower** and **Planning → Order P&L (GL)** / **Style / LC / Buyer P&L (GL)**.
 3. You need permission to view finance reports.
-4. Optional: choose the **Bill source for amounts due** in **Settings → Configuration → Finance** (**Outstanding bills**, **Party ledgers** or **Bill references**). The overdue receivables / payables cards read their bills from it; when nothing is chosen they use **Outstanding bills**.
+4. Optional: the **Bill source for amounts due** in **Settings → Configuration → Finance** is **Automatic (recommended)** by default — party ledgers when they are switched on, otherwise outstanding bills. Pick **Outstanding bills**, **Party ledgers** or **Bill references** only if your company keeps its bills in one specific place. The overdue receivables / payables cards read their bills from it.
 
 ## Steps — read the Control Tower
 
@@ -1625,7 +1641,7 @@ Both are **read-only**: nothing here posts, edits or deletes a voucher or a stoc
 - **Delivery challans not invoiced**: goods shipped but not invoiced. A challan has no money value, so the amount is 0.
 - **Vendor bills outside price/quantity tolerance**: information only. It never blocks a bill.
 - **Cash / bank ledgers with a credit balance** and **Items with negative stock**.
-- **Overdue receivables / payables**: from the bill source chosen in Settings (outstanding bills when none is chosen). Only bills in your base currency are added into the amount; the card note says how many foreign-currency bills were left out.
+- **Overdue receivables / payables**: from the bill source in Settings. The card and its list show a small **Source** label, for example **Source: Party ledgers (automatic)** when it was chosen automatically, with a hint to **change the bill source in Settings → Configuration → Finance**. With outstanding bills, only bills in your base currency are added into the amount; the card note says how many foreign-currency bills were left out.
 
 A small yellow note on a card or a list row is a warning about the figure, for example a foreign-currency document with no exchange rate that was counted at rate 1.
 
@@ -1670,9 +1686,9 @@ The same checks also appear in **AI Tools → Exception agents** as **Finance ex
         "budget vs actual",
         "unattributed",
       ],
-      keywords: ["finance_control_tower_v2", "gl profitability", "grn not billed", "overdue", "negative stock", "margin"],
+      keywords: ["finance_control_tower_v2", "gl profitability", "grn not billed", "overdue", "negative stock", "margin", "bill source"],
       estimatedMinutes: 7,
-      lastUpdated: "2026-11-12",
+      lastUpdated: "2026-11-13",
       audience: "finance",
       infographics: [
         {

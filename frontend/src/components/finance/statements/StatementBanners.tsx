@@ -1,7 +1,12 @@
 import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { StatementReconciliation, StatementWarning } from "@/api/financeStatements";
-import { formatIndian, isZeroMoney } from "./statementFormat";
+import {
+  balancedAfterOpeningDifference,
+  CHART_OF_ACCOUNTS_PATH,
+  OPENING_BALANCE_DIFFERENCE_WARNING,
+} from "./openingDifference";
+import { formatDrCr, formatIndian, isZeroMoney } from "./statementFormat";
 
 /** Where the statement class of an account group is set. */
 export const ACCOUNT_GROUPS_SETUP_PATH = "/app/accounts/groups";
@@ -23,14 +28,25 @@ export function StatementWarnings({ warnings }: { warnings: StatementWarning[] |
     <div className="no-print space-y-2" role="status">
       {list.map((w) => {
         const unclassified = w.code.startsWith("UNCLASSIFIED");
+        const openingDifference = w.code === OPENING_BALANCE_DIFFERENCE_WARNING;
         return (
           <div
             key={w.code}
+            data-testid={openingDifference ? "opening-difference-notice" : undefined}
             className="flex flex-wrap items-start gap-2 rounded-lg border border-status-warning/30 bg-status-warning-subtle px-3 py-2 text-sm text-status-warning-foreground"
           >
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             <p className="min-w-0 flex-1">
-              {unclassified ? (
+              {openingDifference ? (
+                <>
+                  Opening balances do not match by <b>{formatDrCr(w.amount)}</b>. Tally shows this as &quot;Difference in
+                  opening balances&quot;. A finance admin should correct the ledgers&apos; opening balances in{" "}
+                  <Link className="font-medium underline" to={CHART_OF_ACCOUNTS_PATH}>
+                    Chart of Accounts
+                  </Link>
+                  .
+                </>
+              ) : unclassified ? (
                 <>
                   <b>Unclassified:</b> {w.count} {WARNING_TEXT[w.code] ?? "item(s)"}
                   {!isZeroMoney(w.amount) ? <> with {formatIndian(w.amount)}</> : null} are not given a statement
@@ -54,10 +70,11 @@ export function StatementWarnings({ warnings }: { warnings: StatementWarning[] |
   );
 }
 
-/** "Balanced" or "Out of balance by x". */
+/** "Balanced", "Balanced (after opening difference)" or "Difference x". */
 export function ReconciliationBadge({ reconciliation }: { reconciliation: StatementReconciliation | undefined }) {
   if (!reconciliation) return null;
   const ok = reconciliation.balanced;
+  const okText = balancedAfterOpeningDifference(reconciliation) ? "Balanced (after opening difference)" : "Balanced";
   return (
     <span
       role="status"
@@ -69,7 +86,7 @@ export function ReconciliationBadge({ reconciliation }: { reconciliation: Statem
       }`}
     >
       {ok ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> : <XCircle className="h-3.5 w-3.5" aria-hidden />}
-      {ok ? "Balanced" : `Difference ${formatIndian(reconciliation.difference)}`}
+      {ok ? okText : `Difference ${formatIndian(reconciliation.difference)}`}
     </span>
   );
 }

@@ -7989,3 +7989,8 @@ router.include_router(_statements_router)
 from app.modules.finance.control.router import router as _control_router  # noqa: E402
 
 router.include_router(_control_router)
+
+# Budget analytics, expense analysis and expense controls (finance_budget_analytics_v2, read-only). main.py untouched.
+from app.modules.finance.budget_analytics.router import router as _budget_analytics_router  # noqa: E402
+
+router.include_router(_budget_analytics_router)

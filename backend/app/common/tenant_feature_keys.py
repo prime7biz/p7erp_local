@@ -134,6 +134,8 @@ FINANCE_HUBS_V2 = "finance_hubs_v2"
 FINANCE_STATEMENTS_V2 = "finance_statements_v2"
 # Finance Control Tower + GL-based profitability API (default OFF, strict true; never add to DEFAULT_ON_FEATURE_FLAGS).
 FINANCE_CONTROL_TOWER_V2 = "finance_control_tower_v2"
+# Budget analytics, expense analysis and expense controls (default OFF, strict true; never add to DEFAULT_ON_FEATURE_FLAGS).
+FINANCE_BUDGET_ANALYTICS_V2 = "finance_budget_analytics_v2"
 
 # Sprint 6 MIS reports (default ON — read-only).
 MIS_REPORTS_ENABLED = "mis_reports_enabled"
@@ -595,6 +597,10 @@ def is_finance_statements_v2_enabled(feature_flags: Any) -> bool:
 
 def is_finance_control_tower_v2_enabled(feature_flags: Any) -> bool:
     return _flag_true(feature_flags, FINANCE_CONTROL_TOWER_V2)
+
+
+def is_finance_budget_analytics_v2_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, FINANCE_BUDGET_ANALYTICS_V2)
 
 
 def is_mis_reports_enabled(feature_flags: Any) -> bool:

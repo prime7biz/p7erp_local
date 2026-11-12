@@ -1530,6 +1530,32 @@ export const tutorialHelpIndex: TutorialHelpEntry[] = [
     ]
   },
   {
+    "id": "fin-budget-analytics-expense-control",
+    "title": "Budget analytics and expense control",
+    "summary": "Budget vs actual by cost centre, account, month or department with drill-down to voucher lines, expense trends against the previous period, and expense-control alerts.",
+    "relatedAppRoutes": [
+      "/app/finance/planning",
+      "/app/finance/budget-analytics",
+      "/app/finance/expense-analysis",
+      "/app/finance/expense-controls",
+      "/app/accounts/budgets"
+    ]
+  },
+  {
+    "id": "fin-ai-explain-report",
+    "title": "Explain this report (AI)",
+    "summary": "A short written explanation of a finance report. AI is read-only and every number it uses is checked against the calculated report.",
+    "relatedAppRoutes": [
+      "/app/finance/statements",
+      "/app/finance/statements/profit-loss",
+      "/app/finance/statements/balance-sheet",
+      "/app/finance/statements/trial-balance",
+      "/app/finance/home",
+      "/app/finance/budget-analytics",
+      "/app/finance/expense-analysis"
+    ]
+  },
+  {
     "id": "fin-rpt-overview",
     "title": "Finance books & reports map",
     "summary": "Which finance report answers which question, where to find it in the sidebar, and how all reports come from posted vouchers.",

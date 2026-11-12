@@ -3442,6 +3442,56 @@ async def cash_flow_statement(
     if to_date is None:
         to_date = today_local(tenant)
 
+    def _is_cash_account(account: ChartOfAccount, group: AccountGroup) -> bool:
+        name = (account.name or "").lower()
+        code = (group.code or "").lower()
+        return (
+            bool(account.is_bank_account)
+            or bool(group.is_bank_group)
+            or "cash" in name
+            or "bank" in name
+            or "cash" in code
+            or "bank" in code
+        )
+
+    # Opening cash = opening balance of every cash/bank account + posted in-books movement before from_date.
+    # One account query + one aggregate query (no per-account loop).
+    cash_account_rows = (
+        await db.execute(
+            select(ChartOfAccount, AccountGroup)
+            .join(AccountGroup, ChartOfAccount.group_id == AccountGroup.id)
+            .where(ChartOfAccount.tenant_id == tenant.id)
+        )
+    ).all()
+    cash_accounts = {a.id: a for a, g in cash_account_rows if _is_cash_account(a, g)}
+    opening_cash_balance = sum((_to_float(a.opening_balance) for a in cash_accounts.values()), 0.0)
+    if cash_accounts:
+        prior_rows = (
+            await db.execute(
+                select(
+                    VoucherLine.account_id,
+                    func.coalesce(func.sum(case((VoucherLine.entry_type == "DEBIT", line_base_amount_sql()), else_=0)), 0),
+                    func.coalesce(func.sum(case((VoucherLine.entry_type == "CREDIT", line_base_amount_sql()), else_=0)), 0),
+                )
+                .select_from(VoucherLine)
+                .join(Voucher, VoucherLine.voucher_id == Voucher.id)
+                .where(
+                    VoucherLine.tenant_id == tenant.id,
+                    VoucherLine.account_id.in_(list(cash_accounts)),
+                    Voucher.tenant_id == tenant.id,
+                    Voucher.voucher_date < from_date,
+                    Voucher.status == "POSTED",
+                    voucher_in_books_clause(),
+                )
+                .group_by(VoucherLine.account_id)
+            )
+        ).all()
+        for acc_id, debit_sum, credit_sum in prior_rows:
+            if cash_accounts[acc_id].normal_balance == "debit":
+                opening_cash_balance += _to_float(debit_sum) - _to_float(credit_sum)
+            else:
+                opening_cash_balance += _to_float(credit_sum) - _to_float(debit_sum)
+
     vouchers = list(
         (
             await db.execute(
@@ -3461,8 +3511,8 @@ async def cash_flow_statement(
         return {
             "from_date": from_date,
             "to_date": to_date,
-            "opening_cash_balance": 0.0,
-            "closing_cash_balance": 0.0,
+            "opening_cash_balance": round(opening_cash_balance, 2),
+            "closing_cash_balance": round(opening_cash_balance, 2),
             "sections": {
                 "operating": {"inflow": 0.0, "outflow": 0.0, "net": 0.0, "rows": []},
                 "investing": {"inflow": 0.0, "outflow": 0.0, "net": 0.0, "rows": []},
@@ -3506,18 +3556,6 @@ async def cash_flow_statement(
             return amount if line.entry_type == "DEBIT" else -amount
         return amount if line.entry_type == "CREDIT" else -amount
 
-    def _is_cash_account(account: ChartOfAccount, group: AccountGroup) -> bool:
-        name = (account.name or "").lower()
-        code = (group.code or "").lower()
-        return (
-            bool(account.is_bank_account)
-            or bool(group.is_bank_group)
-            or "cash" in name
-            or "bank" in name
-            or "cash" in code
-            or "bank" in code
-        )
-
     lines_by_voucher: dict[int, list[VoucherLine]] = defaultdict(list)
     for line in lines:
         lines_by_voucher[line.voucher_id].append(line)
@@ -3527,11 +3565,6 @@ async def cash_flow_statement(
         "investing": {"inflow": 0.0, "outflow": 0.0, "rows": []},
         "financing": {"inflow": 0.0, "outflow": 0.0, "rows": []},
     }
-
-    opening_cash_balance = 0.0
-    for account, group in account_map.values():
-        if _is_cash_account(account, group):
-            opening_cash_balance += _to_float(account.opening_balance)
 
     for voucher in vouchers:
         voucher_lines = lines_by_voucher.get(voucher.id, [])
@@ -4416,14 +4449,19 @@ async def list_cost_centers(
 
 @router.get("/cost-centers/dashboard")
 async def cost_center_dashboard(
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    if from_date is not None and to_date is not None and from_date > to_date:
+        raise HTTPException(status_code=422, detail="from_date must not be after to_date")
     # Aggregate in the database: avoids loading all voucher lines (memory / timeouts) and keeps
     # voucher_lines scoped to tenant_id (the previous IN(cost_center_id) query did not).
-    amt = cast(VoucherLine.amount, Numeric(18, 4))
+    # Only POSTED, in-books vouchers count, in base currency (same rules as the trial balance).
+    amt = cast(line_base_amount_sql(), Numeric(18, 4))
     debit_sum = func.coalesce(
         func.sum(case((VoucherLine.entry_type == "DEBIT", amt), else_=0)),
         0,
@@ -4438,9 +4476,15 @@ async def cost_center_dashboard(
             debit_sum.label("debit_total"),
             credit_sum.label("credit_total"),
         )
+        .join(Voucher, Voucher.id == VoucherLine.voucher_id)
         .where(
             VoucherLine.tenant_id == tenant.id,
             VoucherLine.cost_center_id.isnot(None),
+            Voucher.tenant_id == tenant.id,
+            Voucher.status == "POSTED",
+            voucher_in_books_clause(),
+            *([Voucher.voucher_date >= from_date] if from_date is not None else []),
+            *([Voucher.voucher_date <= to_date] if to_date is not None else []),
         )
         .group_by(VoucherLine.cost_center_id)
     ).subquery()
@@ -6983,11 +7027,33 @@ async def ledger_activity_report(
         .order_by(Voucher.voucher_date.asc(), Voucher.id.asc(), VoucherLine.id.asc())
     )
     rows = list((await db.execute(q)).all())
-    opening_balance = _to_float(account.opening_balance)
+    # Opening = account opening balance + posted in-books movement before from_date (one aggregate query).
+    prior = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(case((VoucherLine.entry_type == "DEBIT", line_base_amount_sql()), else_=0)), 0),
+                func.coalesce(func.sum(case((VoucherLine.entry_type == "CREDIT", line_base_amount_sql()), else_=0)), 0),
+            )
+            .select_from(VoucherLine)
+            .join(Voucher, VoucherLine.voucher_id == Voucher.id)
+            .where(
+                VoucherLine.tenant_id == tenant.id,
+                VoucherLine.account_id == account_id,
+                Voucher.tenant_id == tenant.id,
+                Voucher.voucher_date < from_date,
+                Voucher.status == "POSTED",
+                voucher_in_books_clause(),
+            )
+        )
+    ).one()
+    prior_debit = _to_float(prior[0])
+    prior_credit = _to_float(prior[1])
+    prior_net = (prior_debit - prior_credit) if account.normal_balance == "debit" else (prior_credit - prior_debit)
+    opening_balance = _to_float(account.opening_balance) + prior_net
     running_balance = opening_balance
     out_rows = []
     for line, voucher in rows:
-        amt = _to_float(line.amount)
+        amt = float(line_base_amount(line))  # base currency (was voucher currency)
         if account.normal_balance == "debit":
             running_balance += amt if line.entry_type == "DEBIT" else -amt
         else:

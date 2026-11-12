@@ -875,6 +875,28 @@ export function ConfigurationPage() {
               }
             />
             <span>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.finance_statements_v2 === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  finance_statements_v2: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Tally-style statements</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Adds the new Trial Balance, Balance Sheet, Profit &amp; Loss, monthly Cash Flow and Funds Flow, Ratio
+                Analysis and Stock vs Ledger to Finance → Statements, with drill-down, Excel / PDF and print. The old
+                reports stay available as &quot;Classic&quot;. Set each account group&apos;s <b>Statement class</b> in
+                Account Groups first; groups without one show as Unclassified. Off by default.
+              </span>
+            </span>
+          </label>
               <span className="font-medium text-text-primary">Payroll four-eyes approval</span>
               <span className="mt-0.5 block text-xs text-text-muted">
                 The person who finalized a payroll run cannot approve it; a second admin or manager must. Needs at

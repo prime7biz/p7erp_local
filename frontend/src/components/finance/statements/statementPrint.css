@@ -1,0 +1,51 @@
+/* Print rules for the Tally-style statements (A4, header row repeats on every page). */
+
+@media print {
+  .statement-print-root {
+    page: statement;
+  }
+
+  @page statement {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  .statement-print-root .statement-sheet {
+    overflow: visible !important;
+    border: none !important;
+  }
+
+  .statement-print-root table {
+    width: 100%;
+    font-size: 10px;
+  }
+
+  .statement-print-root thead {
+    display: table-header-group;
+  }
+
+  .statement-print-root tfoot {
+    display: table-footer-group;
+  }
+
+  .statement-print-root tr {
+    break-inside: avoid;
+  }
+
+  /* The two sides of a Balance Sheet / Trading + P&L stay side by side on paper. */
+  .statement-print-root .statement-two-sides {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 !important;
+  }
+
+  .statement-print-root .statement-two-sides > * {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* The drill-down drawer is never printed. */
+  .statement-drill-panel {
+    display: none !important;
+  }
+}

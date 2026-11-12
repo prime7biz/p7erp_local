@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { EmbeddedPageProvider } from "@/components/app/EmbeddedPageContext";
 import { listPageRootClass } from "@/components/app/listPageLayout";
 import { hubHref } from "./hubNavigation";
-import { pickActiveHubTab, visibleHubTabs } from "./hubVisibility";
+import { hubTabLabel, pickActiveHubTab, visibleHubTabs } from "./hubVisibility";
 import type { Hub, HubAccessCheck, HubFeatureFlags, HubTab } from "./types";
 
 const lazyTabs = new Map<string, LazyExoticComponent<ComponentType>>();
@@ -85,7 +85,7 @@ function ModuleHub({ hub, featureFlags, canAccess, headerActions, renderEmpty }:
                           : "border-transparent text-text-secondary hover:border-border-strong hover:text-text-primary"
                       }`}
                     >
-                      {tab.label}
+                      {hubTabLabel(tab, featureFlags)}
                     </Link>
                   </li>
                 );
@@ -97,7 +97,7 @@ function ModuleHub({ hub, featureFlags, canAccess, headerActions, renderEmpty }:
         )}
       </header>
 
-      <section aria-label={active?.label ?? hub.label} className="min-w-0">
+      <section aria-label={active ? hubTabLabel(active, featureFlags) : hub.label} className="min-w-0">
         {ActivePage ? (
           <EmbeddedPageProvider>
             <Suspense fallback={<TabSkeleton />}>

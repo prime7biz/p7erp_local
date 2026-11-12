@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { pickActiveHubTab, visibleHubTabs } from "./hubVisibility";
+import { hubTabLabel, pickActiveHubTab, visibleHubTabs } from "./hubVisibility";
 import type { Hub, HubAccessCheck, HubFeatureFlags, HubTab } from "./types";
 
 /** `/app/<hub.path>` or `/app/<hub.path>?tab=<tab id>`. */
@@ -53,7 +53,7 @@ export function hubTabPaletteRoutes(
     .flatMap((hub) =>
       visibleHubTabs(hub, featureFlags, canAccess).map((tab) => ({
         href: hubHref(hub, tab.id),
-        label: tab.label,
+        label: hubTabLabel(tab, featureFlags),
         section: `${sectionPrefix} · ${hub.label}`,
         icon: hub.icon,
       })),

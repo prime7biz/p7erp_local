@@ -15,6 +15,8 @@ import { cn } from "@/lib/utils";
 import { logApiError } from "@/utils/logApiError";
 import { getChartOfAccountsCached } from "@/lib/masterData";
 import { useConfirm } from "@/components/app/useConfirm";
+import { StockNatureField } from "@/components/finance/statements/StockNatureField";
+import { useStatementsEnabled } from "@/hooks/useFinanceStatements";
 
 type TreeNode = StockGroupResponse & { children: TreeNode[] };
 
@@ -105,6 +107,8 @@ function CoaSelect(props: {
 
 export function StockGroupsPage({ embedded = false }: { embedded?: boolean }) {
   const confirm = useConfirm();
+  // Tally-style statements switch (tenant flag finance_statements_v2): adds the Stock nature field to the edit window.
+  const statementsOn = useStatementsEnabled();
   const [items, setItems] = useState<StockGroupResponse[]>([]);
   const [treeMetrics, setTreeMetrics] = useState<
     Map<number, { item_count: number; total_stock_value: string }>
@@ -601,6 +605,7 @@ export function StockGroupsPage({ embedded = false }: { embedded?: boolean }) {
                     />
                   </div>
                 </div>
+                {statementsOn ? <StockNatureField groupId={editing.id} /> : null}
                 <div className="flex justify-end gap-2 pt-2">
                   {groupModalMode === "view" ? (
                     <>

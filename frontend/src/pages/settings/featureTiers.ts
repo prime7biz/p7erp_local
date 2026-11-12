@@ -46,6 +46,7 @@ export const TIER_KEYS: Record<Exclude<FeatureTier, "essential">, string[]> = {
   ],
   all: [
     "tds_system_enabled",
+    "finance_statements_v2",
     "statutory_payroll_enabled",
     "compliance_tracking_enabled",
     "age_verification_required",

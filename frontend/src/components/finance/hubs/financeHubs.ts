@@ -28,6 +28,14 @@ export function isFinanceHubsV2Enabled(featureFlags: FeatureFlags): boolean {
   return featureFlags?.[FINANCE_HUBS_FLAG] === true;
 }
 
+/** Tally-style statements (Finance modernization Phase 2), default OFF, strict true. */
+export const FINANCE_STATEMENTS_FLAG = "finance_statements_v2";
+
+/** True only for an explicit `true` (default OFF). */
+export function isFinanceStatementsV2Enabled(featureFlags: FeatureFlags): boolean {
+  return featureFlags?.[FINANCE_STATEMENTS_FLAG] === true;
+}
+
 /** Profitability pages share one component with a start mode. */
 function profitabilityPage(defaultMode: "style" | "lc" | "variance"): () => HubPageModule {
   return () =>
@@ -67,6 +75,30 @@ const pages = {
   paymentAdvice: () => import("@/pages/app/PaymentAdvicePage").then((m) => ({ default: m.PaymentAdvicePage })),
   settlementAudit: () => import("@/pages/app/SettlementAuditPage").then((m) => ({ default: m.SettlementAuditPage })),
   fxReceipts: () => import("@/pages/app/FxReceiptsPage").then((m) => ({ default: m.FxReceiptsPage })),
+  stmtTrialBalance: () =>
+    import("@/pages/app/finance/statements/TrialBalanceStatementPage").then((m) => ({
+      default: m.TrialBalanceStatementPage,
+    })),
+  stmtBalanceSheet: () =>
+    import("@/pages/app/finance/statements/BalanceSheetStatementPage").then((m) => ({
+      default: m.BalanceSheetStatementPage,
+    })),
+  stmtProfitLoss: () =>
+    import("@/pages/app/finance/statements/ProfitLossStatementPage").then((m) => ({
+      default: m.ProfitLossStatementPage,
+    })),
+  stmtCashFlow: () =>
+    import("@/pages/app/finance/statements/CashFlowMonthlyPage").then((m) => ({ default: m.CashFlowMonthlyPage })),
+  stmtFundsFlow: () =>
+    import("@/pages/app/finance/statements/FundsFlowMonthlyPage").then((m) => ({ default: m.FundsFlowMonthlyPage })),
+  stmtRatioAnalysis: () =>
+    import("@/pages/app/finance/statements/RatioAnalysisStatementPage").then((m) => ({
+      default: m.RatioAnalysisStatementPage,
+    })),
+  stmtStockLedger: () =>
+    import("@/pages/app/finance/statements/StockGlReconciliationPage").then((m) => ({
+      default: m.StockGlReconciliationPage,
+    })),
   trialBalance: () => import("@/pages/app/TrialBalancePage").then((m) => ({ default: m.TrialBalancePage })),
   financialStatements: () =>
     import("@/pages/app/FinancialStatementsPage").then((m) => ({ default: m.FinancialStatementsPage })),
@@ -122,6 +154,7 @@ const pages = {
 } satisfies Record<string, () => HubPageModule>;
 
 const MIS_FLAG = "mis_reports_enabled";
+const STATEMENTS_FLAG = FINANCE_STATEMENTS_FLAG;
 const MIS_VIEW = "finance.mis_report.view";
 
 export const FINANCE_HUBS = [
@@ -212,9 +245,69 @@ export const FINANCE_HUBS = [
     icon: FileBarChart,
     permissionKey: "finance.access",
     tabs: [
+      // New Tally-style statements: shown only while `finance_statements_v2` is true, listed first.
+      // Their `legacyPath` is the direct route of the page (it redirects to the tab when the hubs are on).
+      {
+        id: "statement-trial-balance",
+        label: "Trial Balance",
+        legacyPath: "finance/statements/trial-balance",
+        load: pages.stmtTrialBalance,
+        requiresFeatureFlag: STATEMENTS_FLAG,
+        permissionKey: MIS_VIEW,
+      },
+      {
+        id: "statement-balance-sheet",
+        label: "Balance Sheet",
+        legacyPath: "finance/statements/balance-sheet",
+        load: pages.stmtBalanceSheet,
+        requiresFeatureFlag: STATEMENTS_FLAG,
+        permissionKey: MIS_VIEW,
+      },
+      {
+        id: "statement-profit-loss",
+        label: "Profit & Loss",
+        legacyPath: "finance/statements/profit-loss",
+        load: pages.stmtProfitLoss,
+        requiresFeatureFlag: STATEMENTS_FLAG,
+        permissionKey: MIS_VIEW,
+      },
+      {
+        id: "statement-cash-flow",
+        label: "Cash Flow",
+        legacyPath: "finance/statements/cash-flow",
+        load: pages.stmtCashFlow,
+        requiresFeatureFlag: STATEMENTS_FLAG,
+        permissionKey: MIS_VIEW,
+      },
+      {
+        id: "statement-funds-flow",
+        label: "Funds Flow",
+        legacyPath: "finance/statements/funds-flow",
+        load: pages.stmtFundsFlow,
+        requiresFeatureFlag: STATEMENTS_FLAG,
+        permissionKey: MIS_VIEW,
+      },
+      {
+        id: "statement-ratio-analysis",
+        label: "Ratio Analysis",
+        legacyPath: "finance/statements/ratio-analysis",
+        load: pages.stmtRatioAnalysis,
+        requiresFeatureFlag: STATEMENTS_FLAG,
+        permissionKey: MIS_VIEW,
+      },
+      {
+        id: "statement-stock-ledger",
+        label: "Stock vs Ledger",
+        legacyPath: "finance/statements/stock-vs-ledger",
+        load: pages.stmtStockLedger,
+        requiresFeatureFlag: STATEMENTS_FLAG,
+        permissionKey: MIS_VIEW,
+      },
+      // Classic reports: always available; they get a "(Classic)" label while the new statements are on.
       {
         id: "trial-balance",
         label: "Trial Balance",
+        labelWhenFlagOn: { flag: STATEMENTS_FLAG, label: "Trial Balance (Classic)" },
         legacyPath: "accounts/reports/trial-balance",
         load: pages.trialBalance,
         permissionKey: MIS_VIEW,
@@ -222,6 +315,7 @@ export const FINANCE_HUBS = [
       {
         id: "financial-statements",
         label: "Financial Statements",
+        labelWhenFlagOn: { flag: STATEMENTS_FLAG, label: "Financial Statements (Classic)" },
         legacyPath: "accounts/reports/financial-statements",
         load: pages.financialStatements,
         permissionKey: MIS_VIEW,
@@ -229,6 +323,7 @@ export const FINANCE_HUBS = [
       {
         id: "cash-flow",
         label: "Cash Flow",
+        labelWhenFlagOn: { flag: STATEMENTS_FLAG, label: "Cash Flow (Classic)" },
         legacyPath: "accounts/reports/cash-flow",
         load: pages.cashFlow,
         permissionKey: MIS_VIEW,
@@ -236,6 +331,7 @@ export const FINANCE_HUBS = [
       {
         id: "fund-flow",
         label: "Funds Flow",
+        labelWhenFlagOn: { flag: STATEMENTS_FLAG, label: "Funds Flow (Classic)" },
         legacyPath: "finance/mis/fund-flow",
         load: pages.fundFlow,
         hideWhenFeatureFlagFalse: MIS_FLAG,
@@ -244,6 +340,7 @@ export const FINANCE_HUBS = [
       {
         id: "ratio-analysis",
         label: "Ratio Analysis",
+        labelWhenFlagOn: { flag: STATEMENTS_FLAG, label: "Ratio Analysis (Classic)" },
         legacyPath: "accounts/reports/ratio-analysis",
         load: pages.ratioAnalysis,
         permissionKey: MIS_VIEW,

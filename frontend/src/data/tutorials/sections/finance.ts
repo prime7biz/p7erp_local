@@ -38,7 +38,7 @@ An admin can switch on **Finance hubs (compact menu)** in **Settings → Configu
 - **Finance Home** — shortcuts to the other hubs.
 - **Vouchers & Payables** — Vouchers, Approvals, Outstanding Bills, Vendor Bills (GRN), Purchase & AP and the optional registers. **Print vouchers** and the **New credit note / debit note / stock transfer** buttons (when switched on) sit at the top of this hub.
 - **Banking** — Bank Accounts, Reconciliation, Payment Runs, Payment Advice, Settlement Audit, FX Receipts.
-- **Statements** — Trial Balance, Financial Statements, Cash Flow, Funds Flow, Ratio Analysis.
+- **Statements** — Trial Balance, Financial Statements, Cash Flow, Funds Flow, Ratio Analysis. With **Tally-style statements** switched on, the new Tally layouts (Trial Balance, Balance Sheet, Profit & Loss, monthly Cash Flow and Funds Flow, Ratio Analysis, Stock vs Ledger) come first and the old pages are marked **Classic** — see [Tally-style statements](/app/tutorials/fin-tally-statements).
 - **Reports & MIS** — Day Book, AR/AP Aging, Ledger Activity, Exceptions, Voucher Analytics, Group Summary and the Financial MIS reports.
 - **Budgets & Cash**, **Profitability**, **Tax & Compliance**, **Loans & Facilities** and **Finance Setup**.
 
@@ -1474,6 +1474,120 @@ A **facility** is a sanctioned limit from a bank or lender (term loan, working c
         "/app/finance/business-overview",
       ],
       relatedArticleIds: ["fin-overview", "fin-voucher-entry", "fin-voucher-approval-queue"],
+    },
+    {
+      id: "fin-tally-statements",
+      title: "Tally-style statements",
+      summary:
+        "Trial Balance, Balance Sheet, Trading and Profit & Loss, monthly Cash Flow and Funds Flow, Ratio Analysis and Stock vs Ledger in the classic Tally layout, with drill-down, Excel, PDF and print.",
+      content: `## Overview
+
+**Tally-style statements** show your books in the layout accountants know from Tally: a grouped **Trial Balance**, a two-sided **Balance Sheet**, a **Trading and Profit & Loss A/c**, a **monthly Cash Flow**, a **monthly Funds Flow**, **Ratio Analysis** and a **Stock vs Ledger** control report. Amounts use lakh / crore grouping (for example \`1,81,38,63,870.26\`), a negative amount is written \`(-)1,234.00\`, and balances carry **Dr** or **Cr**.
+
+Only **posted** vouchers are counted. Nothing here changes a voucher or a balance; it is a different way to read the same books.
+
+**Who uses it:** the accountant who sets up the groups, and the finance manager and management who read the statements.
+
+## Before you start
+
+1. An admin switches on **Tally-style statements** in **Settings → Configuration → More features → Finance navigation**. It is off by default. The old reports stay available (they are marked **Classic**).
+2. You need permission to view the finance reports. To download Excel or PDF you also need the export permission; without it the **Excel** and **PDF** buttons are greyed out.
+3. A **manager or admin** gives each account group a **Statement class** (see below). Groups without a class are shown as **Unclassified**; the program never guesses from names.
+
+## Steps — give every group a Statement class
+
+1. Open **Finance → Setup → Account Groups** (\`/app/accounts/groups\`).
+2. Click **Actions → Edit** on a group. In the **Statement class** box choose a class, for example **Sundry Debtors**, **Cash In Hand**, **Sales Accounts** or **Indirect Expenses**.
+3. Read the **Preview**: it tells you how many sub-groups and ledgers follow this group and how their class changes.
+4. Click **Save statement class**. Sub-groups and ledgers follow the group unless they have their own class. **Inherit / Unclassified** removes the group's own class.
+5. The **Statement class** column in the list shows the class that applies, and **(inherited)** when it comes from a parent group.
+6. For stock: open **Inventory → Stock Groups**, click a group and choose its **Stock nature** (raw material, work in process, finished goods or other), then **Save stock nature**.
+
+Anyone who is not a manager or admin sees these fields read-only.
+
+## Steps — read the statements
+
+Open **Finance → Statements** (\`/app/finance/statements\`). The new tabs come first: **Trial Balance**, **Balance Sheet**, **Profit & Loss**, **Cash Flow**, **Funds Flow**, **Ratio Analysis** and **Stock vs Ledger**. The old pages follow as **Trial Balance (Classic)** and so on.
+
+- **Trial Balance** (\`/app/finance/statements/trial-balance\`): Opening, Period (Debit, Credit) and Closing for each group and ledger. The Grand Total debit equals the credit. Tick **Show zero balances** to list empty ledgers.
+- **Balance Sheet** (\`/app/finance/statements/balance-sheet\`): Liabilities on the left and Assets on the right (stacked on a phone). Inner amounts are ledgers, outer amounts are groups. The **Profit & Loss A/c** line carries the result of earlier years and this year: a profit sits on the liabilities side, a loss on the assets side.
+- **Profit & Loss** (\`/app/finance/statements/profit-loss\`): the **Trading Account** first (gross profit or loss carried over), then the **Profit & Loss Account** (nett profit or loss). The **Memo: opening and closing stock** box is for information only and is never inside a total.
+- **Cash Flow** (\`/app/finance/statements/cash-flow\`): twelve months of Inflow, Outflow and Nett flow plus the year total. Transfers between two cash or bank ledgers (contra) are **not counted** and the page shows how much was left out. The **Cash without overdraft** figure shows cash and bank money before the bank overdraft.
+- **Funds Flow** (\`/app/finance/statements/funds-flow\`): opening and closing working capital for each month and the flow between them.
+- **Ratio Analysis** (\`/app/finance/statements/ratio-analysis\`): **Principal Groups** on the left and **Principal Ratios** on the right. A **—** means the figure cannot be worked out (for example sales are zero); the reason is written under it.
+- **Stock vs Ledger** (\`/app/finance/statements/stock-vs-ledger\`): the stock value from the stock records against the stock ledgers in the books. A difference is shown as it is.
+
+Pick a **Financial year** or type **From** and **To** dates (the Balance Sheet and Stock vs Ledger use one **As of** date). A green **Balanced** badge means the statement agrees with itself; a red badge shows the **Difference**.
+
+## Steps — drill down
+
+1. Click the name of a group, a ledger or (on Cash Flow) a month.
+2. A side panel opens: group → its sub-groups and ledgers → the vouchers of a ledger (50 per page, **Previous** / **Next**).
+3. Click a voucher number to open the normal voucher page.
+4. Press **Esc** or the close button to leave the panel; the arrow goes back one level.
+
+## Steps — Excel, PDF and print
+
+- **Excel** and **PDF** download a file with the same numbers, the company header, lakh / crore grouping and Dr / Cr.
+- **Print** prints the statement on A4 with the company header and a repeated table heading on every page. Menus and buttons are not printed.
+
+## Good to know
+
+- **Unclassified** warning: a yellow banner links to Account Groups. Fix the class there and reload the statement.
+- Profit and loss come only from classified income and expense groups. Stock is taken from the stock ledger, so the Balance Sheet balances.
+- Switching the setting off hides the new tabs again. The classic reports and your data are untouched.
+
+## Common problems
+
+- **A statement says it is switched off** → ask an admin to turn on **Tally-style statements** in Settings → Configuration.
+- **Excel / PDF is greyed out** → your role does not have the export permission.
+- **"You do not have permission to view this statement"** → your role is not allowed to view finance reports.
+- **Balance Sheet shows a Difference** → check the **Unclassified** banner first; a group with no class can put an amount on the wrong side.`,
+      tags: [
+        "tally",
+        "trial balance",
+        "balance sheet",
+        "profit and loss",
+        "trading account",
+        "cash flow",
+        "funds flow",
+        "ratio analysis",
+        "statement class",
+        "stock nature",
+        "drill down",
+        "lakh",
+        "crore",
+        "export",
+      ],
+      keywords: ["statements", "unclassified", "dr cr", "tally style", "classic reports", "finance_statements_v2"],
+      estimatedMinutes: 8,
+      lastUpdated: "2026-11-12",
+      audience: "finance",
+      infographics: [
+        {
+          type: "steps",
+          title: "Switch on and use the statements",
+          steps: [
+            { title: "Switch on", body: "Settings → Configuration → **Tally-style statements**.", href: "/app/settings/config" },
+            { title: "Classify groups", body: "Account Groups → Edit → **Statement class** → Save.", href: "/app/accounts/groups" },
+            { title: "Read", body: "Finance → **Statements** → pick a tab and a financial year.", href: "/app/finance/statements" },
+            { title: "Drill down", body: "Click a group, ledger or month; click a voucher to open it." },
+            { title: "Export or print", body: "**Excel**, **PDF** or **Print** (A4)." },
+          ],
+        },
+      ],
+      relatedAppRoutes: [
+        "/app/finance/statements",
+        "/app/finance/statements/trial-balance",
+        "/app/finance/statements/balance-sheet",
+        "/app/finance/statements/profit-loss",
+        "/app/finance/statements/cash-flow",
+        "/app/finance/statements/funds-flow",
+        "/app/finance/statements/ratio-analysis",
+        "/app/finance/statements/stock-vs-ledger",
+        "/app/accounts/groups",
+      ],
+      relatedArticleIds: ["fin-overview"],
     },
   ],
 };

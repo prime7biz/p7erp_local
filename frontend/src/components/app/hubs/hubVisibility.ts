@@ -14,6 +14,11 @@ export function isHubTabVisible(tab: HubTab, featureFlags: HubFeatureFlags, canA
   return true;
 }
 
+/** The tab's label for these flags (`labelWhenFlagOn` wins only while its flag is exactly `true`). */
+export function hubTabLabel(tab: HubTab, featureFlags: HubFeatureFlags): string {
+  return tab.labelWhenFlagOn && featureFlags?.[tab.labelWhenFlagOn.flag] === true ? tab.labelWhenFlagOn.label : tab.label;
+}
+
 export function visibleHubTabs(hub: Hub, featureFlags: HubFeatureFlags, canAccess?: HubAccessCheck): HubTab[] {
   return hub.tabs.filter((t) => isHubTabVisible(t, featureFlags, canAccess));
 }

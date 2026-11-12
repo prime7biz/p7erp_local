@@ -464,6 +464,28 @@ const TraceabilityPage = lazy(() =>
   import("@/pages/app/inventory/TraceabilityPage").then((m) => ({ default: m.TraceabilityPage })),
 );
 const DayBookPage = lazy(() => import("@/pages/app/DayBookPage").then((m) => ({ default: m.DayBookPage })));
+// Tally-style statements (tenant flag finance_statements_v2); each one is also a tab of the Statements hub.
+const TrialBalanceStatementPage = lazy(() =>
+  import("@/pages/app/finance/statements/TrialBalanceStatementPage").then((m) => ({ default: m.TrialBalanceStatementPage })),
+);
+const BalanceSheetStatementPage = lazy(() =>
+  import("@/pages/app/finance/statements/BalanceSheetStatementPage").then((m) => ({ default: m.BalanceSheetStatementPage })),
+);
+const ProfitLossStatementPage = lazy(() =>
+  import("@/pages/app/finance/statements/ProfitLossStatementPage").then((m) => ({ default: m.ProfitLossStatementPage })),
+);
+const CashFlowMonthlyPage = lazy(() =>
+  import("@/pages/app/finance/statements/CashFlowMonthlyPage").then((m) => ({ default: m.CashFlowMonthlyPage })),
+);
+const FundsFlowMonthlyPage = lazy(() =>
+  import("@/pages/app/finance/statements/FundsFlowMonthlyPage").then((m) => ({ default: m.FundsFlowMonthlyPage })),
+);
+const RatioAnalysisStatementPage = lazy(() =>
+  import("@/pages/app/finance/statements/RatioAnalysisStatementPage").then((m) => ({ default: m.RatioAnalysisStatementPage })),
+);
+const StockGlReconciliationPage = lazy(() =>
+  import("@/pages/app/finance/statements/StockGlReconciliationPage").then((m) => ({ default: m.StockGlReconciliationPage })),
+);
 const TrialBalancePage = lazy(() =>
   import("@/pages/app/TrialBalancePage").then((m) => ({ default: m.TrialBalancePage })),
 );
@@ -957,6 +979,13 @@ export function AppProtectedRouter() {
           <Route path="finance/vouchers-payables" element={<FinanceHubPage hubId="vouchers-payables" />} />
           <Route path="finance/banking" element={<FinanceHubPage hubId="banking" />} />
           <Route path="finance/statements" element={<FinanceHubPage hubId="statements" />} />
+          <Route path="finance/statements/trial-balance" element={<FinanceLegacyRoute from="finance/statements/trial-balance" Page={TrialBalanceStatementPage} />} />
+          <Route path="finance/statements/balance-sheet" element={<FinanceLegacyRoute from="finance/statements/balance-sheet" Page={BalanceSheetStatementPage} />} />
+          <Route path="finance/statements/profit-loss" element={<FinanceLegacyRoute from="finance/statements/profit-loss" Page={ProfitLossStatementPage} />} />
+          <Route path="finance/statements/cash-flow" element={<FinanceLegacyRoute from="finance/statements/cash-flow" Page={CashFlowMonthlyPage} />} />
+          <Route path="finance/statements/funds-flow" element={<FinanceLegacyRoute from="finance/statements/funds-flow" Page={FundsFlowMonthlyPage} />} />
+          <Route path="finance/statements/ratio-analysis" element={<FinanceLegacyRoute from="finance/statements/ratio-analysis" Page={RatioAnalysisStatementPage} />} />
+          <Route path="finance/statements/stock-vs-ledger" element={<FinanceLegacyRoute from="finance/statements/stock-vs-ledger" Page={StockGlReconciliationPage} />} />
           <Route path="finance/reports" element={<FinanceHubPage hubId="reports" />} />
           <Route path="finance/planning" element={<FinanceHubPage hubId="planning" />} />
           <Route path="finance/profitability" element={<FinanceHubPage hubId="profitability" />} />

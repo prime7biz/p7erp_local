@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import routerSource from "@/app/AppProtectedRouter.tsx?raw";
 import { menuSections } from "@/app/sidebarConfig";
-import { isHubTabVisible, visibleHubTabs } from "@/components/app/hubs/hubVisibility";
+import { hubTabLabel, isHubTabVisible, visibleHubTabs } from "@/components/app/hubs/hubVisibility";
 import type { Hub } from "@/components/app/hubs/types";
 import { filterVisibleMenuSections } from "@/components/shell/sidebarNavUtils";
-import { FINANCE_HUBS, isFinanceHubsV2Enabled } from "./financeHubs";
+import { FINANCE_HUBS, isFinanceHubsV2Enabled, isFinanceStatementsV2Enabled } from "./financeHubs";
 import { findHubLegacyTarget } from "@/components/app/hubs/hubNavigation";
 import { financeTabPaletteRoutes, resolveFinanceHelpPath } from "./financeNavigation";
 
@@ -32,6 +32,14 @@ const EMBEDDABLE_ROUTES = [
   "accounts/reports/cash-flow",
   "finance/mis/fund-flow",
   "accounts/reports/ratio-analysis",
+  // Tally-style statements (tenant flag finance_statements_v2): direct routes that also are Statements hub tabs.
+  "finance/statements/trial-balance",
+  "finance/statements/balance-sheet",
+  "finance/statements/profit-loss",
+  "finance/statements/cash-flow",
+  "finance/statements/funds-flow",
+  "finance/statements/ratio-analysis",
+  "finance/statements/stock-vs-ledger",
   "accounts/reports/day-book",
   "accounts/reports/ar-ap-aging",
   "accounts/reports/ledger-activity",
@@ -291,6 +299,88 @@ describe("Finance hub tabs", () => {
     expect(new Set(keys)).toEqual(new Set(["finance.mis_report.view"]));
     const tabs = visibleHubTabs(byId("statements"), {}, (k) => k !== "finance.mis_report.view");
     expect(tabs).toEqual([]);
+  });
+
+  describe("Statements hub and finance_statements_v2", () => {
+    const statements = () => byId("statements");
+    const ids = (flags: Record<string, boolean | string>) => visibleHubTabs(statements(), flags).map((t) => t.id);
+    const labels = (flags: Record<string, boolean | string>) =>
+      visibleHubTabs(statements(), flags).map((t) => hubTabLabel(t, flags));
+
+    it("flag OFF keeps exactly the five Phase 1 tabs with their old names", () => {
+      for (const flags of [{}, { finance_statements_v2: false }, { finance_statements_v2: "true" }, { finance_statements_v2: 1 }]) {
+        expect(ids(flags as never)).toEqual(["trial-balance", "financial-statements", "cash-flow", "fund-flow", "ratio-analysis"]);
+        expect(labels(flags as never)).toEqual(["Trial Balance", "Financial Statements", "Cash Flow", "Funds Flow", "Ratio Analysis"]);
+      }
+    });
+
+    it("flag ON lists the seven new statements first, then the five classic ones labelled (Classic)", () => {
+      const on = { finance_statements_v2: true };
+      expect(ids(on)).toEqual([
+        "statement-trial-balance",
+        "statement-balance-sheet",
+        "statement-profit-loss",
+        "statement-cash-flow",
+        "statement-funds-flow",
+        "statement-ratio-analysis",
+        "statement-stock-ledger",
+        "trial-balance",
+        "financial-statements",
+        "cash-flow",
+        "fund-flow",
+        "ratio-analysis",
+      ]);
+      expect(labels(on)).toEqual([
+        "Trial Balance",
+        "Balance Sheet",
+        "Profit & Loss",
+        "Cash Flow",
+        "Funds Flow",
+        "Ratio Analysis",
+        "Stock vs Ledger",
+        "Trial Balance (Classic)",
+        "Financial Statements (Classic)",
+        "Cash Flow (Classic)",
+        "Funds Flow (Classic)",
+        "Ratio Analysis (Classic)",
+      ]);
+    });
+
+    it("keeps the classic old routes pointing at their own tabs while the flag is on", () => {
+      const target = (path: string) => findHubLegacyTarget(hubs, path)?.tab.id;
+      expect(target("accounts/reports/trial-balance")).toBe("trial-balance");
+      expect(target("accounts/reports/financial-statements")).toBe("financial-statements");
+      expect(target("accounts/reports/cash-flow")).toBe("cash-flow");
+      expect(target("finance/mis/fund-flow")).toBe("fund-flow");
+      expect(target("accounts/reports/ratio-analysis")).toBe("ratio-analysis");
+      expect(target("finance/statements/profit-loss")).toBe("statement-profit-loss");
+    });
+
+    it("hides every tab for a user without the report-view permission and still shows the classic ones with it", () => {
+      const on = { finance_statements_v2: true };
+      expect(visibleHubTabs(statements(), on, (k) => k !== "finance.mis_report.view")).toEqual([]);
+      expect(visibleHubTabs(statements(), on, () => true)).toHaveLength(12);
+    });
+
+    it("only the exact value true counts as on", () => {
+      expect(isFinanceStatementsV2Enabled({ finance_statements_v2: true })).toBe(true);
+      for (const flags of [undefined, null, {}, { finance_statements_v2: false }, { finance_statements_v2: "true" }]) {
+        expect(isFinanceStatementsV2Enabled(flags as never)).toBe(false);
+      }
+    });
+
+    it("palette rows and Help follow the flag", () => {
+      const off = financeTabPaletteRoutes({}).filter((r) => r.section === "Finance · Statements").map((r) => r.label);
+      expect(off).toEqual(["Trial Balance", "Financial Statements", "Cash Flow", "Funds Flow", "Ratio Analysis"]);
+      const on = financeTabPaletteRoutes({ finance_statements_v2: true }).filter((r) => r.section === "Finance · Statements");
+      expect(on.map((r) => r.label)).toContain("Trial Balance (Classic)");
+      expect(on.map((r) => r.href)).toContain("/app/finance/statements?tab=statement-balance-sheet");
+      expect(resolveFinanceHelpPath("/app/finance/statements", "?tab=statement-profit-loss", { finance_statements_v2: true })).toBe(
+        "/app/finance/statements/profit-loss",
+      );
+      // Flag off: a new tab is not available, Help falls back to the first classic tab.
+      expect(resolveFinanceHelpPath("/app/finance/statements", "?tab=statement-profit-loss", {})).toBe("/app/accounts/reports/trial-balance");
+    });
   });
 
   it("only the flag value true switches the hubs on", () => {

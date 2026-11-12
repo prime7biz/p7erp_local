@@ -8,7 +8,10 @@ import {
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { listPageRootClass } from "@/components/app/listPageLayout";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
-import { logApiError } from "@/utils/logApiError";
+import { StatementClassField } from "@/components/finance/statements/StatementClassField";
+import { classLabel, effectiveStatementClass } from "@/components/finance/statements/statementClassLogic";
+import { useStatementsEnabled } from "@/hooks/useFinanceStatements";
+import { logApiError } from "@/utils/logApiError";
 import { useConfirm } from "@/components/app/useConfirm";
 
 const NATURES = ["Asset", "Liability", "Income", "Expense", "Equity"] as const;
@@ -16,8 +19,10 @@ const NORMAL_BALANCE = ["debit", "credit"] as const;
 
 type ViewMode = "list" | "hierarchy" | "design";
 
-export function AccountGroupsPage() {
+export function AccountGroupsPage() {
   const confirm = useConfirm();
+  // Tally-style statements switch (tenant flag finance_statements_v2): adds the Statement class column and field.
+  const statementsOn = useStatementsEnabled();
   const [rows, setRows] = useState<AccountGroupResponse[]>([]);
   const [hierarchy, setHierarchy] = useState<AccountGroupHierarchyNode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -403,6 +408,20 @@ export function AccountGroupsPage() {
             )}
           </div>
 
+          {statementsOn ? (
+            editingId ? (
+              <StatementClassField
+                groupId={editingId}
+                groupNameOf={(id) => rows.find((x) => x.id === id)?.name}
+                onSaved={() => void load()}
+              />
+            ) : (
+              <p className="text-xs text-text-muted">
+                Statement class: save the group first, then open it with Edit to choose where it appears in the statements.
+              </p>
+            )
+          ) : null}
+
           <div className="flex justify-end gap-2 border-t border-border-subtle pt-4">
             {editingId && (
               <button
@@ -437,19 +456,20 @@ export function AccountGroupsPage() {
                 <th className="px-4 py-3 font-medium">Nature</th>
                 <th className="px-4 py-3 font-medium">Parent</th>
                 <th className="px-4 py-3 font-medium">Flags</th>
+                {statementsOn ? <th className="px-4 py-3 font-medium">Statement class</th> : null}
                 <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="px-4 py-6 text-text-muted" colSpan={6}>
+                  <td className="px-4 py-6 text-text-muted" colSpan={statementsOn ? 7 : 6}>
                     Loading account groups…
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-6 text-text-muted" colSpan={6}>
+                  <td className="px-4 py-6 text-text-muted" colSpan={statementsOn ? 7 : 6}>
                     No account groups yet. Add one above or seed default groups.
                   </td>
                 </tr>
@@ -467,6 +487,20 @@ export function AccountGroupsPage() {
                       {r.is_bank_group ? "Bank " : ""}
                       {r.is_active ? "Active" : "Inactive"}
                     </td>
+                    {statementsOn ? (
+                      <td className="px-4 py-3 text-xs">
+                        {(() => {
+                          const eff = effectiveStatementClass(rows, r.id);
+                          if (!eff.effective) return <span className="text-status-warning-foreground">Unclassified</span>;
+                          return (
+                            <span className="text-text-secondary">
+                              {classLabel(eff.effective)}
+                              {eff.inherited ? <span className="text-text-muted"> (inherited)</span> : null}
+                            </span>
+                          );
+                        })()}
+                      </td>
+                    ) : null}
                     <td className="px-4 py-3">
                       <RowActionsMenu
                         rowId={r.id}

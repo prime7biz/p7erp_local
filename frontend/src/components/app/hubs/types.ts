@@ -22,6 +22,8 @@ export interface HubTab {
   requiresFeatureFlag?: string;
   /** Hidden only when `feature_flags[key] === false` (for default-ON flags such as `mis_reports_enabled`). */
   hideWhenFeatureFlagFalse?: string;
+  /** Different tab label while `feature_flags[flag] === true` (e.g. "Trial Balance" becomes "Trial Balance (Classic)"). */
+  labelWhenFlagOn?: { flag: string; label: string };
   /** Navigation filter only. Route and API guards stay the real control. */
   permissionKey?: string;
   /** A standalone tab is never embedded in the hub (it keeps its own page). */

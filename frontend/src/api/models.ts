@@ -8914,6 +8914,8 @@ export interface AccountGroupResponse extends AccountGroupCreate {
   id: number;
   tenant_id: number;
   code: string;
+  /** Own statement class (Tally-style statements); null = inherits / Unclassified. Set via `financeStatements.ts`. */
+  statement_class?: string | null;
 }
 
 export interface AccountGroupHierarchyNode {

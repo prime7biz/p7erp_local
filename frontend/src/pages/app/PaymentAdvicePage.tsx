@@ -1,8 +1,10 @@
 import { FormEvent, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, type PaymentRunAdviceResponse } from "@/api/client";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 export function PaymentAdvicePage() {
+  const embedded = useEmbeddedPage();
   const [search] = useSearchParams();
   const [runId, setRunId] = useState(search.get("run_id") ?? "");
   const [data, setData] = useState<PaymentRunAdviceResponse | null>(null);
@@ -22,10 +24,14 @@ export function PaymentAdvicePage() {
 
   return (
     <div className="space-y-6">
+      {!embedded && (
+        <>
       <div>
         <h1 className="text-2xl font-semibold text-text-primary">Payment Advice</h1>
         <p className="text-sm text-text-muted">Print-style payment batch advice with bank and voucher reference.</p>
       </div>
+        </>
+      )}
 
       {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
 

@@ -8,8 +8,10 @@ import {
   type PurchaseOrderResponse,
 } from "@/api/client";
 import { subtractMoney } from "@/lib/money";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 export function PurchaseWorkflowPage() {
+  const embedded = useEmbeddedPage();
   const [overview, setOverview] = useState<PurchaseApOverviewResponse | null>(null);
   const [openPayables, setOpenPayables] = useState<OutstandingBillResponse[]>([]);
   const [approvedPoRows, setApprovedPoRows] = useState<PurchaseOrderResponse[]>([]);
@@ -77,10 +79,14 @@ export function PurchaseWorkflowPage() {
 
   return (
     <div className="space-y-6">
+      {!embedded && (
+        <>
       <div>
         <h1 className="text-2xl font-semibold text-text-primary">Purchase & AP Workflow</h1>
         <p className="text-sm text-text-muted">Review purchase liabilities and prepare payments from one place.</p>
       </div>
+        </>
+      )}
       {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
       {success ? <div className="rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
 

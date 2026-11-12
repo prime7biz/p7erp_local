@@ -1,7 +1,9 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, type BankAccountCreate, type BankAccountResponse, type ChartOfAccountResponse } from "@/api/client";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 export function BankAccountsPage() {
+  const embedded = useEmbeddedPage();
   const [rows, setRows] = useState<BankAccountResponse[]>([]);
   const [ledgers, setLedgers] = useState<ChartOfAccountResponse[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -83,10 +85,14 @@ export function BankAccountsPage() {
 
   return (
     <div className="space-y-6">
+      {!embedded && (
+        <>
       <div>
         <h1 className="text-2xl font-semibold text-text-primary">Bank Accounts</h1>
         <p className="text-sm text-text-muted">Maintain bank master, linked ledger, and working balance.</p>
       </div>
+        </>
+      )}
       {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
 
       <form onSubmit={submit} className="grid gap-3 rounded-xl border border-border bg-surface-raised p-4 md:grid-cols-4">

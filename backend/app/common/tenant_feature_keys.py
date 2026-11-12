@@ -128,6 +128,8 @@ AUTO_DOCUMENT_GENERATION_ENABLED = "auto_document_generation_enabled"
 HR_ONBOARDING_WORKSPACE_V2 = "hr_onboarding_workspace_v2"
 # Simpler phone / tablet menu and card lists (frontend only; default OFF; never add to DEFAULT_ON_FEATURE_FLAGS).
 MOBILE_UI_V2 = "mobile_ui_v2"
+# Finance sidebar shows 10 hub links with tabs (frontend only; default OFF; never add to DEFAULT_ON_FEATURE_FLAGS).
+FINANCE_HUBS_V2 = "finance_hubs_v2"
 
 # Sprint 6 MIS reports (default ON — read-only).
 MIS_REPORTS_ENABLED = "mis_reports_enabled"
@@ -577,6 +579,10 @@ def is_hr_onboarding_workspace_v2_enabled(feature_flags: Any) -> bool:
 
 def is_mobile_ui_v2_enabled(feature_flags: Any) -> bool:
     return _flag_true(feature_flags, MOBILE_UI_V2)
+
+
+def is_finance_hubs_v2_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, FINANCE_HUBS_V2)
 
 
 def is_mis_reports_enabled(feature_flags: Any) -> bool:

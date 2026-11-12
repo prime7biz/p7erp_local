@@ -14,6 +14,7 @@ import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { currentMonthLocal } from "@/lib/dates";
 import { getChartOfAccountsCached, getCostCentersCached } from "@/lib/masterData";
 import { useConfirm } from "@/components/app/useConfirm";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 function linesToCreate(lines: BudgetResponse["lines"]): BudgetLineCreate[] {
   return lines.map((l) => ({
@@ -49,6 +50,7 @@ function utilizationBarClass(pct: number): string {
 }
 
 export function BudgetsPage() {
+  const embedded = useEmbeddedPage();
   const confirm = useConfirm();
   const { me } = useAuth();
   const enforcementMode =
@@ -175,8 +177,12 @@ export function BudgetsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
+      {!embedded && (
+        <>
           <h1 className="text-2xl font-semibold text-text-primary">Budgets & Budget vs Actual</h1>
           <p className="text-sm text-text-muted">Create finance budgets and compare with posted actuals.</p>
+        </>
+      )}
           <p className="text-xs text-text-muted mt-1">
             Tip: set budgets to <strong>FINAL</strong> and enable Budget enforcement in Settings → Configuration (
             <code className="mx-1 text-[11px]">off</code>/<code className="mx-1 text-[11px]">warn</code>/

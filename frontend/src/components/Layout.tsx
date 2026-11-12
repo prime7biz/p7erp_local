@@ -12,7 +12,9 @@ import { ShellBreadcrumbs } from "@/components/shell/ShellBreadcrumbs";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { AppFooter } from "@/components/shell/AppFooter";
 import { QuickCreateFab } from "@/components/shell/QuickCreateFab";
-import { filterVisibleMenuSections } from "@/components/shell/sidebarNavUtils";
+import { filterVisibleMenuSections, isMenuPermissionAllowed } from "@/components/shell/sidebarNavUtils";
+import { isFinanceHubsV2Enabled } from "@/components/finance/hubs/financeHubs";
+import { financeTabPaletteRoutes } from "@/components/finance/hubs/financeNavigation";
 import { DemoModeBanner } from "@/components/shell/DemoModeBanner";
 import { logApiError } from "@/utils/logApiError";
 import { isMobileUiV2Enabled } from "@/lib/mobileUi";
@@ -69,7 +71,11 @@ export function Layout() {
     });
     const rows = flattenMenuRoutes(filtered);
     // HR pages live as tabs inside hubs; list each tab so it stays searchable in the palette.
-    return filtered.some((s) => s.section === "HR") ? [...rows, ...hrTabPaletteRoutes(me.feature_flags)] : rows;
+    const withHr = filtered.some((s) => s.section === "HR") ? [...rows, ...hrTabPaletteRoutes(me.feature_flags)] : rows;
+    // Same for Finance when the hubs are switched on (finance_hubs_v2).
+    if (!isFinanceHubsV2Enabled(me.feature_flags) || !filtered.some((s) => s.section === "Finance")) return withHr;
+    const canAccess = (key: string) => isMenuPermissionAllowed(key, me.feature_flags, hasPermission);
+    return [...withHr, ...financeTabPaletteRoutes(me.feature_flags, canAccess)];
   }, [me, enabledOptionalUnits, hasPermission]);
 
   if (loading) return <div className="p-6">Loading...</div>;

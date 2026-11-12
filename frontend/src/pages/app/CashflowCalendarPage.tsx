@@ -4,6 +4,7 @@ import { api, type BtbLcRow, type OutstandingBillResponse } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
 import { toLocalISODate } from "@/lib/dates";
 import { addMoney, subtractMoney } from "@/lib/money";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 type DayCell = { date: string; inflow: number; outflow: number; labels: string[] };
 
@@ -18,6 +19,7 @@ function monthDays(year: number, month0: number): Date[] {
 }
 
 export function CashflowCalendarPage() {
+  const embedded = useEmbeddedPage();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
@@ -98,7 +100,11 @@ export function CashflowCalendarPage() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
+      {!embedded && (
+        <>
           <h1 className="text-2xl font-bold text-text-primary">Cashflow Calendar</h1>
+        </>
+      )}
           <p className="text-text-muted text-sm mt-0.5">
             Planned inflows/outflows from open bills and LC maturities.{" "}
             <Link to="/app/finance/cash-forecast" className="text-brand-primary hover:underline">

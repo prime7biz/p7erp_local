@@ -6,8 +6,10 @@ import { downloadCsv, downloadXlsx, printCurrentPage } from "@/lib/reportExport"
 import { todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 export function FinancialStatementsPage() {
+  const embedded = useEmbeddedPage();
   const [asOfDate, setAsOfDate] = useState(todayLocalISO());
   const [groupId, setGroupId] = useState<number | "">("");
   const [groups, setGroups] = useState<AccountGroupResponse[]>([]);
@@ -110,8 +112,12 @@ export function FinancialStatementsPage() {
       </div>
       <div className="no-print flex flex-wrap items-end gap-2">
         <div className="mr-auto">
+      {!embedded && (
+        <>
         <h1 className="text-2xl font-semibold text-text-primary">Financial Statements</h1>
         <p className="text-sm text-text-muted">Profit & loss and balance sheet summary. Click a heading to see its accounts.</p>
+        </>
+      )}
         </div>
         <input type="date" className="rounded border px-3 py-2 text-sm" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} />
         <select className="rounded border px-3 py-2 text-sm" value={basis} onChange={(e) => setBasis(e.target.value as ReportBasis)} title="Income & expense period">

@@ -2,8 +2,10 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api, type FxReceiptCreate, type FxReceiptResponse, type FxUnsettledSummaryResponse } from "@/api/client";
 import { todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 export function FxReceiptsPage() {
+  const embedded = useEmbeddedPage();
   const [rows, setRows] = useState<FxReceiptResponse[]>([]);
   const [summary, setSummary] = useState<FxUnsettledSummaryResponse | null>(null);
   const [error, setError] = useState("");
@@ -64,10 +66,14 @@ export function FxReceiptsPage() {
 
   return (
     <div className="space-y-6">
+      {!embedded && (
+        <>
       <div>
         <h1 className="text-2xl font-semibold text-text-primary">FX Receipts & Settlement</h1>
         <p className="mt-1 text-sm text-text-muted">Track foreign currency receipts and settlement workflow.</p>
       </div>
+        </>
+      )}
       {summary ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div className="rounded-xl border bg-surface-raised p-3">

@@ -1,6 +1,8 @@
 import type { MeResponse, TenantType } from "@/api/client";
 import { isNavItemVisibleForTenant, type MenuSection, type TenantTypeFilter } from "@/app/sidebarConfig";
 import { getRbacMode } from "@/components/auth/rbacMode";
+import { isFinanceHubsV2Enabled } from "@/components/finance/hubs/financeHubs";
+import { buildFinanceHubSection } from "@/components/finance/hubs/financeNavigation";
 
 /** Section is visible for this tenant type (both sees everything). */
 export function isVisible(tenantType: TenantType, filter?: TenantTypeFilter[]): boolean {
@@ -55,9 +57,24 @@ export function isMenuPermissionAllowed(
  */
 export function filterVisibleMenuSections(sections: MenuSection[], ctx: MenuVisibilityContext): MenuSection[] {
   const { tenantType, enabledOptionalProductionUnits, featureFlags, hasPermission } = ctx;
-  return sections
+  // finance_hubs_v2 ON: the Finance section is replaced by the hub links, each filtered by its own
+  // permission (finance.access or facility.access), so the section-level check is skipped for it.
+  const financeHubsOn = isFinanceHubsV2Enabled(featureFlags);
+  const canAccess = (key: string) => isMenuPermissionAllowed(key, featureFlags, hasPermission);
+  const base = financeHubsOn
+    ? sections.flatMap((s) => {
+        if (s.section !== "Finance") return [s];
+        const hubSection = buildFinanceHubSection(s, featureFlags, canAccess);
+        return hubSection ? [hubSection] : [];
+      })
+    : sections;
+  return base
     .filter((s) => isVisible(tenantType, s.visibleFor))
-    .filter((s) => isMenuPermissionAllowed(sectionPermissionKey(s.section), featureFlags, hasPermission))
+    .filter(
+      (s) =>
+        (financeHubsOn && s.section === "Finance") ||
+        isMenuPermissionAllowed(sectionPermissionKey(s.section), featureFlags, hasPermission),
+    )
     .map((s) => {
       if (s.subsections && s.subsections.length > 0) {
         const subsections = s.subsections

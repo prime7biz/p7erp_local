@@ -9,6 +9,7 @@ import { downloadCsv } from "@/lib/reportExport";
 import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 const STATUS_OPTIONS = ["DRAFT", "APPROVED", "PROCESSED", "EXECUTED"] as const;
 
@@ -31,6 +32,7 @@ function defaultFilters(): SettlementFilters {
 }
 
 export function SettlementAuditPage() {
+  const embedded = useEmbeddedPage();
   const [rows, setRows] = useState<SettlementAuditRow[]>([]);
   const [totals, setTotals] = useState<SettlementAuditResponse["totals"]>({
     row_count: 0,
@@ -187,12 +189,16 @@ export function SettlementAuditPage() {
 
   return (
     <div className="space-y-6">
+      {!embedded && (
+        <>
       <div>
         <h1 className="text-2xl font-semibold text-text-primary">Settlement Audit</h1>
         <p className="text-sm text-text-muted">
           Track source currency, FX rate, and base settlement values for payment runs.
         </p>
       </div>
+        </>
+      )}
 
       {error ? (
         <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div>

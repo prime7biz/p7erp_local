@@ -7,8 +7,10 @@ import { todayLocalISO } from "@/lib/dates";
 import { sumMoneyBy } from "@/lib/money";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 export function TrialBalancePage() {
+  const embedded = useEmbeddedPage();
   const [searchParams] = useSearchParams();
   const natureFilter = searchParams.get("nature") ?? "";
   const [asOfDate, setAsOfDate] = useState(() => dateParam(searchParams.get("as_of"), todayLocalISO()));
@@ -101,6 +103,8 @@ export function TrialBalancePage() {
       </div>
       <div className="no-print flex flex-wrap items-end gap-2">
         <div className="mr-auto">
+      {!embedded && (
+        <>
         <h1 className="text-2xl font-semibold text-text-primary">Trial Balance</h1>
         <p className="text-sm text-text-muted">
           Ledger-wise debit and credit summary. Click an account to see its vouchers.
@@ -119,6 +123,8 @@ export function TrialBalancePage() {
             </>
           ) : null}
         </p>
+        </>
+      )}
         </div>
         <input type="date" className="rounded border px-3 py-2 text-sm" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} />
         <select className="rounded border px-3 py-2 text-sm" value={basis} onChange={(e) => setBasis(e.target.value as ReportBasis)} title="Income & expense period">

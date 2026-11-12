@@ -31,6 +31,19 @@ export const financeSection: TutorialSection = {
 4. **Reports** — Day Book, Trial Balance, Financial Statements, Ledger Activity, Exception Reports and more. These have their own guides in the **Finance reports** section of Help.
 5. **Planning** and **Loans & facilities** — budgets, cash forecast, profitability, and bank loan facilities.
 
+## Compact Finance menu (switched on per company)
+
+An admin can switch on **Finance hubs (compact menu)** in **Settings → Configuration → More features → Finance navigation**. Then the long Finance menu shrinks to **10 links**, and each link opens a **hub** whose tabs are the same pages you already know:
+
+- **Finance Home** — shortcuts to the other hubs.
+- **Vouchers & Payables** — Vouchers, Approvals, Outstanding Bills, Vendor Bills (GRN), Purchase & AP and the optional registers. **Print vouchers** and the **New credit note / debit note / stock transfer** buttons (when switched on) sit at the top of this hub.
+- **Banking** — Bank Accounts, Reconciliation, Payment Runs, Payment Advice, Settlement Audit, FX Receipts.
+- **Statements** — Trial Balance, Financial Statements, Cash Flow, Funds Flow, Ratio Analysis.
+- **Reports & MIS** — Day Book, AR/AP Aging, Ledger Activity, Exceptions, Voucher Analytics, Group Summary and the Financial MIS reports.
+- **Budgets & Cash**, **Profitability**, **Tax & Compliance**, **Loans & Facilities** and **Finance Setup**.
+
+Old links and bookmarks still work: they open the matching tab. Opening one voucher, a cheque print, a party ledger or a facility still shows that record's own page. Who can see what does not change. Press **Ctrl+K** and type a tab name to jump straight to it.
+
 ## What happens next
 
 - A voucher you enter starts as **DRAFT** and moves through **SUBMITTED → CHECKED → RECOMMENDED → APPROVED → POSTED** (see the diagram below). Only **POSTED** vouchers change ledger balances and reports.
@@ -70,7 +83,7 @@ export const financeSection: TutorialSection = {
         "finance menu",
       ],
       estimatedMinutes: 5,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-12",
       featured: true,
       audience: "finance",
       coverImage: "/tutorials/screens/accounts-vouchers.jpg",

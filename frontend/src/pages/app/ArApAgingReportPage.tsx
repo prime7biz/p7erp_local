@@ -3,8 +3,10 @@ import { api, type BillsAgingResponse } from "@/api/client";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 export function ArApAgingReportPage() {
+  const embedded = useEmbeddedPage();
   const [billType, setBillType] = useState<"PAYABLE" | "RECEIVABLE">("RECEIVABLE");
   const [asOfDate, setAsOfDate] = useState(todayLocalISO());
   const [partyName, setPartyName] = useState("");
@@ -60,8 +62,12 @@ export function ArApAgingReportPage() {
         </p>
       </div>
       <div className="no-print">
+      {!embedded && (
+        <>
         <h1 className="text-2xl font-semibold text-text-primary">AR/AP Aging Report</h1>
         <p className="text-sm text-text-muted">Dedicated aging analysis view for receivables and payables.</p>
+        </>
+      )}
       </div>
       {error ? <div className="no-print rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
       {success ? <div className="no-print rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}

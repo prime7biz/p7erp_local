@@ -15,8 +15,10 @@ import { todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { saveBlob } from "@/lib/fileSave";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 export function BankReconciliationPage() {
+  const embedded = useEmbeddedPage();
   const { me } = useAuth();
   const [accounts, setAccounts] = useState<BankAccountResponse[]>([]);
   const [rows, setRows] = useState<BankReconciliationResponse[]>([]);
@@ -321,8 +323,12 @@ export function BankReconciliationPage() {
   return (
     <div className="space-y-6">
       <div>
+      {!embedded && (
+        <>
         <h1 className="text-2xl font-semibold text-text-primary">Bank Reconciliation</h1>
         <p className="text-sm text-text-muted">Compare statement balance with book balance and close differences.</p>
+        </>
+      )}
         <div className={`mt-2 inline-flex rounded-full border px-3 py-1 text-xs font-medium ${selectedStatusClass()}`}>
           Selected Status: {selectedStatusLabel()}
         </div>

@@ -9,8 +9,10 @@ import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 export function VoucherAnalyticsPage() {
+  const embedded = useEmbeddedPage();
   const [fromDate, setFromDate] = useState(startOfMonthLocalISO());
   const [toDate, setToDate] = useState(todayLocalISO());
   const [voucherType, setVoucherType] = useState("");
@@ -126,8 +128,12 @@ export function VoucherAnalyticsPage() {
         </p>
       </div>
       <div className="no-print">
+      {!embedded && (
+        <>
         <h1 className="text-2xl font-semibold text-text-primary">Voucher Analytics</h1>
         <p className="text-sm text-text-muted">Voucher summary, monthly trend and top preparers.</p>
+        </>
+      )}
       </div>
       {error ? <div className="no-print rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
       {success ? <div className="no-print rounded border border-status-success/20 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}

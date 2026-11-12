@@ -8,6 +8,7 @@ import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { getChartOfAccountsCached, getAccountGroupsCached } from "@/lib/masterData";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 const CTL =
   "rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20";
@@ -18,6 +19,7 @@ const BTN =
 const EDITABLE_STATUSES = new Set(["DRAFT", "REJECTED"]);
 
 export function DayBookPage() {
+  const embedded = useEmbeddedPage();
   const navigate = useNavigate();
   const [fromDate, setFromDate] = useState(startOfMonthLocalISO());
   const [toDate, setToDate] = useState(todayLocalISO());
@@ -128,12 +130,16 @@ export function DayBookPage() {
         </p>
       </div>
       <div className="no-print space-y-3">
+      {!embedded && (
+        <>
         <div>
           <h1 className="text-2xl font-semibold text-text-primary">Day Book</h1>
           <p className="text-sm text-text-muted">
             Voucher transaction register with date range filtering. Click a voucher number to open it, or use Actions to view, edit or print.
           </p>
         </div>
+        </>
+      )}
         <div className="flex flex-wrap items-end gap-2">
           <input type="date" className={CTL} value={fromDate} onChange={(e) => setFromDate(e.target.value)} title="From date" />
           <input type="date" className={CTL} value={toDate} onChange={(e) => setToDate(e.target.value)} title="To date" />

@@ -11,6 +11,7 @@ import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
 import { sumMoneyBy } from "@/lib/money";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 function sumOutstanding(r: BillsAgingResponse | null): number {
   if (!r?.rows?.length) return 0;
@@ -80,6 +81,7 @@ function buildMetrics(fs: FinancialStatementsResponse, arAging: BillsAgingRespon
 }
 
 export function RatioAnalysisPage() {
+  const embedded = useEmbeddedPage();
   const [asOfDate, setAsOfDate] = useState(todayLocalISO());
   const [compareDate, setCompareDate] = useState("");
   const [groupId, setGroupId] = useState<number | "">("");
@@ -200,7 +202,11 @@ export function RatioAnalysisPage() {
       </div>
       <div className="no-print flex flex-wrap items-end gap-2">
         <div className="mr-auto">
+      {!embedded && (
+        <>
           <h1 className="text-2xl font-semibold text-text-primary">Ratio Analysis</h1>
+        </>
+      )}
           <p className="text-sm text-text-muted">
             Health metrics from financial statements and AR/AP aging.{" "}
             <Link className="text-brand-primary hover:underline" to="/app/accounts/reports/ar-ap-aging">

@@ -13,6 +13,7 @@ import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { addMoney, subtractMoney, toMoneyString } from "@/lib/money";
 import { getBankAccountsCached } from "@/lib/masterData";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 const RUN_STATUSES = ["DRAFT", "APPROVED", "PROCESSED", "EXECUTED"] as const;
 
@@ -25,6 +26,7 @@ function statusBadgeClass(status: string) {
 }
 
 export function PaymentRunsPage() {
+  const embedded = useEmbeddedPage();
   const { me } = useAuth();
   const [bankAccounts, setBankAccounts] = useState<BankAccountResponse[]>([]);
   const [payables, setPayables] = useState<OutstandingBillResponse[]>([]);
@@ -199,10 +201,14 @@ export function PaymentRunsPage() {
 
   return (
     <div className="space-y-6">
+      {!embedded && (
+        <>
       <div>
         <h1 className="text-2xl font-semibold text-text-primary">Payment Runs</h1>
         <p className="text-sm text-text-muted">Batch payable bills through DRAFT - APPROVED - PROCESSED - EXECUTED workflow.</p>
       </div>
+        </>
+      )}
       {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
       {success ? <div className="rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
 

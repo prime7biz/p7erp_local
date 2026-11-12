@@ -9,8 +9,10 @@ import {
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
 import { useConfirm } from "@/components/app/useConfirm";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 export function AccountsCurrencyPage() {
+  const embedded = useEmbeddedPage();
   const confirm = useConfirm();
   const [rates, setRates] = useState<CurrencyExchangeRateResponse[]>([]);
   const [reval, setReval] = useState<MultiCurrencyRevaluationResponse | null>(null);
@@ -110,10 +112,14 @@ export function AccountsCurrencyPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      {!embedded && (
+        <>
         <div>
           <h1 className="text-2xl font-semibold text-text-primary">Multi-Currency</h1>
           <p className="text-sm text-text-muted">Exchange rate maintenance and FX revaluation preview.</p>
         </div>
+        </>
+      )}
         <Link to="/app/finance/fx-receipts" className="text-sm font-medium text-brand-primary hover:underline">
           FX receipts →
         </Link>

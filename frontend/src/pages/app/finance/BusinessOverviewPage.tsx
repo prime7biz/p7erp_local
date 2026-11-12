@@ -4,6 +4,7 @@ import { api } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
 import { listPageKpiGridClass } from "@/components/app/listPageLayout";
 import { AiMetaDisplay, type AiGovernanceMetaView } from "@/components/external-access/AiMetaDisplay";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 type Overview = {
   base_currency?: string;
@@ -30,6 +31,7 @@ function fmtMoney(n: unknown, ccy: string) {
 }
 
 export function BusinessOverviewPage() {
+  const embedded = useEmbeddedPage();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [health, setHealth] = useState<Record<string, unknown> | null>(null);
   const [rules, setRules] = useState<Record<string, unknown> | null>(null);
@@ -81,10 +83,14 @@ export function BusinessOverviewPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
+      {!embedded && (
+        <>
         <div>
           <h1 className="text-xl font-semibold text-text-primary">Business overview</h1>
           <p className="text-sm text-text-muted">Cross-module KPIs and optional AI narrative.</p>
         </div>
+        </>
+      )}
         <Link to="/app/finance/facilities/dashboard" className="text-sm text-brand-primary">
           Facilities dashboard →
         </Link>

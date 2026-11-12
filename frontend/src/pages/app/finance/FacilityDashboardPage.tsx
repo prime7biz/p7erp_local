@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 function errMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
 export function FacilityDashboardPage() {
+  const embedded = useEmbeddedPage();
   const [summary, setSummary] = useState<Record<string, unknown> | null>(null);
   const [ob, setOb] = useState<Record<string, unknown> | null>(null);
   const [summaryErr, setSummaryErr] = useState("");
@@ -41,10 +43,14 @@ export function FacilityDashboardPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
+      {!embedded && (
+        <>
         <div>
           <h1 className="text-xl font-semibold text-text-primary">Facilities dashboard</h1>
           <p className="text-sm text-text-muted">Debt and EMI aggregates (tenant-wide).</p>
         </div>
+        </>
+      )}
         <Link to="/app/finance/facilities" className="text-sm text-brand-primary">
           All facilities →
         </Link>

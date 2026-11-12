@@ -10,10 +10,12 @@ import {
 } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 type Mode = "style" | "lc" | "variance" | "trade_case";
 
 export function ProfitabilityPage({ defaultMode = "style" }: { defaultMode?: Mode }) {
+  const embedded = useEmbeddedPage();
   const [mode, setMode] = useState<Mode>(defaultMode);
   const [entityId, setEntityId] = useState("");
   const [styles, setStyles] = useState<StyleResponse[]>([]);
@@ -117,8 +119,12 @@ export function ProfitabilityPage({ defaultMode = "style" }: { defaultMode?: Mod
   return (
     <div className="space-y-6">
       <div>
+      {!embedded && (
+        <>
         <h1 className="text-2xl font-semibold text-text-primary">Profitability & Variance</h1>
         <p className="mt-1 text-sm text-text-muted">Style, order/LC, trade case margin, and costing variance.</p>
+        </>
+      )}
         <p className="mt-2 text-xs text-text-muted">
           <strong>Order costing variance</strong> compares quotation vs BOM vs actuals. For inventory-issued quantities tied to BOM lines (PMI / consumption), also see{" "}
           <Link className="text-status-info hover:underline" to="/app/inventory/consumption-control">

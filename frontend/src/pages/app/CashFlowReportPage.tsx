@@ -3,8 +3,10 @@ import { api, type CashFlowStatementResponse, type CashForecastScenarioResponse 
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 export function CashFlowReportPage() {
+  const embedded = useEmbeddedPage();
   const [mode, setMode] = useState<"statement" | "forecast">("statement");
   const [fromDate, setFromDate] = useState(startOfMonthLocalISO());
   const [toDate, setToDate] = useState(todayLocalISO());
@@ -107,8 +109,12 @@ export function CashFlowReportPage() {
       </div>
       <div className="no-print flex flex-wrap items-end gap-2">
         <div className="mr-auto">
+      {!embedded && (
+        <>
           <h1 className="text-2xl font-semibold text-text-primary">Cash Flow Report</h1>
           <p className="text-sm text-text-muted">Accounting statement view plus forecast scenario planning view.</p>
+        </>
+      )}
         </div>
         <button className={`rounded border px-3 py-2 text-sm ${mode === "statement" ? "bg-brand-primary text-brand-primary-foreground" : ""}`} onClick={() => setMode("statement")}>Statement</button>
         <button className={`rounded border px-3 py-2 text-sm ${mode === "forecast" ? "bg-brand-primary text-brand-primary-foreground" : ""}`} onClick={() => setMode("forecast")}>Forecast</button>

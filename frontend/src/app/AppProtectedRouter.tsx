@@ -5,6 +5,7 @@ import { TradeFeatureRouteGuard } from "@/components/TradeFeatureRouteGuard";
 import { KnittingFeatureRouteGuard } from "@/components/KnittingFeatureRouteGuard";
 import { PermissionRouteGuard } from "@/components/auth/PermissionRouteGuard";
 import { HrLegacyRedirect } from "@/components/hr/kit/HrLegacyRedirect";
+import { FinanceLegacyRoute } from "@/components/finance/hubs/FinanceLegacyRoute";
 import { ROUTE_PERMISSION } from "@/app/routePermissions";
 // Translations are only used inside the app, so i18n starts here instead of in main.tsx.
 import "@/i18n";
@@ -596,6 +597,13 @@ const HrEmployeeNewPage = lazy(() =>
   import("@/pages/app/hr/HrEmployeeNewPage").then((m) => ({ default: m.HrEmployeeNewPage })),
 );
 const HrDashboardPage = lazy(() => import("@/pages/app/hr/HrDashboardPage").then((m) => ({ default: m.HrDashboardPage })));
+// Finance hubs (flag finance_hubs_v2): the three profitability routes share one page with a start mode.
+const FinanceHubPage = lazy(() =>
+  import("@/components/finance/hubs/FinanceHubPage").then((m) => ({ default: m.FinanceHubPage })),
+);
+const StyleProfitabilityPage = () => <ProfitabilityPage defaultMode="style" />;
+const LcProfitabilityPage = () => <ProfitabilityPage defaultMode="lc" />;
+const CostingVariancePage = () => <ProfitabilityPage defaultMode="variance" />;
 const HrHubPage = lazy(() => import("@/components/hr/kit/HrHubPage").then((m) => ({ default: m.HrHubPage })));
 const HrBangladeshRulesPage = lazy(() =>
   import("@/pages/app/hr/bangladesh/HrBangladeshRulesPage").then((m) => ({ default: m.HrBangladeshRulesPage })),
@@ -944,73 +952,84 @@ export function AppProtectedRouter() {
           <Route path="reports/exceptions" element={<ReportExceptionsPage />} />
         </Route>
         <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.finance} />}>
-          <Route path="accounts/advance-options" element={<AdvanceOptionsPage />} />
-          <Route path="accounts/groups" element={<AccountGroupsPage />} />
-          <Route path="accounts" element={<ChartOfAccountsPage />} />
-          <Route path="accounts/vouchers" element={<VouchersPage />} />
+          {/* Finance hubs (tenant flag finance_hubs_v2): existing pages shown as ?tab= (see components/finance/hubs/financeHubs.ts). */}
+          <Route path="finance/home" element={<FinanceHubPage hubId="home" />} />
+          <Route path="finance/vouchers-payables" element={<FinanceHubPage hubId="vouchers-payables" />} />
+          <Route path="finance/banking" element={<FinanceHubPage hubId="banking" />} />
+          <Route path="finance/statements" element={<FinanceHubPage hubId="statements" />} />
+          <Route path="finance/reports" element={<FinanceHubPage hubId="reports" />} />
+          <Route path="finance/planning" element={<FinanceHubPage hubId="planning" />} />
+          <Route path="finance/profitability" element={<FinanceHubPage hubId="profitability" />} />
+          <Route path="finance/tax-compliance" element={<FinanceHubPage hubId="tax-compliance" />} />
+          <Route path="finance/setup" element={<FinanceHubPage hubId="setup" />} />
+          <Route path="accounts/advance-options" element={<FinanceLegacyRoute from="accounts/advance-options" Page={AdvanceOptionsPage} />} />
+          <Route path="accounts/groups" element={<FinanceLegacyRoute from="accounts/groups" Page={AccountGroupsPage} />} />
+          <Route path="accounts" element={<FinanceLegacyRoute from="accounts" Page={ChartOfAccountsPage} />} />
+          <Route path="accounts/vouchers" element={<FinanceLegacyRoute from="accounts/vouchers" Page={VouchersPage} />} />
           <Route path="accounts/vouchers/print" element={<VoucherPrintPage />} />
           <Route path="accounts/vouchers/:voucherId" element={<VoucherDetailPage />} />
-          <Route path="accounts/vouchers/approval-queue" element={<VoucherApprovalsPage />} />
-          <Route path="accounts/currency" element={<AccountsCurrencyPage />} />
-          <Route path="accounts/outstanding-bills" element={<OutstandingBillsPage />} />
-          <Route path="accounts/cost-centers" element={<CostCentersPage />} />
-          <Route path="accounts/budgets" element={<BudgetsPage />} />
-          <Route path="accounts/purchase-workflow" element={<PurchaseWorkflowPage />} />
-          <Route path="accounts/vendor-bills" element={<VendorBillsPage />} />
-          <Route path="banking/accounts" element={<BankAccountsPage />} />
-          <Route path="banking/reconciliation" element={<BankReconciliationPage />} />
-          <Route path="banking/payment-runs" element={<PaymentRunsPage />} />
-          <Route path="banking/settlement-audit" element={<SettlementAuditPage />} />
-          <Route path="banking/payment-advice" element={<PaymentAdvicePage />} />
-          <Route path="cashflow/calendar" element={<CashflowCalendarPage />} />
-          <Route path="accounts/reports/day-book" element={<DayBookPage />} />
-          <Route path="accounts/reports/trial-balance" element={<TrialBalancePage />} />
-          <Route path="accounts/reports/financial-statements" element={<FinancialStatementsPage />} />
-          <Route path="accounts/reports/ar-ap-aging" element={<ArApAgingReportPage />} />
-          <Route path="finance/party-ledgers" element={<PartyLedgersPage />} />
+          <Route path="accounts/vouchers/approval-queue" element={<FinanceLegacyRoute from="accounts/vouchers/approval-queue" Page={VoucherApprovalsPage} />} />
+          <Route path="accounts/currency" element={<FinanceLegacyRoute from="accounts/currency" Page={AccountsCurrencyPage} />} />
+          <Route path="accounts/outstanding-bills" element={<FinanceLegacyRoute from="accounts/outstanding-bills" Page={OutstandingBillsPage} />} />
+          <Route path="accounts/cost-centers" element={<FinanceLegacyRoute from="accounts/cost-centers" Page={CostCentersPage} />} />
+          <Route path="accounts/budgets" element={<FinanceLegacyRoute from="accounts/budgets" Page={BudgetsPage} />} />
+          <Route path="accounts/purchase-workflow" element={<FinanceLegacyRoute from="accounts/purchase-workflow" Page={PurchaseWorkflowPage} />} />
+          <Route path="accounts/vendor-bills" element={<FinanceLegacyRoute from="accounts/vendor-bills" Page={VendorBillsPage} />} />
+          <Route path="banking/accounts" element={<FinanceLegacyRoute from="banking/accounts" Page={BankAccountsPage} />} />
+          <Route path="banking/reconciliation" element={<FinanceLegacyRoute from="banking/reconciliation" Page={BankReconciliationPage} />} />
+          <Route path="banking/payment-runs" element={<FinanceLegacyRoute from="banking/payment-runs" Page={PaymentRunsPage} />} />
+          <Route path="banking/settlement-audit" element={<FinanceLegacyRoute from="banking/settlement-audit" Page={SettlementAuditPage} />} />
+          <Route path="banking/payment-advice" element={<FinanceLegacyRoute from="banking/payment-advice" Page={PaymentAdvicePage} />} />
+          <Route path="cashflow/calendar" element={<FinanceLegacyRoute from="cashflow/calendar" Page={CashflowCalendarPage} />} />
+          <Route path="accounts/reports/day-book" element={<FinanceLegacyRoute from="accounts/reports/day-book" Page={DayBookPage} />} />
+          <Route path="accounts/reports/trial-balance" element={<FinanceLegacyRoute from="accounts/reports/trial-balance" Page={TrialBalancePage} />} />
+          <Route path="accounts/reports/financial-statements" element={<FinanceLegacyRoute from="accounts/reports/financial-statements" Page={FinancialStatementsPage} />} />
+          <Route path="accounts/reports/ar-ap-aging" element={<FinanceLegacyRoute from="accounts/reports/ar-ap-aging" Page={ArApAgingReportPage} />} />
+          <Route path="finance/party-ledgers" element={<FinanceLegacyRoute from="finance/party-ledgers" Page={PartyLedgersPage} />} />
           <Route path="finance/party-ledgers/new" element={<PartyLedgerCreatePage />} />
           <Route path="finance/party-ledgers/:id" element={<PartyLedgerDetailPage />} />
-          <Route path="finance/tax-ledgers" element={<TaxLedgersPage />} />
-          <Route path="finance/gst/returns" element={<GstReturnsPage />} />
-          <Route path="finance/gst/settings" element={<TaxSettingsPage />} />
-          <Route path="finance/voucher-types" element={<VoucherTypeConfigPage />} />
-          <Route path="finance/voucher-classes" element={<VoucherClassPage />} />
-          <Route path="finance/recurring-vouchers" element={<RecurringVouchersPage />} />
-          <Route path="finance/registers/post-dated" element={<PostDatedRegisterPage />} />
-          <Route path="finance/registers/memorandum" element={<MemorandumRegisterPage />} />
+          <Route path="finance/tax-ledgers" element={<FinanceLegacyRoute from="finance/tax-ledgers" Page={TaxLedgersPage} />} />
+          <Route path="finance/gst/returns" element={<FinanceLegacyRoute from="finance/gst/returns" Page={GstReturnsPage} />} />
+          <Route path="finance/gst/settings" element={<FinanceLegacyRoute from="finance/gst/settings" Page={TaxSettingsPage} />} />
+          <Route path="finance/voucher-types" element={<FinanceLegacyRoute from="finance/voucher-types" Page={VoucherTypeConfigPage} />} />
+          <Route path="finance/voucher-classes" element={<FinanceLegacyRoute from="finance/voucher-classes" Page={VoucherClassPage} />} />
+          <Route path="finance/recurring-vouchers" element={<FinanceLegacyRoute from="finance/recurring-vouchers" Page={RecurringVouchersPage} />} />
+          <Route path="finance/registers/post-dated" element={<FinanceLegacyRoute from="finance/registers/post-dated" Page={PostDatedRegisterPage} />} />
+          <Route path="finance/registers/memorandum" element={<FinanceLegacyRoute from="finance/registers/memorandum" Page={MemorandumRegisterPage} />} />
           <Route path="finance/credit-notes/new" element={<CreditNoteCreatePage />} />
           <Route path="finance/debit-notes/new" element={<DebitNoteCreatePage />} />
           <Route path="finance/stock-transfer-vouchers/new" element={<StockTransferCreatePage />} />
-          <Route path="finance/tds" element={<TdsSettingsPage />} />
-          <Route path="finance/tds/reports" element={<TdsReportsPage />} />
-          <Route path="finance/mis" element={<FinancialDashboardPage />} />
-          <Route path="finance/mis/fund-flow" element={<FundFlowPage />} />
-          <Route path="finance/mis/ratios" element={<RatioAnalysisMisPage />} />
-          <Route path="finance/mis/comparative" element={<ComparativeStatementsPage />} />
-          <Route path="finance/mis/cash-scenarios" element={<CashFlowScenarioPage />} />
-          <Route path="accounts/reports/ledger-activity" element={<LedgerActivityPage />} />
-          <Route path="accounts/reports/exceptions" element={<ExceptionReportsPage />} />
+          <Route path="finance/tds" element={<FinanceLegacyRoute from="finance/tds" Page={TdsSettingsPage} />} />
+          <Route path="finance/tds/reports" element={<FinanceLegacyRoute from="finance/tds/reports" Page={TdsReportsPage} />} />
+          <Route path="finance/mis" element={<FinanceLegacyRoute from="finance/mis" Page={FinancialDashboardPage} />} />
+          <Route path="finance/mis/fund-flow" element={<FinanceLegacyRoute from="finance/mis/fund-flow" Page={FundFlowPage} />} />
+          <Route path="finance/mis/ratios" element={<FinanceLegacyRoute from="finance/mis/ratios" Page={RatioAnalysisMisPage} />} />
+          <Route path="finance/mis/comparative" element={<FinanceLegacyRoute from="finance/mis/comparative" Page={ComparativeStatementsPage} />} />
+          <Route path="finance/mis/cash-scenarios" element={<FinanceLegacyRoute from="finance/mis/cash-scenarios" Page={CashFlowScenarioPage} />} />
+          <Route path="accounts/reports/ledger-activity" element={<FinanceLegacyRoute from="accounts/reports/ledger-activity" Page={LedgerActivityPage} />} />
+          <Route path="accounts/reports/exceptions" element={<FinanceLegacyRoute from="accounts/reports/exceptions" Page={ExceptionReportsPage} />} />
           <Route path="procurement/requisitions" element={<RequisitionsPage />} />
           <Route path="procurement/requisitions/:requisitionId" element={<RequisitionDetailPage />} />
-          <Route path="accounts/reports/voucher-analytics" element={<VoucherAnalyticsPage />} />
-          <Route path="accounts/reports/group-summary" element={<GroupSummaryPage />} />
-          <Route path="accounts/reports/ratio-analysis" element={<RatioAnalysisPage />} />
-          <Route path="accounts/reports/cash-flow" element={<CashFlowReportPage />} />
-          <Route path="accounts/accounting-periods" element={<AccountingPeriodsPage />} />
-          <Route path="finance/cash-forecast" element={<CashForecastPage />} />
-          <Route path="finance/fx-receipts" element={<FxReceiptsPage />} />
-          <Route path="finance/style-profitability" element={<ProfitabilityPage defaultMode="style" />} />
-          <Route path="finance/lc-profitability" element={<ProfitabilityPage defaultMode="lc" />} />
-          <Route path="finance/costing-variance" element={<ProfitabilityPage defaultMode="variance" />} />
+          <Route path="accounts/reports/voucher-analytics" element={<FinanceLegacyRoute from="accounts/reports/voucher-analytics" Page={VoucherAnalyticsPage} />} />
+          <Route path="accounts/reports/group-summary" element={<FinanceLegacyRoute from="accounts/reports/group-summary" Page={GroupSummaryPage} />} />
+          <Route path="accounts/reports/ratio-analysis" element={<FinanceLegacyRoute from="accounts/reports/ratio-analysis" Page={RatioAnalysisPage} />} />
+          <Route path="accounts/reports/cash-flow" element={<FinanceLegacyRoute from="accounts/reports/cash-flow" Page={CashFlowReportPage} />} />
+          <Route path="accounts/accounting-periods" element={<FinanceLegacyRoute from="accounts/accounting-periods" Page={AccountingPeriodsPage} />} />
+          <Route path="finance/cash-forecast" element={<FinanceLegacyRoute from="finance/cash-forecast" Page={CashForecastPage} />} />
+          <Route path="finance/fx-receipts" element={<FinanceLegacyRoute from="finance/fx-receipts" Page={FxReceiptsPage} />} />
+          <Route path="finance/style-profitability" element={<FinanceLegacyRoute from="finance/style-profitability" Page={StyleProfitabilityPage} />} />
+          <Route path="finance/lc-profitability" element={<FinanceLegacyRoute from="finance/lc-profitability" Page={LcProfitabilityPage} />} />
+          <Route path="finance/costing-variance" element={<FinanceLegacyRoute from="finance/costing-variance" Page={CostingVariancePage} />} />
         </Route>
         <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.facility} />}>
-          <Route path="finance/facilities/dashboard" element={<FacilityDashboardPage />} />
+          <Route path="finance/facilities-hub" element={<FinanceHubPage hubId="facilities" />} />
+          <Route path="finance/facilities/dashboard" element={<FinanceLegacyRoute from="finance/facilities/dashboard" Page={FacilityDashboardPage} />} />
           <Route path="finance/facilities/new" element={<FacilityCreatePage />} />
           <Route path="finance/facilities/:facilityId/utilizations/new" element={<UtilizationCreatePage />} />
           <Route path="finance/facilities/:facilityId" element={<FacilityDetailPage />} />
-          <Route path="finance/facilities" element={<FacilitiesPage />} />
+          <Route path="finance/facilities" element={<FinanceLegacyRoute from="finance/facilities" Page={FacilitiesPage} />} />
           <Route path="finance/utilizations/:utilizationId" element={<UtilizationDetailPage />} />
-          <Route path="finance/business-overview" element={<BusinessOverviewPage />} />
+          <Route path="finance/business-overview" element={<FinanceLegacyRoute from="finance/business-overview" Page={BusinessOverviewPage} />} />
         </Route>
         <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.hr} />}>
           <Route path="hr" element={<HrDashboardPage />} />

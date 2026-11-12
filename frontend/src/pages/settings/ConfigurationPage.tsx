@@ -815,6 +815,32 @@ export function ConfigurationPage() {
         </div>
 
         <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3" hidden={!showTier("more")}>
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Finance navigation</p>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.finance_hubs_v2 === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  finance_hubs_v2: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Finance hubs (compact menu)</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                The Finance menu shows 10 hub links (Finance Home, Vouchers &amp; Payables, Banking, Statements, Reports
+                &amp; MIS, Budgets &amp; Cash, Profitability, Tax &amp; Compliance, Loans &amp; Facilities, Finance Setup).
+                Each hub shows the existing pages as tabs, and old links open the matching tab. Permissions do not
+                change. Off by default.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3" hidden={!showTier("more")}>
           <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">HR payroll</p>
           <label className="flex items-start gap-3 text-sm text-text-secondary">
             <input

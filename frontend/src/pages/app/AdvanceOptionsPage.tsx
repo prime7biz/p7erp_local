@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 import {
   CalendarClock,
   Coins,
@@ -71,14 +72,19 @@ const CARDS: Array<{
 ];
 
 export function AdvanceOptionsPage() {
+  const embedded = useEmbeddedPage();
   return (
     <div className="space-y-6">
+      {!embedded && (
+        <>
       <div>
         <h1 className="text-2xl font-semibold text-text-primary">Finance — Advance Options</h1>
         <p className="mt-1 text-sm text-text-muted">
           Central hub for finance configuration: masters, periods, currency, bills, and links into transactions.
         </p>
       </div>
+        </>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
         {CARDS.map((item) => (

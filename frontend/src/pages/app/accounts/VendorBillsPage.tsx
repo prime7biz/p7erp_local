@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type VendorBillDetailResponse, type VendorBillSummary } from "@/api/client";
 import { PartyLedgerSummaryCard } from "@/pages/app/finance/party-ledger/PartyLedgerSummaryCard";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 /**
  * Finance-owned vendor bills (AP) matched to GRN accepted quantities.
  * Route: /app/accounts/vendor-bills
  */
 export function VendorBillsPage() {
+  const embedded = useEmbeddedPage();
   const [rows, setRows] = useState<VendorBillSummary[]>([]);
   const [selected, setSelected] = useState<VendorBillDetailResponse | null>(null);
   const [error, setError] = useState("");
@@ -95,6 +97,8 @@ export function VendorBillsPage() {
 
   return (
     <div className="space-y-6">
+      {!embedded && (
+        <>
       <div>
         <h1 className="text-2xl font-semibold text-text-primary">Vendor bills (GRN match)</h1>
         <p className="text-sm text-text-muted">
@@ -102,6 +106,8 @@ export function VendorBillsPage() {
           payables.
         </p>
       </div>
+        </>
+      )}
 
       {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
       {success ? <div className="rounded border border-status-success/20 bg-status-success-subtle p-3 text-sm text-status-success-foreground">{success}</div> : null}

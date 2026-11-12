@@ -216,3 +216,48 @@ describe("AppBottomNav with mobile_ui_v2", () => {
     expect(within(drawer).queryByRole("button", { expanded: true })).toBeNull();
   });
 });
+
+describe("AppBottomNav with finance_hubs_v2", () => {
+  const HUBS = { finance_hubs_v2: true } as const;
+
+  it("shows the 10 hub links in the More menu and the Finance tab opens Finance Home", async () => {
+    // Tax & Compliance shows only when GST or TDS is on, so switch GST on to see all 10.
+    renderNav(() => true, { ...HUBS, gst_system_enabled: true }, "/app/finance/banking");
+    const nav = screen.getByRole("navigation", { name: "Main menu" });
+    expect(within(nav).getByRole("link", { name: "Finance" }).getAttribute("href")).toBe("/app/finance/home");
+    await userEvent.click(screen.getByRole("button", { name: "More" }));
+    const drawer = screen.getByRole("dialog", { name: "All modules" });
+    await userEvent.click(within(drawer).getByRole("button", { name: /^Finance/ }));
+    const hrefs = within(drawer)
+      .getAllByRole("link")
+      .map((a) => a.getAttribute("href") ?? "")
+      .filter((h) => h.startsWith("/app/finance/"));
+    expect(hrefs).toHaveLength(10);
+    expect(hrefs).toContain("/app/finance/vouchers-payables");
+    expect(hrefs).not.toContain("/app/accounts/vouchers");
+  });
+
+  it("keeps the long Finance menu while the switch is off or not exactly true", async () => {
+    const offFlags: Record<string, string | boolean>[] = [{}, { finance_hubs_v2: false }, { finance_hubs_v2: "true" }];
+    for (const flags of offFlags) {
+      renderNav(() => true, flags);
+      await userEvent.click(screen.getByRole("button", { name: "More" }));
+      const drawer = screen.getByRole("dialog", { name: "All modules" });
+      const hrefs = within(drawer)
+        .queryAllByRole("link")
+        .map((a) => a.getAttribute("href") ?? "");
+      expect(hrefs.some((h) => h.startsWith("/app/finance/home"))).toBe(false);
+      cleanup();
+    }
+  });
+
+  it("searches Finance tabs by name in the More menu", async () => {
+    renderNav(() => true, HUBS);
+    await userEvent.click(screen.getByRole("button", { name: "More" }));
+    const drawer = screen.getByRole("dialog", { name: "All modules" });
+    await userEvent.type(within(drawer).getByRole("searchbox", { name: "Filter modules and pages" }), "reconciliation");
+    expect(within(drawer).getByRole("link", { name: /Reconciliation · Banking/ }).getAttribute("href")).toBe(
+      "/app/finance/banking?tab=reconciliation",
+    );
+  });
+});

@@ -10,6 +10,8 @@ import {
   isVisible,
 } from "@/components/shell/sidebarNavUtils";
 import { hrTabPaletteRoutes } from "@/components/hr/kit/hrHubs";
+import { isFinanceHubsV2Enabled } from "@/components/finance/hubs/financeHubs";
+import { financeTabPaletteRoutes } from "@/components/finance/hubs/financeNavigation";
 import { readOpenMenuSection, useOpenMenuSection } from "@/components/shell/menuOpenSection";
 import { isMobileUiV2Enabled } from "@/lib/mobileUi";
 import { mobileMenuSections, pickMobileTabs } from "./mobileNavLogic";
@@ -126,14 +128,21 @@ export function AppBottomNav({
     [tenantType, enabledOptionalProductionUnits, featureFlags, hasPermission],
   );
 
+  const financeHubsOn = isFinanceHubsV2Enabled(featureFlags);
+
   const tabs = useMemo(() => {
-    if (mobileV2) return pickMobileTabs(new Set(permittedSections.map((s) => s.section)));
-    return bottomNavItems.filter(
-      (item) =>
-        isVisible(tenantType, item.visibleFor) &&
-        isMenuPermissionAllowed(item.permissionKey, featureFlags, hasPermission),
-    );
-  }, [mobileV2, permittedSections, tenantType, featureFlags, hasPermission]);
+    const picked = mobileV2
+      ? pickMobileTabs(new Set(permittedSections.map((s) => s.section)))
+      : bottomNavItems.filter(
+          (item) =>
+            isVisible(tenantType, item.visibleFor) &&
+            isMenuPermissionAllowed(item.permissionKey, featureFlags, hasPermission),
+        );
+    if (!financeHubsOn) return picked;
+    // finance_hubs_v2: the Finance tab opens the first Finance hub the user may see.
+    const firstHub = permittedSections.find((s) => s.section === "Finance")?.items[0]?.href;
+    return firstHub ? picked.map((tab) => (tab.key === "finance" ? { ...tab, href: firstHub } : tab)) : picked;
+  }, [mobileV2, financeHubsOn, permittedSections, tenantType, featureFlags, hasPermission]);
 
   /** Sections listed in the More menu (mobile_ui_v2 leaves out Reports, AI Tools and Settings). */
   const filteredSections = useMemo(
@@ -162,6 +171,16 @@ export function AppBottomNav({
       .filter((r) => r.label.toLowerCase().includes(q))
       .map((r) => ({ href: r.href, label: `${r.label} · ${r.section.replace(/^HR · /, "")}`, icon: r.icon }));
   }, [drawerSearch, featureFlags, visibleSectionNames]);
+
+  // finance_hubs_v2: Finance pages are tabs inside hubs; search them by tab name too.
+  const financeTabMatches = useMemo<DrawerLink[]>(() => {
+    const q = drawerSearch.trim().toLowerCase();
+    if (!q || !financeHubsOn || !visibleSectionNames.has("Finance")) return [];
+    const canAccess = (key: string) => isMenuPermissionAllowed(key, featureFlags, hasPermission);
+    return financeTabPaletteRoutes(featureFlags, canAccess)
+      .filter((r) => r.label.toLowerCase().includes(q))
+      .map((r) => ({ href: r.href, label: `${r.label} · ${r.section.replace(/^Finance · /, "")}`, icon: r.icon }));
+  }, [drawerSearch, financeHubsOn, featureFlags, hasPermission, visibleSectionNames]);
 
   useEffect(() => {
     setIsMoreOpen(false);
@@ -504,13 +523,22 @@ export function AppBottomNav({
                 </section>
               )}
               {!isSearching && !mobileV2 && renderPortalsSection()}
-              {drawerSearch.trim() && filteredDrawerSections.length === 0 && hrTabMatches.length === 0 && (
+              {drawerSearch.trim() &&
+                filteredDrawerSections.length === 0 &&
+                hrTabMatches.length === 0 &&
+                financeTabMatches.length === 0 && (
                 <p className="px-2 py-6 text-center text-sm text-text-muted">No pages match “{drawerSearch.trim()}”.</p>
               )}
               {hrTabMatches.length > 0 && (
                 <section className="rounded-lg border border-border bg-surface-raised p-3">
                   <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">HR tabs</h3>
                   <div className="space-y-1">{hrTabMatches.map(renderDrawerLink)}</div>
+                </section>
+              )}
+              {financeTabMatches.length > 0 && (
+                <section className="rounded-lg border border-border bg-surface-raised p-3">
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">Finance tabs</h3>
+                  <div className="space-y-1">{financeTabMatches.map(renderDrawerLink)}</div>
                 </section>
               )}
               {mobileV2 && !isSearching ? (

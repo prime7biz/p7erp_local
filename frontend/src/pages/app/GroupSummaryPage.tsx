@@ -5,8 +5,10 @@ import { todayLocalISO } from "@/lib/dates";
 import { addMoney, subtractMoney } from "@/lib/money";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 export function GroupSummaryPage() {
+  const embedded = useEmbeddedPage();
   const [asOfDate, setAsOfDate] = useState(todayLocalISO());
   const [groupId, setGroupId] = useState<number | "">("");
   const [accountId, setAccountId] = useState<number | "">("");
@@ -89,8 +91,12 @@ export function GroupSummaryPage() {
       </div>
       <div className="no-print flex flex-wrap items-end gap-2">
         <div className="mr-auto">
+      {!embedded && (
+        <>
         <h1 className="text-2xl font-semibold text-text-primary">Group Summary</h1>
         <p className="text-sm text-text-muted">Account group wise debit/credit totals.</p>
+        </>
+      )}
         </div>
         <input type="date" className="rounded border px-3 py-2 text-sm" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} />
         <select className="rounded border px-3 py-2 text-sm" value={groupId} onChange={(e) => setGroupId(e.target.value ? Number(e.target.value) : "")}>

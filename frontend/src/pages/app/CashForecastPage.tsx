@@ -4,8 +4,10 @@ import { api, type CashForecastScenarioCreate, type CashForecastScenarioResponse
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
 import { useConfirm } from "@/components/app/useConfirm";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 export function CashForecastPage() {
+  const embedded = useEmbeddedPage();
   const confirm = useConfirm();
   const [rows, setRows] = useState<CashForecastScenarioResponse[]>([]);
   const [summary, setSummary] = useState<{ expected_inflows: number; expected_outflows: number; net_cash_flow: number; scenarios_count: number } | null>(null);
@@ -101,10 +103,14 @@ export function CashForecastPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      {!embedded && (
+        <>
         <div>
           <h1 className="text-2xl font-semibold text-text-primary">Cash Forecast</h1>
           <p className="mt-1 text-sm text-text-muted">Scenario-based inflow/outflow planning; BTB LC maturities can be merged on generate (server).</p>
         </div>
+        </>
+      )}
         <Link to="/app/cashflow/calendar" className="text-sm font-medium text-brand-primary hover:underline">
           Cashflow calendar →
         </Link>

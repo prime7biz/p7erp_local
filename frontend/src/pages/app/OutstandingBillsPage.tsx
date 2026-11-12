@@ -5,8 +5,10 @@ import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { useSubmitGuard } from "@/hooks/useSubmitGuard";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 export function OutstandingBillsPage() {
+  const embedded = useEmbeddedPage();
   const actionGuard = useSubmitGuard();
   const [rows, setRows] = useState<OutstandingBillResponse[]>([]);
   const [aging, setAging] = useState<BillsAgingResponse | null>(null);
@@ -152,7 +154,11 @@ export function OutstandingBillsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
+      {!embedded && (
+        <>
           <h1 className="text-2xl font-semibold text-text-primary">Outstanding Bills</h1>
+        </>
+      )}
           <p className="text-sm text-text-muted">
             AP/AR bill tracking with aging buckets.{" "}
             <Link className="font-medium text-brand-primary hover:underline" to="/app/accounts/reports/ar-ap-aging">

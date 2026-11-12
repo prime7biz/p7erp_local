@@ -5,8 +5,10 @@ import { dateParam, idParam, voucherHref } from "@/lib/financeDrilldown";
 import { downloadCsv, downloadXlsx, printCurrentPage } from "@/lib/reportExport";
 import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 export function LedgerActivityPage() {
+  const embedded = useEmbeddedPage();
   const [searchParams] = useSearchParams();
   const [compactView, setCompactView] = useState(false);
   const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
@@ -105,8 +107,12 @@ export function LedgerActivityPage() {
         </p>
       </div>
       <div className="no-print">
+      {!embedded && (
+        <>
         <h1 className="text-2xl font-semibold text-text-primary">Ledger Activity Report</h1>
         <p className="text-sm text-text-muted">Account-wise posted voucher activity with running balance.</p>
+        </>
+      )}
       </div>
       {error ? <div className="no-print rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
       {success ? <div className="no-print rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}

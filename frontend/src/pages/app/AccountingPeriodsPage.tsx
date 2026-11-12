@@ -2,8 +2,10 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api, type AccountingPeriodCreate, type AccountingPeriodResponse } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
 import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
+import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 export function AccountingPeriodsPage() {
+  const embedded = useEmbeddedPage();
   const [rows, setRows] = useState<AccountingPeriodResponse[]>([]);
   const [error, setError] = useState("");
   const [lockDate, setLockDate] = useState(todayLocalISO());
@@ -96,10 +98,14 @@ export function AccountingPeriodsPage() {
 
   return (
     <div className="space-y-6">
+      {!embedded && (
+        <>
       <div>
         <h1 className="text-2xl font-semibold text-text-primary">Accounting Periods</h1>
         <p className="text-sm text-text-muted">Posting is blocked when a voucher date is outside any open period.</p>
       </div>
+        </>
+      )}
       {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
 
       {sorted.length > 0 ? (

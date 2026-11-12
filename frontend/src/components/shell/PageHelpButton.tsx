@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { BookOpen, CircleHelp } from "lucide-react";
 import { findHelpEntries, type TutorialHelpEntry } from "@/data/tutorials/helpIndex";
 import { resolveHrHelpPath } from "@/components/hr/kit/hrHubs";
+import { resolveFinanceHelpPath } from "@/components/finance/hubs/financeNavigation";
 import { useAuth } from "@/context/AuthContext";
 import { logApiError } from "@/utils/logApiError";
 
@@ -72,7 +73,9 @@ export function PageHelpButton() {
 
   const articles = useMemo(() => {
     if (!findArticles || pathname.startsWith("/app/tutorials")) return [];
-    return findArticles(resolveHrHelpPath(pathname, search, featureFlags)).slice(0, MAX_ARTICLES);
+    // Hub tabs (HR, then Finance) resolve to the open tab's old route, where the tutorials point.
+    const helpPath = resolveFinanceHelpPath(resolveHrHelpPath(pathname, search, featureFlags), search, featureFlags);
+    return findArticles(helpPath).slice(0, MAX_ARTICLES);
   }, [findArticles, pathname, search, featureFlags]);
 
   if (articles.length === 0) return null;

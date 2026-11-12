@@ -21,4 +21,9 @@ describe("feature tiers", () => {
     expect(hiddenEnabledCount({ mobile_ui_v2: true }, "essential")).toBe(1);
     expect(hiddenEnabledCount({ mobile_ui_v2: true }, "more")).toBe(0);
   });
+
+  it("lists the Finance Control Tower switch in the More tier", () => {
+    expect(hiddenEnabledCount({ finance_control_tower_v2: true }, "essential")).toBe(1);
+    expect(hiddenEnabledCount({ finance_control_tower_v2: true }, "more")).toBe(0);
+  });
 });

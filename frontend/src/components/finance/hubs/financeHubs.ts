@@ -36,6 +36,14 @@ export function isFinanceStatementsV2Enabled(featureFlags: FeatureFlags): boolea
   return featureFlags?.[FINANCE_STATEMENTS_FLAG] === true;
 }
 
+/** Finance Control Tower + GL profitability (Finance modernization Phase 3), default OFF, strict true. */
+export const FINANCE_CONTROL_TOWER_FLAG = "finance_control_tower_v2";
+
+/** True only for an explicit `true` (default OFF). */
+export function isFinanceControlTowerV2Enabled(featureFlags: FeatureFlags): boolean {
+  return featureFlags?.[FINANCE_CONTROL_TOWER_FLAG] === true;
+}
+
 /** Profitability pages share one component with a start mode. */
 function profitabilityPage(defaultMode: "style" | "lc" | "variance"): () => HubPageModule {
   return () =>
@@ -125,6 +133,14 @@ const pages = {
   budgets: () => import("@/pages/app/BudgetsPage").then((m) => ({ default: m.BudgetsPage })),
   cashForecast: () => import("@/pages/app/CashForecastPage").then((m) => ({ default: m.CashForecastPage })),
   cashflowCalendar: () => import("@/pages/app/CashflowCalendarPage").then((m) => ({ default: m.CashflowCalendarPage })),
+  orderProfitGl: () =>
+    import("@/pages/app/finance/profitability/OrderProfitabilityGlPage").then((m) => ({
+      default: m.OrderProfitabilityGlPage,
+    })),
+  entityProfitGl: () =>
+    import("@/pages/app/finance/profitability/EntityProfitabilityGlPage").then((m) => ({
+      default: m.EntityProfitabilityGlPage,
+    })),
   styleProfitability: profitabilityPage("style"),
   lcProfitability: profitabilityPage("lc"),
   costingVariance: profitabilityPage("variance"),
@@ -155,6 +171,7 @@ const pages = {
 
 const MIS_FLAG = "mis_reports_enabled";
 const STATEMENTS_FLAG = FINANCE_STATEMENTS_FLAG;
+const CONTROL_TOWER_FLAG = FINANCE_CONTROL_TOWER_FLAG;
 const MIS_VIEW = "finance.mis_report.view";
 
 export const FINANCE_HUBS = [
@@ -416,9 +433,44 @@ export const FINANCE_HUBS = [
     icon: Target,
     permissionKey: "finance.access",
     tabs: [
-      { id: "style", label: "Style Profitability", legacyPath: "finance/style-profitability", load: pages.styleProfitability },
-      { id: "lc", label: "LC Profitability", legacyPath: "finance/lc-profitability", load: pages.lcProfitability },
-      { id: "variance", label: "Costing Variance", legacyPath: "finance/costing-variance", load: pages.costingVariance },
+      // Real profit from the books (tenant flag finance_control_tower_v2); the quotation-based tabs follow.
+      {
+        id: "order-pnl-gl",
+        label: "Order P&L (GL)",
+        legacyPath: "finance/profitability/orders",
+        load: pages.orderProfitGl,
+        requiresFeatureFlag: CONTROL_TOWER_FLAG,
+        permissionKey: MIS_VIEW,
+      },
+      {
+        id: "entity-pnl-gl",
+        label: "Style / LC / Buyer P&L (GL)",
+        legacyPath: "finance/profitability/entity",
+        load: pages.entityProfitGl,
+        requiresFeatureFlag: CONTROL_TOWER_FLAG,
+        permissionKey: MIS_VIEW,
+      },
+      {
+        id: "style",
+        label: "Style Profitability",
+        labelWhenFlagOn: { flag: CONTROL_TOWER_FLAG, label: "Style Profitability (Quotation)" },
+        legacyPath: "finance/style-profitability",
+        load: pages.styleProfitability,
+      },
+      {
+        id: "lc",
+        label: "LC Profitability",
+        labelWhenFlagOn: { flag: CONTROL_TOWER_FLAG, label: "LC Profitability (Quotation)" },
+        legacyPath: "finance/lc-profitability",
+        load: pages.lcProfitability,
+      },
+      {
+        id: "variance",
+        label: "Costing Variance",
+        labelWhenFlagOn: { flag: CONTROL_TOWER_FLAG, label: "Costing Variance (Quotation)" },
+        legacyPath: "finance/costing-variance",
+        load: pages.costingVariance,
+      },
     ],
   },
   {

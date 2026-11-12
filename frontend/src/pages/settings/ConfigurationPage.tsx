@@ -897,6 +897,28 @@ export function ConfigurationPage() {
               </span>
             </span>
           </label>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.finance_control_tower_v2 === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  finance_control_tower_v2: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Finance Control Tower and GL profitability</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Finance Home shows a Control Tower of exception cards (GRNs not billed, overdue bills, negative cash and
+                stock, budget breaches, vouchers waiting...), and Profitability gets Order P&amp;L and Style / LC / Buyer
+                P&amp;L from the posted books. The quotation-based pages stay as &quot;(Quotation)&quot;. Read-only; it
+                changes no records. Off by default.
+              </span>
+            </span>
+          </label>
               <span className="font-medium text-text-primary">Payroll four-eyes approval</span>
               <span className="mt-0.5 block text-xs text-text-muted">
                 The person who finalized a payroll run cannot approve it; a second admin or manager must. Needs at

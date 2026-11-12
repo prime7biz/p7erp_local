@@ -4,7 +4,12 @@ import { menuSections } from "@/app/sidebarConfig";
 import { hubTabLabel, isHubTabVisible, visibleHubTabs } from "@/components/app/hubs/hubVisibility";
 import type { Hub } from "@/components/app/hubs/types";
 import { filterVisibleMenuSections } from "@/components/shell/sidebarNavUtils";
-import { FINANCE_HUBS, isFinanceHubsV2Enabled, isFinanceStatementsV2Enabled } from "./financeHubs";
+import {
+  FINANCE_HUBS,
+  isFinanceControlTowerV2Enabled,
+  isFinanceHubsV2Enabled,
+  isFinanceStatementsV2Enabled,
+} from "./financeHubs";
 import { findHubLegacyTarget } from "@/components/app/hubs/hubNavigation";
 import { financeTabPaletteRoutes, resolveFinanceHelpPath } from "./financeNavigation";
 
@@ -56,6 +61,9 @@ const EMBEDDABLE_ROUTES = [
   "finance/style-profitability",
   "finance/lc-profitability",
   "finance/costing-variance",
+  // GL profitability (tenant flag finance_control_tower_v2): direct routes that also are Profitability hub tabs.
+  "finance/profitability/orders",
+  "finance/profitability/entity",
   "finance/tax-ledgers",
   "finance/gst/returns",
   "finance/gst/settings",
@@ -380,6 +388,60 @@ describe("Finance hub tabs", () => {
       );
       // Flag off: a new tab is not available, Help falls back to the first classic tab.
       expect(resolveFinanceHelpPath("/app/finance/statements", "?tab=statement-profit-loss", {})).toBe("/app/accounts/reports/trial-balance");
+    });
+  });
+
+  describe("Profitability hub and finance_control_tower_v2", () => {
+    const profitability = () => byId("profitability");
+    const ids = (flags: Record<string, boolean | string>) => visibleHubTabs(profitability(), flags).map((t) => t.id);
+    const labels = (flags: Record<string, boolean | string>) =>
+      visibleHubTabs(profitability(), flags).map((t) => hubTabLabel(t, flags));
+
+    it("flag OFF keeps exactly the three quotation tabs with their old names", () => {
+      for (const flags of [{}, { finance_control_tower_v2: false }, { finance_control_tower_v2: "true" }, { finance_control_tower_v2: 1 }]) {
+        expect(ids(flags as never)).toEqual(["style", "lc", "variance"]);
+        expect(labels(flags as never)).toEqual(["Style Profitability", "LC Profitability", "Costing Variance"]);
+      }
+    });
+
+    it("flag ON lists the two GL tabs first and labels the quotation tabs (Quotation)", () => {
+      const on = { finance_control_tower_v2: true };
+      expect(ids(on)).toEqual(["order-pnl-gl", "entity-pnl-gl", "style", "lc", "variance"]);
+      expect(labels(on)).toEqual([
+        "Order P&L (GL)",
+        "Style / LC / Buyer P&L (GL)",
+        "Style Profitability (Quotation)",
+        "LC Profitability (Quotation)",
+        "Costing Variance (Quotation)",
+      ]);
+    });
+
+    it("keeps the quotation routes on their own tabs while the flag is on", () => {
+      const target = (path: string) => findHubLegacyTarget(hubs, path)?.tab.id;
+      expect(target("finance/style-profitability")).toBe("style");
+      expect(target("finance/lc-profitability")).toBe("lc");
+      expect(target("finance/costing-variance")).toBe("variance");
+      expect(target("finance/profitability/orders")).toBe("order-pnl-gl");
+      expect(target("finance/profitability/entity")).toBe("entity-pnl-gl");
+    });
+
+    it("GL tabs need the report-view permission for navigation; quotation tabs are unchanged", () => {
+      const on = { finance_control_tower_v2: true };
+      const noMis = (k: string) => k !== "finance.mis_report.view";
+      expect(visibleHubTabs(profitability(), on, noMis).map((t) => t.id)).toEqual(["style", "lc", "variance"]);
+    });
+
+    it("Finance Home shows the Control Tower tab only for an exact true flag", () => {
+      const home = byId("home");
+      expect(visibleHubTabs(home, { finance_control_tower_v2: "true" } as never)).toEqual([]);
+      expect(visibleHubTabs(home, { finance_control_tower_v2: true }).map((t) => t.id)).toEqual(["control-tower"]);
+    });
+
+    it("only the exact value true counts as on", () => {
+      expect(isFinanceControlTowerV2Enabled({ finance_control_tower_v2: true })).toBe(true);
+      for (const flags of [undefined, null, {}, { finance_control_tower_v2: false }, { finance_control_tower_v2: "true" }]) {
+        expect(isFinanceControlTowerV2Enabled(flags as never)).toBe(false);
+      }
     });
   });
 

@@ -1589,5 +1589,104 @@ Pick a **Financial year** or type **From** and **To** dates (the Balance Sheet a
       ],
       relatedArticleIds: ["fin-overview"],
     },
+    {
+      id: "fin-control-tower-profitability",
+      title: "Finance Control Tower and profitability",
+      summary:
+        "A Finance Home of exception cards (GRNs not billed, overdue bills, negative cash, budget breaches...) and real order, style, LC and buyer profit taken from the posted books.",
+      content: `## Overview
+
+The **Finance Control Tower** lists the things in your books that need attention, one card per check. **GL profitability** shows the real profit of an order, a style, a master contract (LC) or a buyer, worked out from **posted** vouchers, next to the quotation budget.
+
+Both are **read-only**: nothing here posts, edits or deletes a voucher or a stock record.
+
+**Who uses it:** the finance manager and accountant (Control Tower), merchandisers and management (profit).
+
+## Before you start
+
+1. An admin switches on **Finance Control Tower and GL profitability** in **Settings → Configuration → More features → Finance navigation**. It is off by default.
+2. Use the **Finance hubs** menu to find the pages: **Finance Home → Control Tower** and **Profitability → Order P&L (GL)** / **Style / LC / Buyer P&L (GL)**.
+3. You need permission to view finance reports.
+
+## Steps — read the Control Tower
+
+1. Open **Finance → Finance Home** and the **Control Tower** tab.
+2. Pick the **As of** date and, if you like, a **Severity** (High, Medium, Low). Press **Refresh** to read the books again.
+3. Each card shows the check name, a **severity** chip, how many records break the check, the amount in your base currency (lakh / crore grouping) and the **oldest date**.
+4. A card with **0** is greyed out: that check is clear.
+5. Click a card. A side panel lists the records (25 per page, **Previous** / **Next**). Its total and amount are the same numbers as on the card.
+6. A voucher, delivery challan or stock item opens its own page when you click its reference. GRNs, vendor bills, outstanding bills, ledgers and budgets have no page of their own, so they are plain text.
+7. Press **Esc** or the close button to leave the panel.
+
+## What each card means
+
+- **GRNs not billed**: goods received but no vendor bill yet. The amount is the received quantity times the PO price.
+- **Delivery challans not invoiced**: goods shipped but not invoiced. A challan has no money value, so the amount is 0.
+- **Vendor bills outside price/quantity tolerance**: information only. It never blocks a bill.
+- **Cash / bank ledgers with a credit balance** and **Items with negative stock**.
+- **Overdue receivables / payables**: from the outstanding bills list. Only bills in your base currency are added into the amount; the card note says how many foreign-currency bills were left out.
+- **Budget lines at 80% or 100%**: alerts only; nothing is blocked.
+- **Stock valuation differs from the GL inventory ledger**: the same comparison as **Stock vs Ledger**.
+- **Vouchers waiting for approval** and **Draft vouchers older than 7 days**.
+
+## Steps — read the profit
+
+1. Open **Finance → Profitability → Order P&L (GL)**. Choose a financial year or **From** and **To** dates.
+2. The table shows revenue, material, CM, other cost, overhead, finance cost, gross profit, nett profit and **Margin %** for each order. Click a heading (Order, Revenue, Nett, Margin %) to sort. A **—** in Margin % means the order has no revenue yet, so no percentage can be worked out.
+3. Click an order, or **Actions → Budget vs actual**, to see **budget (quotation)** beside **actual (books)** and the difference, how the actuals were linked, warnings and notes.
+4. **Actions** also opens the **Style**, **Contract / LC** or **Buyer** profit of that order.
+5. Open **Style / LC / Buyer P&L (GL)**, choose what to show, search for the record and read the same detail.
+
+## How attribution works
+
+- Only **explicit links** are used: a voucher linked to an order counts for that order; a voucher line on a master contract's cost centre counts for that LC. A style adds up its orders; a buyer adds up the buyer's orders.
+- A voucher is never matched to an order by its reference text.
+- Lines with no order or cost-centre link go to the **Unattributed** bucket. They are shown at the bottom of the table and are **not** split between orders.
+- **Overhead is not shared out between orders yet.** Overhead shows only what is linked directly.
+- Accounts whose group has no **Statement class** appear in an **Unclassified** warning with a link to Account Groups.
+
+## Common problems
+
+- **The page says it is switched off** → ask an admin to turn on the setting above.
+- **Margin shows —** → the order has no revenue in the period.
+- **Profit looks too small** → check the **Unattributed** line and the **Unclassified** warning; entries without a link are not counted for the order.
+- **"You do not have permission"** → your role cannot view finance reports.`,
+      tags: [
+        "control tower",
+        "finance home",
+        "exceptions",
+        "profitability",
+        "order profit",
+        "style profit",
+        "lc profit",
+        "buyer profit",
+        "budget vs actual",
+        "unattributed",
+      ],
+      keywords: ["finance_control_tower_v2", "gl profitability", "grn not billed", "overdue", "negative stock", "margin"],
+      estimatedMinutes: 7,
+      lastUpdated: "2026-11-12",
+      audience: "finance",
+      infographics: [
+        {
+          type: "steps",
+          title: "Use the Control Tower and GL profit",
+          steps: [
+            { title: "Switch on", body: "Settings → Configuration → **Finance Control Tower and GL profitability**.", href: "/app/settings/config" },
+            { title: "Check the cards", body: "Finance Home → **Control Tower**; click a card for its list.", href: "/app/finance/home" },
+            { title: "Read order profit", body: "Profitability → **Order P&L (GL)**; click an order for budget vs actual.", href: "/app/finance/profitability/orders" },
+            { title: "Roll up", body: "**Style / LC / Buyer P&L (GL)** adds up the linked orders.", href: "/app/finance/profitability/entity" },
+          ],
+        },
+      ],
+      relatedAppRoutes: [
+        "/app/finance/home",
+        "/app/finance/profitability",
+        "/app/finance/profitability/orders",
+        "/app/finance/profitability/entity",
+        "/app/accounts/groups",
+      ],
+      relatedArticleIds: ["fin-overview", "fin-tally-statements"],
+    },
   ],
 };

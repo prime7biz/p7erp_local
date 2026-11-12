@@ -23,6 +23,7 @@ from app.models.hr_attendance import OvertimeEntry
 from app.models.hr_leave import LeaveBalance, LeaveType
 from app.models.hr_lifecycle import HrClearanceItem, HrFinalSettlement, HrSeparation
 from app.models.hr_payroll import BonusDeclaration, EmployeeAdvance, PayrollPeriod, PayrollRun, PayrollRunLine
+from app.modules.hr_allowances.pay_benefits import is_employee_overtime_enabled
 from app.modules.hr_localization import bd_calculations as calc
 from app.modules.hr_localization.employee_pay import pay_snapshot
 from app.modules.hr_localization.payroll_extras import DEAD_RUN_STATUSES, SOURCES
@@ -134,6 +135,9 @@ async def compute_settlement(
         ),
         ZERO,
     ) if salary_days else ZERO
+    if ot_hours and not await is_employee_overtime_enabled(db, tenant.id, emp.id):
+        warnings.append(f"Overtime is switched off for this employee: {ot_hours} approved overtime hour(s) are not paid")
+        ot_hours = ZERO
     overtime = calc.overtime(snap.basic, ot_hours, eff.rules).amount if ot_hours else ZERO
 
     # Unpaid approved extras, excluding anything a live payroll line owns.

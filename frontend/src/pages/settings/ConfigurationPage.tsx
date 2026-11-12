@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type SettingsConfigUpdate, type TenantType } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { SalaryTdsSwitch } from "@/components/hr/workspace/SalaryTdsSwitch";
 import {
   FEATURE_TIER_LABEL,
   hiddenEnabledCount,
@@ -737,6 +738,11 @@ export function ConfigurationPage() {
                 "Ask-a-metric dashboard cards",
                 "Type a question on the dashboard (e.g. “late orders”) and pin the answer as a card. Answers come only from a fixed list of figures.",
               ],
+              [
+                "ai_agent_mode_enabled",
+                "AI assistant agent mode",
+                "The AI assistant looks things up across orders, stock, production, finance and HR (read-only, only what each user may see) and remembers the chat. Needs AI_AGENT_MODEL on the server; it never changes data.",
+              ],
             ] as const
           ).map(([key, title, help]) => (
             <label key={key} className="flex items-start gap-3 text-sm text-text-secondary">
@@ -784,6 +790,31 @@ export function ConfigurationPage() {
         </div>
 
         <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3" hidden={!showTier("more")}>
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Phone and tablet</p>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.mobile_ui_v2 === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  mobile_ui_v2: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Simpler mobile layout</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                On phones and tablets: shorter bottom menu (Reports, AI Tools and Settings are left out of the
+                More menu but stay reachable through search), card lists instead of wide tables, and one-column
+                forms. Desktop is unchanged. Off by default.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3" hidden={!showTier("more")}>
           <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">HR payroll</p>
           <label className="flex items-start gap-3 text-sm text-text-secondary">
             <input
@@ -825,6 +856,7 @@ export function ConfigurationPage() {
               </span>
             </span>
           </label>
+          <SalaryTdsSwitch />
         </div>
 
         <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3" hidden={!showTier("all")}>

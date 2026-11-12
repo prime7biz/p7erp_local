@@ -31,6 +31,9 @@ import {
   listTableThRightClass,
   listTableTheadClass,
   listTableTrClass,
+  mobileFieldClass,
+  mobileStickyActionsClass,
+  mobileTouchControlClass,
 } from "@/components/app/listPageLayout";
 import { EmployeeAvatar } from "@/components/hr/EmployeeAvatar";
 import { EmployeeBadges, EmployeeCard } from "@/components/hr/employeeList/EmployeeListParts";
@@ -38,6 +41,8 @@ import { KpiCard, RowActionsMenu, SortableTh, type RowAction } from "@/component
 import { downloadBlob } from "@/components/hr/workspace/recordTabs/shared";
 import { useAuth } from "@/context/AuthContext";
 import { useDebouncedValue, useLatestRequest } from "@/hooks/useDebouncedValue";
+import { useResponsiveListPreference } from "@/hooks/useInventoryListView";
+import { isMobileUiV2Enabled } from "@/lib/mobileUi";
 import { downloadXlsx } from "@/lib/reportExport";
 import { canExportHrData } from "@/lib/roles";
 import { logApiError } from "@/utils/logApiError";
@@ -115,7 +120,13 @@ export function HrEmployeesPage() {
   const [filters, setFilters] = useState<EmployeeFilters>(emptyFilters);
   const [sortKey, setSortKey] = useState<SortKey>("code");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [view, setView] = useState<ViewMode>(readStoredView);
+  const [desktopView, setDesktopView] = useState<ViewMode>(readStoredView);
+  // mobile_ui_v2: phones start on Cards and remember their own choice; other screens keep the old setting.
+  const phoneList = useResponsiveListPreference("hr.employees", isMobileUiV2Enabled(me?.feature_flags));
+  const phoneTouch = phoneList.showToggle;
+  const view: ViewMode = phoneTouch ? phoneList.view : desktopView;
+  const setView = phoneTouch ? phoneList.setView : setDesktopView;
+  const modalFieldClass = `rounded border border-border-strong px-3 py-2 text-sm${phoneTouch ? ` ${mobileFieldClass}` : ""}`;
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
@@ -213,11 +224,11 @@ export function HrEmployeesPage() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(VIEW_STORAGE_KEY, view);
+      localStorage.setItem(VIEW_STORAGE_KEY, desktopView);
     } catch {
       // Private browsing can block storage; the toggle still works for this visit.
     }
-  }, [view]);
+  }, [desktopView]);
 
   // ---------- Filtering, stats, sorting, paging ----------
   const debouncedSearch = useDebouncedValue(filters.search);
@@ -711,12 +722,12 @@ export function HrEmployeesPage() {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2">
+        <div className={`flex items-center gap-2 ${phoneTouch ? "flex-wrap" : ""}`}>
           <span className="whitespace-nowrap text-xs text-text-muted">
             {sorted.length.toLocaleString()} of {employees.length.toLocaleString()}
           </span>
           <select
-            className="rounded-lg border border-border-strong bg-surface-raised px-2 py-1.5 text-xs text-text-primary"
+            className={`rounded-lg border border-border-strong bg-surface-raised px-2 py-1.5 text-xs text-text-primary ${phoneTouch ? mobileTouchControlClass : ""}`}
             value={`${sortKey}:${sortDir}`}
             onChange={(e) => {
               const [k, d] = e.target.value.split(":") as [SortKey, SortDir];
@@ -738,13 +749,13 @@ export function HrEmployeesPage() {
                 type="button"
                 aria-pressed={view === v}
                 onClick={() => setView(v)}
-                className={`px-3 py-1.5 text-xs font-medium ${view === v ? "bg-brand-primary text-white" : "text-text-secondary hover:bg-surface-subtle"}`}
+                className={`px-3 py-1.5 text-xs font-medium ${phoneTouch ? mobileTouchControlClass : ""} ${view === v ? "bg-brand-primary text-white" : "text-text-secondary hover:bg-surface-subtle"}`}
               >
                 {v === "table" ? "Table" : "Cards"}
               </button>
             ))}
           </div>
-          <button type="button" className="rounded-lg border border-border-strong px-2.5 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => void load()} disabled={loading}>
+          <button type="button" className={`rounded-lg border border-border-strong px-2.5 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle ${phoneTouch ? mobileTouchControlClass : ""}`} onClick={() => void load()} disabled={loading}>
             Refresh
           </button>
         </div>
@@ -975,8 +986,16 @@ export function HrEmployeesPage() {
       )}
 
       {modalOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4" onClick={closeModal}>
-          <div className="w-full max-w-lg rounded-xl bg-surface-raised p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div
+          className={`fixed inset-0 flex items-center justify-center bg-black/40 p-4 ${phoneTouch ? "z-50" : "z-40"}`}
+          onClick={closeModal}
+        >
+          <div
+            className={`w-full max-w-lg rounded-xl bg-surface-raised shadow-xl ${
+              phoneTouch ? "max-h-[calc(100dvh-1.5rem)] overflow-y-auto overscroll-contain p-4 pb-0" : "p-6"
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
             <h2 className="mb-4 text-lg font-semibold text-text-primary">{editing ? "Edit employee" : "Add employee"}</h2>
             <form onSubmit={onSubmit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="rounded border border-border bg-surface-subtle px-3 py-2 text-sm text-text-secondary" aria-label="Employee number">
@@ -993,47 +1012,48 @@ export function HrEmployeesPage() {
                 )}
               </div>
               <input
-                className="rounded border border-border-strong px-3 py-2 text-sm"
+                className={modalFieldClass}
                 placeholder="First name"
                 value={form.first_name}
                 onChange={(e) => setForm((prev) => ({ ...prev, first_name: e.target.value }))}
                 required
               />
               <input
-                className="rounded border border-border-strong px-3 py-2 text-sm"
+                className={modalFieldClass}
                 placeholder="Last name"
                 value={form.last_name ?? ""}
                 onChange={(e) => setForm((prev) => ({ ...prev, last_name: e.target.value }))}
               />
               <input
-                className="rounded border border-border-strong px-3 py-2 text-sm"
+                className={modalFieldClass}
                 placeholder="Email"
+                inputMode={phoneTouch ? "email" : undefined}
                 value={form.email ?? ""}
                 onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
               />
               <input
-                className="rounded border border-border-strong px-3 py-2 text-sm"
+                className={modalFieldClass}
                 placeholder="Mobile (e.g. 01712345678)"
                 inputMode="tel"
                 value={form.phone ?? ""}
                 onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
               />
               <input
-                className="rounded border border-border-strong px-3 py-2 text-sm"
+                className={modalFieldClass}
                 placeholder="NID (10, 13 or 17 digits)"
                 inputMode="numeric"
                 value={form.national_id ?? ""}
                 onChange={(e) => setForm((prev) => ({ ...prev, national_id: e.target.value }))}
               />
               <input
-                className="rounded border border-border-strong px-3 py-2 text-sm"
+                className={modalFieldClass}
                 placeholder="Birth registration no. (17 digits)"
                 inputMode="numeric"
                 value={form.birth_registration_no ?? ""}
                 onChange={(e) => setForm((prev) => ({ ...prev, birth_registration_no: e.target.value }))}
               />
               <select
-                className="rounded border border-border-strong px-3 py-2 text-sm"
+                className={modalFieldClass}
                 value={form.department_id ?? ""}
                 onChange={(e) =>
                   setForm((prev) => ({ ...prev, department_id: e.target.value ? Number(e.target.value) : null }))
@@ -1047,7 +1067,7 @@ export function HrEmployeesPage() {
                 ))}
               </select>
               <select
-                className="rounded border border-border-strong px-3 py-2 text-sm"
+                className={modalFieldClass}
                 value={form.designation_id ?? ""}
                 onChange={(e) =>
                   setForm((prev) => ({ ...prev, designation_id: e.target.value ? Number(e.target.value) : null }))
@@ -1077,17 +1097,36 @@ export function HrEmployeesPage() {
                   ))}
                 </select>
               </label>
-              <input
-                type="date"
-                className="rounded border border-border-strong px-3 py-2 text-sm sm:col-span-2"
-                value={form.joining_date ?? ""}
-                onChange={(e) => setForm((prev) => ({ ...prev, joining_date: e.target.value }))}
-              />
-              <div className="sm:col-span-2 flex justify-end gap-2 pt-1">
-                <button type="button" onClick={closeModal} className="rounded border border-border-strong px-3 py-1.5 text-sm text-text-secondary">
+              {phoneTouch ? (
+                <label className="flex flex-col gap-1 text-xs text-text-muted sm:col-span-2">
+                  Joining date
+                  <input
+                    type="date"
+                    className={modalFieldClass}
+                    value={form.joining_date ?? ""}
+                    onChange={(e) => setForm((prev) => ({ ...prev, joining_date: e.target.value }))}
+                  />
+                </label>
+              ) : (
+                <input
+                  type="date"
+                  className="rounded border border-border-strong px-3 py-2 text-sm sm:col-span-2"
+                  value={form.joining_date ?? ""}
+                  onChange={(e) => setForm((prev) => ({ ...prev, joining_date: e.target.value }))}
+                />
+              )}
+              <div className={phoneTouch ? `${mobileStickyActionsClass} sm:col-span-2` : "sm:col-span-2 flex justify-end gap-2 pt-1"}>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className={`rounded border border-border-strong px-3 py-1.5 text-sm text-text-secondary ${phoneTouch ? "min-h-11 flex-1" : ""}`}
+                >
                   Cancel
                 </button>
-                <button type="submit" className="rounded bg-brand-primary px-4 py-1.5 text-sm font-semibold text-white">
+                <button
+                  type="submit"
+                  className={`rounded bg-brand-primary px-4 py-1.5 text-sm font-semibold text-white ${phoneTouch ? "min-h-11 flex-1" : ""}`}
+                >
                   Save
                 </button>
               </div>

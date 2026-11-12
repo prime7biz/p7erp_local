@@ -5,6 +5,7 @@ from datetime import date, datetime
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.pagination import MAX_PAGE_SIZE
 from app.common.auth import get_current_user
 from app.common.db_errors import commit_handling_duplicate_document_code
 from app.common.tenant import require_tenant
@@ -256,7 +257,7 @@ def _append_audit_note(existing: str | None, actor_user_id: int, action: str, no
 async def list_quality_checks(
     work_order_id: int | None = Query(default=None),
     check_type: str | None = Query(default=None),
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -329,7 +330,7 @@ async def create_quality_check(
 async def list_ncrs(
     status_filter: str | None = Query(default=None),
     work_order_id: int | None = Query(default=None),
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -408,7 +409,7 @@ async def update_ncr_status(
 async def list_capas(
     status_filter: str | None = Query(default=None),
     ncr_id: int | None = Query(default=None),
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),

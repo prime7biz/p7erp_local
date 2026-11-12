@@ -8,8 +8,10 @@ import {
 } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
+import { useConfirm } from "@/components/app/useConfirm";
 
 export function AccountsCurrencyPage() {
+  const confirm = useConfirm();
   const [rates, setRates] = useState<CurrencyExchangeRateResponse[]>([]);
   const [reval, setReval] = useState<MultiCurrencyRevaluationResponse | null>(null);
   const [error, setError] = useState("");
@@ -85,7 +87,7 @@ export function AccountsCurrencyPage() {
   }
 
   async function removeRate(id: number) {
-    if (!window.confirm("Delete this exchange rate row?")) return;
+    if (!(await confirm({ title: "Delete this exchange rate row?", danger: true }))) return;
     try {
       await api.deleteCurrencyExchangeRate(id);
       if (editingId === id) {

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Users } from "lucide-react";
 import { api, type FactoryCalendarOverrideRow, type CountryHolidayPreviewItem } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
-import { useAiChat } from "@/pages/app/ai/hooks/useAiChat";
+import { useAiChat } from "@/pages/app/ai/hooks/useAiChat";
+import { toast } from "sonner";
 
 const WEEKDAY_NAMES = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
 
@@ -267,7 +268,7 @@ export function ProductionFactoryCalendarPage() {
     const start = new Date(editDate + "T12:00:00");
     const end = new Date((editEndDate || editDate) + "T12:00:00");
     if (end < start) {
-      alert("End date must be on or after start date.");
+      toast.error("End date must be on or after start date.");
       return;
     }
     try {

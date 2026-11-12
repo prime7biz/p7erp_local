@@ -50,7 +50,7 @@ ZERO = Decimal("0")
 
 async def _avg_unit_cost(db: AsyncSession, tenant_id: int, item_id: int) -> Decimal:
     item = await db.get(Item, item_id)
-    if not item:
+    if not item or item.tenant_id != tenant_id:
         return ZERO
     cost = _d(item.avg_cost) or _d(item.default_cost) or _d(item.standard_price)
     return _q(cost)
@@ -116,7 +116,7 @@ async def create_idt_issue(
                 detail="Cannot issue to department: item has pending GRN quality inspection in quarantine",
             )
         from_wh = await db.get(Warehouse, from_warehouse_id)
-        if from_wh and getattr(from_wh, "is_quarantine", False):
+        if from_wh and from_wh.tenant_id == tenant_id and getattr(from_wh, "is_quarantine", False):
             raise HTTPException(
                 status_code=400,
                 detail="Cannot issue from quarantine warehouse until QC is completed",

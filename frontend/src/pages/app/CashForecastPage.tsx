@@ -3,8 +3,10 @@ import { Link } from "react-router-dom";
 import { api, type CashForecastScenarioCreate, type CashForecastScenarioResponse } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
+import { useConfirm } from "@/components/app/useConfirm";
 
 export function CashForecastPage() {
+  const confirm = useConfirm();
   const [rows, setRows] = useState<CashForecastScenarioResponse[]>([]);
   const [summary, setSummary] = useState<{ expected_inflows: number; expected_outflows: number; net_cash_flow: number; scenarios_count: number } | null>(null);
   const [error, setError] = useState("");
@@ -70,7 +72,7 @@ export function CashForecastPage() {
   }
 
   async function removeScenario(id: number) {
-    if (!window.confirm("Delete this scenario and its lines?")) return;
+    if (!(await confirm({ title: "Delete this scenario and its lines?", danger: true }))) return;
     try {
       await api.deleteCashForecastScenario(id);
       await load();

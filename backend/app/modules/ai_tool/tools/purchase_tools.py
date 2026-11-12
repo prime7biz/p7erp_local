@@ -19,6 +19,9 @@ from app.models import (
 )
 from app.modules.ai_tool.query_parser import parse_search_query
 
+# The shortage scan runs several queries per order; only the newest orders are checked.
+SHORTAGE_ORDER_SCAN_LIMIT = 50
+
 
 def _to_float(value: str | int | float | Decimal | None) -> float:
     if value is None:
@@ -103,7 +106,12 @@ async def suggest_orders_with_shortage(
             "summary": "No consumption-issued orders found.",
             "data": {"orders_with_shortage": []},
         }
-    stmt = select(Order).where(Order.tenant_id == tenant_id, Order.id.in_(order_ids))
+    stmt = (
+        select(Order)
+        .where(Order.tenant_id == tenant_id, Order.id.in_(order_ids))
+        .order_by(Order.id.desc())
+        .limit(SHORTAGE_ORDER_SCAN_LIMIT)
+    )
     orders_result = await db.execute(stmt)
     orders = list(orders_result.scalars().all())
     shortage_list: list[dict] = []
@@ -156,6 +164,8 @@ async def suggest_orders_with_shortage(
                 shortage_count += 1
         if shortage_count > 0:
             style = await db.get(GarmentStyle, quotation.style_id)
+            if style is not None and style.tenant_id != tenant_id:
+                style = None
             shortage_list.append({
                 "order_id": order.id,
                 "order_code": order.order_code,

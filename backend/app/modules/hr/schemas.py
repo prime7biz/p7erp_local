@@ -340,6 +340,15 @@ class EmployeePaySnapshot(BaseModel):
     wage_grade_gross: str | None = None
     wage_assignment_id: int | None = None
     wage_effective_from: date | None = None
+    # Migration 290: per-employee component amounts ({component code: amount}) and change metadata.
+    component_overrides: dict[str, str] = Field(default_factory=dict)
+    change_type: str | None = None
+    change_note: str | None = None
+    # Every active line of the structure in force, priced for this basic (same shape as the preview).
+    components: list[dict] = Field(default_factory=list)
+
+
+ComponentOverrides = dict[str, str]
 
 
 class EmployeeCompensationReplace(BaseModel):
@@ -347,6 +356,24 @@ class EmployeeCompensationReplace(BaseModel):
     bd_wage_rate_id: int | None = None
     base_salary: str | None = Field(None, max_length=32, description="Decimal string; defaults to the grade minimum basic")
     effective_from: date
+    component_overrides: ComponentOverrides | None = Field(
+        None, description="{component code: monthly amount} for earnings other than the basic"
+    )
+    change_type: Literal["INCREMENT", "PROMOTION", "CORRECTION"] | None = None
+    change_note: str | None = Field(None, max_length=2000)
+
+
+PAY_BENEFIT_CODES = ("OVERTIME", "FRIDAY", "TIFFIN", "LUNCH", "DINNER", "NIGHT")
+
+
+class PayBenefitItem(BaseModel):
+    benefit_code: Literal["OVERTIME", "FRIDAY", "TIFFIN", "LUNCH", "DINNER", "NIGHT"]
+    enabled: bool = True
+    amount_override: str | None = Field(None, max_length=32)
+
+
+class PayBenefitsUpdate(BaseModel):
+    benefits: list[PayBenefitItem] = Field(..., max_length=len(PAY_BENEFIT_CODES))
 
 
 EmployeeResponse.model_rebuild()

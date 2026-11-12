@@ -535,7 +535,7 @@ async def apply_posted_note_to_party_bills(
         note_bill.settled_amount = applied
         _refresh_bill_status(note_bill)
     await db.flush()
-    await update_party_ledger_balance(db, ledger.id)
+    await update_party_ledger_balance(db, ledger.id, tenant_id=tenant_id)
     return note_bill
 
 

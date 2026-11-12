@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.pagination import MAX_PAGE_SIZE
 from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.business_date import today_local
@@ -136,7 +137,7 @@ def _to_plan_task_response(
 @router.get("/templates", response_model=list[TnaTemplateResponse])
 async def list_templates(
     active_only: bool = Query(default=False),
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -251,7 +252,7 @@ async def add_template_task(
 @router.get("/plans", response_model=list[TnaPlanResponse])
 async def list_plans(
     status_filter: str | None = Query(default=None),
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -372,7 +373,7 @@ async def create_plan(
 @router.get("/plans/{plan_id}/tasks", response_model=list[TnaPlanTaskResponse])
 async def list_plan_tasks(
     plan_id: int,
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),

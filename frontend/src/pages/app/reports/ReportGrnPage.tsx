@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type ReportGrnRow } from "@/api/client";
-import { logApiError } from "@/utils/logApiError";
+import { logApiError } from "@/utils/logApiError";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
 
 export function ReportGrnPage() {
   const [rows, setRows] = useState<ReportGrnRow[]>([]);
@@ -33,18 +34,13 @@ export function ReportGrnPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-text-primary">GRN Summary</h1>
-        <p className="text-text-muted text-sm mt-0.5">
-          Goods receiving notes summary.
-        </p>
-      </header>
+      <AppPageHeader title="GRN Summary" description="Goods receiving notes summary." />
       {error && (
         <div className="rounded-lg bg-status-danger-subtle border border-status-danger/20 px-4 py-3 text-sm text-status-danger-foreground">
           {error}
         </div>
       )}
-      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+      <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
         {loading ? (
           <div className="space-y-3 p-6"><div className="h-4 w-3/4 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-full animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-5/6 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-2/3 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-4/5 animate-pulse rounded bg-surface-subtle" /></div>
         ) : rows.length === 0 ? (

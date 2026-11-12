@@ -39,6 +39,23 @@ def test_preview_api_schema_exposes_every_preview_field():
     assert not missing, f"Preview fields missing from API schema: {sorted(missing)}"
 
 
+def test_preview_endpoint_copies_every_preview_field():
+    """The preview endpoint builds the response field by field; a field it forgets silently shows its default."""
+    import inspect
+    from dataclasses import fields
+
+    from app.modules.hr_payroll import router
+    from app.modules.hr_payroll.payroll_calculation_service import EmployeeCalcPreview
+
+    source = inspect.getsource(router.auto_calculate_preview)
+    not_copied = [
+        f.name
+        for f in fields(EmployeeCalcPreview)
+        if f.name not in {"trace", "components"} and f"{f.name}=e.{f.name}" not in source
+    ]
+    assert not not_copied, f"auto_calculate_preview does not copy: {not_copied}"
+
+
 def test_formula_engine_output_types():
     assert assert_valid_calculation_type("per_piece") == "PER_PIECE"
     assert calculate_component_amount(calculation_type="PER_PIECE", amount="2.5", pieces=40) == Decimal("100.0000")

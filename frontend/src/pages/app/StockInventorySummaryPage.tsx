@@ -7,6 +7,9 @@ import { Layers, Package, Warehouse, Workflow } from "lucide-react";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { saveBlob } from "@/lib/fileSave";
+import { useResponsiveListPreference } from "@/hooks/useInventoryListView";
+import { useMobileUiV2 } from "@/hooks/useMobileUiV2";
+import { InventoryListViewToggle } from "@/components/inventory/InventoryMobileList";
 
 type Tab = "overview" | "group" | "warehouse" | "wip";
 
@@ -23,6 +26,10 @@ export function StockInventorySummaryPage() {
   const [rebuildMsg, setRebuildMsg] = useState("");
 
   const asOfParam = asOf.trim() || undefined;
+  // mobile_ui_v2: phones start on Cards; group / warehouse totals stay in each card header.
+  const phoneList = useResponsiveListPreference("inventory.stock-summary", useMobileUiV2());
+  const cards = phoneList.showCards;
+  const tabTouch = phoneList.showToggle ? "min-h-11" : "";
 
   const latest = useLatestRequest();
 
@@ -159,7 +166,7 @@ export function StockInventorySummaryPage() {
             key={k}
             type="button"
             onClick={() => setTab(k)}
-            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm ${
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm ${tabTouch} ${
               tab === k ? "border-brand-primary bg-brand-primary/10 font-medium text-brand-primary" : "border-border text-text-secondary"
             }`}
           >
@@ -168,6 +175,9 @@ export function StockInventorySummaryPage() {
           </button>
         ))}
       </div>
+      {phoneList.showToggle && tab !== "overview" ? (
+        <InventoryListViewToggle value={phoneList.view} onChange={phoneList.setView} />
+      ) : null}
 
       {tab === "overview" && overview ? (
         <div className="grid gap-4 sm:grid-cols-3">
@@ -216,6 +226,9 @@ export function StockInventorySummaryPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="overflow-x-auto p-0">
+                {cards ? (
+                  <StockLineCards lines={g.lines} showWarehouse />
+                ) : (
                 <table className="min-w-full text-sm">
                   <thead className="bg-surface-subtle text-left text-text-muted">
                     <tr>
@@ -252,6 +265,7 @@ export function StockInventorySummaryPage() {
                     ))}
                   </tbody>
                 </table>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -276,6 +290,9 @@ export function StockInventorySummaryPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="overflow-x-auto p-0">
+                {cards ? (
+                  <StockLineCards lines={w.lines} />
+                ) : (
                 <table className="min-w-full text-sm">
                   <thead className="bg-surface-subtle text-left text-text-muted">
                     <tr>
@@ -310,6 +327,7 @@ export function StockInventorySummaryPage() {
                     ))}
                   </tbody>
                 </table>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -323,6 +341,21 @@ export function StockInventorySummaryPage() {
             <span className="text-sm text-text-muted">Total: {wip.total_wip_value.toLocaleString()}</span>
           </CardHeader>
           <CardContent className="overflow-x-auto p-0">
+            {cards ? (
+              <ul className="divide-y divide-border-subtle">
+                {wip.rows.map((r) => (
+                  <li key={r.process_order_id} className="px-4 py-3">
+                    <div className="font-medium text-text-primary">{r.process_number}</div>
+                    <dl className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
+                      <CardField label="Input" value={r.input_item_code} />
+                      <CardField label="Output" value={r.output_item_code} />
+                      <CardField label="Qty" value={r.input_quantity} />
+                      <CardField label="WIP value" value={r.wip_value} />
+                    </dl>
+                  </li>
+                ))}
+              </ul>
+            ) : (
             <table className="min-w-full text-sm">
               <thead className="bg-surface-subtle text-left text-text-muted">
                 <tr>
@@ -345,9 +378,56 @@ export function StockInventorySummaryPage() {
                 ))}
               </tbody>
             </table>
+            )}
           </CardContent>
         </Card>
       ) : null}
     </div>
+  );
+}
+
+type StockLine = {
+  item_id: number;
+  warehouse_id?: number | null;
+  item_code?: string | null;
+  item_name?: string | null;
+  warehouse_name?: string | null;
+  on_hand_qty: unknown;
+  unit_cost: unknown;
+  line_value: unknown;
+};
+
+function CardField({ label, value }: { label: string; value: unknown }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">{label}</dt>
+      <dd className="break-words text-text-secondary">{value == null || value === "" ? "—" : String(value)}</dd>
+    </div>
+  );
+}
+
+/** Phone cards for one stock group / warehouse (mobile_ui_v2); each card opens the item like a table row. */
+function StockLineCards({ lines, showWarehouse = false }: { lines: StockLine[]; showWarehouse?: boolean }) {
+  return (
+    <ul className="divide-y divide-border-subtle">
+      {lines.map((ln) => (
+        <li key={`${ln.item_id}-${ln.warehouse_id}`}>
+          <Link
+            to={`/app/inventory?tab=items&item=${ln.item_id}`}
+            className="block min-h-11 px-4 py-3 hover:bg-surface-subtle/80 focus:bg-surface-subtle/80 focus:outline-none"
+          >
+            <div className="break-words font-medium text-text-primary">
+              {ln.item_code} — {ln.item_name}
+            </div>
+            <dl className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
+              {showWarehouse ? <CardField label="Warehouse" value={ln.warehouse_name ?? "—"} /> : null}
+              <CardField label="On hand" value={ln.on_hand_qty} />
+              <CardField label="Unit cost" value={ln.unit_cost} />
+              <CardField label="Value" value={ln.line_value} />
+            </dl>
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }

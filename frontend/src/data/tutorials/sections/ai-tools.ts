@@ -20,7 +20,7 @@ Who uses it: owners and managers (briefs, exception agents), merchandisers (orde
 ## Before you start
 
 - Your role needs **AI tools** access (permission key \`ai.access\`) to open the **AI Tools** menu screens. The ✦ drawer and the dashboard cards follow your normal module permissions.
-- Some features are company switches in **Settings → Configuration** (choose **More features** at the top): **AI exception agents** and **Ask-a-metric dashboard cards** are on by default; an admin can switch them off.
+- Some features are company switches in **Settings → Configuration** (choose **More features** at the top): **AI exception agents** and **Ask-a-metric dashboard cards** are on by default; an admin can switch them off. **AI assistant agent mode** (smarter chat that looks things up across modules) is off until an admin ticks it.
 - AI text (briefs, weekly reports, chat answers) needs an AI service set up on the server. When it is not set up, rule-based parts still work and AI parts show a clear notice.
 
 ## Steps: where each AI feature lives
@@ -64,7 +64,7 @@ Every AI question, suggestion, confirmation and dismissal is written to the **AI
         "AI safe",
       ],
       estimatedMinutes: 4,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-12",
       featured: true,
       coverImage: "/tutorials/screens/ai-assistant.jpg",
       infographics: [
@@ -196,7 +196,7 @@ The **Prime7 AI Assistant** answers questions about your ERP data in plain langu
 2. Click the **✦** button (**Prime7 AI**) in the top bar. The drawer **Prime7 AI Assistant** slides in from the right.
 3. Look for the chip **Asking about …** above the input. It means your question will use this record.
 4. Type your question in the box (*Ask about dashboard, approvals, orders, inventory, production, or finance...*) and press **Send**.
-5. While it works you see **Local AI is thinking...**. The answer appears in the conversation, with a **Source** link back to the record it used.
+5. While it works you see **AI is thinking... checking your data can take up to 30 seconds.** The answer appears in the conversation, with a **Source** link back to the record it used.
 6. If the answer card says **Paid processing required**, read the reason. Click **Approve Paid Processing** to let the larger cloud tool answer, or **Cancel**.
 7. To ask without the record, click **×** on the chip. Click **Use this … as context** to switch it back on.
 8. Click **New** to start a fresh session; click **×** (top right) to close the drawer. Your conversation is kept.
@@ -207,6 +207,17 @@ The **Prime7 AI Assistant** answers questions about your ERP data in plain langu
 2. **AI Sessions** (left) lists your past conversations. Click one to reopen it, or **New**.
 3. **Quick Actions** (right) run ready-made questions in one click: **Summarize dashboard**, **Show pending approvals**, **Search delayed orders**, **Buyer-wise order status**, **Inventory shortages**, **Production summary** and more.
 4. Further down the right column: anomaly insights, **Controlled Automation** (see *AI Automation*), a knowledge question box, forecast requests and recent report / forecast runs.
+
+## Agent mode (smarter answers)
+
+When an admin switches on **AI assistant agent mode** in **Settings → Configuration** (\`/app/settings/config\`, *More* features), the assistant works out for itself what to look up. It can check several places for one question, for example find a buyer, then list that buyer's late orders, then check material shortages.
+
+- It **remembers the conversation**, so a follow-up like *"and last month?"* keeps the earlier subject.
+- Under the answer you see **Checked:** with the areas it looked at (for example *Orders, Stock shortages*), plus **Source** links to the records.
+- It only sees what **your role** may open. If a lookup was not allowed you see *"lookups were skipped because your role cannot see that data"*.
+- It still only **reads**. It never creates, approves, posts or deletes anything.
+
+Example questions: *"Which orders for H&M are late, and is any material short for them?"*, *"How many vouchers are waiting for approval?"*, *"Which vendors deliver late most often?"*
 
 ## What happens next
 
@@ -224,9 +235,9 @@ The assistant only **reads**. If you want something changed (a reminder, a messa
 - **"Rate limit reached. Please wait a few seconds and retry."** → too many questions in a short time; wait a minute.
 - **"Request timed out"** → ask a smaller question (one buyer, one month).`,
       tags: ["AI", "assistant", "chat", "drawer", "screen context", "quick actions", "sessions"],
-      keywords: ["ask AI", "sparkle button", "Prime7 AI", "chatbot", "question", "context", "Approve Paid Processing", "AI Tool"],
-      estimatedMinutes: 5,
-      lastUpdated: "2026-11-06",
+      keywords: ["ask AI", "sparkle button", "Prime7 AI", "chatbot", "question", "context", "Approve Paid Processing", "AI Tool", "agent mode", "Checked"],
+      estimatedMinutes: 6,
+      lastUpdated: "2026-11-12",
       coverImage: "/tutorials/screens/ai-drawer-order-context.jpg",
       videos: [
         {

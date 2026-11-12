@@ -7,145 +7,101 @@ from app.models import BankReconciliation, LeaveRequest, PaymentRun, PayrollAppr
 from app.modules.ai_tool.query_parser import parse_search_query
 
 
-async def get_pending_approvals(db: AsyncSession, *, tenant_id: int) -> dict:
-    vouchers_pending = int(
-        (
-            await db.execute(
-                select(func.count()).select_from(Voucher).where(
-                    Voucher.tenant_id == tenant_id,
-                    Voucher.status.in_(["SUBMITTED", "CHECKED", "RECOMMENDED"]),
-                )
-            )
-        ).scalar()
-        or 0
-    )
-    runs_draft = int(
-        (
-            await db.execute(
-                select(func.count()).select_from(PaymentRun).where(
-                    PaymentRun.tenant_id == tenant_id,
-                    PaymentRun.status == "DRAFT",
-                )
-            )
-        ).scalar()
-        or 0
-    )
-    recons_open = int(
-        (
-            await db.execute(
-                select(func.count()).select_from(BankReconciliation).where(
-                    BankReconciliation.tenant_id == tenant_id,
-                    BankReconciliation.is_finalized.is_(False),
-                )
-            )
-        ).scalar()
-        or 0
-    )
-    leave_pending = int(
-        (
-            await db.execute(
-                select(func.count()).select_from(LeaveRequest).where(
-                    LeaveRequest.tenant_id == tenant_id,
-                    LeaveRequest.status.in_(["PENDING", "SUBMITTED"]),
-                )
-            )
-        ).scalar()
-        or 0
-    )
-    payroll_pending = int(
-        (
-            await db.execute(
-                select(func.count()).select_from(PayrollApproval).where(
-                    PayrollApproval.tenant_id == tenant_id,
-                    func.upper(PayrollApproval.action) == "PENDING",
-                )
-            )
-        ).scalar()
-        or 0
-    )
+async def _count(db: AsyncSession, stmt) -> int:
+    return int((await db.execute(stmt)).scalar() or 0)
 
-    total = vouchers_pending + runs_draft + recons_open + leave_pending + payroll_pending
+
+async def pending_approval_counts(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    include_finance: bool = True,
+    include_hr: bool = True,
+) -> dict[str, int]:
+    """Pending approval counts per queue. Queues the caller may not see are left out (not zeroed)."""
+    counts: dict[str, int] = {}
+    if include_finance:
+        counts["vouchers"] = await _count(
+            db,
+            select(func.count()).select_from(Voucher).where(
+                Voucher.tenant_id == tenant_id,
+                Voucher.status.in_(["SUBMITTED", "CHECKED", "RECOMMENDED"]),
+            ),
+        )
+        counts["payment_runs"] = await _count(
+            db,
+            select(func.count()).select_from(PaymentRun).where(
+                PaymentRun.tenant_id == tenant_id,
+                PaymentRun.status == "DRAFT",
+            ),
+        )
+        counts["bank_reconciliations"] = await _count(
+            db,
+            select(func.count()).select_from(BankReconciliation).where(
+                BankReconciliation.tenant_id == tenant_id,
+                BankReconciliation.is_finalized.is_(False),
+            ),
+        )
+    if include_hr:
+        counts["leave_requests"] = await _count(
+            db,
+            select(func.count()).select_from(LeaveRequest).where(
+                LeaveRequest.tenant_id == tenant_id,
+                LeaveRequest.status.in_(["PENDING", "SUBMITTED"]),
+            ),
+        )
+        counts["payroll_approvals"] = await _count(
+            db,
+            select(func.count()).select_from(PayrollApproval).where(
+                PayrollApproval.tenant_id == tenant_id,
+                func.upper(PayrollApproval.action) == "PENDING",
+            ),
+        )
+    return counts
+
+
+_QUEUE_LABELS = {
+    "vouchers": "Vouchers",
+    "payment_runs": "Payment Runs",
+    "bank_reconciliations": "Bank Reconciliations",
+    "leave_requests": "Leave Requests",
+    "payroll_approvals": "Payroll Approvals",
+}
+
+
+async def get_pending_approvals(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    include_finance: bool = True,
+    include_hr: bool = True,
+) -> dict:
+    counts = await pending_approval_counts(
+        db, tenant_id=tenant_id, include_finance=include_finance, include_hr=include_hr
+    )
+    total = sum(counts.values())
     return {
         "title": "Pending Approvals",
         "summary": f"Total pending approval items: {total}.",
-        "data": {
-            "total_pending": total,
-            "vouchers": vouchers_pending,
-            "payment_runs": runs_draft,
-            "bank_reconciliations": recons_open,
-            "leave_requests": leave_pending,
-            "payroll_approvals": payroll_pending,
-        },
+        "data": {"total_pending": total, **counts},
     }
 
 
-async def search_pending_approvals(db: AsyncSession, *, tenant_id: int, prompt: str) -> dict:
+async def search_pending_approvals(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    prompt: str,
+    include_finance: bool = True,
+    include_hr: bool = True,
+) -> dict:
     query = parse_search_query(prompt)
-    vouchers_pending = int(
-        (
-            await db.execute(
-                select(func.count()).select_from(Voucher).where(
-                    Voucher.tenant_id == tenant_id,
-                    Voucher.status.in_(["SUBMITTED", "CHECKED", "RECOMMENDED"]),
-                )
-            )
-        ).scalar()
-        or 0
+    counts = await pending_approval_counts(
+        db, tenant_id=tenant_id, include_finance=include_finance, include_hr=include_hr
     )
-    runs_draft = int(
-        (
-            await db.execute(
-                select(func.count()).select_from(PaymentRun).where(
-                    PaymentRun.tenant_id == tenant_id,
-                    PaymentRun.status == "DRAFT",
-                )
-            )
-        ).scalar()
-        or 0
-    )
-    recons_open = int(
-        (
-            await db.execute(
-                select(func.count()).select_from(BankReconciliation).where(
-                    BankReconciliation.tenant_id == tenant_id,
-                    BankReconciliation.is_finalized.is_(False),
-                )
-            )
-        ).scalar()
-        or 0
-    )
-    leave_pending = int(
-        (
-            await db.execute(
-                select(func.count()).select_from(LeaveRequest).where(
-                    LeaveRequest.tenant_id == tenant_id,
-                    LeaveRequest.status.in_(["PENDING", "SUBMITTED"]),
-                )
-            )
-        ).scalar()
-        or 0
-    )
-    payroll_pending = int(
-        (
-            await db.execute(
-                select(func.count()).select_from(PayrollApproval).where(
-                    PayrollApproval.tenant_id == tenant_id,
-                    func.upper(PayrollApproval.action) == "PENDING",
-                )
-            )
-        ).scalar()
-        or 0
-    )
-
-    total = vouchers_pending + runs_draft + recons_open + leave_pending + payroll_pending
+    total = sum(counts.values())
     threshold = query.min_count
-    items = [
-        {"queue": "Vouchers", "count": vouchers_pending},
-        {"queue": "Payment Runs", "count": runs_draft},
-        {"queue": "Bank Reconciliations", "count": recons_open},
-        {"queue": "Leave Requests", "count": leave_pending},
-        {"queue": "Payroll Approvals", "count": payroll_pending},
-    ]
+    items = [{"queue": _QUEUE_LABELS[key], "count": value} for key, value in counts.items()]
     items.sort(key=lambda x: x["count"], reverse=True)
     summary = (
         f"Found {total} pending approvals."

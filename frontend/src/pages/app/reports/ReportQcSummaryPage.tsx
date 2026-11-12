@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type QualityDashboardResponse } from "@/api/client";
-import { logApiError } from "@/utils/logApiError";
+import { logApiError } from "@/utils/logApiError";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
 
 export function ReportQcSummaryPage() {
   const [data, setData] = useState<QualityDashboardResponse | null>(null);
@@ -29,10 +30,7 @@ export function ReportQcSummaryPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-text-primary">QC Summary</h1>
-        <p className="text-text-muted text-sm mt-0.5">Manufacturing quality dashboard: inspections, defects, NCR, CAPA.</p>
-      </header>
+      <AppPageHeader title="QC Summary" description="Manufacturing quality dashboard: inspections, defects, NCR, CAPA." />
       {error && (
         <div className="rounded-lg bg-status-danger-subtle border border-status-danger/20 px-4 py-3 text-sm text-status-danger-foreground">
           {error}
@@ -69,7 +67,7 @@ export function ReportQcSummaryPage() {
               <div className="text-2xl font-semibold">{data.inspections.failed}</div>
             </div>
           </div>
-          <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+          <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
             <h2 className="border-b border-border px-4 py-2 text-sm font-semibold">By check type</h2>
             <table className="min-w-full text-sm">
               <thead className="bg-surface-subtle text-left text-text-muted">
@@ -94,7 +92,7 @@ export function ReportQcSummaryPage() {
               </tbody>
             </table>
           </div>
-          <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+          <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
             <h2 className="border-b border-border px-4 py-2 text-sm font-semibold">Defect distribution</h2>
             <table className="min-w-full text-sm">
               <thead className="bg-surface-subtle text-left text-text-muted">

@@ -31,7 +31,7 @@ from app.models.commercial import (
     CommercialInvoiceLine,
     CommercialInvoiceReceiptAllocation,
 )
-from app.modules.finance.auto_posting_service import AutoPostingLine, create_system_voucher
+from app.modules.finance.auto_posting_service import AutoPostingLine, create_system_voucher, quantize_rate
 
 ACTIVE_INVOICE_STATUSES = ("DRAFT", "ISSUED")
 ACTIVE_ALLOCATION_STATUSES = ("PENDING", "POSTED")
@@ -580,7 +580,7 @@ async def issue_commercial_invoice(
         source_module="COMMERCIAL_INVOICE",
         source_module_ref=str(invoice.id),
         currency=cur,
-        exchange_rate=float(rate) if rate > 0 else 1.0,
+        exchange_rate=rate if rate > 0 else Decimal("1"),
         auto_post=False,
     )
     voucher.order_id = primary_order_id
@@ -676,6 +676,7 @@ async def create_receipt_from_commercial_invoice(
     rate = _d(exchange_rate_to_base)
     if rate <= 0:
         raise HTTPException(status_code=400, detail="exchange_rate_to_base must be greater than zero")
+    rate = quantize_rate(rate)  # same 6-dp rate the voucher stores, so allocation and voucher agree
 
     outstanding = await get_ci_outstanding(db, tenant_id=tenant_id, invoice=invoice)
     if amt > outstanding.outstanding_for_new:
@@ -727,7 +728,7 @@ async def create_receipt_from_commercial_invoice(
         source_module="COMMERCIAL_INVOICE",
         source_module_ref=str(invoice.id),
         currency=cur,
-        exchange_rate=float(rate),
+        exchange_rate=rate,
         auto_post=False,
     )
     voucher.order_id = primary_order_id

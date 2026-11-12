@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { HrEmployeePaySnapshot, HrOnboardingRun } from "@/api/models";
+import type { HrEmployeePaySnapshot, HrOnboardingRun, HrStructureLine } from "@/api/models";
 import {
   addFacility,
   addressesMatch,
@@ -35,6 +35,14 @@ import {
   syncPermanentAddress,
   toggleFacility,
   updateSalary,
+  buildComponentRows,
+  buildPayBenefitsPayload,
+  calculateIncrementBasic,
+  componentRowsGross,
+  emptyPayBenefits,
+  incrementPatch,
+  payBenefitsBlocker,
+  payBenefitsFromApi,
   type SalaryFormState,
   type SalaryPreviewState,
 } from "./employeeWorkspaceLogic";
@@ -257,7 +265,9 @@ describe("employee workspace: simplified salary set-up", () => {
 
   it("sends no salary when set-up is off, whatever stale values are hidden in the form", () => {
     const stale: SalaryFormState = {
+      ...emptySalaryForm(),
       enabled: false, structure_id: 4, bd_wage_rate_id: 9, override: true, base_salary: "50000", effective_from: "2026-12-01", acknowledged: true,
+      component_overrides: { "BD-HRENT": "9000" }, change_type: "INCREMENT",
     };
     expect(buildCompensation(stale, "2026-12-01")).toBeNull();
     expect(buildOnboardingRequest("onb-off", emptyEmployeeForm(), stale, false).compensation).toBeNull();
@@ -343,11 +353,17 @@ describe("employee workspace: simplified salary set-up", () => {
       bd_wage_rate_id: null, override: false, base_salary: "20000",
     });
     // A stored grade without a structure keeps the grade selected; the structure is then chosen by the user.
-    expect(salaryFormFromSnapshot(snap({ structure_id: null, basic: "0.0000" }))).toEqual({ ...emptySalaryForm(), enabled: true, bd_wage_rate_id: 9 });
+    expect(salaryFormFromSnapshot(snap({ structure_id: null, basic: "0.0000" }))).toEqual({
+      ...emptySalaryForm(), enabled: true, bd_wage_rate_id: 9, change_type: "INCREMENT",
+    });
     // An assignment without a stored basic reports 0: that is not an override of the grade.
     expect(salaryFormFromSnapshot(snap({ basic: "0.0000" }))).toMatchObject({ bd_wage_rate_id: 9, override: false, base_salary: "" });
     expect(salaryFormFromSnapshot(snap({ wage_rate_id: null, wage_grade_basic: null, basic: "0.0000" })).base_salary).toBe("");
-    expect(salaryFormFromSnapshot(null)).toEqual({ ...emptySalaryForm(), enabled: true });
+    expect(salaryFormFromSnapshot(null)).toEqual({ ...emptySalaryForm(), enabled: true, change_type: "INCREMENT" });
+    // Existing per-employee component amounts are kept for the next change.
+    expect(salaryFormFromSnapshot(snap({ component_overrides: { "BD-HRENT": "4000.0000" } })).component_overrides).toEqual({
+      "BD-HRENT": "4000",
+    });
   });
 
   it("normalizes money strings without floating point", () => {
@@ -355,5 +371,102 @@ describe("employee workspace: simplified salary set-up", () => {
     expect(normalizeMoney("0012500.50")).toBe("12500.5");
     expect(normalizeMoney("0.0000")).toBe("0");
     expect(normalizeMoney(" abc ")).toBe("abc");
+  });
+});
+
+describe("employee workspace: salary components, change type and increment", () => {
+  const on = (patch: Partial<SalaryFormState> = {}): SalaryFormState => ({ ...emptySalaryForm(), enabled: true, structure_id: 4, ...patch });
+  const lines: HrStructureLine[] = [
+    { component_id: 1, code: "BD-BASIC", name: "Basic wage", component_type: "EARNING", calculation_type: "PERCENT_OF_BASE", amount: "100.0000", is_basic: true, editable: false },
+    { component_id: 2, code: "BD-HRENT", name: "House rent", component_type: "EARNING", calculation_type: "PERCENT_OF_BASE", amount: "50.0000", is_basic: false, editable: true },
+    { component_id: 3, code: "BD-MEDICAL", name: "Medical", component_type: "EARNING", calculation_type: "FIXED", amount: "750.0000", is_basic: false, editable: true },
+    { component_id: 4, code: "OT", name: "Overtime", component_type: "EARNING", calculation_type: "PER_HOUR_OT", amount: "60.0000", is_basic: false, editable: false },
+    { component_id: 5, code: "PF", name: "Provident fund", component_type: "DEDUCTION", calculation_type: "FIXED", amount: "200.0000", is_basic: false, editable: false },
+  ];
+
+  it("prices every line for the basic and keeps the basic line bound to the basic salary", () => {
+    const rows = buildComponentRows(lines, "10000", { "BD-MEDICAL": "900" });
+    expect(rows.map((r) => [r.code, r.kind, r.standard, r.value])).toEqual([
+      ["BD-BASIC", "basic", "10000", "10000"],
+      ["BD-HRENT", "editable", "5000", "5000"],
+      ["BD-MEDICAL", "editable", "750", "900"],
+      ["OT", "readonly", null, null],
+      ["PF", "readonly", "200", "200"],
+    ]);
+    expect(rows.find((r) => r.code === "BD-MEDICAL")?.overridden).toBe(true);
+    // Gross: basic + house rent + typed medical; deductions and per-hour lines excluded.
+    expect(componentRowsGross(rows)).toBe("15900");
+  });
+
+  it("sends only typed component amounts and the change type, and clears amounts on another structure", () => {
+    const salary = on({ base_salary: "10000", component_overrides: { "BD-HRENT": " 6000 ", "BD-MEDICAL": "" }, change_type: "PROMOTION", change_note: " Line chief " });
+    expect(buildCompensation(salary, "2026-12-01")).toEqual({
+      structure_id: 4, bd_wage_rate_id: null, base_salary: "10000", effective_from: "2026-12-01",
+      component_overrides: { "BD-HRENT": "6000" }, change_type: "PROMOTION", change_note: "Line chief",
+    });
+    expect(updateSalary(salary, { structure_id: 5 }).component_overrides).toEqual({});
+    expect(updateSalary(salary, { base_salary: "11000" }).component_overrides).toEqual(salary.component_overrides);
+    // Component amounts are part of the preview identity.
+    expect(previewKey(buildCompensation(salary, "2026-12-01"))).not.toBe(
+      previewKey(buildCompensation({ ...salary, component_overrides: {} }, "2026-12-01")),
+    );
+  });
+
+  it("blocks a bad component amount and a start date on or before the current salary unless it is a correction", () => {
+    const opts = { mode: "edit" as const, joiningDate: "2026-01-01", currentStart: "2026-06-01" };
+    expect(salaryBlocker(on({ base_salary: "10000", component_overrides: { "BD-HRENT": "6,000" } }), "2026-12-01", IDLE_PREVIEW, opts)).toMatch(/BD-HRENT/);
+    const inc = on({ base_salary: "10000", change_type: "INCREMENT" });
+    expect(salaryBlocker(inc, "2026-05-01", IDLE_PREVIEW, opts)).toMatch(/must start after 2026-06-01/);
+    expect(salaryBlocker(inc, "2026-06-01", IDLE_PREVIEW, opts)).toMatch(/choose Correction/);
+    const fix = { ...inc, change_type: "CORRECTION" as const };
+    expect(salaryBlocker(fix, "2026-06-01", IDLE_PREVIEW, opts)).toMatch(/Checking/); // passes the date rule
+    expect(salaryBlocker(fix, "2026-05-01", IDLE_PREVIEW, opts)).toMatch(/must start after/);
+  });
+
+  it("calculates the increment as a percent or an amount and types it as the new basic", () => {
+    expect(calculateIncrementBasic("12500", "percent", "5")).toBe("13125");
+    expect(calculateIncrementBasic("12500.0000", "amount", "500")).toBe("13000");
+    expect(calculateIncrementBasic("12500", "percent", "abc")).toBeNull();
+    expect(incrementPatch(on({ bd_wage_rate_id: 9 }), "12500", { increment_value: "10" })).toEqual({
+      increment_value: "10", base_salary: "13750", override: true,
+    });
+    expect(incrementPatch(on(), "12500", { increment_value: "" })).toEqual({ increment_value: "" });
+  });
+});
+
+describe("employee workspace: overtime and bill switches", () => {
+  it("defaults to everything on at the company rate", () => {
+    const state = emptyPayBenefits();
+    expect(buildPayBenefitsPayload(state)).toEqual(
+      ["OVERTIME", "FRIDAY", "TIFFIN", "LUNCH", "DINNER", "NIGHT"].map((code) => ({ benefit_code: code, enabled: true, amount_override: null })),
+    );
+  });
+
+  it("reads saved switches, never sends an overtime amount and drops the amount of a switched-off bill", () => {
+    const state = payBenefitsFromApi([
+      { benefit_code: "OVERTIME", enabled: false, amount_override: null },
+      { benefit_code: "LUNCH", enabled: true, amount_override: "80.0000" },
+      { benefit_code: "NIGHT", enabled: false, amount_override: "40.0000" },
+    ]);
+    expect(state.OVERTIME).toEqual({ enabled: false, amount: "" });
+    expect(state.LUNCH).toEqual({ enabled: true, amount: "80" });
+    const payload = buildPayBenefitsPayload({ ...state, OVERTIME: { enabled: true, amount: "99" } });
+    expect(payload.find((p) => p.benefit_code === "OVERTIME")).toEqual({ benefit_code: "OVERTIME", enabled: true, amount_override: null });
+    expect(payload.find((p) => p.benefit_code === "LUNCH")?.amount_override).toBe("80");
+    expect(payload.find((p) => p.benefit_code === "NIGHT")).toEqual({ benefit_code: "NIGHT", enabled: false, amount_override: null });
+  });
+
+  it("blocks a bad own amount and sends switches with onboarding and its retry", () => {
+    const state = emptyPayBenefits();
+    expect(payBenefitsBlocker({ ...state, TIFFIN: { enabled: true, amount: "1,000" } })).toMatch(/Tiffin bill/);
+    expect(payBenefitsBlocker({ ...state, TIFFIN: { enabled: false, amount: "1,000" } })).toBeNull();
+    const switches = buildPayBenefitsPayload({ ...state, OVERTIME: { enabled: false, amount: "" } });
+    const body = buildOnboardingRequest("onb-pb", emptyEmployeeForm(), emptySalaryForm(), false, [], null, switches);
+    expect(body.pay_benefits).toEqual(switches);
+    expect(buildOnboardingRequest("onb-none", emptyEmployeeForm(), emptySalaryForm(), false).pay_benefits).toBeUndefined();
+    const failed = { steps: { employee: "COMPLETED", payroll: "FAILED", gate_pass: "SKIPPED", checklist: "COMPLETED" } } as HrOnboardingRun;
+    expect(buildResumeSteps(failed, body).pay_benefits).toEqual(switches);
+    const done = { steps: { ...failed.steps, payroll: "COMPLETED" } } as HrOnboardingRun;
+    expect(buildResumeSteps(done, body).pay_benefits).toBeUndefined();
   });
 });

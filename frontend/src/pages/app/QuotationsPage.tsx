@@ -43,8 +43,11 @@ import {
   listTableTrClass,
 } from "@/components/app/listPageLayout";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/app/useConfirm";
+import { toast } from "sonner";
 
 export function QuotationsPage() {
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const [items, setItems] = useState<QuotationResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -507,7 +510,7 @@ export function QuotationsPage() {
                               type="button"
                               onClick={async () => {
                                 setOpenActionsId(null);
-                                if (!window.confirm("Delete this quotation?")) return;
+                                if (!(await confirm({ title: "Delete this quotation?", danger: true }))) return;
                                 try {
                                   setError("");
                                   await api.deleteQuotation(q.id);
@@ -540,7 +543,7 @@ export function QuotationsPage() {
                                   try {
                                     setError("");
                                     const order = await api.convertQuotationToOrder(q.id);
-                                    alert(`Order ${order.order_code} created from quotation.`);
+                                    toast.success(`Order ${order.order_code} created from quotation.`);
                                     await load();
                                   } catch (e) {
                                     setError(e instanceof Error ? e.message : "Conversion failed");

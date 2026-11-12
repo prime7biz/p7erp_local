@@ -5,6 +5,7 @@ import { api } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
+import { toast } from "sonner";
 
 function screenTitle(pathname: string): string {
   if (pathname.includes("/production/cutting")) return "Shop Floor - Cutting";
@@ -227,7 +228,7 @@ export function ShopFloorExecutionPage() {
                   type="button"
                   className="rounded border border-border px-2 py-1 text-[11px] hover:bg-state-hover"
                   onClick={() =>
-                    window.alert(
+                    toast.info(
                       "Apply is advisory only in this MVP — update line assignments from crew/setup screens after supervisor confirmation.",
                     )
                   }

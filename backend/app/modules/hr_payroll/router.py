@@ -326,7 +326,7 @@ async def _payroll_statutory_totals(db: AsyncSession, *, tenant_id: int, run_id:
         .scalars()
         .all()
     )
-    keys = ("employee_pf", "employer_pf", "employee_esi", "employer_esi", "pt")
+    keys = ("employee_pf", "employer_pf", "employee_esi", "employer_esi", "pt", "bd_tds")
     totals = {k: Decimal("0") for k in keys}
     for snap in snaps:
         trace = snap.trace_json or {}
@@ -340,6 +340,7 @@ async def _payroll_statutory_totals(db: AsyncSession, *, tenant_id: int, run_id:
                 "employee_esi": Decimal(str(esi.get("employee_esi") or 0)),
                 "employer_esi": Decimal(str(esi.get("employer_esi") or 0)),
                 "pt": Decimal(str(statutory.get("pt_amount") or 0)),
+                "bd_tds": Decimal(str((statutory.get("bd_tds") or {}).get("monthly_tds") or 0)),
             }
         except Exception:
             continue
@@ -390,6 +391,12 @@ async def _gross_payroll_entries(
         raise HTTPException(status_code=400, detail="Payroll net pay exceeds gross pay; check the run lines")
     remaining = deductions_total
     parts: list[tuple[str, Decimal, str]] = []
+    # Bangladesh salary TDS (frozen in the snapshots) gets its own tax payable credit, so it is never
+    # lumped into "other deductions".
+    tds_amount = min(st["bd_tds"], remaining)
+    if tds_amount > 0:
+        parts.append(("tax", tds_amount, "Income tax (TDS) deduction"))
+        remaining -= tds_amount
     for key, acct_key, label in (
         ("employee_pf", "pf", "PF employee deduction"),
         ("employee_esi", "esi", "ESI employee deduction"),
@@ -1319,6 +1326,15 @@ async def post_run(
 
     # (account_id, entry_type, amount, note)
     entries: list[tuple[int, str, Decimal, str]] = []
+    run_tds = (await _payroll_statutory_totals(db, tenant_id=tenant.id, run_id=run.id))["bd_tds"]
+    if run_tds > 0 and not is_payroll_gross_posting_enabled(tenant.feature_flags):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This payroll run deducts Bangladesh salary tax (TDS). Turn on gross payroll posting and set the "
+                "Tax payable account in Payroll accounting settings before posting, so the tax liability is recorded."
+            ),
+        )
     if is_payroll_gross_posting_enabled(tenant.feature_flags):
         entries = await _gross_payroll_entries(
             db,
@@ -1966,6 +1982,7 @@ async def auto_calculate_preview(
                 ot_paid_hours=e.ot_paid_hours,
                 ot_hourly_rate=e.ot_hourly_rate,
                 ot_amount=e.ot_amount,
+                overtime_enabled=e.overtime_enabled,
                 components=[
                     PayrollComponentCalcOut(
                         component_id=c.component_id,

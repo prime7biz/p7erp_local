@@ -6,6 +6,7 @@ import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import type { OrderReadinessPayload, PipelineOrderRow } from "@/types/productionPlanning";
 import { toLocalISODate, todayLocalISO } from "@/lib/dates";
+import { toast } from "sonner";
 
 function todayISO() {
   return todayLocalISO();
@@ -414,7 +415,7 @@ export function ProductionLinePlanPage() {
       const message = moves.length
         ? `AI suggested ${moves.length} move(s). Review JSON in console or apply manually on the board.`
         : aiReasonMessage(r.ai_status as AiStatus | undefined);
-      alert(message);
+      toast(message);
       if (moves.length) console.info("AI optimize moves", moves);
     } catch (e) {
       logApiError(e, "ProductionLinePlanPage.optimize");
@@ -524,8 +525,8 @@ export function ProductionLinePlanPage() {
         ) : null}
 
         {visibleConflicts.length > 0 ? (
-          <section className="rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/30">
-            <h2 className="mb-2 text-sm font-medium text-red-800 dark:text-red-200">
+          <section className="rounded-lg border border-red-200 bg-red-50 p-3">
+            <h2 className="mb-2 text-sm font-medium text-red-800">
               Planning conflicts ({visibleConflicts.length})
             </h2>
             <ul className="space-y-1 text-xs">
@@ -560,7 +561,7 @@ export function ProductionLinePlanPage() {
                   return (
                     <div
                       key={d}
-                      className={`min-w-[28px] flex-1 text-center text-[10px] ${isHol ? "bg-amber-100/50 text-amber-900 dark:bg-amber-900/20" : "text-text-muted"}`}
+                      className={`min-w-[28px] flex-1 text-center text-[10px] ${isHol ? "bg-amber-100/50 text-amber-900" : "text-text-muted"}`}
                       title={isHol ? "Holiday" : d}
                     >
                       {d.slice(5)}
@@ -602,7 +603,7 @@ export function ProductionLinePlanPage() {
                             <div
                               key={d}
                               className={`flex-1 border-r border-border-subtle/50 ${
-                                over ? "bg-brand-primary/20" : isHol ? "bg-amber-50/30 dark:bg-amber-950/20" : "bg-surface-subtle/30"
+                                over ? "bg-brand-primary/20" : isHol ? "bg-amber-50/30" : "bg-surface-subtle/30"
                               }`}
                             />
                           );

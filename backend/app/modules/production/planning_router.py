@@ -1,6 +1,7 @@
 """Line plan board, suggestions, readiness, pipeline, Gemini AI."""
 from __future__ import annotations
 
+import logging
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -12,7 +13,7 @@ from app.common.auth import get_current_user
 from app.common.ownership import ensure_owned
 from app.common.tenant import require_tenant
 from app.config import get_settings
-from app.database import get_db
+from app.database import get_db, safe_async_session_rollback
 from app.models import (
     FactoryCalendarOverride,
     GarmentStyle,
@@ -61,6 +62,7 @@ from app.modules.production.settings_router import _get_or_create_settings
 from app.modules.production.suggest_service import suggest_assignments
 
 router = APIRouter(prefix="/production", tags=["production-planning"])
+logger = logging.getLogger(__name__)
 
 
 class LineReservationProposeBody(BaseModel):
@@ -757,30 +759,37 @@ async def release_work_orders(
     material_estimate = 0
     if released_ids:
         # Best-effort material line estimate from linked order BOMs (advisory for UI modal/toast).
+        # Flush the release first, then run the estimate in a savepoint: a failed estimate query
+        # rolls back only the savepoint, never the release that is committed below.
+        # (begin_nested() also flushes before SAVEPOINT; the explicit flush keeps that visible.)
+        await db.flush()
         try:
             from app.models import Bom, BomItem
 
-            for oid in order_ids_touched:
-                bom_id = (
-                    await db.execute(
-                        select(Bom.id).where(Bom.tenant_id == tenant.id, Bom.order_id == oid).limit(1)
-                    )
-                ).scalar_one_or_none()
-                if bom_id:
-                    material_estimate += int(
-                        (
-                            await db.execute(
-                                select(func.count())
-                                .select_from(BomItem)
-                                .where(BomItem.tenant_id == tenant.id, BomItem.bom_id == bom_id)
-                            )
-                        ).scalar_one()
-                        or 0
-                    )
+            async with db.begin_nested():
+                for oid in order_ids_touched:
+                    bom_id = (
+                        await db.execute(
+                            select(Bom.id).where(Bom.tenant_id == tenant.id, Bom.order_id == oid).limit(1)
+                        )
+                    ).scalar_one_or_none()
+                    if bom_id:
+                        material_estimate += int(
+                            (
+                                await db.execute(
+                                    select(func.count())
+                                    .select_from(BomItem)
+                                    .where(BomItem.tenant_id == tenant.id, BomItem.bom_id == bom_id)
+                                )
+                            ).scalar_one()
+                            or 0
+                        )
         except Exception:
+            logger.warning("release_work_orders material estimate failed tenant_id=%s", tenant.id, exc_info=True)
             material_estimate = 0
         await db.commit()
-        # Soft pipeline nudge only — does not replace existing pipeline rules.
+        # Soft pipeline nudge only — does not replace existing pipeline rules. The release is already
+        # committed; a failed nudge only rolls back its own changes.
         try:
             from app.modules.orders.pipeline_service import auto_advance_order_pipeline
 
@@ -788,7 +797,8 @@ async def release_work_orders(
                 await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=oid)
             await db.commit()
         except Exception:
-            pass
+            logger.warning("release_work_orders pipeline nudge failed tenant_id=%s", tenant.id, exc_info=True)
+            await safe_async_session_rollback(db)
     return {
         "released": len(released_ids),
         "work_order_ids": released_ids,

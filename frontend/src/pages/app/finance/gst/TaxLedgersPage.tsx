@@ -4,7 +4,8 @@ import { api, type ChartOfAccountResponse, type TaxLedgerResponse } from "@/api/
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { listPageRootClass } from "@/components/app/listPageLayout";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
-import { logApiError } from "@/utils/logApiError";
+import { logApiError } from "@/utils/logApiError";
+import { getChartOfAccountsCached } from "@/lib/masterData";
 
 const TAX_TYPES = ["CGST", "SGST", "IGST", "UTGST", "VAT", "CST"] as const;
 
@@ -26,7 +27,7 @@ export function TaxLedgersPage() {
       setError("");
       const [ledgers, coa] = await Promise.all([
         api.listTaxLedgers({ active_only: false }),
-        api.listChartOfAccounts({ active_only: true }),
+        getChartOfAccountsCached({ active_only: true }),
       ]);
       setRows(ledgers);
       setAccounts(coa);

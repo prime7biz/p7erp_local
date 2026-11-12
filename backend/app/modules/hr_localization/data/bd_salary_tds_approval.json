@@ -1,0 +1,20 @@
+{
+  "approval_id": null,
+  "status": "PENDING",
+  "schedule_version": "BD-SALARY-TDS-2026-27-v1",
+  "schedule_checksum": null,
+  "settlement_classification_version": null,
+  "sources": [
+    {
+      "name": "NBR circular 2026-27 (income tax rates, salary exemption, rebate, minimum tax)",
+      "sha256": "5db4fe40076417355bf0ef6cc625322e4c426e351afbe22662001f3c9c7003e7"
+    },
+    {
+      "name": "Income Tax Act 2023 (s.32, s.78, s.86, Sixth Schedule Part 1 para 27)",
+      "sha256": "a1afdff5ad0d79c18011088d9e78187413d30be01aeee83e85249a27ef69068b"
+    }
+  ],
+  "approver": null,
+  "approved_on": null,
+  "note": "Set status to PASS and fill approval_id, schedule_checksum, settlement_classification_version, approver and approved_on only after a Bangladesh tax / compliance reviewer signs off. Until then the TDS switch cannot be enabled."
+}

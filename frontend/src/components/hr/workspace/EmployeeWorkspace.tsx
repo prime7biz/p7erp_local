@@ -39,9 +39,11 @@ import {
   buildResumeSteps,
   buildTabUpdate,
   buildCompensation,
+  buildPayBenefitsPayload,
   CORE_TABS,
   EMPLOYMENT_KEYS,
   emptyEmployeeForm,
+  emptyPayBenefits,
   emptySalaryForm,
   formFromEmployee,
   isDirty,
@@ -49,6 +51,8 @@ import {
   mergeExtraction,
   newRequestId,
   omittedCreateKeys,
+  payBenefitsBlocker,
+  payBenefitsFromApi,
   PERSONAL_KEYS,
   PRESENT_KEYS,
   previewableCompensation,
@@ -58,6 +62,7 @@ import {
   syncPermanentAddress,
   updateSalary,
   type EmployeeFormState,
+  type PayBenefitsState,
   type SalaryFormState,
   type WorkspaceMode,
   type WorkspaceTab,
@@ -119,6 +124,10 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
   const [salary, setSalary] = useState<SalaryFormState>(emptySalaryForm);
   const [salarySaving, setSalarySaving] = useState(false);
   const [salaryStatus, setSalaryStatus] = useState<SalaryStatus>(null);
+  const [payBenefits, setPayBenefits] = useState<PayBenefitsState>(emptyPayBenefits);
+  const [initialPayBenefits, setInitialPayBenefits] = useState<PayBenefitsState>(emptyPayBenefits);
+  const [benefitsSaving, setBenefitsSaving] = useState(false);
+  const [benefitsStatus, setBenefitsStatus] = useState<SalaryStatus>(null);
   const [previewNonce, setPreviewNonce] = useState(0);
   const creating = useRef(false);
   const [sameAsPresent, setSameAsPresent] = useState(false);
@@ -143,12 +152,16 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
     () => new Set<string>(employee?.masked_fields ?? access.masked_fields ?? []),
     [employee?.masked_fields, access.masked_fields],
   );
-  const dirty = isDirty(initialForm, form) || salary.enabled;
+  const dirty = isDirty(initialForm, form) || salary.enabled || isDirty(initialPayBenefits, payBenefits);
+  const benefitsBlock = payBenefitsBlocker(payBenefits);
 
   const savedJoiningDate = mode === "edit" ? initialForm.joining_date : form.joining_date;
   const effective = resolveSalaryEffectiveDate(salary, mode, form.joining_date, compOptions?.as_of ?? null);
+  const previewRequest = previewableCompensation(salary, effective.date);
   const preview = useCompensationPreview(
-    previewableCompensation(salary, effective.date),
+    previewRequest && mode === "edit" && Number.isFinite(employeeIdNum) && employeeIdNum > 0
+      ? { ...previewRequest, employee_id: employeeIdNum }
+      : previewRequest,
     access.can_manage_payroll && salary.enabled,
     previewNonce,
   );
@@ -156,6 +169,7 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
     mode,
     joiningDate: savedJoiningDate,
     joiningDateUnsaved: mode === "edit" && form.joining_date !== initialForm.joining_date,
+    currentStart: compensation?.snapshot.structure_effective_from ?? null,
   });
   const changeSalary = useCallback((patch: Partial<SalaryFormState>) => {
     setSalaryStatus(null);
@@ -204,6 +218,14 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
         setSameAsPresent(addressesMatch(f));
         if (acc.can_manage_payroll) {
           api.getHrEmployeeCompensation(row.id).then(setCompensation).catch((e) => logApiError("EmployeeWorkspace.compensation", e));
+          api
+            .getHrEmployeePayBenefits(row.id)
+            .then((view) => {
+              const state = payBenefitsFromApi(view.benefits);
+              setPayBenefits(state);
+              setInitialPayBenefits(state);
+            })
+            .catch((e) => logApiError("EmployeeWorkspace.payBenefits", e));
         }
       } else {
         setManagers(people);
@@ -281,6 +303,11 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
       showError(`Salary set-up: ${salaryBlock}`);
       return;
     }
+    if (access.can_manage_payroll && benefitsBlock) {
+      setTab("employment");
+      showError(`Overtime & allowances: ${benefitsBlock}`);
+      return;
+    }
     creating.current = true;
     setSaving(true);
     setError("");
@@ -292,11 +319,13 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
         issueTempGatePass && access.can_manage_gate_pass,
         omittedCreateKeys(access),
         compOptions?.as_of ?? null,
+        access.can_manage_payroll ? buildPayBenefitsPayload(payBenefits) : null,
       );
       lastRequest.current = body;
       const result = await api.startHrOnboarding(body);
       setRun(result);
       setInitialForm(form);
+      setInitialPayBenefits(payBenefits);
     } catch (e) {
       showError(e instanceof Error ? e.message : "Could not create the employee");
     } finally {
@@ -367,6 +396,28 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
       setSalaryStatus({ kind: "error", text: `Salary not saved: ${e instanceof Error ? e.message : "Salary change failed"}` });
     } finally {
       setSalarySaving(false);
+    }
+  };
+
+  const changePayBenefits = useCallback((next: PayBenefitsState) => {
+    setBenefitsStatus(null);
+    setPayBenefits(next);
+  }, []);
+
+  const savePayBenefits = async () => {
+    if (!employee || benefitsSaving || benefitsBlock) return;
+    setBenefitsSaving(true);
+    setBenefitsStatus(null);
+    try {
+      const view = await api.replaceHrEmployeePayBenefits(employee.id, buildPayBenefitsPayload(payBenefits));
+      const state = payBenefitsFromApi(view.benefits);
+      setPayBenefits(state);
+      setInitialPayBenefits(state);
+      setBenefitsStatus({ kind: "success", text: "Overtime & allowances saved." });
+    } catch (e) {
+      setBenefitsStatus({ kind: "error", text: `Not saved: ${e instanceof Error ? e.message : "Update failed"}` });
+    } finally {
+      setBenefitsSaving(false);
     }
   };
 
@@ -617,6 +668,21 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
             onSaveSalary={mode === "edit" ? () => void saveSalary() : undefined}
             savingSalary={salarySaving}
             salaryStatus={salaryStatus}
+            payBenefits={payBenefits}
+            onPayBenefitsChange={changePayBenefits}
+            payBenefitsBlocker={benefitsBlock}
+            onSavePayBenefits={mode === "edit" ? () => void savePayBenefits() : undefined}
+            savingPayBenefits={benefitsSaving}
+            payBenefitsStatus={benefitsStatus}
+            payBenefitsDirty={isDirty(initialPayBenefits, payBenefits)}
+            employeeId={mode === "edit" && Number.isFinite(employeeIdNum) && employeeIdNum > 0 ? employeeIdNum : undefined}
+            onTaxProfileSaved={() => {
+              api
+                .getHrEmployeeCompensation(employeeIdNum)
+                .then(setCompensation)
+                .catch((e) => logApiError("EmployeeWorkspace.compensation", e));
+              setPreviewNonce((n) => n + 1);
+            }}
           />
         </div>
       )}

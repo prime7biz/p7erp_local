@@ -141,3 +141,14 @@ A human compliance sign-off (section 7) is still required before any enforcement
 | Name | Role | Date | Result (PASS / BLOCK) |
 |---|---|---|---|
 | | Compliance officer / labour counsel | | |
+
+## 8. Salary income tax (TDS) sources - sign-off still OPEN
+
+Schedule BD-SALARY-TDS-2026-27-v1 (`backend/app/modules/hr_localization/bd_salary_tds.py`). The signed approval record
+`backend/app/modules/hr_localization/data/bd_salary_tds_approval.json` stays **PENDING**; the payroll TDS switch cannot be
+turned on until a tax reviewer sets it to PASS with the schedule checksum.
+
+| Source | SHA-256 |
+|---|---|
+| NBR circular 2026-27 (rates, salary exemption, rebate, minimum tax) | 5db4fe40076417355bf0ef6cc625322e4c426e351afbe22662001f3c9c7003e7 |
+| Income Tax Act 2023 (s.32, s.78, s.86, Sixth Schedule Part 1 para 27) | a1afdff5ad0d79c18011088d9e78187413d30be01aeee83e85249a27ef69068b |

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type MerchAlertItem, type TradeCaseRow } from "@/api/client";
-import { logApiError } from "@/utils/logApiError";
+import { logApiError } from "@/utils/logApiError";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
 
 export function ReportExceptionsPage() {
   const [alerts, setAlerts] = useState<MerchAlertItem[]>([]);
@@ -36,10 +37,7 @@ export function ReportExceptionsPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-text-primary">Exceptions & Open Items</h1>
-        <p className="text-text-muted text-sm mt-0.5">Open merchandising alerts and open trade cases.</p>
-      </header>
+      <AppPageHeader title="Exceptions & Open Items" description="Open merchandising alerts and open trade cases." />
       {error && (
         <div className="rounded-lg bg-status-danger-subtle border border-status-danger/20 px-4 py-3 text-sm text-status-danger-foreground">
           {error}
@@ -49,7 +47,7 @@ export function ReportExceptionsPage() {
         <div className="space-y-3 p-6"><div className="h-4 w-3/4 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-full animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-5/6 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-2/3 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-4/5 animate-pulse rounded bg-surface-subtle" /></div>
       ) : (
         <>
-          <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+          <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
             <h2 className="border-b border-border px-4 py-2 text-sm font-semibold">Merch alerts (open)</h2>
             <table className="min-w-full text-sm">
               <thead className="bg-surface-subtle text-left text-text-muted">
@@ -90,7 +88,7 @@ export function ReportExceptionsPage() {
               </tbody>
             </table>
           </div>
-          <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+          <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
             <h2 className="border-b border-border px-4 py-2 text-sm font-semibold">Trade cases (open)</h2>
             <table className="min-w-full text-sm">
               <thead className="bg-surface-subtle text-left text-text-muted">

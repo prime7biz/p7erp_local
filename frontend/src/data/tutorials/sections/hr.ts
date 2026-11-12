@@ -598,14 +598,16 @@ The **unified employee workspace** replaces the small **Add employee** dialog an
 5. Tick **Issue a 7-day temporary gate pass** if the person starts before the ID card is printed (needs a mobile number).
 6. **Salary set-up** (same tab, needs payroll permission) — tick **Set salary now**, or leave it off and set the salary later from the profile. Then:
    - Choose the **Salary structure** (how the pay is split into basic, house rent and allowances).
-   - For workers choose the **Bangladesh wage grade**. The **Standard basic salary** is the grade minimum, so you do not type anything.
+   - For workers choose the **Bangladesh wage grade**. The **Standard basic salary** is the grade minimum, so you do not type anything. The **Legal minimum** box next to it shows the grade's basic and gross.
    - Only if this person is paid more than the standard, tick **Override standard basic salary**, type the **Employee basic salary** and tick the confirmation box. Changing the amount, grade or structure clears the tick, so you confirm the final figure.
    - Without a grade, type the **Basic salary** yourself.
-   - **Salary starts on** is the joining date unless you type another date (with no joining date it is today).
+   - The **component table** lists every part of the structure (basic, house rent, medical, transport, food…) with the **Standard** amount and **This employee (per month)**. Type a different amount in a box to override that allowance for this person; **Reset** goes back to the standard. The basic row always follows the basic salary above, and per-day / per-piece / overtime lines and deductions are worked out by payroll. **Monthly gross** at the bottom includes your amounts, and the legal minimum still applies.
+   - **Salary starts on** is filled in from the joining date and follows it until you type another date (with no joining date it is today).
    - The green / red box shows basic and gross against the legal minimum; a salary below the grade is refused.
-7. Below the salary: **Salary paid by** (bank, bKash or cash), the optional bank details and the **Facilities** the person gets (lunch, transport…).
-8. Click **Create employee** in the bar at the bottom (use **Next** / **Back** to move between Personal and Employment & Salary). If **Set salary now** is ticked but the salary is not complete or not valid yet, the employee is **not** created and a message says what to fix. Photo, documents, medical and the other tabs are locked until this first save.
-9. The **Next steps** window shows each step. Download the **ID card**, the **Appointment letter (QR signed)**, the **Job description (QR signed)** and the **Temporary gate pass**. If a step failed, fix it and click **Retry failed steps** — the employee is never created twice.
+7. **Overtime & allowances** (same tab, needs payroll permission) — tick what this person gets: **Overtime**, **Friday allowance**, **Tiffin bill**, **Lunch bill**, **Dinner bill** and **Night bill**. All are ticked by default. Each bill shows the **Company rate** from **HR → Payroll Extras → Allowances & bonuses**; type an **Own amount per day** only if this person gets a different amount. With **Overtime** unticked, overtime cannot be entered or approved for this person and payroll pays no overtime.
+8. Below: **Salary paid by** (bank, bKash or cash), the optional bank details and the **Facilities** the person gets (lunch, transport…).
+9. Click **Create employee** in the bar at the bottom (use **Next** / **Back** to move between Personal and Employment & Salary). If **Set salary now** is ticked but the salary is not complete or not valid yet, the employee is **not** created and a message says what to fix. Photo, documents, medical and the other tabs are locked until this first save.
+10. The **Next steps** window shows each step. Download the **ID card**, the **Appointment letter (QR signed)**, the **Job description (QR signed)** and the **Temporary gate pass**. If a step failed, fix it and click **Retry failed steps** — the employee is never created twice.
 
 > **Tip:** You no longer need **Payroll → Structure assignments** for a new employee: choosing the structure here creates the assignment.
 
@@ -613,9 +615,14 @@ The **unified employee workspace** replaces the small **Add employee** dialog an
 
 1. Open the employee (**Actions → View** or **Edit**). Each tab has its own **Save** button in the bottom bar.
 2. **Employment & Salary** tab — job, payment and facility changes are saved with **Save employment & payment** in the bottom bar. The salary has its own save:
-   - **Current salary** shows basic, gross, structure and grade with the history.
-   - Click **Change salary**. The form starts from today's pay (an above-standard basic shows as an override). Make the change, choose **New salary starts on**, then **Save new salary**: the old period ends the day before and the new one starts that day. Earlier periods are never changed.
+   - **Current salary** shows basic, gross, structure and grade, then every component of the salary (basic, house rent, medical, transport, food…) with its rule and monthly amount — amounts set only for this person are marked **Own amount** with the standard underneath — and the history.
+   - Click **Change salary**. The form starts from today's pay (an above-standard basic and any component amounts are kept). Choose the **Type of change**:
+     - **Increment** — choose **% of basic** or **Taka** and type the raise, or click **Use the annual increment (5%)**. The new basic is typed in for you and you can still change it.
+     - **Promotion** — pick the new grade or structure.
+     - **Correction (fix a mistake)** — fixes a wrong salary. With the **same start date** as the current salary it corrects that salary in place, but only while no payroll has been calculated for it; otherwise use a later date.
+   - Add an optional **Note**, choose **New salary starts on**, then **Save new salary**: the old period ends the day before and the new one starts that day. Earlier periods are never changed.
    - If you changed the **Joining date**, click **Save employment & payment** first; until then **Save new salary** stays off.
+   - **Overtime & allowances** has its own **Save overtime & allowances** button.
 3. **Checklist** tab — photo, photo consent, NID / birth registration scan and (when medical tracking is on) the medical exam. Each task shows **Pending** until the real record is saved on the matching tab (click **Open**); it reopens if the record is withdrawn. The medical task needs a medical record with result **Fit** or **Restricted** — a record still marked **Pending** keeps it pending. A compliance manager can **Waive…** a task with a reason.
 
 ### C. Signed letters
@@ -628,7 +635,10 @@ The **unified employee workspace** replaces the small **Add employee** dialog an
 
 - **"Requires … permission 'hr.identity.manage'"** or **'hr.payroll.manage'** → your role cannot set that field; leave it for a manager.
 - **"Basic … is below the … minimum"** / **"Gross … is below …"** → raise the basic salary or pick the right structure for the grade.
-- **"A salary assignment already starts on …"** → choose an effective date after the latest salary period.
+- **"A salary assignment already starts on …"** → choose an effective date after the latest salary period, or choose **Correction** with the same date to fix it.
+- **"Payroll has already been calculated … on or after …"** → that salary is already in a payroll run; record the change from a later date.
+- **"… is the basic salary; change the basic salary instead"** → the basic row in the component table follows the basic salary field.
+- **"Overtime is not activated for this employee"** → tick **Overtime** under **Overtime & allowances** on the employee's Employment & Salary tab.
 - **"Tick the confirmation box …"** → you overrode the standard basic; tick the box under the amount to confirm it.
 - **"Save employment first …"** → the joining date has an unsaved change; save employment & payment, then the new salary.
 - **"A mobile number is needed for the temporary gate pass"** → fill **Mobile** on the Personal tab.
@@ -652,8 +662,15 @@ The **unified employee workspace** replaces the small **Add employee** dialog an
         "QR verification",
         "gate pass",
         "checklist",
+        "salary components",
+        "increment",
+        "promotion",
+        "overtime",
+        "friday allowance",
+        "tiffin bill",
+        "lunch bill",
       ],
-      lastUpdated: "2026-11-10",
+      lastUpdated: "2026-11-11",
       coverImage: "/tutorials/screens/hr-emp-ws-personal.jpg",
       images: [
         {

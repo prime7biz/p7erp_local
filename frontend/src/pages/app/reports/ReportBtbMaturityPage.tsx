@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type BtbLcRow } from "@/api/client";
-import { logApiError } from "@/utils/logApiError";
+import { logApiError } from "@/utils/logApiError";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
 
 function daysToMaturity(d: string | null | undefined): number | null {
   if (!d) return null;
@@ -62,15 +63,7 @@ export function ReportBtbMaturityPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-text-primary">BTB LC Maturity</h1>
-        <p className="text-text-muted text-sm mt-0.5">
-          Back-to-back LC maturity and accounting status.{" "}
-          <Link to="/app/commercial/btb-lcs" className="text-brand-primary hover:underline">
-            Open BTB LCs
-          </Link>
-        </p>
-      </header>
+      <AppPageHeader title="BTB LC Maturity" description="Back-to-back LC maturity and accounting status." actions={<><Link to="/app/commercial/btb-lcs" className="text-brand-primary hover:underline"> Open BTB LCs </Link></>} />
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-sm text-text-muted">Status</label>
         <input
@@ -93,7 +86,7 @@ export function ReportBtbMaturityPage() {
           {error}
         </div>
       )}
-      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+      <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
         {loading ? (
           <div className="space-y-3 p-6"><div className="h-4 w-3/4 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-full animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-5/6 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-2/3 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-4/5 animate-pulse rounded bg-surface-subtle" /></div>
         ) : rows.length === 0 ? (

@@ -8,6 +8,8 @@ _EMAIL = re.compile(
     r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
     re.IGNORECASE,
 )
+# Bangladesh mobile numbers: 01XXXXXXXXX, 01XXX-XXXXXX, +8801XXXXXXXXX
+_BD_MOBILE = re.compile(r"(?<!\d)(?:\+?880[\s\-]?)?01[3-9]\d{2}[\s\-]?\d{6}(?!\d)")
 # Loose phone / national id style digit runs (mask, do not validate country rules)
 _PHONE = re.compile(r"\b(?:\+?\d{1,3}[\s.\-]?)?(?:\(?\d{3}\)?[\s.\-]?)\d{3}[\s.\-]?\d{4}\b")
 _CARD = re.compile(r"\b(?:\d[ \-]?){13,19}\d\b")
@@ -18,6 +20,7 @@ def redact_pii_for_external_provider(text: str) -> str:
     if not text:
         return ""
     out = _EMAIL.sub("[EMAIL_REDACTED]", text)
+    out = _BD_MOBILE.sub("[PHONE_REDACTED]", out)
     out = _PHONE.sub("[PHONE_REDACTED]", out)
     out = _CARD.sub("[CARD_REDACTED]", out)
     return out

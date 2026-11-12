@@ -1,6 +1,7 @@
 """Merch Critical Alert engine: seed definitions, run rules, upsert instances, scan log."""
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, timezone
 from typing import Any
 
@@ -15,7 +16,10 @@ from app.models import (
     AlertScanLog,
     Tenant,
 )
+from app.common.tenant_feature_keys import is_alert_scan_compact_log
 from app.modules.merch.alert_rules import DEFAULT_DEFINITIONS, RULE_REGISTRY, TRADE_RULE_KEYS
+
+logger = logging.getLogger(__name__)
 
 
 ACTIVE_STATUSES = ("new", "acknowledged", "in_progress", "waiting_on_buyer", "waiting_on_supplier", "snoozed", "escalated")
@@ -206,6 +210,14 @@ async def run_scan(
     }
 
 
+SCAN_RUN_RULE_KEY = "__scan__"  # rule_key of the one summary row written in compact mode
+
+
+async def _compact_log_enabled(db: AsyncSession, tenant_id: int) -> bool:
+    flags = (await db.execute(select(Tenant.feature_flags).where(Tenant.id == tenant_id))).scalar_one_or_none()
+    return is_alert_scan_compact_log(flags)
+
+
 async def _run_definitions(
     db: AsyncSession,
     tenant_id: int,
@@ -217,6 +229,8 @@ async def _run_definitions(
     def_rows = [
         (d.id, d.rule_key, d.config_json if isinstance(d.config_json, dict) else None) for d in definitions
     ]
+    if await _compact_log_enabled(db, tenant_id):
+        return await _run_definitions_compact(db, tenant_id, def_rows, trigger)
     total_created = total_updated = 0
     for defn_id, rule_key, config in def_rows:
         if rule_key not in RULE_REGISTRY:
@@ -244,6 +258,49 @@ async def _run_definitions(
             log_row.error_message = str(e)[:2000]
             # Continue remaining rules; scan log row records the failure
         await db.flush()
+    return total_created, total_updated
+
+
+async def _run_definitions_compact(
+    db: AsyncSession,
+    tenant_id: int,
+    def_rows: list[tuple[int, str, dict | None]],
+    trigger: str,
+) -> tuple[int, int]:
+    """Same rule runs as `_run_definitions`, but one AlertScanLog row for the whole scan.
+
+    The row is "completed" when at least one rule succeeded (so "last completed scan" lookups behave as
+    before) and names any failed rules in error_message; per-rule results go to the application log.
+    """
+    runnable = [row for row in def_rows if row[1] in RULE_REGISTRY]
+    if not runnable:
+        return 0, 0  # like the per-rule path: no rules, no log row (keeps "last completed scan" honest)
+    log_row = AlertScanLog(tenant_id=tenant_id, rule_key=SCAN_RUN_RULE_KEY, trigger=trigger, status="running")
+    db.add(log_row)
+    await db.flush()
+    total_created = total_updated = 0
+    ran = 0
+    failed: list[str] = []
+    for defn_id, rule_key, config in runnable:
+        ran += 1
+        try:
+            async with db.begin_nested():
+                created, updated = await run_rule(db, tenant_id, rule_key, defn_id, config)
+            total_created += created
+            total_updated += updated
+            logger.info(
+                "alert_rule_done tenant_id=%s rule=%s created=%s updated=%s", tenant_id, rule_key, created, updated
+            )
+        except Exception as e:
+            failed.append(rule_key)
+            logger.warning("alert_rule_failed tenant_id=%s rule=%s error=%s", tenant_id, rule_key, str(e)[:500])
+    log_row.status = "failed" if ran and len(failed) == ran else "completed"
+    log_row.finished_at = datetime.now(timezone.utc)
+    log_row.instances_created = total_created
+    log_row.instances_updated = total_updated
+    if failed:
+        log_row.error_message = f"{len(failed)} of {ran} rule(s) failed: {', '.join(failed)}"[:2000]
+    await db.flush()
     return total_created, total_updated
 
 

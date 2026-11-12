@@ -13,7 +13,7 @@ import {
 } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
 import { ProformaPaymentPanel } from "@/components/commercial/ProformaPaymentPanel";
-import { getCustomersCached, getVendorsCached } from "@/lib/masterData";
+import { getCustomersCached, getVendorsCached, getBankAccountsCached } from "@/lib/masterData";
 
 const INCOTERMS_OPTIONS = ["EXW", "FCA", "FAS", "FOB", "CFR", "CIF", "CIP", "DAP", "DPU", "DDP"] as const;
 const PAYMENT_TERM_OPTIONS = [
@@ -126,7 +126,7 @@ export function ProformaInvoiceFormPage() {
           await Promise.all([
           api.listOrders({ limit: 500, offset: 0 }),
           getCustomersCached(),
-          api.listBankAccounts().catch((e) => {
+          getBankAccountsCached().catch((e) => {
             logApiError("ProformaInvoiceFormPage.listBankAccounts", e);
             return [];
           }),

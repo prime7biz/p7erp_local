@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.pagination import MAX_PAGE_SIZE
 from app.common.auth import get_current_user, hash_password
 from app.common.email_service import send_staff_welcome_email
 from app.common.plan_enforcer import assert_can_add_user
@@ -14,6 +15,7 @@ from app.common.username import generate_unique_username_for_tenant
 from app.common.authz import ensure_user_is_tenant_admin
 from app.common.tenant import require_tenant
 from app.common.tenant_feature_keys import (
+    HR_BD_SALARY_TDS_ENABLED,
     is_payroll_four_eyes_enabled,
     is_single_session_enforced,
     normalize_feature_flags,
@@ -23,7 +25,12 @@ from app.modules.hr.employee_identity import EMPLOYEE_NUMBER_FORMAT_KEY
 from app.modules.hr_localization.enforcement_flags import ENFORCEMENT_FLAGS
 from app.modules.hr_localization.preset_service import PRESET_MARKER_KEY
 
-HR_BD_MANAGED_FLAG_KEYS: tuple[str, ...] = (*ENFORCEMENT_FLAGS, PRESET_MARKER_KEY, EMPLOYEE_NUMBER_FORMAT_KEY)
+HR_BD_MANAGED_FLAG_KEYS: tuple[str, ...] = (
+    *ENFORCEMENT_FLAGS,
+    PRESET_MARKER_KEY,
+    EMPLOYEE_NUMBER_FORMAT_KEY,
+    HR_BD_SALARY_TDS_ENABLED,
+)
 from app.database import get_db
 from app.models import AuditLog, BackupJob, CommissionMode, Role, Tenant, User
 from app.modules.audit.service import log_action
@@ -240,7 +247,7 @@ async def get_permissions_registry(
 
 @router.get("/roles", response_model=list[SettingsRoleResponse])
 async def list_settings_roles(
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -383,7 +390,7 @@ async def delete_settings_role(
 
 @router.get("/users", response_model=list[SettingsUserResponse])
 async def list_settings_users(
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),

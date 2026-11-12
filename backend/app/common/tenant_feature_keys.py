@@ -101,6 +101,10 @@ PAYROLL_LOP_ENABLED = "payroll_lop_enabled"
 # OT entry pays hours x (monthly base salary / hr_ot_hours_per_month) x multiplier.
 # Runs that were already auto-calculated without it keep their old numbers.
 PAYROLL_OT_FROM_SALARY_ENABLED = "payroll_ot_from_salary_enabled"
+# Bangladesh salary income tax (TDS) deducted in payroll auto-calculate (default OFF, strict True).
+# Managed flag: changed only through PUT /hr/localization/bd-rmg/salary-tds/enablement, which checks
+# the signed approval record (bd_salary_tds_approval.json). Runs keep the mode of their first calculation.
+HR_BD_SALARY_TDS_ENABLED = "hr_bd_salary_tds_enabled"
 # Numeric HR settings stored in feature_flags (edited on HR -> HR Settings).
 HR_OT_HOURS_PER_MONTH = "hr_ot_hours_per_month"
 HR_OT_MULTIPLIER = "hr_ot_multiplier"
@@ -122,6 +126,8 @@ AI_COMPLIANCE_RISK_PREDICTION_ENABLED = "ai_compliance_risk_prediction_enabled"
 AUTO_DOCUMENT_GENERATION_ENABLED = "auto_document_generation_enabled"
 # Unified tabbed employee onboarding workspace (default OFF; never add to DEFAULT_ON_FEATURE_FLAGS).
 HR_ONBOARDING_WORKSPACE_V2 = "hr_onboarding_workspace_v2"
+# Simpler phone / tablet menu and card lists (frontend only; default OFF; never add to DEFAULT_ON_FEATURE_FLAGS).
+MOBILE_UI_V2 = "mobile_ui_v2"
 
 # Sprint 6 MIS reports (default ON — read-only).
 MIS_REPORTS_ENABLED = "mis_reports_enabled"
@@ -148,6 +154,8 @@ EOQ_HOLDING_COST_RATE = "eoq_holding_cost_rate"
 
 # Sprint I4 serial / kit / consignment (all default off).
 SERIAL_TRACKING_ENABLED = "serial_tracking_enabled"
+# Alert scans write one AlertScanLog row per scan run instead of one per rule (default OFF, strict True).
+ALERT_SCAN_COMPACT_LOG = "alert_scan_compact_log"
 
 # R4 RMG depth (default ON — a tenant can switch each one off with an explicit False).
 ORDER_COLOR_SIZE_MATRIX_ENABLED = "order_color_size_matrix_enabled"
@@ -163,6 +171,9 @@ AI_EXCEPTION_AGENTS_ENABLED = "ai_exception_agents_enabled"
 AI_DASHBOARD_CARDS_ENABLED = "ai_dashboard_cards_enabled"
 # Read-only hints beside the voucher form (ledger balances, usual accounts, AI narration).
 VOUCHER_ENTRY_ASSIST_ENABLED = "voucher_entry_assist_enabled"
+# AI chat "agent mode": the model picks read-only ERP tools itself (default OFF, strict true;
+# never add it to DEFAULT_ON_FEATURE_FLAGS).
+AI_AGENT_MODE_ENABLED = "ai_agent_mode_enabled"
 
 # Flags that are on for every tenant (existing and new) unless explicitly set to False.
 # API payloads read by the frontend (`/auth/me`, `/settings/config`) fill these in as True when missing.
@@ -265,6 +276,10 @@ def is_ai_dashboard_cards_enabled(feature_flags: Any) -> bool:
 
 def is_voucher_entry_assist_enabled(feature_flags: Any) -> bool:
     return _flag_default_true(feature_flags, VOUCHER_ENTRY_ASSIST_ENABLED)
+
+
+def is_ai_agent_mode_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, AI_AGENT_MODE_ENABLED)
 
 
 def is_packing_list_cartons_enabled(feature_flags: Any) -> bool:
@@ -480,6 +495,11 @@ def is_payroll_ot_from_salary_enabled(feature_flags: Any) -> bool:
     return _flag_true(feature_flags, PAYROLL_OT_FROM_SALARY_ENABLED)
 
 
+def is_hr_bd_salary_tds_enabled(feature_flags: Any) -> bool:
+    """Strict: only an explicit True deducts Bangladesh salary TDS in payroll (default off)."""
+    return _flag_true(feature_flags, HR_BD_SALARY_TDS_ENABLED)
+
+
 def _positive_number_setting(feature_flags: Any, key: str, default: float) -> float:
     if not isinstance(feature_flags, dict):
         return default
@@ -555,6 +575,10 @@ def is_hr_onboarding_workspace_v2_enabled(feature_flags: Any) -> bool:
     return _flag_true(feature_flags, HR_ONBOARDING_WORKSPACE_V2)
 
 
+def is_mobile_ui_v2_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, MOBILE_UI_V2)
+
+
 def is_mis_reports_enabled(feature_flags: Any) -> bool:
     """MIS reports are on unless explicitly set to False (missing key ⇒ True)."""
     if not isinstance(feature_flags, dict):
@@ -608,6 +632,10 @@ def is_cycle_counting_enabled(feature_flags: Any) -> bool:
 
 def is_serial_tracking_enabled(feature_flags: Any) -> bool:
     return _flag_true(feature_flags, SERIAL_TRACKING_ENABLED)
+
+
+def is_alert_scan_compact_log(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, ALERT_SCAN_COMPACT_LOG)
 
 
 def is_kitting_enabled(feature_flags: Any) -> bool:

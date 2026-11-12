@@ -1,4 +1,5 @@
-"""Tiffin / dinner / night bills, production bonus and festival bonus.
+"""Tiffin / lunch / dinner / night bills, Friday (weekly holiday) allowance, production bonus and
+festival bonus. Per-employee switches and own amounts: ``pay_benefits.py``.
 
 All three are company benefits (never labelled statutory). Approved rows reach the employee through
 exactly one payroll run line (``payroll_extras``) when the matching strict flag is ON:
@@ -48,6 +49,8 @@ from app.models.hr_allowance import (
 from app.models.hr_attendance import AttendanceEntry, AttendanceRoster, AttendanceShift
 from app.models.hr_payroll import BonusDeclaration
 from app.modules.audit.service import log_action
+from app.modules.hr_allowances.pay_benefits import benefits_by_employee
+from app.modules.hr_leave.leave_days import load_weekend_weekdays
 from app.modules.hr_localization import bd_calculations as calc
 from app.modules.hr_localization.employee_pay import pay_snapshot
 from app.modules.hr_localization.payroll_extras import (
@@ -117,8 +120,8 @@ ENTRY_FIELDS = ("id", "employee_id", "work_date", "rule_id", "attendance_entry_i
 class RuleCreate(BaseModel):
     code: str = Field(..., min_length=1, max_length=24)
     name: str = Field(..., min_length=1, max_length=128)
-    bill_type: str = Field(..., pattern="^(TIFFIN|DINNER|NIGHT)$")
-    eligibility_basis: str = Field(..., pattern="^(PRESENT|NIGHT_SHIFT|MIN_WORK_MINUTES|MIN_OT_MINUTES)$")
+    bill_type: str = Field(..., pattern="^(TIFFIN|LUNCH|DINNER|NIGHT|FRIDAY)$")
+    eligibility_basis: str = Field(..., pattern="^(PRESENT|NIGHT_SHIFT|MIN_WORK_MINUTES|MIN_OT_MINUTES|WEEKLY_HOLIDAY)$")
     threshold_minutes: int = Field(default=0, ge=0, le=1440)
     amount: Decimal = Field(..., ge=0, le=Decimal("100000"))
     effective_from: date
@@ -193,13 +196,22 @@ def _worked_minutes(entry: AttendanceEntry) -> int:
     return int((end - start).total_seconds() // 60)
 
 
-async def _eligible(db: AsyncSession, tenant: Tenant, start: date, end: date) -> list[tuple[AttendanceEntry, HrAllowanceRule]]:
+async def _eligible(
+    db: AsyncSession, tenant: Tenant, start: date, end: date
+) -> list[tuple[AttendanceEntry, HrAllowanceRule, Decimal]]:
+    """(attendance day, rule, amount) pairs that earn a bill.
+
+    Per-employee switches (``hr_employee_pay_benefits``): a bill switched off is skipped; an own
+    amount replaces the rule amount and is paid once per employee, day and bill type even when
+    several approved rules of that type match. In / out times are needed only to measure worked
+    minutes (MIN_WORK_MINUTES).
+    """
     rules = (
         await db.execute(
             select(HrAllowanceRule).where(
                 HrAllowanceRule.tenant_id == tenant.id, HrAllowanceRule.status == "APPROVED",
                 HrAllowanceRule.effective_from <= end, or_(HrAllowanceRule.effective_to.is_(None), HrAllowanceRule.effective_to >= start),
-            )
+            ).order_by(HrAllowanceRule.code)
         )
     ).scalars().all()
     if not rules:
@@ -208,26 +220,42 @@ async def _eligible(db: AsyncSession, tenant: Tenant, start: date, end: date) ->
         await db.execute(
             select(AttendanceEntry).where(
                 AttendanceEntry.tenant_id == tenant.id, AttendanceEntry.attendance_date >= start, AttendanceEntry.attendance_date <= end,
-                AttendanceEntry.in_time.is_not(None), AttendanceEntry.out_time.is_not(None),
                 AttendanceEntry.status.in_(("PRESENT", "LATE", "HALF_DAY")),
-            ).limit(20000)
+            ).order_by(AttendanceEntry.attendance_date, AttendanceEntry.employee_id).limit(20000)
         )
     ).scalars().all()
     night = await _night_shift_days(db, tenant.id, start, end) if any(r.eligibility_basis == "NIGHT_SHIFT" for r in rules) else set()
-    out = []
+    weekend = await load_weekend_weekdays(db, tenant) if any(r.eligibility_basis == "WEEKLY_HOLIDAY" for r in rules) else set()
+    switches = await benefits_by_employee(db, tenant.id, {e.employee_id for e in entries})
+    out: list[tuple[AttendanceEntry, HrAllowanceRule, Decimal]] = []
+    own_amount_paid: set[tuple[int, date, str]] = set()
     for e in entries:
+        own = switches.get(e.employee_id, {})
         for r in rules:
             if not (r.effective_from <= e.attendance_date and (r.effective_to is None or e.attendance_date <= r.effective_to)):
                 continue
+            switch = own.get(r.bill_type)
+            if switch is not None and not switch.enabled:
+                continue
             basis = r.eligibility_basis
+            has_times = e.in_time is not None and e.out_time is not None
             ok = (
                 basis == "PRESENT"
                 or (basis == "NIGHT_SHIFT" and (e.employee_id, e.attendance_date) in night)
-                or (basis == "MIN_WORK_MINUTES" and _worked_minutes(e) >= r.threshold_minutes)
+                or (basis == "MIN_WORK_MINUTES" and has_times and _worked_minutes(e) >= r.threshold_minutes)
                 or (basis == "MIN_OT_MINUTES" and (e.overtime_minutes or 0) >= r.threshold_minutes)
+                or (basis == "WEEKLY_HOLIDAY" and e.attendance_date.weekday() in weekend)
             )
-            if ok:
-                out.append((e, r))
+            if not ok:
+                continue
+            if switch is not None and switch.amount_override is not None:
+                key = (e.employee_id, e.attendance_date, r.bill_type)
+                if key in own_amount_paid:
+                    continue
+                own_amount_paid.add(key)
+                out.append((e, r, Decimal(switch.amount_override)))
+            else:
+                out.append((e, r, Decimal(r.amount)))
     return out
 
 
@@ -237,27 +265,42 @@ async def preview_allowances(body: RangeBody, tenant: Tenant = Depends(require_t
     _range(body.from_date, body.to_date)
     rows = await _eligible(db, tenant, body.from_date, body.to_date)
     totals: dict[str, Decimal] = {}
-    for _e, r in rows:
-        totals[r.bill_type] = totals.get(r.bill_type, Decimal("0")) + r.amount
+    for _e, r, amount in rows:
+        totals[r.bill_type] = totals.get(r.bill_type, Decimal("0")) + amount
     return {"eligible": len(rows), "totals": {k: str(v) for k, v in totals.items()}}
 
 
 @router.post("/allowances/generate")
 async def generate_allowances(body: RangeBody, tenant: Tenant = Depends(require_tenant), user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await _perm(db, user, tenant, PERMISSION_HR_ALLOWANCE_MANAGE)
-    _flag(tenant, HR_MEAL_NIGHT_BILLS_ENABLED, "Tiffin / dinner / night bills")
+    _flag(tenant, HR_MEAL_NIGHT_BILLS_ENABLED, "Tiffin / lunch / dinner / night bills and Friday allowance")
     _range(body.from_date, body.to_date)
     await lock_tenant(db, tenant.id)
-    existing = set(
+    existing_rows = (
+        await db.execute(
+            select(HrAllowanceEntry.employee_id, HrAllowanceEntry.work_date, HrAllowanceEntry.rule_id, HrAllowanceRule.bill_type)
+            .join(HrAllowanceRule, HrAllowanceRule.id == HrAllowanceEntry.rule_id)
+            .where(HrAllowanceEntry.tenant_id == tenant.id, HrAllowanceEntry.work_date >= body.from_date,
+                   HrAllowanceEntry.work_date <= body.to_date, HrAllowanceEntry.status != "REJECTED")
+        )
+    ).all()
+    existing = {(emp, day, rule_id) for emp, day, rule_id, _t in existing_rows}
+    existing_types = {(emp, day, bill_type) for emp, day, _r, bill_type in existing_rows}
+    rejected = set(
         (await db.execute(select(HrAllowanceEntry.employee_id, HrAllowanceEntry.work_date, HrAllowanceEntry.rule_id).where(
-            HrAllowanceEntry.tenant_id == tenant.id, HrAllowanceEntry.work_date >= body.from_date, HrAllowanceEntry.work_date <= body.to_date))).all()
+            HrAllowanceEntry.tenant_id == tenant.id, HrAllowanceEntry.work_date >= body.from_date,
+            HrAllowanceEntry.work_date <= body.to_date, HrAllowanceEntry.status == "REJECTED"))).all()
     )
+    switches = await benefits_by_employee(db, tenant.id, {emp for emp, _d, _r, _t in existing_rows})
     created = 0
-    for e, r in await _eligible(db, tenant, body.from_date, body.to_date):
-        if (e.employee_id, e.attendance_date, r.id) in existing:
+    for e, r, amount in await _eligible(db, tenant, body.from_date, body.to_date):
+        if (e.employee_id, e.attendance_date, r.id) in existing or (e.employee_id, e.attendance_date, r.id) in rejected:
+            continue
+        own = switches.get(e.employee_id, {}).get(r.bill_type)
+        if own is not None and own.amount_override is not None and (e.employee_id, e.attendance_date, r.bill_type) in existing_types:
             continue
         db.add(HrAllowanceEntry(tenant_id=tenant.id, employee_id=e.employee_id, work_date=e.attendance_date, rule_id=r.id,
-                                attendance_entry_id=e.id, amount=r.amount, status="PENDING", created_by=user.id))
+                                attendance_entry_id=e.id, amount=amount, status="PENDING", created_by=user.id))
         created += 1
     await log_action(db, tenant_id=tenant.id, user_id=user.id, action="HR_ALLOWANCES_GENERATED", resource="hr.allowances", details=f"{body.from_date}..{body.to_date}: {created}")
     await db.commit()

@@ -14,12 +14,14 @@
  *   node mobile-audit.mjs                     # all routes, all viewports
  *   node mobile-audit.mjs --viewport=phone-390
  *   node mobile-audit.mjs --route=/app/orders
+ *   node mobile-audit.mjs --mobile-ui-v2      # simpler phone layout on (only in this browser; no DB change)
  *
  * Severity rules:
  *   high   - the whole page scrolls sideways, the app turned dark, the page crashed, or in print
  *            preview the shell still clips the page / prints the menus
  *   medium - a button, link or field sticks out past the right edge and cannot be scrolled to
  *   low    - tap targets smaller than 32px (count only; many dense ERP tables have them)
+ * With --mobile-ui-v2 the report also counts controls under 44px tall (`under44`) and lists a few.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -88,11 +90,15 @@ function measureLayout() {
 
   const controls = [...document.querySelectorAll("button, a[href], input, select, textarea")].filter(isShown);
   const clipped = [];
+  const under44 = [];
   let smallTargets = 0;
+  const main = document.querySelector(".erp-main-content");
   for (const el of controls) {
     const r = el.getBoundingClientRect();
     if (r.right > vw + 1 && !scrollsSideways(el)) clipped.push({ label: label(el), right: Math.round(r.right) });
     if (r.height < 32 && el.tagName !== "INPUT") smallTargets++;
+    const isBox = el.type === "checkbox" || el.type === "radio";
+    if (main?.contains(el) && !isBox && r.height < 44) under44.push(label(el));
   }
   return {
     dark: document.documentElement.classList.contains("dark"),
@@ -100,6 +106,8 @@ function measureLayout() {
     clipped: clipped.slice(0, 10),
     clippedCount: clipped.length,
     smallTargets,
+    under44: under44.length,
+    under44Sample: under44.slice(0, 8),
     title: document.querySelector("h1")?.textContent?.trim() ?? "",
   };
 }
@@ -152,6 +160,15 @@ async function main() {
         },
         { t: token, id: tenantId },
       );
+      if (args["mobile-ui-v2"]) {
+        // Turn the tenant switch on for this browser only by editing the /auth/me answer.
+        await context.route("**/api/v1/auth/me", async (route) => {
+          const res = await route.fetch();
+          const body = await res.json();
+          body.feature_flags = { ...(body.feature_flags ?? {}), mobile_ui_v2: true };
+          await route.fulfill({ response: res, json: body });
+        });
+      }
       const page = await context.newPage();
       for (const route of routes) {
         const entry = { viewport: vp.name, module: route.module, path: route.path };
@@ -170,7 +187,7 @@ async function main() {
           await page.emulateMedia({ media: "screen" });
         } catch (e) {
           entry.error = String(e.message || e).slice(0, 200);
-          entry.layout = entry.layout ?? { dark: false, pageOverflowPx: 0, clipped: [], clippedCount: 0, smallTargets: 0 };
+          entry.layout = entry.layout ?? { dark: false, pageOverflowPx: 0, clipped: [], clippedCount: 0, smallTargets: 0, under44: 0 };
           entry.print = entry.print ?? { hasShell: false, hiddenShell: true, mainClips: false };
         }
         page.off("pageerror", onError);
@@ -181,6 +198,7 @@ async function main() {
           `${entry.severity.padEnd(6)} ${vp.name}  ${route.path}` +
             (entry.layout.pageOverflowPx > 2 ? `  page overflow ${entry.layout.pageOverflowPx}px` : "") +
             (entry.layout.clippedCount ? `  clipped ${entry.layout.clippedCount}` : "") +
+            (args["mobile-ui-v2"] && entry.layout.under44 ? `  under44 ${entry.layout.under44}` : "") +
             (entry.layout.dark ? "  DARK" : "") +
             (entry.print.mainClips ? "  print-clips" : "") +
             (entry.error ? `  error: ${entry.error}` : ""),

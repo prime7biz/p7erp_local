@@ -583,6 +583,8 @@ def _default_line_template_counts(role_key: str, line: SewingLine) -> int:
 
 async def _template_rows_for_line(db: AsyncSession, tenant_id: int, line_id: int) -> list[CrewTemplateRowResponse]:
     line = await db.get(SewingLine, line_id)
+    if not line or line.tenant_id != tenant_id:
+        raise HTTPException(404, "Sewing line not found")
     roles = list(
         (
             await db.execute(

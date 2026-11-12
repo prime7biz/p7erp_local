@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "tsx scripts/generate-sitemap.ts",
+    "prebuild": "tsx scripts/generate-sitemap.ts && tsx scripts/generate-tutorial-help-index.ts",
+    "generate:help-index": "tsx scripts/generate-tutorial-help-index.ts",
     "validate:sitemap": "node scripts/validate-sitemap.mjs",
     "build": "tsc -b && vite build && tsx scripts/inject-static-route-html.ts",
     "lint": "eslint .",
@@ -34,11 +35,11 @@
     "react-helmet-async": "^2.0.5",
     "react-i18next": "^17.1.11",
     "react-markdown": "^9.1.0",
-    "react-router-dom": "^7.0.2",
+    "react-router-dom": "^7.18.5",
     "react-simple-maps": "^3.0.0",
     "sonner": "^2.0.8",
     "tailwind-merge": "3.5.0",
-    "write-excel-file": "^2.3.10"
+    "write-excel-file": "^4.1.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
@@ -62,5 +63,8 @@
     "typescript-eslint": "^8.57.1",
     "vite": "^6.0.1",
     "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "d3-color": "^3.1.0"
   }
 }

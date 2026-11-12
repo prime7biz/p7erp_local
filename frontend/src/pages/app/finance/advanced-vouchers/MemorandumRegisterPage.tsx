@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type MemorandumRegisterRow } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
-import { logApiError } from "@/utils/logApiError";
+import { logApiError } from "@/utils/logApiError";
+import { useConfirm } from "@/components/app/useConfirm";
 
-export function MemorandumRegisterPage() {
+export function MemorandumRegisterPage() {
+  const confirm = useConfirm();
   const [rows, setRows] = useState<MemorandumRegisterRow[]>([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -38,7 +40,7 @@ export function MemorandumRegisterPage() {
   }, []);
 
   async function convert(id: number) {
-    if (!window.confirm("Convert this memorandum voucher to a regular voucher?")) return;
+    if (!(await confirm({ title: "Convert this memorandum voucher to a regular voucher?" }))) return;
     try {
       setConvertingId(id);
       setOpenActionsId(null);

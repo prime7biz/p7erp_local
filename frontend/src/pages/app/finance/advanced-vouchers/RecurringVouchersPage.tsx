@@ -9,12 +9,14 @@ import {
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
+import { useConfirm } from "@/components/app/useConfirm";
 
 const FREQUENCIES: RecurringFrequency[] = ["DAILY", "WEEKLY", "MONTHLY", "QUARTERLY", "YEARLY"];
 
 type LineDraft = { account_id: string; entry_type: "DEBIT" | "CREDIT"; amount: string; notes: string };
 
 export function RecurringVouchersPage() {
+  const confirm = useConfirm();
   const [rows, setRows] = useState<RecurringVoucherResponse[]>([]);
   const [voucherTypes, setVoucherTypes] = useState<string[]>([]);
   const [error, setError] = useState("");
@@ -150,7 +152,7 @@ export function RecurringVouchersPage() {
   }
 
   async function remove(id: number) {
-    if (!window.confirm("Delete this recurring template?")) return;
+    if (!(await confirm({ title: "Delete this recurring template?", danger: true }))) return;
     try {
       setOpenActionsId(null);
       await api.deleteRecurringVoucher(id);

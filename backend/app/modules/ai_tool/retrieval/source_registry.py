@@ -32,10 +32,31 @@ SOURCE_MODULE_PERMISSION_KEYS: dict[str, str] = {
 }
 DEFAULT_SOURCE_PERMISSION_KEY = "ai.tools.dashboard.read"
 
+# ERP module access key (roles.permissions) behind each source module; modules not listed need none.
+SOURCE_MODULE_ACCESS_KEYS: dict[str, str] = {
+    "finance": "finance.access",
+    "accounting": "finance.access",
+    "vouchers": "finance.access",
+    "hr": "hr.access",
+    "payroll": "hr.access",
+    "attendance": "hr.access",
+    "inventory": "inventory.access",
+    "production": "production.access",
+    "qa": "production.access",
+    "orders": "merch.access",
+    "merch": "merch.access",
+    "commercial": "merch.access",
+    "logistics": "merch.access",
+}
+
 
 def permission_key_for_module(source_module: str | None) -> str:
     module = (source_module or "").strip().lower()
     return SOURCE_MODULE_PERMISSION_KEYS.get(module, DEFAULT_SOURCE_PERMISSION_KEY)
+
+
+def module_access_key_for_source(source_module: str | None) -> str | None:
+    return SOURCE_MODULE_ACCESS_KEYS.get((source_module or "").strip().lower())
 
 
 @dataclass(frozen=True, slots=True)

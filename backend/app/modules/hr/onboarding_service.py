@@ -3,7 +3,8 @@
 Steps, each committed on its own while holding ``FOR UPDATE`` on the run row:
 1. employee   - the employee insert, ``run.employee_id`` and the step status commit together, so a
                 crash can never leave an employee without its run.
-2. payroll    - ``replace_employee_compensation`` (legal wage floors, effective dating).
+2. payroll    - ``replace_employee_compensation`` (legal wage floors, effective dating, component
+                overrides, change type JOINING) and the overtime / bill switches (idempotent upsert).
 3. gate_pass  - seven-day temporary pass, created and activated through the gate-pass service.
 4. checklist  - truthful DUE tasks (``onboarding_tasks``).
 
@@ -41,8 +42,10 @@ from app.models.hr_onboarding import HrEmployeeOnboardingRun
 from app.models.hr_payroll import PayrollStructure
 from app.modules.audit.service import log_action
 from app.modules.hr import employee_service
+from app.modules.hr import tax_profile as tax
 from app.modules.hr.onboarding_tasks import create_onboarding_tasks
-from app.modules.hr.schemas import EmployeeCreate
+from app.modules.hr.schemas import PAY_BENEFIT_CODES, ComponentOverrides, EmployeeCreate, PayBenefitItem
+from app.modules.hr_allowances import pay_benefits as benefits
 from app.modules.hr_gate import service as gate_service
 from app.modules.hr_payroll import compensation_service as comp
 
@@ -56,10 +59,15 @@ class OnboardingCompensation(BaseModel):
     bd_wage_rate_id: int | None = None
     base_salary: str | None = Field(None, max_length=32)
     effective_from: date | None = None
+    component_overrides: ComponentOverrides | None = None
 
 
 class OnboardingSteps(BaseModel):
     compensation: OnboardingCompensation | None = None
+    # Overtime + bill switches; saved in the payroll step (needs hr.payroll.manage).
+    pay_benefits: list[PayBenefitItem] | None = Field(None, max_length=len(PAY_BENEFIT_CODES))
+    # Bangladesh salary tax (TDS) profile; saved in the payroll step (needs hr.payroll.manage).
+    tax_profile: tax.TaxProfileBody | None = None
     issue_temp_gate_pass: bool = False
 
 
@@ -116,11 +124,16 @@ async def _employee(db: AsyncSession, tenant_id: int, employee_id: int | None) -
 async def _authorize(
     db: AsyncSession, *, tenant: Tenant, user: User, steps: OnboardingSteps, phone: str | None
 ) -> None:
-    if steps.compensation is not None:
+    if steps.compensation is not None or steps.pay_benefits or steps.tax_profile is not None:
         await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_MANAGE)
+    if steps.compensation is not None:
         await ensure_owned(db, PayrollStructure, steps.compensation.structure_id, tenant.id, "Payroll structure", status_code=404)
         await ensure_owned(db, HrBdWageScheduleRate, steps.compensation.bd_wage_rate_id, tenant.id, "Wage rate", status_code=404)
         comp.parse_money(steps.compensation.base_salary)
+    for item in steps.pay_benefits or []:
+        benefits.parse_bill_amount(item.amount_override, item.benefit_code)
+    if steps.tax_profile is not None:
+        tax.parse_profile(steps.tax_profile)
     if steps.issue_temp_gate_pass:
         await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_GATE_PASS_MANAGE)
         if not (phone or "").strip():
@@ -233,31 +246,55 @@ async def continue_onboarding(
             user=user,
             steps=OnboardingSteps(
                 compensation=steps.compensation if run.payroll_step_status not in DONE else None,
+                pay_benefits=steps.pay_benefits if run.payroll_step_status not in DONE else None,
+                tax_profile=steps.tax_profile if run.payroll_step_status not in DONE else None,
                 issue_temp_gate_pass=steps.issue_temp_gate_pass and run.gate_pass_step_status not in DONE,
             ),
             phone=emp.phone,
         )
 
     if run.payroll_step_status not in DONE:
-        if steps.compensation is None:
+        if steps.compensation is None and not steps.pay_benefits and steps.tax_profile is None:
             await _skip(db, run, "payroll", user_id)
         else:
             c = steps.compensation
             try:
                 async with db.begin_nested():
-                    result = await comp.replace_employee_compensation(
-                        db, tenant=tenant, employee_id=emp.id, structure_id=c.structure_id,
-                        bd_wage_rate_id=c.bd_wage_rate_id, base_salary=c.base_salary,
-                        effective_from=c.effective_from or emp.joining_date or today_local(tenant), actor_id=user_id,
-                    )
-                    await log_action(
-                        db, tenant_id=tenant_id, user_id=user_id, action="HR_EMPLOYEE_COMPENSATION_REPLACED",
-                        resource=f"hr.employee:{emp.id}",
-                        details=f"onboarding {request_id} "
-                        + comp.audit_details(result, result.structure_assignment.effective_from),
-                    )
-                run.payroll_assignment_id = result.structure_assignment.id
-                run.wage_assignment_id = result.wage_assignment.id if result.wage_assignment else None
+                    result = None
+                    if c is not None:
+                        result = await comp.replace_employee_compensation(
+                            db, tenant=tenant, employee_id=emp.id, structure_id=c.structure_id,
+                            bd_wage_rate_id=c.bd_wage_rate_id, base_salary=c.base_salary,
+                            effective_from=c.effective_from or emp.joining_date or today_local(tenant), actor_id=user_id,
+                            component_overrides=c.component_overrides, change_type="JOINING",
+                        )
+                        await log_action(
+                            db, tenant_id=tenant_id, user_id=user_id, action="HR_EMPLOYEE_COMPENSATION_REPLACED",
+                            resource=f"hr.employee:{emp.id}",
+                            details=f"onboarding {request_id} "
+                            + comp.audit_details(result, result.structure_assignment.effective_from),
+                        )
+                    if steps.pay_benefits:
+                        await comp.lock_employee(db, tenant_id, emp.id)
+                        switched_off = await benefits.upsert_pay_benefits(
+                            db, tenant_id=tenant_id, employee_id=emp.id, items=steps.pay_benefits, actor_id=user_id
+                        )
+                        await log_action(
+                            db, tenant_id=tenant_id, user_id=user_id, action="HR_EMPLOYEE_PAY_BENEFITS_UPDATED",
+                            resource=f"hr.employee:{emp.id}",
+                            details=f"onboarding {request_id} off={switched_off}",
+                        )
+                    if steps.tax_profile is not None:
+                        await comp.lock_employee(db, tenant_id, emp.id)
+                        changed = await tax.upsert_tax_profile(
+                            db, tenant_id=tenant_id, employee_id=emp.id, body=steps.tax_profile, actor_id=user_id
+                        )
+                        await log_action(
+                            db, tenant_id=tenant_id, user_id=user_id, action="HR_EMPLOYEE_TAX_PROFILE_UPDATED",
+                            resource=f"hr.employee:{emp.id}", details=f"onboarding {request_id} fields={changed}",
+                        )
+                run.payroll_assignment_id = result.structure_assignment.id if result else None
+                run.wage_assignment_id = result.wage_assignment.id if result and result.wage_assignment else None
                 run.payroll_step_status = "COMPLETED"
             except (HTTPException, IntegrityError) as exc:
                 run.payroll_step_status = "FAILED"

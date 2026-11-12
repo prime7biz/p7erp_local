@@ -3,6 +3,7 @@ import { api } from "@/api/client";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
+import { useConfirm } from "@/components/app/useConfirm";
 
 const OPTIONAL_UNITS = ["knitting", "dyeing", "printing", "aop", "embroidery", "elastic", "washing"];
 
@@ -18,6 +19,7 @@ function crewEmpOptionKey(designationId: number | null | undefined, designationF
 type CrewRow = Awaited<ReturnType<typeof api.getCrewDaily>>[number];
 
 export function DailyCrewSheetPage() {
+  const confirm = useConfirm();
   const [date, setDate] = useState(todayISO());
   const [mode, setMode] = useState<"line" | "unit">("line");
   const [shiftId, setShiftId] = useState<number | null>(null);
@@ -206,7 +208,7 @@ export function DailyCrewSheetPage() {
       logApiError(e, "DailyCrewSheetPage.save");
       const raw = e instanceof Error ? e.message : String(e);
       if (raw.includes("override_validation")) {
-        const ok = window.confirm("There are over-allocation warnings. Save anyway?");
+        const ok = await confirm({ title: "There are over-allocation warnings. Save anyway?", confirmLabel: "Save anyway" });
         if (ok) await save(true);
       } else {
         setMsg("Could not save crew sheet.");

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type HrPayrollReportRow } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
 
 export function ReportPayrollSummaryPage() {
   const year = new Date().getFullYear();
@@ -43,21 +44,21 @@ export function ReportPayrollSummaryPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">Payroll Summary</h1>
-          <p className="text-text-muted text-sm mt-0.5">Payroll runs by period (YTD totals below).</p>
-        </div>
-        <label className="flex items-center gap-2 text-sm">
-          Year
-          <input
-            type="number"
-            className="w-24 rounded border border-border-strong px-2 py-1"
-            value={y}
-            onChange={(e) => setY(Number(e.target.value))}
-          />
-        </label>
-      </header>
+      <AppPageHeader
+        title="Payroll Summary"
+        description="Payroll runs by period (YTD totals below)."
+        actions={
+          <label className="flex items-center gap-2 text-sm">
+            Year
+            <input
+              type="number"
+              className="w-24 rounded border border-border-strong px-2 py-1"
+              value={y}
+              onChange={(e) => setY(Number(e.target.value))}
+            />
+          </label>
+        }
+      />
       {error && (
         <div className="rounded-lg bg-status-danger-subtle border border-status-danger/20 px-4 py-3 text-sm text-status-danger-foreground">
           {error}
@@ -77,7 +78,7 @@ export function ReportPayrollSummaryPage() {
           <div className="text-xl font-semibold">{totals.n.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
         </div>
       </div>
-      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+      <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
         {loading ? (
           <div className="space-y-3 p-6"><div className="h-4 w-3/4 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-full animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-5/6 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-2/3 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-4/5 animate-pulse rounded bg-surface-subtle" /></div>
         ) : rows.length === 0 ? (

@@ -136,43 +136,51 @@ async def import_serials_csv(
         try:
             item_id = int(row.get("item_id") or 0)
             sn = str(row.get("serial_number") or "").strip()
-            if not item_id or not sn:
-                errors.append(f"row {idx}: item_id and serial_number required")
-                continue
-            item = await db.get(Item, item_id)
-            if not item or item.tenant_id != tenant.id:
-                errors.append(f"row {idx}: item not found")
-                continue
-            exists = (
-                await db.execute(
-                    select(StockSerial.id).where(
-                        StockSerial.tenant_id == tenant.id,
-                        StockSerial.serial_number == sn,
+        except (TypeError, ValueError):
+            errors.append(f"row {idx}: item_id must be a number")
+            continue
+        if not item_id or not sn:
+            errors.append(f"row {idx}: item_id and serial_number required")
+            continue
+        try:
+            # One savepoint per row: a failed row is undone on its own and the session stays usable.
+            async with db.begin_nested():
+                item = await db.get(Item, item_id)
+                if not item or item.tenant_id != tenant.id:
+                    errors.append(f"row {idx}: item not found")
+                    continue
+                exists = (
+                    await db.execute(
+                        select(StockSerial.id).where(
+                            StockSerial.tenant_id == tenant.id,
+                            StockSerial.serial_number == sn,
+                        )
+                    )
+                ).first()
+                if exists:
+                    errors.append(f"row {idx}: duplicate {sn}")
+                    continue
+                wh = row.get("warehouse_id")
+                if wh:
+                    wh_row = await db.get(Warehouse, int(wh))
+                    if not wh_row or wh_row.tenant_id != tenant.id:
+                        errors.append(f"row {idx}: warehouse not found")
+                        continue
+                db.add(
+                    StockSerial(
+                        tenant_id=tenant.id,
+                        item_id=item_id,
+                        serial_number=sn,
+                        status=str(row.get("status") or "IN_STOCK").upper(),
+                        warehouse_id=int(wh) if wh else item.default_warehouse_id,
+                        notes=row.get("notes"),
                     )
                 )
-            ).first()
-            if exists:
-                errors.append(f"row {idx}: duplicate {sn}")
-                continue
-            wh = row.get("warehouse_id")
-            if wh:
-                wh_row = await db.get(Warehouse, int(wh))
-                if not wh_row or wh_row.tenant_id != tenant.id:
-                    errors.append(f"row {idx}: warehouse not found")
-                    continue
-            db.add(
-                StockSerial(
-                    tenant_id=tenant.id,
-                    item_id=item_id,
-                    serial_number=sn,
-                    status=str(row.get("status") or "IN_STOCK").upper(),
-                    warehouse_id=int(wh) if wh else item.default_warehouse_id,
-                    notes=row.get("notes"),
-                )
-            )
+                await db.flush()
             created += 1
-        except Exception as exc:
-            errors.append(f"row {idx}: {exc}")
+        except Exception:
+            logger.warning("serial import row %s failed tenant_id=%s", idx, tenant.id, exc_info=True)
+            errors.append(f"row {idx}: could not be saved")
     await db.flush()
     return {"created": created, "errors": errors}
 

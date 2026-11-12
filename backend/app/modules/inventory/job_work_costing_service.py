@@ -104,8 +104,10 @@ def receipt_cost_from_idt(
 async def calculate_job_work_cost(
     db: AsyncSession,
     idt_id: int,
+    *,
+    tenant_id: int,
 ) -> JobWorkCostBreakdown:
     idt = await db.get(InterDepartmentTransfer, idt_id)
-    if not idt:
+    if not idt or idt.tenant_id != tenant_id:
         raise ValueError("IDT not found")
     return calculate_job_work_cost_from_idt(idt)

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type ShipmentRow } from "@/api/client";
-import { logApiError } from "@/utils/logApiError";
+import { logApiError } from "@/utils/logApiError";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
 
 export function ReportShipmentsPage() {
   const [rows, setRows] = useState<ShipmentRow[]>([]);
@@ -35,15 +36,7 @@ export function ReportShipmentsPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-text-primary">Shipment Tracking</h1>
-        <p className="text-text-muted text-sm mt-0.5">
-          Logistics shipments linked to trade cases.{" "}
-          <Link to="/app/logistics" className="text-brand-primary hover:underline">
-            Logistics hub
-          </Link>
-        </p>
-      </header>
+      <AppPageHeader title="Shipment Tracking" description="Logistics shipments linked to trade cases." actions={<><Link to="/app/logistics" className="text-brand-primary hover:underline"> Logistics hub </Link></>} />
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-sm text-text-muted">Status</label>
         <input
@@ -58,7 +51,7 @@ export function ReportShipmentsPage() {
           {error}
         </div>
       )}
-      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+      <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
         {loading ? (
           <div className="space-y-3 p-6"><div className="h-4 w-3/4 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-full animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-5/6 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-2/3 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-4/5 animate-pulse rounded bg-surface-subtle" /></div>
         ) : rows.length === 0 ? (

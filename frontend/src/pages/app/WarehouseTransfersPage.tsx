@@ -22,9 +22,13 @@ import {
   inventoryScrollTableClass,
   touchFieldClass,
 } from "@/components/inventory/InventoryMobileList";
-import { useListViewPreference } from "@/hooks/useInventoryListView";
+import { useListViewPreference, useResponsiveListPreference } from "@/hooks/useInventoryListView";
+import { useMobileUiV2 } from "@/hooks/useMobileUiV2";
+import { RowActionsMenu, type RowActionItem } from "@/components/app/RowActionsMenu";
+import { mobileFieldClass, mobilePageStickyActionsClass } from "@/components/app/listPageLayout";
 import { fetchInventoryItemPage, hydrateInventoryItem } from "@/lib/remoteSelectFetchers";
 import { getWarehousesCached } from "@/lib/masterData";
+import { cn } from "@/lib/utils";
 
 export function WarehouseTransfersPage() {
   const [rows, setRows] = useState<WarehouseTransferResponse[]>([]);
@@ -42,6 +46,10 @@ export function WarehouseTransfersPage() {
   });
   const [loading, setLoading] = useState(true);
   const { isNarrow, view, setView, showCards } = useListViewPreference();
+  // mobile_ui_v2: phones start on Cards (own saved choice), shared Actions menu, touch-size form.
+  const mobileV2 = useMobileUiV2();
+  const phoneList = useResponsiveListPreference("inventory.warehouse-transfers", mobileV2);
+  const phoneForm = mobileV2 && phoneList.isPhone;
   const [printOpen, setPrintOpen] = useState(false);
   const [printData, setPrintData] = useState<InventoryDocumentPrintPayload | null>(null);
   const [printTitle, setPrintTitle] = useState("");
@@ -108,6 +116,61 @@ export function WarehouseTransfersPage() {
     [itemLabels],
   );
 
+  /** Same actions as the table's Actions menu, for the shared row menu on phone cards. */
+  const transferActions = (row: WarehouseTransferResponse): RowActionItem[] => {
+    const items: RowActionItem[] = [];
+    if (row.status === "DRAFT") {
+      items.push({
+        key: "post",
+        label: "Post to stock",
+        onClick: () => {
+          setError("");
+          void api
+            .postWarehouseTransfer(row.id)
+            .then(load)
+            .catch((err) => setError(err instanceof Error ? err.message : "Post failed"));
+        },
+      });
+    }
+    items.push(
+      {
+        key: "print",
+        label: "Print preview",
+        onClick: () => {
+          void api
+            .getWarehouseTransferPrintData(row.id)
+            .then((d) => {
+              setPrintData(d);
+              setPrintTitle(row.transfer_code);
+              setPrintOpen(true);
+            })
+            .catch((err) => {
+              logApiError("WarehouseTransfersPage.print", err);
+              setError(err instanceof Error ? err.message : "Print failed");
+            });
+        },
+      },
+      {
+        key: "postings",
+        label: "GL postings",
+        onClick: () => {
+          void api
+            .getWarehouseTransferGlPostings(row.id)
+            .then((p) => {
+              setPostingsRows(p);
+              setPostingsTitle(row.transfer_code);
+              setPostingsOpen(true);
+            })
+            .catch((err) => {
+              logApiError("WarehouseTransfersPage.postings", err);
+              setError(err instanceof Error ? err.message : "Postings failed");
+            });
+        },
+      },
+    );
+    return items;
+  };
+
   return (
     <div className="min-w-0 space-y-6">
       <div>
@@ -117,7 +180,11 @@ export function WarehouseTransfersPage() {
       {error ? <InventoryErrorPanel message={error} onRetry={() => void load()} /> : null}
 
       <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface-raised p-3 sm:flex-row sm:items-center sm:justify-between">
-        {isNarrow ? <InventoryListViewToggle value={view} onChange={setView} /> : null}
+        {mobileV2 ? (
+          phoneList.showToggle ? <InventoryListViewToggle value={phoneList.view} onChange={phoneList.setView} /> : null
+        ) : isNarrow ? (
+          <InventoryListViewToggle value={view} onChange={setView} />
+        ) : null}
         <label className="flex flex-1 flex-wrap items-center gap-2 text-xs font-semibold text-text-secondary">
           Status filter
           <input
@@ -188,14 +255,28 @@ export function WarehouseTransfersPage() {
               onChange={(e) => setForm((p) => ({ ...p, transfer_date: e.target.value }))}
             />
           </label>
-          <label className="text-xs text-text-muted">
-            Notes
-            <input
-              className="mt-0.5 w-full rounded border border-border px-2 py-2 text-sm"
-              value={form.notes ?? ""}
-              onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
-            />
-          </label>
+          {phoneForm ? (
+            <details className="text-xs text-text-muted">
+              <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-brand-primary">
+                Notes (optional)
+              </summary>
+              <input
+                aria-label="Notes"
+                className={cn("mt-0.5 w-full rounded border border-border px-2 py-2 text-sm", mobileFieldClass)}
+                value={form.notes ?? ""}
+                onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+              />
+            </details>
+          ) : (
+            <label className="text-xs text-text-muted">
+              Notes
+              <input
+                className="mt-0.5 w-full rounded border border-border px-2 py-2 text-sm"
+                value={form.notes ?? ""}
+                onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+              />
+            </label>
+          )}
         </div>
         <div className="space-y-2">
           {form.items.map((line, idx) => (
@@ -219,8 +300,10 @@ export function WarehouseTransfersPage() {
                 allowClear
               />
               <input
-                className="w-28 rounded border border-border px-2 py-2 text-sm"
+                className={cn("w-28 rounded border border-border px-2 py-2 text-sm", phoneForm && mobileFieldClass)}
                 placeholder="Qty"
+                aria-label="Quantity"
+                inputMode={phoneForm ? "decimal" : undefined}
                 value={line.quantity}
                 onChange={(e) => {
                   const v = e.target.value;
@@ -232,7 +315,10 @@ export function WarehouseTransfersPage() {
               />
               <button
                 type="button"
-                className="rounded border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
+                className={cn(
+                  "rounded border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-subtle",
+                  phoneForm && "min-h-11 px-3 text-sm",
+                )}
                 onClick={() => setForm((p) => ({ ...p, items: p.items.filter((_, i) => i !== idx) }))}
               >
                 Remove
@@ -241,15 +327,29 @@ export function WarehouseTransfersPage() {
           ))}
           <button
             type="button"
-            className="rounded border border-dashed border-border px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle"
+            className={cn(
+              "rounded border border-dashed border-border px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle",
+              phoneForm && "min-h-11 w-full text-sm",
+            )}
             onClick={() => setForm((p) => ({ ...p, items: [...p.items, { item_id: 0, quantity: "1" }] }))}
           >
             + Add line
           </button>
         </div>
-        <button type="submit" className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-brand-primary-foreground">
-          Save draft
-        </button>
+        {phoneForm ? (
+          <div className={mobilePageStickyActionsClass}>
+            <button
+              type="submit"
+              className="min-h-11 w-full rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-brand-primary-foreground"
+            >
+              Save draft
+            </button>
+          </div>
+        ) : (
+          <button type="submit" className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-brand-primary-foreground">
+            Save draft
+          </button>
+        )}
       </form>
 
       {loading ? (
@@ -259,7 +359,53 @@ export function WarehouseTransfersPage() {
           title={rows.length ? "No transfers match this status" : "No warehouse transfers yet"}
           description={rows.length ? "Clear the status filter to see all transfers." : "Save a draft transfer above, then post it to move stock."}
         />
-      ) : showCards ? (
+      ) : mobileV2 && phoneList.showCards ? (
+        <ul className="space-y-3">
+          {filteredRows.map((row) => (
+            <li key={row.id} className="rounded-xl border border-border bg-surface-raised p-3 shadow-sm">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-base font-semibold text-text-primary">{row.transfer_code}</div>
+                  <div className="break-words text-sm text-text-secondary">
+                    {whName(row.from_warehouse_id)} → {whName(row.to_warehouse_id)}
+                  </div>
+                </div>
+                <span className="shrink-0 rounded-full bg-surface-subtle px-2 py-0.5 text-xs font-medium text-text-secondary">
+                  {row.status}
+                </span>
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+                <div>
+                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Date</dt>
+                  <dd className="text-text-secondary">
+                    {row.transfer_date ? new Date(row.transfer_date).toLocaleDateString() : "—"}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Lines</dt>
+                  <dd className="break-words text-text-secondary">
+                    {row.items.map((l) => (
+                      <span key={l.id} className="block">
+                        {itemLabel(l.item_id)}: {l.quantity}
+                      </span>
+                    ))}
+                  </dd>
+                </div>
+              </dl>
+              {row.status === "DRAFT" || row.status === "POSTED" ? (
+                <div className="mt-2 flex justify-end border-t border-border-subtle pt-2" onClick={(e) => e.stopPropagation()}>
+                  <RowActionsMenu
+                    rowId={row.id}
+                    openId={openActionsId}
+                    onOpenChange={(id) => setOpenActionsId(id as number | null)}
+                    items={transferActions(row)}
+                  />
+                </div>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : showCards && !mobileV2 ? (
         <div className="space-y-3">
           {filteredRows.map((row) => (
             <div key={row.id} className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">

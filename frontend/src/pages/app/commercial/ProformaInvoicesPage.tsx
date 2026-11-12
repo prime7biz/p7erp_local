@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { FileText, Plus, Printer } from "lucide-react";
-import { api, type ProformaInvoiceRow, type OrderResponse } from "@/api/client";
+import { api, type ProformaInvoiceRow, type OrderResponse } from "@/api/client";
+import { useConfirm } from "@/components/app/useConfirm";
 
-export function ProformaInvoicesPage() {
+export function ProformaInvoicesPage() {
+  const confirm = useConfirm();
   const [items, setItems] = useState<ProformaInvoiceRow[]>([]);
   const [orders, setOrders] = useState<OrderResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,7 +55,7 @@ export function ProformaInvoicesPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm("Delete this proforma invoice?")) return;
+    if (!(await confirm({ title: "Delete this proforma invoice?", danger: true }))) return;
     setDeletingId(id);
     try {
       await api.deleteProformaInvoice(id);

@@ -587,6 +587,69 @@ export interface HrEmployeePaySnapshot {
   wage_grade_gross: string | null;
   wage_assignment_id: number | null;
   wage_effective_from: string | null;
+  /** Per-employee monthly amounts, `{component code: amount}` (never the basic line). */
+  component_overrides?: Record<string, string>;
+  change_type?: HrSalaryChangeType | "JOINING" | null;
+  change_note?: string | null;
+  /** Every active line of the structure in force, priced for the current basic. */
+  components?: HrCompensationComponent[];
+}
+
+export type HrSalaryChangeType = "INCREMENT" | "PROMOTION" | "CORRECTION";
+
+/** One active line of a salary structure (GET /hr/compensation/options). */
+export interface HrStructureLine {
+  component_id: number;
+  code: string;
+  name: string;
+  component_type: string;
+  calculation_type: string;
+  /** Line amount as stored: a percentage for PERCENT_OF_BASE, money for FIXED. */
+  amount: string | null;
+  /** The line that pays the basic; its amount is the basic salary. */
+  is_basic: boolean;
+  /** Monthly earning that can get a per-employee amount. */
+  editable: boolean;
+}
+
+export interface HrBillRule {
+  id: number;
+  code: string;
+  name: string;
+  bill_type: HrBillType;
+  eligibility_basis: string;
+  amount: string | null;
+}
+
+export type HrBillType = "TIFFIN" | "LUNCH" | "DINNER" | "NIGHT" | "FRIDAY";
+export type HrPayBenefitCode = "OVERTIME" | HrBillType;
+
+export interface HrPayBenefit {
+  benefit_code: HrPayBenefitCode;
+  label?: string;
+  enabled: boolean;
+  amount_override: string | null;
+  is_default?: boolean;
+}
+
+export interface HrPayBenefitsView {
+  employee_id: number;
+  benefits: HrPayBenefit[];
+}
+
+/** One priced line of the salary preview. */
+export interface HrCompensationComponent {
+  component_id: number;
+  code: string;
+  name: string;
+  component_type: string;
+  calculation_type: string;
+  rule_amount: string | null;
+  standard_amount: string | null;
+  amount: string | null;
+  is_basic: boolean;
+  editable: boolean;
+  overridden: boolean;
 }
 
 /** GET /hr/employee-access — UI hints only; the API enforces every rule. */
@@ -603,7 +666,7 @@ export interface HrEmployeeAccess {
 
 export interface HrCompensationOptions {
   as_of: string;
-  structures: { id: number; code: string; name: string }[];
+  structures: { id: number; code: string; name: string; lines?: HrStructureLine[] }[];
   wage_grades: {
     id: number;
     rate_code: string;
@@ -612,14 +675,24 @@ export interface HrCompensationOptions {
     employment_stage: string;
     basic: string;
     gross: string;
+    annual_increment_pct?: string | null;
   }[];
+  /** Default annual increment (% of basic) when a grade has none. */
+  annual_increment_pct?: string;
+  /** Approved company bill rules in force today. */
+  bill_rules?: HrBillRule[];
 }
 
 export interface HrCompensationInput {
   structure_id: number;
+  /** Lets the live tax estimate use the saved gender, birth date and tax profile. */
+  employee_id?: number | null;
   bd_wage_rate_id?: number | null;
   base_salary?: string | null;
   effective_from?: string | null;
+  component_overrides?: Record<string, string> | null;
+  change_type?: HrSalaryChangeType | null;
+  change_note?: string | null;
 }
 
 export interface HrCompensationPreview {
@@ -629,11 +702,14 @@ export interface HrCompensationPreview {
   gross: string | null;
   meets_minimum: boolean;
   message: string | null;
+  components?: HrCompensationComponent[];
+  tds_estimate?: HrTdsEstimate | null;
 }
 
 export interface HrEmployeeCompensationView {
   employee_id: number;
   snapshot: HrEmployeePaySnapshot;
+  tds_estimate?: HrTdsEstimate | null;
   structure_assignments: {
     id: number;
     structure_id: number;
@@ -641,6 +717,9 @@ export interface HrEmployeeCompensationView {
     base_salary: string | null;
     effective_from: string;
     effective_to: string | null;
+    component_overrides?: Record<string, string>;
+    change_type?: HrSalaryChangeType | "JOINING" | null;
+    change_note?: string | null;
   }[];
   wage_assignments: {
     id: number;
@@ -655,6 +734,8 @@ export type HrOnboardingStepStatus = "PENDING" | "COMPLETED" | "FAILED" | "SKIPP
 
 export interface HrOnboardingSteps {
   compensation?: HrCompensationInput | null;
+  /** Overtime + bill switches; saved in the payroll step (needs hr.payroll.manage). */
+  pay_benefits?: HrPayBenefit[] | null;
   issue_temp_gate_pass?: boolean;
 }
 
@@ -11371,3 +11452,51 @@ export interface BillWiseAgingReport {
     pending_amount: number;
   }>;
 }
+
+/** Bangladesh salary income tax (TDS). Money is always a decimal string. */
+export interface HrTdsEstimate {
+  estimate_basis: "SALARY_ONLY";
+  payroll_enabled: boolean;
+  employee_tds_enabled: boolean;
+  supported: boolean;
+  message: string | null;
+  monthly_tds?: string;
+  estimated_net_monthly?: string;
+  net_annual_tax?: string;
+  annual_gross?: string;
+  taxable_income?: string;
+  category?: string;
+  warnings?: string[];
+}
+
+export type HrTaxCategoryOverride = "AUTO" | "GENERAL" | "FEMALE" | "SENIOR_65" | "DISABLED" | "FREEDOM_FIGHTER" | "THIRD_GENDER";
+
+export interface HrEmployeeTaxProfile {
+  exists?: boolean;
+  tds_enabled: boolean;
+  tin_number: string | null;
+  tax_circle: string | null;
+  tax_zone: string | null;
+  tax_category_override: HrTaxCategoryOverride | string;
+  category_evidence_reference: string | null;
+  disabled_children_count: number;
+  is_first_time_taxpayer: boolean;
+  rebate_mode: "NONE" | "DECLARED_INVESTMENT";
+  declared_annual_investment: string | null;
+  monthly_tds_override: string | null;
+  opening_ytd_gross: string | null;
+  opening_ytd_tds: string | null;
+  opening_income_year_start: string | null;
+  opening_through_date: string | null;
+}
+
+export interface HrSalaryTdsSwitch {
+  enabled: boolean;
+  can_enable: boolean;
+  problems: string[];
+  schedule_version: string;
+  approval_status: string;
+  approval_id: string | null;
+}
+
+

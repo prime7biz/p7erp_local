@@ -3356,6 +3356,8 @@ async def _apply_grn_receive_goods(
         plid = getattr(line, "purchase_order_line_id", None)
         if plid:
             pl = po_lines_by_id.get(int(plid)) or await db.get(PurchaseOrderItem, int(plid))
+            if pl is not None and pl.tenant_id != tenant.id:
+                pl = None
         if pl is None and row.purchase_order_id:
             pl = po_lines_map.get((line.item_id, line.warehouse_id)) or po_lines_map.get((line.item_id, None))
 
@@ -3417,55 +3419,43 @@ async def _apply_grn_receive_goods(
         db.add(mv)
         await db.flush()
         await finalize_movement_fifo(db, tenant.id, mv, in_unit_cost=uc)
-        # Sprint 2: physical batch on GRN when batch_tracking enabled (skip if quarantine QC)
+        # Sprint 2: physical batch on GRN when batch_tracking enabled (skip if quarantine QC).
+        # Batch and serial records are part of the receipt: any failure fails the whole request so the
+        # stock movement, cost layer and GRN status are rolled back with it (never received without them).
         if not qc_on:
-            try:
-                from decimal import Decimal as _Dec
-                from app.modules.inventory.stock_batch_service import create_batch_on_grn
+            from decimal import Decimal as _Dec
+            from app.modules.inventory.stock_batch_service import create_batch_on_grn
 
-                it_row = await db.get(Item, line.item_id)
-                if it_row and it_row.tenant_id == tenant.id:
-                    await create_batch_on_grn(
-                        db,
-                        tenant.id,
-                        item=it_row,
-                        grn_item=line,
-                        movement=mv,
-                        qty=_Dec(str(acc_s)),
-                        unit_cost=_Dec(str(uc)),
-                        feature_flags=tenant.feature_flags,
-                        batch_number=getattr(line, "lot_number", None),
-                    )
-            except Exception:
-                import logging
-
-                logging.getLogger(__name__).exception("create_batch_on_grn failed grn=%s line=%s", row.id, line.id)
+            it_row = await db.get(Item, line.item_id)
+            if it_row and it_row.tenant_id == tenant.id:
+                await create_batch_on_grn(
+                    db,
+                    tenant.id,
+                    item=it_row,
+                    grn_item=line,
+                    movement=mv,
+                    qty=_Dec(str(acc_s)),
+                    unit_cost=_Dec(str(uc)),
+                    feature_flags=tenant.feature_flags,
+                    batch_number=getattr(line, "lot_number", None),
+                )
 
         # Sprint I4: create serial numbers when serial tracking enabled (skip quarantine QC path until PASS)
         if not qc_on:
-            try:
-                from app.common.tenant_feature_keys import is_serial_tracking_enabled
-                from app.modules.inventory import serial_tracking_service
+            from app.common.tenant_feature_keys import is_serial_tracking_enabled
+            from app.modules.inventory import serial_tracking_service
 
-                if is_serial_tracking_enabled(tenant.feature_flags):
-                    it_ser = await db.get(Item, line.item_id)
-                    if it_ser and it_ser.tenant_id == tenant.id:
-                        await serial_tracking_service.create_serials_on_grn(
-                            db,
-                            tenant,
-                            item=it_ser,
-                            grn_item=line,
-                            qty=stock_qty_s,
-                            warehouse_id=receive_wh_id,
-                        )
-            except HTTPException:
-                raise
-            except Exception:
-                import logging
-
-                logging.getLogger(__name__).exception(
-                    "create_serials_on_grn failed grn=%s line=%s", row.id, line.id
-                )
+            if is_serial_tracking_enabled(tenant.feature_flags):
+                it_ser = await db.get(Item, line.item_id)
+                if it_ser and it_ser.tenant_id == tenant.id:
+                    await serial_tracking_service.create_serials_on_grn(
+                        db,
+                        tenant,
+                        item=it_ser,
+                        grn_item=line,
+                        qty=stock_qty_s,
+                        warehouse_id=receive_wh_id,
+                    )
 
     # Sprint I2: create pending QC inspections after all lines posted to quarantine
     if qc_on and qc_wh_map:

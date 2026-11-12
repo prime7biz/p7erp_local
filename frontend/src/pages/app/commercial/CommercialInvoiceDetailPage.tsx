@@ -12,6 +12,8 @@ import { LinkedRecordsSection } from "@/components/app/LinkedRecordsSection";
 import { WorkflowSummaryStrip } from "@/components/app/WorkflowSummaryStrip";
 import { PartyLedgerSummaryCard } from "@/pages/app/finance/party-ledger/PartyLedgerSummaryCard";
 import { todayLocalISO } from "@/lib/dates";
+import { getChartOfAccountsCached, getBankAccountsCached } from "@/lib/masterData";
+import { useConfirm } from "@/components/app/useConfirm";
 
 function money(n: number | null | undefined, currency?: string | null) {
   const v = Number(n ?? 0);
@@ -29,6 +31,7 @@ function newKey(prefix: string) {
 }
 
 export function CommercialInvoiceDetailPage() {
+  const confirm = useConfirm();
   const { id } = useParams<{ id: string }>();
   const invoiceId = Number(id);
   const [invoice, setInvoice] = useState<CommercialInvoiceRow | null>(null);
@@ -54,8 +57,8 @@ export function CommercialInvoiceDetailPage() {
       if ((inv.status || "").toUpperCase() === "ISSUED") {
         const [pay, bankList, coa] = await Promise.all([
           api.getCommercialInvoicePaymentSummary(invoiceId),
-          api.listBankAccounts({ active_only: true }),
-          api.listChartOfAccounts({ active_only: true }),
+          getBankAccountsCached({ active_only: true }),
+          getChartOfAccountsCached({ active_only: true }),
         ]);
         setSummary(pay);
         setBanks(bankList);
@@ -102,7 +105,7 @@ export function CommercialInvoiceDetailPage() {
 
   const handleCancel = async () => {
     if (!invoice) return;
-    if (!window.confirm("Cancel this issued commercial invoice?")) return;
+    if (!(await confirm({ title: "Cancel this issued commercial invoice?", danger: true }))) return;
     setBusy(true);
     setError(null);
     setSuccess(null);

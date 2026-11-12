@@ -3,6 +3,9 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 
 const isProduction = process.env.NODE_ENV === "production";
+// Dev server only. VITE_DEV_HMR=false stops the open browser tab from updating/reloading on every
+// saved file (useful while many files are being edited); press F5 to load the latest code.
+const devHmrEnabled = process.env.VITE_DEV_HMR !== "false";
 
 /**
  * Installable mobile app (docs/mobile-feasibility). Off unless VITE_PWA_ENABLED=true at build time.
@@ -102,9 +105,18 @@ export default defineConfig(async ({ mode }) => {
       // Polling stats every file over the slow Windows bind mount and starves Node's fs threads.
       // dist/ is build output (never imported in dev); images/videos in public/ change rarely.
       binaryInterval: 5000,
-      ignored: ["**/dist/**", "**/coverage/**", "**/tsconfig.tsbuildinfo"],
+      // Test files are never loaded by the app; watching them only caused full page reloads.
+      ignored: [
+        "**/dist/**",
+        "**/coverage/**",
+        "**/tsconfig.tsbuildinfo",
+        "**/*.test.{ts,tsx}",
+        "**/*.spec.{ts,tsx}",
+      ],
     },
-    hmr: isProduction
+    hmr: !devHmrEnabled
+      ? false
+      : isProduction
       ? {
           protocol: "wss",
           port: 443,

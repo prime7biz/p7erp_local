@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Item, StockMovement
 from app.modules.ai_tool.query_parser import parse_search_query
+
+SNAPSHOT_LIMIT = 20
+SHORTAGE_MAX_ROWS = 100
 
 
 def _to_float(value: str | float | int | None) -> float:
@@ -14,44 +17,43 @@ def _to_float(value: str | float | int | None) -> float:
         return 0.0
 
 
+def _on_hand_by_item(tenant_id: int):
+    """Per-item on-hand totals computed in SQL (IN adds, every other movement type subtracts)."""
+    on_hand = func.sum(
+        case(
+            (StockMovement.movement_type == "IN", StockMovement.quantity),
+            else_=-StockMovement.quantity,
+        )
+    ).label("on_hand")
+    return (
+        select(Item.id.label("item_id"), Item.item_code, Item.name.label("item_name"), on_hand)
+        .join(
+            StockMovement,
+            and_(StockMovement.item_id == Item.id, StockMovement.tenant_id == tenant_id),
+        )
+        .where(Item.tenant_id == tenant_id)
+        .group_by(Item.id, Item.item_code, Item.name)
+    )
+
+
+def _row_to_item(row, threshold: int | None = None) -> dict:
+    out = {
+        "item_id": row.item_id,
+        "item_code": row.item_code,
+        "item_name": row.item_name,
+        "on_hand_qty": round(_to_float(row.on_hand), 3),
+    }
+    if threshold is not None:
+        out["threshold"] = threshold
+    return out
+
+
 async def get_inventory_snapshot(db: AsyncSession, *, tenant_id: int) -> dict:
-    movements = (
-        await db.execute(
-            select(StockMovement).where(StockMovement.tenant_id == tenant_id)
-        )
-    ).scalars().all()
-    items = (
-        await db.execute(
-            select(Item).where(Item.tenant_id == tenant_id)
-        )
-    ).scalars().all()
-    item_map = {x.id: x for x in items}
-
-    bucket: dict[int, dict[str, float]] = {}
-    for movement in movements:
-        entry = bucket.setdefault(movement.item_id, {"in_qty": 0.0, "out_qty": 0.0})
-        qty = _to_float(movement.quantity)
-        if movement.movement_type == "IN":
-            entry["in_qty"] += qty
-        else:
-            entry["out_qty"] += qty
-
-    rows: list[dict] = []
-    for item_id, qty in bucket.items():
-        item = item_map.get(item_id)
-        if not item:
-            continue
-        on_hand = round(qty["in_qty"] - qty["out_qty"], 3)
-        rows.append(
-            {
-                "item_id": item_id,
-                "item_code": item.item_code,
-                "item_name": item.name,
-                "on_hand_qty": on_hand,
-            }
-        )
-    rows.sort(key=lambda x: x["on_hand_qty"], reverse=True)
-    top_rows = rows[:20]
+    sub = _on_hand_by_item(tenant_id).subquery()
+    rows = (
+        await db.execute(select(sub).order_by(sub.c.on_hand.desc()).limit(SNAPSHOT_LIMIT))
+    ).all()
+    top_rows = [_row_to_item(r) for r in rows]
     return {
         "title": "Inventory Snapshot",
         "summary": f"Showing {len(top_rows)} item(s) by on-hand quantity.",
@@ -65,49 +67,23 @@ async def search_inventory_shortages(db: AsyncSession, *, tenant_id: int, prompt
     query = parse_search_query(prompt)
     threshold = query.min_count if query.min_count is not None else 0
 
-    movements = (
+    sub = _on_hand_by_item(tenant_id).subquery()
+    total = int(
+        (await db.execute(select(func.count()).select_from(sub).where(sub.c.on_hand <= threshold))).scalar()
+        or 0
+    )
+    limit = max(1, min(int(query.top_n or 10), SHORTAGE_MAX_ROWS))
+    rows = (
         await db.execute(
-            select(StockMovement).where(StockMovement.tenant_id == tenant_id)
+            select(sub).where(sub.c.on_hand <= threshold).order_by(sub.c.on_hand.asc()).limit(limit)
         )
-    ).scalars().all()
-    items = (
-        await db.execute(
-            select(Item).where(Item.tenant_id == tenant_id)
-        )
-    ).scalars().all()
-    item_map = {x.id: x for x in items}
-
-    bucket: dict[int, dict[str, float]] = {}
-    for movement in movements:
-        entry = bucket.setdefault(movement.item_id, {"in_qty": 0.0, "out_qty": 0.0})
-        qty = _to_float(movement.quantity)
-        if movement.movement_type == "IN":
-            entry["in_qty"] += qty
-        else:
-            entry["out_qty"] += qty
-
-    shortage_rows: list[dict] = []
-    for item_id, qty in bucket.items():
-        item = item_map.get(item_id)
-        if not item:
-            continue
-        on_hand = round(qty["in_qty"] - qty["out_qty"], 3)
-        if on_hand <= threshold:
-            shortage_rows.append(
-                {
-                    "item_id": item_id,
-                    "item_code": item.item_code,
-                    "item_name": item.name,
-                    "on_hand_qty": on_hand,
-                    "threshold": threshold,
-                }
-            )
-    shortage_rows.sort(key=lambda x: x["on_hand_qty"])
+    ).all()
+    shortage_rows = [_row_to_item(r, threshold) for r in rows]
     return {
         "title": "Inventory Shortages",
-        "summary": f"Found {len(shortage_rows)} item(s) at or below threshold {threshold}.",
+        "summary": f"Found {total} item(s) at or below threshold {threshold}.",
         "data": {
             "applied_filters": [f"on_hand <= {threshold}"],
-            "items": shortage_rows[: query.top_n],
+            "items": shortage_rows,
         },
     }

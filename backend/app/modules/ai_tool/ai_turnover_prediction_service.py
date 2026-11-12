@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date, timedelta
 from typing import Any
 
@@ -12,6 +13,8 @@ from app.models.hr import Employee
 from app.models.hr_attendance import AttendanceEntry
 from app.models.hr_compliance_framework import HrAiAnalysisResult
 from app.models.hr_leave import LeaveBalance
+
+logger = logging.getLogger(__name__)
 
 
 async def predict_turnover_risk(db: AsyncSession, tenant_id: int) -> dict[str, Any]:
@@ -55,23 +58,24 @@ async def predict_turnover_risk(db: AsyncSession, tenant_id: int) -> dict[str, A
         if absent >= 5:
             score += 20
             factors.append(f"{absent} absences in last 90 days")
-        # Leave balance high
+        # Leave balance high (optional signal; a savepoint keeps a failed read from aborting the session)
         try:
-            bal = (
-                await db.execute(
-                    select(LeaveBalance).where(
-                        LeaveBalance.tenant_id == tenant_id,
-                        LeaveBalance.employee_id == emp.id,
+            async with db.begin_nested():
+                bal = (
+                    await db.execute(
+                        select(LeaveBalance).where(
+                            LeaveBalance.tenant_id == tenant_id,
+                            LeaveBalance.employee_id == emp.id,
+                        )
                     )
-                )
-            ).scalars().first()
+                ).scalars().first()
             if bal is not None:
                 remaining = float(getattr(bal, "closing_balance_days", 0) or 0)
                 if remaining >= 30:
                     score += 15
                     factors.append(f"High leave balance ({remaining} days)")
         except Exception:
-            pass
+            logger.warning("turnover leave-balance signal failed tenant_id=%s", tenant_id, exc_info=True)
 
         score = min(100, score)
         level = "LOW"

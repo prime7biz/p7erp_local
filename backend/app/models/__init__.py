@@ -291,6 +291,7 @@ from app.models.hr_bd import (
     HrBdRuleSet,
     HrBdServiceBenefitCase,
     HrBdWageScheduleRate,
+    HrEmployeeTaxProfile,
 )
 from app.models.hr_lifecycle import (
     HrClearanceItem,
@@ -314,6 +315,7 @@ from app.models.hr_allowance import (
     HrAllowanceEntry,
     HrAllowanceRule,
     HrBonusAllocationLine,
+    HrEmployeePayBenefit,
     HrProductionBonusEntry,
     HrProductionBonusScheme,
 )

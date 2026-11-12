@@ -17,12 +17,17 @@ import { STALE_MASTER_DATA } from "@/lib/queryStaleTimes";
 
 type VendorParams = Parameters<typeof api.listVendors>[0];
 type ItemParams = Parameters<typeof api.listInventoryItems>[0];
+type ActiveParams = { active_only?: boolean };
 
 export const masterDataKeys = {
   customers: () => tenantKey("master", "customers"),
   vendors: (params?: VendorParams) => tenantKey("master", "vendors", params ?? {}),
   inventoryItems: (params?: ItemParams) => tenantKey("master", "inventory-items", params ?? {}),
   warehouses: () => tenantKey("master", "warehouses"),
+  chartOfAccounts: (params?: ActiveParams) => tenantKey("master", "chart-of-accounts", params ?? {}),
+  accountGroups: () => tenantKey("master", "account-groups"),
+  costCenters: (params?: ActiveParams) => tenantKey("master", "cost-centers", params ?? {}),
+  bankAccounts: (params?: ActiveParams) => tenantKey("master", "bank-accounts", params ?? {}),
 };
 
 export function getCustomersCached() {
@@ -57,7 +62,54 @@ export function getWarehousesCached() {
   });
 }
 
+/*
+ * Finance pick-lists (accounts, groups, cost centres, bank accounts) for dropdowns only.
+ * Account rows carry live balances: screens that SHOW balances (trial balance, ledger, chart of
+ * accounts, bank accounts) must keep calling the API directly.
+ */
+export function getChartOfAccountsCached(params?: ActiveParams) {
+  return queryClient.fetchQuery({
+    queryKey: masterDataKeys.chartOfAccounts(params),
+    queryFn: () => api.listChartOfAccounts(params),
+    staleTime: STALE_MASTER_DATA,
+  });
+}
+
+export function getAccountGroupsCached() {
+  return queryClient.fetchQuery({
+    queryKey: masterDataKeys.accountGroups(),
+    queryFn: () => api.listAccountGroups(),
+    staleTime: STALE_MASTER_DATA,
+  });
+}
+
+export function getCostCentersCached(params?: ActiveParams) {
+  return queryClient.fetchQuery({
+    queryKey: masterDataKeys.costCenters(params),
+    queryFn: () => api.listCostCenters(params),
+    staleTime: STALE_MASTER_DATA,
+  });
+}
+
+export function getBankAccountsCached(params?: ActiveParams) {
+  return queryClient.fetchQuery({
+    queryKey: masterDataKeys.bankAccounts(params),
+    queryFn: () => api.listBankAccounts(params),
+    staleTime: STALE_MASTER_DATA,
+  });
+}
+
+export type MasterDataKind =
+  | "customers"
+  | "vendors"
+  | "inventory-items"
+  | "warehouses"
+  | "chart-of-accounts"
+  | "account-groups"
+  | "cost-centers"
+  | "bank-accounts";
+
 /** Forget a cached list so the next read downloads it again. */
-export function invalidateMasterData(kind: "customers" | "vendors" | "inventory-items" | "warehouses") {
+export function invalidateMasterData(kind: MasterDataKind) {
   return queryClient.invalidateQueries({ queryKey: ["master", kind] });
 }

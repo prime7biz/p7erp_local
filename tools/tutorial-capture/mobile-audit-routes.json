@@ -11,6 +11,7 @@
     { "module": "Inventory", "path": "/app/inventory/goods-receiving" },
     { "module": "Inventory", "path": "/app/inventory/stock-inventory-summary" },
     { "module": "Inventory", "path": "/app/inventory/purchase-orders" },
+    { "module": "Inventory", "path": "/app/inventory/warehouse-transfers" },
     { "module": "Merchandising", "path": "/app/inquiries/new" },
     { "module": "Production", "path": "/app/production/hourly/sewing" },
     { "module": "Production", "path": "/app/production/scan-station" },

@@ -274,17 +274,34 @@ async def quality_dashboard(
     from collections import defaultdict
 
     rej_by_item: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
-    for c in completed:
-        if _d_safe(c.rejected_qty) > 0:
-            line = await db.get(GoodsReceivingItem, c.grn_item_id)
-            if line:
-                rej_by_item[line.item_id] += _d_safe(c.rejected_qty)
+    rejected = [c for c in completed if _d_safe(c.rejected_qty) > 0]
+    # One query for all GRN lines and one for the top items (not one query per inspection).
+    line_item = dict(
+        (
+            await db.execute(
+                select(GoodsReceivingItem.id, GoodsReceivingItem.item_id).where(
+                    GoodsReceivingItem.tenant_id == tenant.id,
+                    GoodsReceivingItem.id.in_({c.grn_item_id for c in rejected}),
+                )
+            )
+        ).all()
+    ) if rejected else {}
+    for c in rejected:
+        item_id = line_item.get(c.grn_item_id)
+        if item_id is not None:
+            rej_by_item[item_id] += _d_safe(c.rejected_qty)
     top = sorted(rej_by_item.items(), key=lambda x: x[1], reverse=True)[:10]
     top_out = []
     from app.models.costing import Item
 
+    items = {
+        it.id: it
+        for it in (
+            await db.execute(select(Item).where(Item.tenant_id == tenant.id, Item.id.in_([iid for iid, _ in top])))
+        ).scalars().all()
+    } if top else {}
     for iid, qty in top:
-        it = await db.get(Item, iid)
+        it = items.get(iid)
         top_out.append(
             {
                 "item_id": iid,

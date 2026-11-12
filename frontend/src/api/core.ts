@@ -141,10 +141,25 @@ const MASTER_LIST_PREFIXES: [string, string][] = [
   ["/api/v1/inventory/vendors", "vendors"],
   ["/api/v1/inventory/items", "inventory-items"],
   ["/api/v1/inventory/warehouses", "warehouses"],
+  // Finance pick-lists: any finance write (or a new customer / vendor, which can get its own ledger
+  // account) may add or rename accounts, so all four are dropped together.
+  ["/api/v1/finance/", "chart-of-accounts"],
+  ["/api/v1/finance/", "account-groups"],
+  ["/api/v1/finance/", "cost-centers"],
+  ["/api/v1/finance/", "bank-accounts"],
+  // Writes elsewhere that can create ledger accounts on the server (party / payroll / facility /
+  // LC / stock-group accounts) also refresh the account pick-list.
+  ["/api/v1/customers", "chart-of-accounts"],
+  ["/api/v1/inventory/vendors", "chart-of-accounts"],
+  ["/api/v1/inventory/stock-groups", "chart-of-accounts"],
+  ["/api/v1/hr/payroll", "chart-of-accounts"],
+  ["/api/v1/facility", "chart-of-accounts"],
+  ["/api/v1/commercial", "chart-of-accounts"],
+  ["/api/v1/settings", "chart-of-accounts"],
 ];
 
 /** After a successful create/update/delete (or a data import), drop the cached dropdown lists. */
-function forgetMasterListsAfterWrite(path: string, method: string | undefined): void {
+export function forgetMasterListsAfterWrite(path: string, method: string | undefined): void {
   const m = (method ?? "GET").toUpperCase();
   if (m === "GET" || m === "HEAD") return;
   if (path.startsWith("/api/v1/data-migration/")) {

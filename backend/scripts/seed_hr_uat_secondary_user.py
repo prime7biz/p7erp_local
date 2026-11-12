@@ -15,11 +15,13 @@ if str(backend) not in sys.path:
     sys.path.insert(0, str(backend))
 
 from app.common.auth import hash_password
+from app.common.demo_credentials import seed_password
 from app.database import AsyncSessionLocal
 from app.models import Role, Tenant, User
 
 
 async def main() -> None:
+    password = seed_password("SEED_HR_UAT_PASSWORD", "Lakhsma123")
     async with AsyncSessionLocal() as db:
         tenant = (await db.execute(select(Tenant).where(Tenant.company_code == "LAKHSMA4821"))).scalars().first()
         if not tenant:
@@ -47,14 +49,14 @@ async def main() -> None:
             role_id=role.id,
             username="hrmanager",
             email="hrmanager@lakhsma.com",
-            password_hash=await hash_password("Lakhsma123"),
+            password_hash=await hash_password(password),
             first_name="HR",
             last_name="Manager",
             is_active=True,
         )
         db.add(user)
         await db.commit()
-        print("Created secondary user: hrmanager / Lakhsma123")
+        print("Created secondary user: hrmanager (password from SEED_HR_UAT_PASSWORD, or the dev default)")
 
 
 if __name__ == "__main__":

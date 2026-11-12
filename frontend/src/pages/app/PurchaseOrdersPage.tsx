@@ -23,6 +23,9 @@ import { VendorQuickCreateModal } from "@/components/quick-create/VendorQuickCre
 import { VoucherActionReasonModal } from "@/components/vouchers/VoucherActionReasonModal";
 import { alternateToBase, parseFactor, type LineUnitMode } from "@/lib/unitConversion";
 import { useListViewPreference } from "@/hooks/useInventoryListView";
+import { isMobileUiV2Enabled } from "@/lib/mobileUi";
+import { useMobileUiV2Phone } from "@/hooks/useMobileUiV2";
+import { PhoneDisclosure, PhoneFieldLabel } from "@/components/app/PhoneDisclosure";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { sumMoneyBy } from "@/lib/money";
 import { logApiError } from "@/utils/logApiError";
@@ -39,6 +42,8 @@ import {
   listPageKpiCardClass,
   listPageRootClass,
   listPageTableCardClass,
+  mobileFieldClass,
+  mobilePageStickyActionsClass,
 } from "@/components/app/listPageLayout";
 import { useListPagination } from "@/hooks/useListPagination";
 import { useFormDirty } from "@/hooks/useFormDirty";
@@ -84,6 +89,11 @@ export function PurchaseOrdersPage() {
   const [poPage, setPoPage] = useState(1);
   const [poTotal, setPoTotal] = useState(0);
   const { isNarrow, view, setView, showCards } = useListViewPreference();
+  // mobile_ui_v2: the shared grid draws the phone cards (shared Actions menu, bulk actions, own Cards/Table setting).
+  const mobileV2 = isMobileUiV2Enabled(me?.feature_flags);
+  const legacyCards = showCards && !mobileV2;
+  const phoneUi = useMobileUiV2Phone();
+  const poFieldClass = cn("rounded border px-3 py-2 text-sm", phoneUi && mobileFieldClass);
   const latest = useLatestRequest();
 
   /** Receipt progress + received GRNs for vendor bill drafts */
@@ -331,22 +341,30 @@ export function PurchaseOrdersPage() {
         id: "po_code",
         header: "PO Code",
         alwaysVisible: true,
+        mobile: "title",
         value: (r) => r.po_code,
         cell: (r) => <span className="font-semibold text-text-primary">{r.po_code}</span>,
       },
-      { id: "supplier", header: "Supplier", value: (r) => r.supplier_name, cell: (r) => <span className="text-text-primary">{r.supplier_name}</span> },
+      {
+        id: "supplier",
+        header: "Supplier",
+        mobile: "subtitle",
+        value: (r) => r.supplier_name,
+        cell: (r) => <span className="text-text-primary">{r.supplier_name}</span>,
+      },
       {
         id: "vendor",
         header: "Vendor",
         value: (r) => (r.vendor_id ? vendorName.get(r.vendor_id) ?? `#${r.vendor_id}` : ""),
         cell: (r) => (r.vendor_id ? vendorName.get(r.vendor_id) ?? `#${r.vendor_id}` : "—"),
       },
-      { id: "currency", header: "Currency", value: (r) => r.currency ?? "", cell: (r) => r.currency || "—" },
-      { id: "status", header: "Status", value: (r) => r.status, cell: (r) => r.status },
+      { id: "currency", header: "Currency", mobile: "detail", value: (r) => r.currency ?? "", cell: (r) => r.currency || "—" },
+      { id: "status", header: "Status", mobile: "status", value: (r) => r.status, cell: (r) => r.status },
       {
         id: "items",
         header: "Items",
         enableSorting: false,
+        mobile: "detail",
         value: (r) => r.items.map((ln) => `${itemName.get(ln.item_id) || `#${ln.item_id}`} (${ln.quantity})`).join(", "),
         cell: (r) => (
           <span className="text-xs">
@@ -361,6 +379,7 @@ export function PurchaseOrdersPage() {
         alwaysVisible: true,
         noExport: true,
         enableSorting: false,
+        mobile: "actions",
         cell: (r) => {
           const st = (r.status || "").toUpperCase();
           const items: RowActionItem[] = [
@@ -425,7 +444,7 @@ export function PurchaseOrdersPage() {
         </div>
       ) : null}
       <div className={cn(listPageFilterBarClass, "sm:justify-between")}>
-        {isNarrow ? <InventoryListViewToggle value={view} onChange={setView} /> : null}
+        {isNarrow && !mobileV2 ? <InventoryListViewToggle value={view} onChange={setView} /> : null}
         <label className="flex flex-1 flex-wrap items-center gap-2 text-xs font-semibold text-text-secondary">
           Status Filter
           <input
@@ -510,43 +529,74 @@ export function PurchaseOrdersPage() {
             + New
           </button>
           </div>
-          <input
-            className="rounded border px-3 py-2 text-sm"
-            placeholder="Supplier name **"
-            value={form.supplier_name ?? ""}
-            onChange={(e) => setForm((p) => ({ ...p, supplier_name: e.target.value }))}
-          />
-          <input
-            className="rounded border px-3 py-2 text-sm"
-            placeholder="Currency (USD/BDT)"
-            value={form.currency ?? ""}
-            onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value.toUpperCase() }))}
-          />
-          <input
-            className="rounded border px-3 py-2 text-sm"
-            placeholder="FX rate to base"
-            type="number"
-            min="0"
-            step="0.000001"
-            value={form.exchange_rate_to_base ?? 1}
-            onChange={(e) =>
-              setForm((p) => ({ ...p, exchange_rate_to_base: e.target.value ? Number(e.target.value) : 1 }))
-            }
-          />
+          <PhoneFieldLabel enabled={phoneUi} label="Supplier name **">
+            <input
+              className={poFieldClass}
+              placeholder="Supplier name **"
+              value={form.supplier_name ?? ""}
+              onChange={(e) => setForm((p) => ({ ...p, supplier_name: e.target.value }))}
+            />
+          </PhoneFieldLabel>
+          <PhoneFieldLabel enabled={phoneUi} label="Currency">
+            <input
+              className={poFieldClass}
+              placeholder="Currency (USD/BDT)"
+              value={form.currency ?? ""}
+              onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value.toUpperCase() }))}
+            />
+          </PhoneFieldLabel>
+          <PhoneFieldLabel enabled={phoneUi} label="FX rate to base">
+            <input
+              className={poFieldClass}
+              placeholder="FX rate to base"
+              type="number"
+              min="0"
+              step="0.000001"
+              inputMode={phoneUi ? "decimal" : undefined}
+              value={form.exchange_rate_to_base ?? 1}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, exchange_rate_to_base: e.target.value ? Number(e.target.value) : 1 }))
+              }
+            />
+          </PhoneFieldLabel>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-          <input className="rounded border px-3 py-2 text-sm" type="date" value={form.order_date ?? ""} onChange={(e) => setForm((p) => ({ ...p, order_date: e.target.value }))} />
-          <input className="rounded border px-3 py-2 text-sm" type="date" value={form.expected_date ?? ""} onChange={(e) => setForm((p) => ({ ...p, expected_date: e.target.value }))} />
-          <input
-            className="rounded border px-3 py-2 text-sm"
-            type="number"
-            min="0"
-            step="1"
-            placeholder="BTB LC ID (optional)"
-            value={form.btb_lc_id ?? ""}
-            onChange={(e) => setForm((p) => ({ ...p, btb_lc_id: e.target.value ? Number(e.target.value) : null }))}
-          />
-          <input className="rounded border px-3 py-2 text-sm" placeholder="Notes" value={form.notes ?? ""} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} />
+          {phoneUi ? (
+            <>
+              <label className="text-xs text-text-muted">
+                Order date
+                <input className={cn(poFieldClass, "mt-0.5 w-full")} type="date" value={form.order_date ?? ""} onChange={(e) => setForm((p) => ({ ...p, order_date: e.target.value }))} />
+              </label>
+              <label className="text-xs text-text-muted">
+                Expected date
+                <input className={cn(poFieldClass, "mt-0.5 w-full")} type="date" value={form.expected_date ?? ""} onChange={(e) => setForm((p) => ({ ...p, expected_date: e.target.value }))} />
+              </label>
+            </>
+          ) : (
+            <>
+              <input className={poFieldClass} type="date" value={form.order_date ?? ""} onChange={(e) => setForm((p) => ({ ...p, order_date: e.target.value }))} />
+              <input className={poFieldClass} type="date" value={form.expected_date ?? ""} onChange={(e) => setForm((p) => ({ ...p, expected_date: e.target.value }))} />
+            </>
+          )}
+          <PhoneDisclosure
+            enabled={phoneUi}
+            title="BTB LC and notes (optional)"
+            defaultOpen={Boolean(form.btb_lc_id || form.notes)}
+          >
+            <div className={phoneUi ? "grid gap-2" : "contents"}>
+              <input
+                className={poFieldClass}
+                type="number"
+                min="0"
+                step="1"
+                inputMode={phoneUi ? "numeric" : undefined}
+                placeholder="BTB LC ID (optional)"
+                value={form.btb_lc_id ?? ""}
+                onChange={(e) => setForm((p) => ({ ...p, btb_lc_id: e.target.value ? Number(e.target.value) : null }))}
+              />
+              <input className={poFieldClass} placeholder="Notes" value={form.notes ?? ""} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} />
+            </div>
+          </PhoneDisclosure>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
           <div className="flex gap-1">
@@ -611,22 +661,24 @@ export function PurchaseOrdersPage() {
             + New
           </button>
           </div>
-          <select className="rounded border px-3 py-2 text-sm" value={line.warehouse_id ?? ""} onChange={(e) => setLine((p) => ({ ...p, warehouse_id: e.target.value ? Number(e.target.value) : null }))}>
+          <select className={poFieldClass} value={line.warehouse_id ?? ""} onChange={(e) => setLine((p) => ({ ...p, warehouse_id: e.target.value ? Number(e.target.value) : null }))}>
             {warehouses.map((wh) => <option key={wh.id} value={wh.id}>{wh.name}</option>)}
           </select>
           <input
-            className="rounded border px-3 py-2 text-sm"
+            className={poFieldClass}
             placeholder={lineUnit === "alternate" && lineAltUnit ? `Qty (${lineAltUnit})` : "Qty"}
+            inputMode={phoneUi ? "decimal" : undefined}
             value={line.quantity}
             onChange={(e) => setLine((p) => ({ ...p, quantity: e.target.value }))}
           />
           <input
-            className="rounded border px-3 py-2 text-sm"
+            className={poFieldClass}
             placeholder={lineUnit === "alternate" && lineAltUnit ? `Price per ${lineAltUnit}` : "Unit price"}
+            inputMode={phoneUi ? "decimal" : undefined}
             value={line.unit_price}
             onChange={(e) => setLine((p) => ({ ...p, unit_price: e.target.value }))}
           />
-          <button type="button" className="rounded border border-border-strong px-3 py-2 text-sm" onClick={addPoLine}>
+          <button type="button" className={cn("rounded border border-border-strong px-3 py-2 text-sm", phoneUi && "min-h-11")} onClick={addPoLine}>
             Add Line
           </button>
         </div>
@@ -682,7 +734,15 @@ export function PurchaseOrdersPage() {
             Vendor default currency applied: {selectedVendor.default_currency}
           </div>
         )}
-        <button className="rounded bg-brand-primary px-3 py-2 text-sm font-medium text-brand-primary-foreground">Create Purchase Order</button>
+        {phoneUi ? (
+          <div className={mobilePageStickyActionsClass}>
+            <button className="min-h-11 w-full rounded bg-brand-primary px-3 py-2 text-sm font-medium text-brand-primary-foreground">
+              Create Purchase Order
+            </button>
+          </div>
+        ) : (
+          <button className="rounded bg-brand-primary px-3 py-2 text-sm font-medium text-brand-primary-foreground">Create Purchase Order</button>
+        )}
       </form>
 
       {loading ? (
@@ -698,7 +758,7 @@ export function PurchaseOrdersPage() {
         />
       ) : (
         <>
-        {showCards ? (
+        {legacyCards ? (
         <div className="space-y-3">
           {orders.map((row) => (
             <div key={row.id} className={listPageKpiCardClass}>
@@ -817,6 +877,7 @@ export function PurchaseOrdersPage() {
           <DataGrid
             tableKey="inventory.purchase-orders"
             exportName="purchase-orders"
+            mobileCards={mobileV2}
             columns={poColumns}
             rows={orders}
             getRowId={(r) => r.id}
@@ -834,6 +895,7 @@ export function PurchaseOrdersPage() {
                     onClick={() => void bulkSetPoStatus(selected, target, clear)}
                     className={cn(
                       "rounded-lg border bg-surface-raised px-2.5 py-1 font-medium disabled:opacity-50",
+                      mobileV2 && "max-md:min-h-11 max-md:px-3 max-md:text-sm",
                       target === "CANCELLED"
                         ? "border-status-danger/40 text-status-danger hover:bg-status-danger-subtle"
                         : "border-border-strong text-text-secondary hover:bg-surface-subtle",
@@ -861,7 +923,7 @@ export function PurchaseOrdersPage() {
           />
         </div>
       )}
-      {!loading && poTotal > 0 && showCards ? (
+      {!loading && poTotal > 0 && legacyCards ? (
         <div className={listPageTableCardClass}>
           <DataTablePagination
             page={poPage}

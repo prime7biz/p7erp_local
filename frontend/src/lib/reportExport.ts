@@ -30,7 +30,7 @@ type XlsxCell = string | number | null | undefined;
  * loaded only when someone exports, so it does not grow the main bundle.
  */
 export async function downloadXlsx(headers: string[], rows: XlsxCell[][], baseName: string): Promise<void> {
-  const { default: writeXlsxFile } = await import("write-excel-file");
+  const { default: writeXlsxFile } = await import("write-excel-file/browser");
   const data = [
     headers.map((h) => ({ value: h, fontWeight: "bold" as const })),
     ...rows.map((line) =>
@@ -39,7 +39,7 @@ export async function downloadXlsx(headers: string[], rows: XlsxCell[][], baseNa
       ),
     ),
   ];
-  const blob = await writeXlsxFile(data, {});
+  const blob = await writeXlsxFile(data).toBlob();
   await saveBlob(blob, `${baseName}_${timestampForFilename(new Date())}.xlsx`);
 }
 

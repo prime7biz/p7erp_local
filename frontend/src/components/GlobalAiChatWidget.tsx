@@ -118,7 +118,9 @@ export function GlobalAiChatWidget() {
 
           <div className="border-t border-border bg-surface-raised p-3">
             {error ? <p className="mb-2 text-xs text-status-danger">{error}</p> : null}
-            {sending ? <p className="mb-2 text-xs text-text-muted">Local AI is thinking...</p> : null}
+            {sending ? (
+              <p className="mb-2 text-xs text-text-muted">AI is thinking... checking your data can take up to 30 seconds.</p>
+            ) : null}
             {approvingEscalationId ? <p className="mb-2 text-xs text-text-muted">Cloud AI is processing...</p> : null}
             {screen ? (
               <div className="mb-2 flex items-center gap-2 text-xs">

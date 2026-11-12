@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.models import AlertScanLog
 from app.modules.merch import alert_engine
 from app.workers import party_ledger_worker
+from tests.bd_hr_fixtures import real_db  # noqa: F401  (pytest fixture)
 from tests.conftest import _async_database_url
 from tests.merch_fixtures import create_merch_tenant_with_user
 
@@ -94,3 +95,62 @@ async def test_alert_scan_failing_rule_keeps_other_rule_results(db_session_integ
         )
     ).all()
     assert [tuple(r) for r in logs] == [("bad_rule", "failed"), ("good_rule", "completed")]
+
+
+async def _migration_job(factory, register) -> tuple[int, int]:
+    from app.common.platform_jobs import JOB_TYPE_DATA_MIGRATION
+    from app.models import PlatformBackgroundJob
+
+    async with factory() as db:
+        tenant, _user, _ = await create_merch_tenant_with_user(db)
+        job = PlatformBackgroundJob(job_type=JOB_TYPE_DATA_MIGRATION, status="queued")
+        db.add(job)
+        await db.commit()
+        register(tenant.id)
+        return tenant.id, job.id
+
+
+async def _job_status(factory, job_id: int) -> str:
+    from app.models import PlatformBackgroundJob
+
+    async with factory() as db:
+        return (await db.get(PlatformBackgroundJob, job_id)).status
+
+
+async def _drop_job(factory, job_id: int) -> None:
+    async with factory() as db:
+        await db.execute(text("DELETE FROM platform_background_jobs WHERE id = :i"), {"i": job_id})
+        await db.commit()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fail", [False, True])
+async def test_data_migration_import_runs_pinned_to_its_tenant(real_db, monkeypatch, fail):
+    """RC-09: with RLS on, the import may only touch its own tenant; job bookkeeping stays platform-level."""
+    from app.common import rls
+    from app.workers import platform_worker
+
+    factory, register = real_db
+    tenant_id, job_id = await _migration_job(factory, register)
+    seen: dict[str, int | None] = {}
+
+    async def fake_import(db, tenant, entity_type, csv_text, dry_run):
+        seen["pinned_to"] = rls.session_rls_tenant_id(db)
+        seen["tenant"] = tenant.id
+        if fail:
+            raise RuntimeError("bad csv")
+        return {"total_rows": 0, "ok_count": 0, "error_count": 0, "errors": []}
+
+    monkeypatch.setattr(rls, "rls_session_enabled", lambda: True)
+    monkeypatch.setattr(platform_worker, "AsyncSessionLocal", factory)
+    monkeypatch.setattr(platform_worker, "run_import", fake_import)
+    try:
+        if fail:
+            with pytest.raises(RuntimeError):
+                await platform_worker._run_data_migration_import(job_id, tenant_id, "customers", "", None)
+        else:
+            await platform_worker._run_data_migration_import(job_id, tenant_id, "customers", "", None)
+        assert seen == {"pinned_to": tenant_id, "tenant": tenant_id}
+        assert await _job_status(factory, job_id) == ("failed" if fail else "completed")
+    finally:
+        await _drop_job(factory, job_id)

@@ -13,6 +13,7 @@ import { RowActionsMenu } from "@/components/app/RowActionsMenu";
 import { logApiError } from "@/utils/logApiError";
 import { downloadCsv } from "@/lib/reportExport";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useConfirm } from "@/components/app/useConfirm";
 
 const defaultForm: ChartOfAccountCreate = {
   account_number: "",
@@ -34,6 +35,7 @@ const defaultForm: ChartOfAccountCreate = {
 };
 
 export function ChartOfAccountsPage() {
+  const confirm = useConfirm();
   const [groups, setGroups] = useState<AccountGroupResponse[]>([]);
   const [rows, setRows] = useState<ChartOfAccountResponse[]>([]);
   const [showInactive, setShowInactive] = useState(false);
@@ -141,7 +143,7 @@ export function ChartOfAccountsPage() {
   }
 
   async function remove(id: number) {
-    if (!window.confirm("Delete this ledger account?")) return;
+    if (!(await confirm({ title: "Delete this ledger account?", danger: true }))) return;
     try {
       await api.deleteChartOfAccount(id);
       await load();

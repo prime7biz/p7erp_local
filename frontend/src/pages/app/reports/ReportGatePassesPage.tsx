@@ -3,6 +3,7 @@ import { api, type EnhancedGatePassResponse } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
 import { saveBlob } from "@/lib/fileSave";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
 
 function toCsv(rows: EnhancedGatePassResponse[]) {
   const h = ["gate_pass_code", "status", "purpose", "destination", "vehicle_no", "guard_ack"];
@@ -55,29 +56,29 @@ export function ReportGatePassesPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">Gate Pass Register</h1>
-          <p className="text-text-muted text-sm mt-0.5">Enhanced gate passes (inventory).</p>
-        </div>
-        <div className="flex gap-2">
-          <input
-            className="rounded border border-border-strong px-2 py-1 text-sm"
-            placeholder="Status filter"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          />
-          <button type="button" className="rounded border border-border px-3 py-1 text-sm" onClick={exportCsv}>
-            Export CSV
-          </button>
-        </div>
-      </header>
+      <AppPageHeader
+        title="Gate Pass Register"
+        description="Enhanced gate passes (inventory)."
+        actions={
+          <>
+            <input
+              className="rounded border border-border-strong px-2 py-1 text-sm"
+              placeholder="Status filter"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            />
+            <button type="button" className="rounded border border-border px-3 py-1 text-sm" onClick={exportCsv}>
+              Export CSV
+            </button>
+          </>
+        }
+      />
       {error && (
         <div className="rounded-lg bg-status-danger-subtle border border-status-danger/20 px-4 py-3 text-sm text-status-danger-foreground">
           {error}
         </div>
       )}
-      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+      <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
         {loading ? (
           <div className="space-y-3 p-6"><div className="h-4 w-3/4 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-full animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-5/6 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-2/3 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-4/5 animate-pulse rounded bg-surface-subtle" /></div>
         ) : rows.length === 0 ? (

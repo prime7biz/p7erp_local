@@ -263,7 +263,7 @@ async def test_sale_bill_receipt_fifo_and_manual(db_session_integration):
     await db.refresh(bills[1])
     assert bills[1].status == "SETTLED"
 
-    await update_party_ledger_balance(db, pl.id)
+    await update_party_ledger_balance(db, pl.id, tenant_id=pl.tenant_id)
     await db.refresh(pl)
     assert Decimal(str(pl.current_balance)) == Decimal("0")
 
@@ -368,7 +368,7 @@ async def test_overdue_interest_statement_aging_cancel(db_session_integration):
     await db.refresh(bill)
     assert bill.status == "OVERDUE"
 
-    interest = await calculate_bill_interest(db, bill.id)
+    interest = await calculate_bill_interest(db, bill.id, tenant_id=bill.tenant_id)
     assert interest > 0
 
     maint = await daily_party_ledger_maintenance(db, tenant.id, feature_flags=tenant.feature_flags)

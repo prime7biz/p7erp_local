@@ -257,6 +257,9 @@ class PayrollEmployeeStructureAssignment(Base):
     effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
     base_salary: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     component_overrides: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Migration 290: JOINING / INCREMENT / PROMOTION / CORRECTION (CHECK), null on older rows.
+    change_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    change_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

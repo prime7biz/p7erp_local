@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type DeliveryChallanResponse } from "@/api/client";
-import { logApiError } from "@/utils/logApiError";
+import { logApiError } from "@/utils/logApiError";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
 
 export function ReportChallansPage() {
   const [rows, setRows] = useState<DeliveryChallanResponse[]>([]);
@@ -41,10 +42,7 @@ export function ReportChallansPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-text-primary">Delivery Challans Report</h1>
-        <p className="text-text-muted text-sm mt-0.5">Outbound delivery challans and line counts.</p>
-      </header>
+      <AppPageHeader title="Delivery Challans Report" description="Outbound delivery challans and line counts." />
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-lg border border-border bg-surface-raised p-4">
           <div className="text-xs text-text-muted uppercase">Total</div>
@@ -73,7 +71,7 @@ export function ReportChallansPage() {
           {error}
         </div>
       )}
-      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+      <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
         {loading ? (
           <div className="space-y-3 p-6"><div className="h-4 w-3/4 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-full animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-5/6 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-2/3 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-4/5 animate-pulse rounded bg-surface-subtle" /></div>
         ) : rows.length === 0 ? (

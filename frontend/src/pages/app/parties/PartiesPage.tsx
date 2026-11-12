@@ -10,6 +10,7 @@ import {
   type IntermediaryUpdate,
 } from "@/api/client";
 import { getCustomersCached } from "@/lib/masterData";
+import { useConfirm } from "@/components/app/useConfirm";
 
 type PartiesTab = "buying_houses" | "agents" | "links";
 
@@ -34,6 +35,7 @@ const emptyLinkForm: CustomerIntermediaryLinkCreate = {
 };
 
 export function PartiesPage() {
+  const confirm = useConfirm();
   const [activeTab, setActiveTab] = useState<PartiesTab>("buying_houses");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -121,7 +123,7 @@ export function PartiesPage() {
   };
 
   const removeIntermediary = async (id: number) => {
-    if (!window.confirm("Delete this party?")) return;
+    if (!(await confirm({ title: "Delete this party?", danger: true }))) return;
     setError("");
     try {
       await api.deleteIntermediary(id);
@@ -176,7 +178,7 @@ export function PartiesPage() {
   };
 
   const removeLink = async (id: number) => {
-    if (!window.confirm("Delete this customer link?")) return;
+    if (!(await confirm({ title: "Delete this customer link?", danger: true }))) return;
     setError("");
     try {
       await api.deleteCustomerIntermediaryLink(id);

@@ -7,6 +7,7 @@ import { downloadCsv, downloadXlsx, printCurrentPage } from "@/lib/reportExport"
 import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
+import { getChartOfAccountsCached, getAccountGroupsCached } from "@/lib/masterData";
 
 const CTL =
   "rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20";
@@ -62,8 +63,8 @@ export function DayBookPage() {
     try {
       const [types, accountGroups, chartAccounts] = await Promise.all([
         api.getVoucherTypesMeta(),
-        api.listAccountGroups(),
-        api.listChartOfAccounts({ active_only: true }),
+        getAccountGroupsCached(),
+        getChartOfAccountsCached({ active_only: true }),
       ]);
       setVoucherTypes(types);
       setGroups(accountGroups);

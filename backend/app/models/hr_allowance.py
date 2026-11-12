@@ -1,5 +1,5 @@
 """Company allowances and bonuses (migration 287): tiffin / dinner / night bills, production bonus,
-festival-bonus allocations.
+festival-bonus allocations. Migration 290: lunch + Friday bills and per-employee switches.
 
 Accounting ownership: each entry is paid either through one payroll run line
 (``payroll_run_line_id``) or one final settlement (``final_settlement_id``), never both.
@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, true
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,9 +24,9 @@ class HrAllowanceRule(Base):
     __tablename__ = "hr_allowance_rules"
     __table_args__ = (
         UniqueConstraint("tenant_id", "code", name="uq_hr_allowance_rule_code"),
-        CheckConstraint("bill_type IN ('TIFFIN','DINNER','NIGHT')", name="ck_hr_allowance_rule_type"),
+        CheckConstraint("bill_type IN ('TIFFIN','LUNCH','DINNER','NIGHT','FRIDAY')", name="ck_hr_allowance_rule_type"),
         CheckConstraint(
-            "eligibility_basis IN ('PRESENT','NIGHT_SHIFT','MIN_WORK_MINUTES','MIN_OT_MINUTES')",
+            "eligibility_basis IN ('PRESENT','NIGHT_SHIFT','MIN_WORK_MINUTES','MIN_OT_MINUTES','WEEKLY_HOLIDAY')",
             name="ck_hr_allowance_rule_basis",
         ),
         CheckConstraint("status IN ('DRAFT','APPROVED','RETIRED')", name="ck_hr_allowance_rule_status"),
@@ -81,6 +81,35 @@ class HrAllowanceEntry(Base):
         ForeignKey("hr_final_settlements.id", ondelete="RESTRICT"), nullable=True, index=True
     )
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class HrEmployeePayBenefit(Base):
+    """Per-employee switch for overtime and the company bills (migration 290).
+
+    No row means enabled at the company rate. ``amount_override`` replaces the rule amount per
+    qualifying day; OVERTIME is priced from salary, so it never has an amount (CHECK).
+    """
+
+    __tablename__ = "hr_employee_pay_benefits"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "employee_id", "benefit_code", name="uq_hr_employee_pay_benefit"),
+        CheckConstraint(
+            "benefit_code IN ('OVERTIME','FRIDAY','TIFFIN','LUNCH','DINNER','NIGHT')",
+            name="ck_hr_employee_pay_benefit_code",
+        ),
+        CheckConstraint("amount_override IS NULL OR amount_override >= 0", name="ck_hr_employee_pay_benefit_amount"),
+        CheckConstraint("benefit_code <> 'OVERTIME' OR amount_override IS NULL", name="ck_hr_employee_pay_benefit_ot_amount"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("hr_employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    benefit_code: Mapped[str] = mapped_column(String(16), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())
+    amount_override: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -115,8 +115,8 @@ def build_reducing_schedule(
 
 def preview_emi(
     *,
-    principal: float,
-    annual_interest_rate_percent: float,
+    principal: Decimal | float | str,
+    annual_interest_rate_percent: Decimal | float | str,
     repayment_policy: str,
     num_installments: int | None,
     installment_frequency: str = "monthly",

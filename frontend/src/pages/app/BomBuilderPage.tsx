@@ -11,9 +11,11 @@ import { BomLinkedPosDrawer } from "@/components/merch/bom/BomLinkedPosDrawer";
 import { useBomPage } from "@/components/merch/bom/useBomPage";
 import type { OrderDrivenBomLine } from "@/api/client";
 import { useFormDirty } from "@/hooks/useFormDirty";
-import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
+import { useConfirm } from "@/components/app/useConfirm";
 
-export function BomBuilderPage() {
+export function BomBuilderPage() {
+  const confirm = useConfirm();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const {
@@ -335,7 +337,7 @@ export function BomBuilderPage() {
               onCreatePo={setPoLine}
               onViewPos={(line) => setLinkedLineId(line.id)}
               onDelete={async (line) => {
-                if (!window.confirm("Delete this line?")) return;
+                if (!(await confirm({ title: "Delete this line?", danger: true }))) return;
                 clearFlash();
                 await deleteLine(bom.id, line.id);
               }}

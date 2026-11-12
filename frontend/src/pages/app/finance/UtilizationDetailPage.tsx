@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, type FacilityUtilizationRow } from "@/api/client";
-import { logApiError } from "@/utils/logApiError";
+import { logApiError } from "@/utils/logApiError";
+import { toast } from "sonner";
 
 function rowClass(status: string) {
   if (status === "paid") return "bg-emerald-50";
@@ -42,7 +43,7 @@ export function UtilizationDetailPage() {
     try {
       const activateRes = await api.activateFacilityUtilization(id);
       const vid = (activateRes as { disbursement_voucher_id?: number }).disbursement_voucher_id;
-      if (vid) window.alert(`Disbursement draft voucher #${vid} created. Post it from Vouchers to draw down.`);
+      if (vid) toast.success(`Disbursement draft voucher #${vid} created. Post it from Vouchers to draw down.`);
       const detail = await api.getFacilityUtilization(id);
       setUtil(detail.utilization);
       setSchedule(detail.schedule);

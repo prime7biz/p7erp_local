@@ -81,7 +81,12 @@ from app.common.ownership import ensure_all_owned, ensure_owned
 from app.common.tenant import require_tenant
 from app.config import get_settings
 from app.database import get_db, safe_async_session_rollback
-from app.modules.finance.auto_posting_service import AutoPostingLine, create_system_voucher
+from app.modules.finance.auto_posting_service import (
+    AutoPostingLine,
+    create_system_voucher,
+    quantize_amount,
+    to_money_decimal,
+)
 from app.modules.finance.voucher_signature import apply_voucher_signature, voucher_signature_payload
 from app.modules.finance.exposure_service import build_maturity_ladder, compute_master_lc_exposure
 from app.models import (
@@ -5622,7 +5627,7 @@ async def settlement_audit(
     status_filter: str | None = Query(default=None),
     source_currency: str | None = Query(default=None),
     party_query: str | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=1000),
+    limit: int = Query(default=100, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -7794,10 +7799,10 @@ async def post_vendor_bill(
     lines = list(lr.scalars().all())
     if not lines:
         raise HTTPException(status_code=400, detail="Vendor bill has no lines")
-    total = sum(float(str(ln.line_total or 0).replace(",", "") or 0) for ln in lines)
+    total = sum((to_money_decimal(ln.line_total or 0, field="line_total") for ln in lines), Decimal("0"))
     if total <= 0:
         raise HTTPException(status_code=400, detail="Vendor bill total must be greater than zero")
-    amt = Decimal(str(round(total, 4)))
+    amt = quantize_amount(total)
 
     voucher = await create_system_voucher(
         db,

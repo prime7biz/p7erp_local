@@ -25,7 +25,11 @@ async def search_sales_orders(db: AsyncSession, *, tenant_id: int, prompt: str) 
     today = date.today()
     stmt = (
         select(Order, Customer)
-        .join(Customer, Customer.id == Order.customer_id, isouter=True)
+        .join(
+            Customer,
+            and_(Customer.id == Order.customer_id, Customer.tenant_id == tenant_id),
+            isouter=True,
+        )
         .where(Order.tenant_id == tenant_id)
     )
 

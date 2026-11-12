@@ -70,13 +70,13 @@ const INQ_INPUT =
 
 /** Labels and shells for fields that must be set before save (customer + style). */
 const REQUIRED_LABEL =
-  "block text-xs font-semibold text-amber-900 dark:text-amber-200 mb-1";
+  "block text-xs font-semibold text-amber-900 mb-1";
 function requiredSelectShell(filled: boolean): string {
   return cn(
     "w-full rounded-lg px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-0",
     filled
       ? "border border-border-strong"
-      : "border-2 border-amber-400/90 bg-amber-50/60 dark:border-amber-600 dark:bg-amber-950/35",
+      : "border-2 border-amber-400/90 bg-amber-50/60",
   );
 }
 
@@ -1110,7 +1110,7 @@ export function InquiryCreatePage() {
                         "w-full rounded px-3 py-2 text-sm",
                         quickStyleName.trim()
                           ? "border border-status-info/30"
-                          : "border-2 border-amber-400/90 bg-amber-50/60 dark:border-amber-600 dark:bg-amber-950/35",
+                          : "border-2 border-amber-400/90 bg-amber-50/60",
                       )}
                     />
                   </div>

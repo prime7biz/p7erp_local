@@ -275,108 +275,191 @@ async def rule_order_missing_tna(
     return out
 
 
+class _ConsumptionLine:
+    """One BOM line of an order that has consumption issues (all lookups pre-loaded)."""
+
+    __slots__ = ("order", "style_id", "order_qty", "bom", "line", "item", "category", "actual")
+
+    def __init__(self, order, style_id, order_qty, bom, line, item, category, actual):
+        self.order = order
+        self.style_id = style_id
+        self.order_qty = order_qty
+        self.bom = bom
+        self.line = line
+        self.item = item
+        self.category = category
+        self.actual = actual
+
+
+async def _consumption_lines(db: AsyncSession, tenant_id: int, *, with_categories: bool) -> list[_ConsumptionLine]:
+    """Orders with consumption issues x their style's latest BOM lines, in a fixed number of queries
+    (no per-order / per-line lookups, so scans stay fast as orders grow)."""
+    ref_ids = [
+        r
+        for r in (
+            await db.execute(
+                select(StockMovement.reference_id).where(
+                    StockMovement.tenant_id == tenant_id,
+                    StockMovement.reference_type == "CONSUMPTION_ISSUE",
+                    StockMovement.reference_id.isnot(None),
+                ).distinct()
+            )
+        ).scalars().all()
+        if r is not None
+    ]
+    if not ref_ids:
+        return []
+    orders = list(
+        (
+            await db.execute(
+                select(Order).where(
+                    Order.tenant_id == tenant_id,
+                    Order.id.in_(ref_ids),
+                    Order.quotation_id.isnot(None),
+                )
+            )
+        ).scalars().all()
+    )
+    if not orders:
+        return []
+    quotation_ids = {o.quotation_id for o in orders if o.quotation_id}
+    style_by_quotation = dict(
+        (
+            await db.execute(
+                select(Quotation.id, Quotation.style_id).where(
+                    Quotation.tenant_id == tenant_id, Quotation.id.in_(quotation_ids)
+                )
+            )
+        ).all()
+    )
+    style_ids = {s for s in style_by_quotation.values() if s}
+    if not style_ids:
+        return []
+    latest_bom: dict[int, Bom] = {}
+    for bom in (
+        await db.execute(
+            select(Bom)
+            .where(Bom.tenant_id == tenant_id, Bom.style_id.in_(style_ids))
+            .order_by(Bom.style_id, Bom.version_no.desc())
+        )
+    ).scalars().all():
+        latest_bom.setdefault(bom.style_id, bom)
+    if not latest_bom:
+        return []
+    lines_by_bom: dict[int, list[BomItem]] = {}
+    for line in (
+        await db.execute(
+            select(BomItem).where(
+                BomItem.tenant_id == tenant_id,
+                BomItem.bom_id.in_([b.id for b in latest_bom.values()]),
+                BomItem.item_id.isnot(None),
+            )
+        )
+    ).scalars().all():
+        lines_by_bom.setdefault(line.bom_id, []).append(line)
+    item_ids = {ln.item_id for lines in lines_by_bom.values() for ln in lines}
+    if not item_ids:
+        return []
+    items = {
+        it.id: it
+        for it in (
+            await db.execute(select(Item).where(Item.tenant_id == tenant_id, Item.id.in_(item_ids)))
+        ).scalars().all()
+    }
+    categories: dict[int, ItemCategory] = {}
+    if with_categories:
+        cat_ids = {it.category_id for it in items.values() if it.category_id}
+        if cat_ids:
+            categories = {
+                c.id: c
+                for c in (
+                    await db.execute(
+                        select(ItemCategory).where(ItemCategory.tenant_id == tenant_id, ItemCategory.id.in_(cat_ids))
+                    )
+                ).scalars().all()
+            }
+    actual: dict[tuple[int, int], float] = {}
+    for ref_id, item_id, qty, mtype in (
+        await db.execute(
+            select(StockMovement.reference_id, StockMovement.item_id, StockMovement.quantity, StockMovement.movement_type)
+            .where(
+                StockMovement.tenant_id == tenant_id,
+                StockMovement.reference_type == "CONSUMPTION_ISSUE",
+                StockMovement.reference_id.in_([o.id for o in orders]),
+                StockMovement.item_id.in_(item_ids),
+            )
+        )
+    ).all():
+        if (mtype or "").upper() == "OUT":
+            actual[(ref_id, item_id)] = actual.get((ref_id, item_id), 0.0) + _to_float(qty)
+
+    out: list[_ConsumptionLine] = []
+    for order in orders:
+        style_id = style_by_quotation.get(order.quotation_id)
+        if not style_id:
+            continue
+        order_qty = _to_float(str(order.quantity)) if order.quantity is not None else 0.0
+        if order_qty <= 0:
+            continue
+        bom = latest_bom.get(style_id)
+        if not bom:
+            continue
+        for line in lines_by_bom.get(bom.id, []):
+            item = items.get(line.item_id)
+            if not item:
+                continue
+            cat = categories.get(item.category_id) if item.category_id else None
+            out.append(
+                _ConsumptionLine(order, style_id, order_qty, bom, line, item, cat, actual.get((order.id, line.item_id), 0.0))
+            )
+    return out
+
+
 async def rule_wastage_vs_bom(
     db: AsyncSession, tenant_id: int, config: dict[str, Any] | None
 ) -> list[dict[str, Any]]:
     """Orders with actual consumption vs BOM above threshold (reuse wastage report logic)."""
     threshold = (config or {}).get("wastage_threshold_pct", WASTAGE_THRESHOLD_PCT)
-    mov_result = await db.execute(
-        select(StockMovement.reference_id).where(
-            StockMovement.tenant_id == tenant_id,
-            StockMovement.reference_type == "CONSUMPTION_ISSUE",
-            StockMovement.reference_id.isnot(None),
-        ).distinct()
-    )
-    ref_ids = [r[0] for r in mov_result.scalars().all() if r[0] is not None]
-    if not ref_ids:
-        return []
-    from app.models import GarmentStyle
-    ord_stmt = select(Order).where(
-        Order.tenant_id == tenant_id,
-        Order.id.in_(ref_ids),
-        Order.quotation_id.isnot(None),
-    )
-    ord_result = await db.execute(ord_stmt)
-    orders = list(ord_result.scalars().all())
     out: list[dict[str, Any]] = []
-    for order in orders:
-        if not order.quotation_id:
+    for c in await _consumption_lines(db, tenant_id, with_categories=False):
+        order, line = c.order, c.line
+        base = _to_float(line.base_consumption)
+        wastage = _to_float(line.wastage_pct) / 100.0
+        expected = c.order_qty * base * (1.0 + wastage)
+        actual = c.actual
+        if expected <= 0:
             continue
-        quotation = await db.get(Quotation, order.quotation_id)
-        if not quotation or quotation.tenant_id != tenant_id or not quotation.style_id:
+        wastage_pct = (actual - expected) / expected * 100.0
+        if wastage_pct < threshold:
             continue
-        style_id = quotation.style_id
-        order_qty = _to_float(str(order.quantity)) if order.quantity is not None else 0.0
-        if order_qty <= 0:
-            continue
-        bom_result = await db.execute(
-            select(Bom).where(
-                Bom.tenant_id == tenant_id,
-                Bom.style_id == style_id,
-            ).order_by(Bom.version_no.desc()).limit(1)
-        )
-        bom = bom_result.scalar_one_or_none()
-        if not bom:
-            continue
-        lines_result = await db.execute(
-            select(BomItem).where(
-                BomItem.tenant_id == tenant_id,
-                BomItem.bom_id == bom.id,
-                BomItem.item_id.isnot(None),
-            )
-        )
-        for line in lines_result.scalars().all():
-            item = await db.get(Item, line.item_id)
-            if not item or item.tenant_id != tenant_id:
-                continue
-            base = _to_float(line.base_consumption)
-            wastage = _to_float(line.wastage_pct) / 100.0
-            expected = order_qty * base * (1.0 + wastage)
-            mov_q = await db.execute(
-                select(StockMovement).where(
-                    StockMovement.tenant_id == tenant_id,
-                    StockMovement.reference_type == "CONSUMPTION_ISSUE",
-                    StockMovement.reference_id == order.id,
-                    StockMovement.item_id == line.item_id,
-                )
-            )
-            actual = sum(
-                _to_float(m.quantity) for m in mov_q.scalars().all()
-                if (m.movement_type or "").upper() == "OUT"
-            )
-            if expected <= 0:
-                continue
-            wastage_pct = (actual - expected) / expected * 100.0
-            if wastage_pct < threshold:
-                continue
-            severity = "high" if wastage_pct >= 25 else "medium"
-            item_code = item.item_code or str(line.item_id)
-            out.append({
-                "natural_key": f"wastage_vs_bom:order:{order.id}:item:{line.item_id}",
-                "title": f"Order {order.order_code} · {item_code} wastage vs BOM",
-                "description": f"Wastage vs BOM: {wastage_pct:+.1f}% (expected {expected:.2f}, actual {actual:.2f}).",
-                "severity": severity,
-                "reason_text": f"Expected {expected:.2f}, actual {actual:.2f}; {wastage_pct:+.1f}%.",
-                "recommended_action": "Investigate cause; log variance; adjust BOM or process.",
-                "entity_type": "order",
-                "entity_id": order.id,
-                "order_id": order.id,
-                "evidence_json": _evidence_schema_v1(
-                    "wastage_vs_bom",
-                    thresholds={"wastage_threshold_pct": threshold},
-                    facts={
-                        "order_id": order.id,
-                        "order_code": order.order_code,
-                        "style_id": style_id,
-                        "bom_id": bom.id,
-                        "item_id": line.item_id,
-                        "item_code": item_code,
-                        "expected_qty": round(expected, 4),
-                        "actual_qty": round(actual, 4),
-                        "wastage_pct_vs_bom": round(wastage_pct, 2),
-                    },
-                ),
-            })
+        severity = "high" if wastage_pct >= 25 else "medium"
+        item_code = c.item.item_code or str(line.item_id)
+        out.append({
+            "natural_key": f"wastage_vs_bom:order:{order.id}:item:{line.item_id}",
+            "title": f"Order {order.order_code} · {item_code} wastage vs BOM",
+            "description": f"Wastage vs BOM: {wastage_pct:+.1f}% (expected {expected:.2f}, actual {actual:.2f}).",
+            "severity": severity,
+            "reason_text": f"Expected {expected:.2f}, actual {actual:.2f}; {wastage_pct:+.1f}%.",
+            "recommended_action": "Investigate cause; log variance; adjust BOM or process.",
+            "entity_type": "order",
+            "entity_id": order.id,
+            "order_id": order.id,
+            "evidence_json": _evidence_schema_v1(
+                "wastage_vs_bom",
+                thresholds={"wastage_threshold_pct": threshold},
+                facts={
+                    "order_id": order.id,
+                    "order_code": order.order_code,
+                    "style_id": c.style_id,
+                    "bom_id": c.bom.id,
+                    "item_id": line.item_id,
+                    "item_code": item_code,
+                    "expected_qty": round(expected, 4),
+                    "actual_qty": round(actual, 4),
+                    "wastage_pct_vs_bom": round(wastage_pct, 2),
+                },
+            ),
+        })
     return out
 
 
@@ -385,108 +468,48 @@ async def rule_trim_overconsumption_above(
 ) -> list[dict[str, Any]]:
     """Trim items with actual consumption vs BOM above threshold (e.g. 10%)."""
     threshold = (config or {}).get("trim_wastage_threshold_pct", TRIM_WASTAGE_THRESHOLD_PCT)
-    from app.models import GarmentStyle
-    mov_result = await db.execute(
-        select(StockMovement.reference_id).where(
-            StockMovement.tenant_id == tenant_id,
-            StockMovement.reference_type == "CONSUMPTION_ISSUE",
-            StockMovement.reference_id.isnot(None),
-        ).distinct()
-    )
-    ref_ids = [r[0] for r in mov_result.scalars().all() if r[0] is not None]
-    if not ref_ids:
-        return []
-    ord_stmt = select(Order).where(
-        Order.tenant_id == tenant_id,
-        Order.id.in_(ref_ids),
-        Order.quotation_id.isnot(None),
-    )
-    ord_result = await db.execute(ord_stmt)
-    orders = list(ord_result.scalars().all())
     out: list[dict[str, Any]] = []
-    for order in orders:
-        if not order.quotation_id:
+    for c in await _consumption_lines(db, tenant_id, with_categories=True):
+        if not _is_trim_category(c.category):
             continue
-        quotation = await db.get(Quotation, order.quotation_id)
-        if not quotation or quotation.tenant_id != tenant_id or not quotation.style_id:
+        order, line = c.order, c.line
+        base = _to_float(line.base_consumption)
+        wastage = _to_float(line.wastage_pct) / 100.0
+        expected = c.order_qty * base * (1.0 + wastage)
+        actual = c.actual
+        if expected <= 0:
             continue
-        style_id = quotation.style_id
-        order_qty = _to_float(str(order.quantity)) if order.quantity is not None else 0.0
-        if order_qty <= 0:
+        wastage_pct = (actual - expected) / expected * 100.0
+        if wastage_pct < threshold:
             continue
-        bom_result = await db.execute(
-            select(Bom).where(
-                Bom.tenant_id == tenant_id,
-                Bom.style_id == style_id,
-            ).order_by(Bom.version_no.desc()).limit(1)
-        )
-        bom = bom_result.scalar_one_or_none()
-        if not bom:
-            continue
-        lines_result = await db.execute(
-            select(BomItem).where(
-                BomItem.tenant_id == tenant_id,
-                BomItem.bom_id == bom.id,
-                BomItem.item_id.isnot(None),
-            )
-        )
-        for line in lines_result.scalars().all():
-            item = await db.get(Item, line.item_id)
-            if not item or item.tenant_id != tenant_id:
-                continue
-            cat = await db.get(ItemCategory, item.category_id) if item.category_id else None
-            if cat and cat.tenant_id != tenant_id:
-                cat = None
-            if not _is_trim_category(cat):
-                continue
-            base = _to_float(line.base_consumption)
-            wastage = _to_float(line.wastage_pct) / 100.0
-            expected = order_qty * base * (1.0 + wastage)
-            mov_q = await db.execute(
-                select(StockMovement).where(
-                    StockMovement.tenant_id == tenant_id,
-                    StockMovement.reference_type == "CONSUMPTION_ISSUE",
-                    StockMovement.reference_id == order.id,
-                    StockMovement.item_id == line.item_id,
-                )
-            )
-            actual = sum(
-                _to_float(m.quantity) for m in mov_q.scalars().all()
-                if (m.movement_type or "").upper() == "OUT"
-            )
-            if expected <= 0:
-                continue
-            wastage_pct = (actual - expected) / expected * 100.0
-            if wastage_pct < threshold:
-                continue
-            severity = "high" if wastage_pct >= 20 else "medium"
-            item_code = item.item_code or str(line.item_id)
-            out.append({
-                "natural_key": f"trim_overconsumption:order:{order.id}:item:{line.item_id}",
-                "title": f"Order {order.order_code} · {item_code} trim overconsumption",
-                "description": f"Trim wastage vs BOM: {wastage_pct:+.1f}% (expected {expected:.2f}, actual {actual:.2f}).",
-                "severity": severity,
-                "reason_text": f"Trim item; expected {expected:.2f}, actual {actual:.2f}; {wastage_pct:+.1f}%.",
-                "recommended_action": "Review trim issue policy and consumption; adjust BOM if needed.",
-                "entity_type": "order",
-                "entity_id": order.id,
-                "order_id": order.id,
-                "evidence_json": _evidence_schema_v1(
-                    "trim_overconsumption_above",
-                    thresholds={"trim_wastage_threshold_pct": threshold},
-                    facts={
-                        "order_id": order.id,
-                        "order_code": order.order_code,
-                        "style_id": style_id,
-                        "bom_id": bom.id,
-                        "item_id": line.item_id,
-                        "item_code": item_code,
-                        "expected_qty": round(expected, 4),
-                        "actual_qty": round(actual, 4),
-                        "wastage_pct_vs_bom": round(wastage_pct, 2),
-                    },
-                ),
-            })
+        severity = "high" if wastage_pct >= 20 else "medium"
+        item_code = c.item.item_code or str(line.item_id)
+        out.append({
+            "natural_key": f"trim_overconsumption:order:{order.id}:item:{line.item_id}",
+            "title": f"Order {order.order_code} · {item_code} trim overconsumption",
+            "description": f"Trim wastage vs BOM: {wastage_pct:+.1f}% (expected {expected:.2f}, actual {actual:.2f}).",
+            "severity": severity,
+            "reason_text": f"Trim item; expected {expected:.2f}, actual {actual:.2f}; {wastage_pct:+.1f}%.",
+            "recommended_action": "Review trim issue policy and consumption; adjust BOM if needed.",
+            "entity_type": "order",
+            "entity_id": order.id,
+            "order_id": order.id,
+            "evidence_json": _evidence_schema_v1(
+                "trim_overconsumption_above",
+                thresholds={"trim_wastage_threshold_pct": threshold},
+                facts={
+                    "order_id": order.id,
+                    "order_code": order.order_code,
+                    "style_id": c.style_id,
+                    "bom_id": c.bom.id,
+                    "item_id": line.item_id,
+                    "item_code": item_code,
+                    "expected_qty": round(expected, 4),
+                    "actual_qty": round(actual, 4),
+                    "wastage_pct_vs_bom": round(wastage_pct, 2),
+                },
+            ),
+        })
     return out
 
 

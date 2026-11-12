@@ -34,4 +34,7 @@ export interface AiAssistantMessageMeta {
   /** Phase-2 response envelope */
   provenance?: AiResponseProvenance;
   trace_spans?: AiTraceSpan[];
+  /** "agent" when the AI picked its own read-only tools (tenant flag ai_agent_mode_enabled). */
+  mode?: string;
+  agent?: { model?: string; steps?: number; tool_calls?: number };
 }

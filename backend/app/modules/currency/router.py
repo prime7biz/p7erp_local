@@ -8,6 +8,7 @@ from sqlalchemy import select, and_, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
+from app.common.pagination import MAX_PAGE_SIZE
 from app.common.auth import get_current_user
 from app.common.delete_guards import ensure_exchange_rate_deletable
 from app.common.money import format_rate, line_rate_from_input, parse_money
@@ -62,7 +63,7 @@ async def list_exchange_rates(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     active_only: bool = Query(True, description="Only active rates"),
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
 ):
     """List all exchange rates for the current tenant (newest first per pair)."""

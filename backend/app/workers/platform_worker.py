@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from app.common.celery_app import celery_app
+from app.common.rls import bind_session_bypass, bind_session_tenant
 from app.workers.async_runner import run_async
 from app.database import AsyncSessionLocal, safe_async_session_rollback
 from app.models import PlatformBackgroundJob, Tenant
@@ -28,6 +29,8 @@ async def _run_bulk_create(
 ) -> None:
     async with AsyncSessionLocal() as db:
         try:
+            # Platform job: creates new tenants, so it runs in RLS bypass mode (no-op while RLS is off).
+            await bind_session_bypass(db)
             job = await db.get(PlatformBackgroundJob, job_id)
             if not job:
                 return
@@ -83,6 +86,9 @@ async def _run_data_migration_import(
 ) -> None:
     async with AsyncSessionLocal() as db:
         try:
+            # Job bookkeeping is platform data (bypass); the import itself is pinned to the one tenant,
+            # so with RLS on it can only read and write that tenant's rows.
+            await bind_session_bypass(db)
             job = await db.get(PlatformBackgroundJob, job_id)
             tenant = await db.get(Tenant, tenant_id)
             if not job or not tenant:
@@ -93,7 +99,10 @@ async def _run_data_migration_import(
             job.progress_json = {"phase": "importing", "entity_type": entity_type}
             await db.commit()
 
+            await bind_session_tenant(db, tenant_id)
             result = await run_import(db, tenant, entity_type, csv_text, dry_run=False)
+            await db.commit()
+            await bind_session_bypass(db)
             job = await db.get(PlatformBackgroundJob, job_id)
             if job:
                 job.status = "completed" if not result.get("errors") else "completed_with_errors"
@@ -108,6 +117,7 @@ async def _run_data_migration_import(
                 await db.commit()
         except Exception as exc:
             await safe_async_session_rollback(db)
+            await bind_session_bypass(db)
             job = await db.get(PlatformBackgroundJob, job_id)
             if job:
                 job.status = "failed"

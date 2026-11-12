@@ -118,10 +118,10 @@ export function ControlTowerPage() {
     return (
       <div className="p-6 space-y-4 max-w-xl">
         <AppPageHeader title="Control Tower" description="Cross-functional order execution view (read-only)." />
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-100">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
           <p className="font-medium">Control Tower is disabled for this tenant.</p>
-          <p className="mt-2 text-text-secondary dark:text-amber-100/80">
-            Ask an admin to enable <code className="rounded bg-white/60 px-1 dark:bg-black/20">control_tower_enabled</code> in{" "}
+          <p className="mt-2 text-text-secondary">
+            Ask an admin to enable <code className="rounded bg-white/60 px-1">control_tower_enabled</code> in{" "}
             <Link className="text-status-info underline" to="/app/settings/config">
               Settings → Configuration
             </Link>

@@ -1330,13 +1330,13 @@ After fixing, re-apply and finalize. If the run was already **approved** but not
     // ------------------------------------------------------------------ 12. Allowances & bonuses
     {
       id: "hr-pay-allowances-bonuses",
-      title: "Tiffin, dinner and night bills, production bonus and Eid bonus",
+      title: "Tiffin, lunch, dinner and night bills, Friday allowance, production bonus and Eid bonus",
       summary:
-        "Set bill rules from attendance, calculate production bonus from output and allocate the festival bonus; each is approved by a manager and paid once in the next payroll run.",
-      tags: ["HR", "payroll", "allowance", "bonus", "tiffin bill", "night bill"],
-      keywords: ["tiffin bill", "dinner bill", "night bill", "production bonus", "piece rate bonus", "efficiency bonus", "eid bonus", "festival bonus", "utsob bonus"],
+        "Set bill rules (including lunch and the Friday allowance) from attendance, calculate production bonus from output and allocate the festival bonus; each is approved by a manager and paid once in the next payroll run.",
+      tags: ["HR", "payroll", "allowance", "bonus", "tiffin bill", "night bill", "lunch bill", "friday allowance"],
+      keywords: ["tiffin bill", "lunch bill", "dinner bill", "night bill", "friday allowance", "weekly holiday", "production bonus", "piece rate bonus", "efficiency bonus", "eid bonus", "festival bonus", "utsob bonus"],
       estimatedMinutes: 6,
-      lastUpdated: "2026-11-10",
+      lastUpdated: "2026-11-11",
       audience: "hr",
       content: `## Overview
 
@@ -1344,13 +1344,15 @@ After fixing, re-apply and finalize. If the run was already **approved** but not
 
 ## Before you start
 
-An admin turns on the parts you use under **Settings → Configuration**: **HR tiffin / dinner / night bills**, **HR production bonus**, **HR Eid / festival bonus**. They are off by default and the menu item appears once one is on.
+An admin turns on the parts you use under **Settings → Configuration**: **HR tiffin / dinner / night bills** (also covers lunch and the Friday allowance), **HR production bonus**, **HR Eid / festival bonus**. They are off by default and the menu item appears once one is on.
 
-## Tiffin / dinner / night bills
+## Bills & Friday allowance
 
-1. Add a **Bill rule**: code, name, bill type, **Who gets it** (every present day, night-shift day, worked at least N minutes, or overtime at least N minutes), the amount per day and the start date. A manager clicks **Actions → Approve**.
+1. Add a **Bill rule**: code, name, bill type (**Tiffin**, **Lunch**, **Dinner**, **Night** or **Friday allowance**), **Who gets it** (every present day, night-shift day, worked at least N minutes, overtime at least N minutes, or **Present on the weekly holiday (Friday)**), the amount per day and the start date. A manager clicks **Actions → Approve**.
 2. Choose **From / To**, click **Preview** to see the count and totals, then **Generate**.
 3. Review the **Bills** list (**Actions → Correct amount** with a reason, or **Reject**), then **Approve all pending**.
+
+> **Tip:** Each employee's **Employment & Salary** tab has **Overtime & allowances** switches. A bill switched off there is skipped for that person, and an **Own amount per day** replaces the company amount (paid once per day even when two rules of the same bill type apply). The weekly holiday is the one set in HR settings (Friday by default).
 
 ## Production bonus
 

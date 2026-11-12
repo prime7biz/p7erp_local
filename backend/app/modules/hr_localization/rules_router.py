@@ -275,6 +275,95 @@ async def update_enforcement(
     return {"flags": enforcement_state(locked.feature_flags)}
 
 
+# --- Salary income tax (TDS) switch ----------------------------------------------------------------
+
+
+class SalaryTdsSwitch(BaseModel):
+    enabled: bool
+
+
+async def _salary_tds_problems(db: AsyncSession, tenant: Tenant) -> list[str]:
+    from app.common.tenant_feature_keys import is_payroll_gross_posting_enabled
+    from app.models.hr_payroll import PayrollAccountingConfig
+    from app.modules.hr_localization import bd_salary_tds_service as tds_service
+
+    problems = tds_service.approval_problems()
+    if not is_payroll_gross_posting_enabled(tenant.feature_flags):
+        problems.append("Turn on gross payroll posting first, so the tax liability is recorded in the books")
+    cfg = (
+        await db.execute(select(PayrollAccountingConfig).where(PayrollAccountingConfig.tenant_id == tenant.id).limit(1))
+    ).scalar_one_or_none()
+    if cfg is None or not cfg.tax_payable_account_id:
+        problems.append("Set the Tax payable account in Payroll accounting settings")
+    return problems
+
+
+def _salary_tds_state(tenant: Tenant, problems: list[str]) -> dict[str, Any]:
+    from app.common.tenant_feature_keys import is_hr_bd_salary_tds_enabled
+    from app.modules.hr_localization import bd_salary_tds as engine
+    from app.modules.hr_localization import bd_salary_tds_service as tds_service
+
+    approval = tds_service.load_approval()
+    return {
+        "enabled": is_hr_bd_salary_tds_enabled(tenant.feature_flags),
+        "can_enable": not problems,
+        "problems": problems,
+        "schedule_version": engine.SCHEDULE_VERSION,
+        "approval_status": str(approval.get("status") or "MISSING"),
+        "approval_id": approval.get("approval_id"),
+    }
+
+
+@router.get("/salary-tds")
+async def get_salary_tds_switch(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    await _payroll_manage(db, user, tenant.id)
+    return _salary_tds_state(tenant, await _salary_tds_problems(db, tenant))
+
+
+@router.put("/salary-tds")
+async def update_salary_tds_switch(
+    body: SalaryTdsSwitch,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Turn Bangladesh salary TDS on or off. Turning it on needs the signed tax approval record."""
+    from app.common.tenant_feature_keys import HR_BD_SALARY_TDS_ENABLED, is_hr_bd_salary_tds_enabled
+    from app.modules.hr_localization import bd_salary_tds as engine
+    from app.modules.hr_localization import bd_salary_tds_service as tds_service
+
+    _ensure_tenant(user, tenant)
+    tenant_id, user_id = tenant.id, user.id
+    await require_manager_admin(db, user, tenant_id)
+    locked = await lock_tenant(db, tenant_id)
+    problems: list[str] = []
+    if body.enabled:
+        problems = await _salary_tds_problems(db, locked)
+        if problems:
+            raise HTTPException(status_code=409, detail="Cannot switch salary TDS on: " + "; ".join(problems))
+    was = is_hr_bd_salary_tds_enabled(locked.feature_flags)
+    flags = dict(locked.feature_flags) if isinstance(locked.feature_flags, dict) else {}
+    flags[HR_BD_SALARY_TDS_ENABLED] = bool(body.enabled)
+    locked.feature_flags = flags
+    if was != body.enabled:
+        approval = tds_service.load_approval()
+        await log_action(
+            db, tenant_id=tenant_id, user_id=user_id, action="HR_BD_SALARY_TDS_SWITCHED",
+            resource="hr.bd.salary_tds",
+            details=(
+                f"{was} -> {body.enabled}; schedule {engine.SCHEDULE_VERSION}; approval {approval.get('approval_id')}"
+            ),
+        )
+    await db.commit()
+    await db.refresh(locked)
+    return _salary_tds_state(locked, problems)
+
+
 # --- Read-only previews --------------------------------------------------------------------------
 
 

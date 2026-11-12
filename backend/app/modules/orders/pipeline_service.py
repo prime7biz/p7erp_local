@@ -225,13 +225,17 @@ async def _has_production(db: AsyncSession, tenant_id: int, order_id: int) -> bo
     try:
         from app.models import HourlyProductionEntry
 
-        r3 = await db.execute(
-            select(func.count()).select_from(HourlyProductionEntry).where(
-                HourlyProductionEntry.tenant_id == tenant_id,
-                HourlyProductionEntry.order_id == order_id,
+        # Savepoint: this optional check runs inside callers' transactions; a failure must not abort
+        # them. Flush first so callers' pending writes are not inside the savepoint that may roll back.
+        await db.flush()
+        async with db.begin_nested():
+            r3 = await db.execute(
+                select(func.count()).select_from(HourlyProductionEntry).where(
+                    HourlyProductionEntry.tenant_id == tenant_id,
+                    HourlyProductionEntry.order_id == order_id,
+                )
             )
-        )
-        return (r3.scalar() or 0) > 0
+            return (r3.scalar() or 0) > 0
     except Exception:
         return False
 

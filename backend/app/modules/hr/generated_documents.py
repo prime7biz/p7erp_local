@@ -30,9 +30,9 @@ from app.config import get_settings
 from app.models import HrSection, Tenant
 from app.models.hr import Department, Designation, Employee
 from app.models.hr_onboarding import HrGeneratedEmployeeDocument
-from app.models.hr_payroll import PayrollComponent, PayrollStructureLine
 from app.modules.document_verify.schemas import PublicDocumentVerification
 from app.modules.hr.employee_service import EmployeeFieldAccess
+from app.modules.hr_localization.employee_pay import active_structure_lines, gross_of, price_lines
 from app.modules.hr_payroll import compensation_service as comp
 
 SNAPSHOT_SCHEMA = "hr-document-v1"
@@ -90,28 +90,14 @@ async def _salary(db: AsyncSession, tenant: Tenant, emp: Employee) -> dict | Non
     if asgn is None:
         return None
     basic = api_money_to_decimal(asgn.base_salary) if asgn.base_salary is not None else Decimal("0")
-    lines = (
-        await db.execute(
-            select(PayrollStructureLine, PayrollComponent)
-            .join(PayrollComponent, PayrollComponent.id == PayrollStructureLine.component_id)
-            .where(PayrollStructureLine.tenant_id == tenant.id, PayrollStructureLine.structure_id == asgn.structure_id)
-            .order_by(PayrollStructureLine.id)
-        )
-    ).all()
-    components, gross = [], Decimal("0")
-    for line, component in lines:
-        if (component.component_type or "").upper() == "DEDUCTION":
-            continue
-        amount = api_money_to_decimal(line.amount)
-        calc = (component.calculation_type or "FIXED").upper()
-        if calc == "PERCENT_OF_BASE":
-            value = basic * amount / Decimal("100")
-        elif calc == "FIXED":
-            value = amount
-        else:
-            continue
-        gross += value
-        components.append({"name": component.name, "amount": _money(value)})
+    overrides = asgn.component_overrides if isinstance(asgn.component_overrides, dict) else None
+    rows = price_lines(await active_structure_lines(db, tenant.id, asgn.structure_id), basic, overrides)
+    components = [
+        {"name": r.name, "amount": _money(r.amount)}
+        for r in rows
+        if r.component_type != "DEDUCTION" and r.amount is not None
+    ]
+    gross = gross_of(rows)
     _wage_row, rate = await comp.wage_rate_in_force(db, tenant.id, emp.id, as_of)
     return {
         "basic": _money(basic),

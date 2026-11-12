@@ -298,7 +298,7 @@ export function AiAssistantPage() {
 
       {sessionsError ? <AiStateNotice type="error" message={sessionsError} /> : null}
       {chatError ? <AiStateNotice type="error" message={chatError} /> : null}
-      {sending ? <AiStateNotice message="Local AI is thinking..." /> : null}
+      {sending ? <AiStateNotice message="AI is thinking... checking your data can take up to 30 seconds." /> : null}
       {approvingEscalationId ? <AiStateNotice message="Cloud AI is processing..." /> : null}
       {opsOverview ? (
         <AiStateNotice

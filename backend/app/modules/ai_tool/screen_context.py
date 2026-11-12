@@ -73,22 +73,49 @@ async def resolve_screen_context(
     if not await can_access_module(db, tenant, user, PERMISSION_FOR[record_type]):
         return None
     try:
-        if record_type == "order":
-            return await _order(db, tenant.id, record_id)
-        if record_type == "customer":
-            return await _customer(db, tenant.id, record_id)
-        if record_type == "style":
-            return await _style(db, tenant.id, record_id)
-        if record_type == "voucher":
-            return await _voucher(db, tenant.id, record_id)
-        if record_type == "employee":
-            return await _employee(db, tenant.id, record_id)
+        return await _load_record(db, tenant.id, record_type, record_id)
     except Exception:
         # Context is a nice-to-have: never fail the chat because of it.
         from app.database import safe_async_session_rollback
 
         await safe_async_session_rollback(db)
         return None
+
+
+async def resolve_screen_context_nested(
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    user: User,
+    record_type: str | None,
+    record_id: int | None,
+) -> ScreenContext | None:
+    """Same as ``resolve_screen_context`` but safe inside a transaction that already holds unsaved rows.
+
+    A failed lookup rolls back only its SAVEPOINT, never the caller's transaction.
+    """
+    if not record_type or record_type not in RECORD_TYPES or not record_id or record_id < 1:
+        return None
+    if not await can_access_module(db, tenant, user, PERMISSION_FOR[record_type]):
+        return None
+    try:
+        async with db.begin_nested():
+            return await _load_record(db, tenant.id, record_type, record_id)
+    except Exception:
+        return None
+
+
+async def _load_record(db: AsyncSession, tenant_id: int, record_type: str, record_id: int) -> ScreenContext | None:
+    if record_type == "order":
+        return await _order(db, tenant_id, record_id)
+    if record_type == "customer":
+        return await _customer(db, tenant_id, record_id)
+    if record_type == "style":
+        return await _style(db, tenant_id, record_id)
+    if record_type == "voucher":
+        return await _voucher(db, tenant_id, record_id)
+    if record_type == "employee":
+        return await _employee(db, tenant_id, record_id)
     return None
 
 

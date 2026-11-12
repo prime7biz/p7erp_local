@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Literal
 
 from fastapi import HTTPException
@@ -46,6 +46,37 @@ def _to_float(v: object) -> float:
     if isinstance(v, (int, float)):
         return float(v)
     return float(str(v).replace(",", "").strip() or 0)
+
+
+# Same scales as the voucher columns: amount / base_amount Numeric(18,4), exchange_rate Numeric(18,6).
+AMOUNT_QUANT = Decimal("0.0001")
+RATE_QUANT = Decimal("0.000001")
+
+
+def to_money_decimal(value: object, *, field: str = "amount") -> Decimal:
+    """Decimal from Decimal / int / str (legacy float callers go through str, never binary maths)."""
+    if isinstance(value, Decimal):
+        d = value
+    else:
+        raw = str(value if value is not None else "").replace(",", "").strip()
+        try:
+            d = Decimal(raw)
+        except InvalidOperation as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid {field}: {value!r}") from exc
+    if not d.is_finite():
+        raise HTTPException(status_code=400, detail=f"Invalid {field}: {value!r}")
+    return d
+
+
+def quantize_amount(value: object, *, field: str = "amount") -> Decimal:
+    return to_money_decimal(value, field=field).quantize(AMOUNT_QUANT, rounding=ROUND_HALF_UP)
+
+
+def quantize_rate(value: object) -> Decimal:
+    rate = to_money_decimal(value, field="exchange_rate").quantize(RATE_QUANT, rounding=ROUND_HALF_UP)
+    if rate <= 0:
+        raise HTTPException(status_code=400, detail="exchange_rate must be greater than zero")
+    return rate
 
 
 _voucher_signature_payload = voucher_signature_payload
@@ -122,17 +153,26 @@ async def create_system_voucher(
     facility_utilization_id: int | None = None,
     currency: str | None = None,
     base_currency: str | None = None,
-    exchange_rate: float = 1.0,
+    exchange_rate: Decimal | str | int | float = Decimal("1"),
     auto_post: bool = False,
 ) -> Voucher:
+    """Create a system voucher from lines.
+
+    Amounts and base amounts are rounded once to 4 dp and the rate to 6 dp (the column scales), all in
+    Decimal. Debits must equal credits in both the voucher currency and the base currency after that
+    rounding; otherwise the whole request is rejected (no balancing line is ever invented).
+    """
     if not lines:
         raise HTTPException(status_code=400, detail="At least one voucher line is required")
     vtype = voucher_type.strip().upper()
     await _ensure_voucher_type_allowed(db, tenant_id, vtype)
+    rate = quantize_rate(exchange_rate)
 
-    resolved: list[tuple[AutoPostingLine, int]] = []
+    resolved: list[tuple[AutoPostingLine, int, Decimal, Decimal]] = []
     total_dr = Decimal("0")
     total_cr = Decimal("0")
+    base_dr = Decimal("0")
+    base_cr = Decimal("0")
     for line in lines:
         if line.account_id is not None:
             aid = line.account_id
@@ -147,19 +187,27 @@ async def create_system_voucher(
                 detail="Each line needs account_id or system_code",
             )
         await _validate_posting_account(db, tenant_id, aid)
-        amt = line.amount
+        amt = quantize_amount(line.amount)
         if amt <= 0:
             raise HTTPException(status_code=400, detail="Line amounts must be greater than zero")
+        base = (amt * rate).quantize(AMOUNT_QUANT, rounding=ROUND_HALF_UP)
         if line.entry_type == "DEBIT":
             total_dr += amt
+            base_dr += base
         else:
             total_cr += amt
-        resolved.append((line, aid))
+            base_cr += base
+        resolved.append((line, aid, amt, base))
 
     if total_dr != total_cr:
         raise HTTPException(
             status_code=400,
             detail=f"Voucher is not balanced: debits {total_dr} != credits {total_cr}",
+        )
+    if base_dr != base_cr:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Voucher is not balanced in base currency after rounding: debits {base_dr} != credits {base_cr}",
         )
 
     voucher_number, series_seq, series_key, fy = await allocate_series_voucher_number(
@@ -171,7 +219,6 @@ async def create_system_voucher(
     )
     cur = (currency or "BDT").strip().upper()[:8] or "BDT"
     base_cur = (base_currency or cur).strip().upper()[:8] or cur
-    rate_str = f"{float(exchange_rate):.8f}".rstrip("0").rstrip(".")
 
     voucher = Voucher(
         tenant_id=tenant_id,
@@ -183,7 +230,7 @@ async def create_system_voucher(
         reference=reference,
         currency=cur,
         base_currency=base_cur,
-        exchange_rate=rate_str,
+        exchange_rate=rate,
         btb_lc_id=btb_lc_id,
         trade_case_id=trade_case_id,
         facility_utilization_id=facility_utilization_id,
@@ -200,9 +247,7 @@ async def create_system_voucher(
     await db.flush()
 
     default_notes = "System COA auto entry"
-    for line, aid in resolved:
-        amt_str = f"{float(line.amount):.2f}"
-        base_amt = float(line.amount) * float(exchange_rate)
+    for line, aid, amt, base in resolved:
         db.add(
             VoucherLine(
                 tenant_id=tenant_id,
@@ -210,12 +255,12 @@ async def create_system_voucher(
                 account_id=aid,
                 cost_center_id=line.cost_center_id,
                 currency=cur,
-                exchange_rate=rate_str,
-                base_amount=f"{base_amt:.4f}",
+                exchange_rate=rate,
+                base_amount=base,
                 is_rate_overridden=False,
                 rate_source="system",
                 entry_type=line.entry_type,
-                amount=amt_str,
+                amount=amt,
                 notes=line.notes or default_notes,
             )
         )
@@ -266,7 +311,7 @@ async def create_system_voucher_from_mapping(
     user_id: int | None,
     voucher_type: str,
     voucher_date: date,
-    amount: float,
+    amount: Decimal | str | int | float,
     debit_system_code: str | None,
     credit_system_code: str | None,
     debit_account_id: int | None = None,
@@ -278,10 +323,10 @@ async def create_system_voucher_from_mapping(
     source_module_ref: str | None = None,
     btb_lc_id: int | None = None,
     currency: str | None = None,
-    exchange_rate: float = 1.0,
+    exchange_rate: Decimal | str | int | float = Decimal("1"),
     auto_post: bool = False,
 ) -> Voucher:
-    amt = Decimal(str(amount))
+    amt = to_money_decimal(amount)
     lines = [
         AutoPostingLine(
             entry_type="DEBIT",

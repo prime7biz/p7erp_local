@@ -35,6 +35,8 @@ import {
   listTableTrClass,
 } from "@/components/app/listPageLayout";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/app/useConfirm";
+import { toast } from "sonner";
 
 const statusClass = (status: string) => {
   const value = status.toUpperCase();
@@ -59,6 +61,7 @@ function formatInquiryCreatedAt(iso: string | undefined): string {
 }
 
 export function InquiriesPage() {
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const [items, setItems] = useState<InquiryResponse[]>([]);
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
@@ -406,7 +409,7 @@ export function InquiriesPage() {
                                       profit_percentage: 15,
                                     });
                                     await load();
-                                    alert(`Quotation ${quotation.quotation_code} created from inquiry.`);
+                                    toast.success(`Quotation ${quotation.quotation_code} created from inquiry.`);
                                   } catch (e) {
                                     setError(e instanceof Error ? e.message : "Convert to quotation failed");
                                   }
@@ -420,7 +423,7 @@ export function InquiriesPage() {
                               type="button"
                               onClick={async () => {
                                 setOpenActionsId(null);
-                                if (!window.confirm("Delete this inquiry?")) return;
+                                if (!(await confirm({ title: "Delete this inquiry?", danger: true }))) return;
                                 try {
                                   setError("");
                                   await api.deleteInquiry(inq.id);

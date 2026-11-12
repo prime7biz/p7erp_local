@@ -4,9 +4,11 @@ import { api, type FacilityRow } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { listPageRootClass } from "@/components/app/listPageLayout";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
-import { logApiError } from "@/utils/logApiError";
+import { logApiError } from "@/utils/logApiError";
+import { useConfirm } from "@/components/app/useConfirm";
 
-export function FacilitiesPage() {
+export function FacilitiesPage() {
+  const confirm = useConfirm();
   const [rows, setRows] = useState<FacilityRow[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -30,7 +32,7 @@ export function FacilitiesPage() {
   }, []);
 
   async function removeDraft(id: number) {
-    if (!window.confirm("Delete this draft facility?")) return;
+    if (!(await confirm({ title: "Delete this draft facility?", danger: true }))) return;
     try {
       await api.deleteFacility(id);
       await load();

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { bottomNavItems, menuSections } from "@/app/sidebarConfig";
+import { mobileMenuSections, pickMobileTabs } from "@/components/navigation/mobileNavLogic";
 import { filterVisibleMenuSections, isMenuPermissionAllowed } from "./sidebarNavUtils";
 
 const allow = () => true;
@@ -83,5 +84,38 @@ describe("bottom nav permissions", () => {
   it("keeps every tab when RBAC is not enforced", () => {
     const tabs = bottomNavItems.filter((t) => isMenuPermissionAllowed(t.permissionKey, {}, denyFinance));
     expect(tabs).toHaveLength(bottomNavItems.length);
+  });
+});
+
+describe("mobile_ui_v2 menu trimming", () => {
+  const ctx = { tenantType: "both" as const, enabledOptionalProductionUnits: [], hasPermission: allow };
+
+  it("does not change the desktop sidebar / search sections", () => {
+    const off = filterVisibleMenuSections(menuSections, { ...ctx, featureFlags: {} }).map((s) => s.section);
+    const on = filterVisibleMenuSections(menuSections, { ...ctx, featureFlags: { mobile_ui_v2: true } }).map((s) => s.section);
+    expect(on).toEqual(off);
+    expect(on).toEqual(expect.arrayContaining(["Reports", "AI Tools", "Settings"]));
+  });
+
+  it("only drops the sections marked hideInMobileMenu from the More menu", () => {
+    const all = filterVisibleMenuSections(menuSections, { ...ctx, featureFlags: {} });
+    const phone = mobileMenuSections(all).map((s) => s.section);
+    expect(all.map((s) => s.section).filter((n) => !phone.includes(n)).sort()).toEqual(["AI Tools", "Reports", "Settings"]);
+  });
+
+  it("never adds a section the user cannot see", () => {
+    const visible = filterVisibleMenuSections(menuSections, {
+      ...ctx,
+      featureFlags: { rbac_enforcement: "enforce" },
+      hasPermission: denyFinance,
+    });
+    expect(mobileMenuSections(visible).map((s) => s.section)).not.toContain("Finance");
+    expect(pickMobileTabs(new Set(visible.map((s) => s.section))).map((t) => t.key)).toEqual([
+      "home",
+      "sales",
+      "inventory",
+      "production",
+      "more",
+    ]);
   });
 });

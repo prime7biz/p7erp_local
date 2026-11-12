@@ -92,6 +92,31 @@ export const listTableTdPrimaryClass = "px-4 py-3 text-sm font-medium text-text-
 export const listTableTrClass =
   "border-b border-border-subtle last:border-0 hover:bg-surface-subtle/80";
 
+/**
+ * Phone touch sizes (used with the tenant switch `mobile_ui_v2`). Never applied globally: desktop
+ * tables and toolbars keep their compact controls.
+ * - `mobileTouchControlClass`: always 44px tall; add it only when the page already knows it is on a phone.
+ * - `mobileFieldClass`: 44px below `sm`, the usual 38px from `sm` up (same as inventory `touchFieldClass`).
+ */
+export const mobileTouchControlClass = "min-h-11 touch-manipulation";
+export const mobileFieldClass = "min-h-[44px] touch-manipulation sm:min-h-[38px]";
+
+/**
+ * Save / Cancel bar that stays visible at the bottom of a long phone form or dialog, above the
+ * iPhone home bar. From `sm` up it is a normal row of buttons.
+ */
+export const mobileStickyActionsClass =
+  "sticky bottom-0 z-10 -mx-4 flex flex-wrap justify-end gap-2 border-t border-border bg-surface-raised px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:pb-0";
+
+/**
+ * Same bar for a form on a normal page (not a dialog): it sits just above the bottom menu, which
+ * covers the last 4rem of the screen below `lg`. The right padding leaves room for the floating
+ * quick-create (+) button so it never covers the Save button. No negative margin, so it fits any
+ * card padding.
+ */
+export const mobilePageStickyActionsClass =
+  "sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-10 flex flex-wrap justify-end gap-2 border-t border-border bg-surface-raised py-3 pr-16 sm:static sm:border-0 sm:bg-transparent sm:py-0 sm:pr-0";
+
 /** Aliases for portal / settings tables (same tokens as ERP list tables) */
 export const listTableHeadCellClass = listTableThClass;
 export const listTableRowClass = listTableTrClass;

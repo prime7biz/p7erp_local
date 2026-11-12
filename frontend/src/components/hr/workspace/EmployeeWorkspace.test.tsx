@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -44,8 +44,11 @@ const api = vi.hoisted(() => ({
   createHrEmployee: vi.fn(),
   getHrEmployee: vi.fn(),
   getHrEmployeeCompensation: vi.fn(),
+  getHrEmployeeTaxProfile: vi.fn(() => new Promise(() => {})),
   updateHrEmployee: vi.fn(),
   replaceHrEmployeeCompensation: vi.fn(),
+  getHrEmployeePayBenefits: vi.fn(),
+  replaceHrEmployeePayBenefits: vi.fn(),
 }));
 vi.mock("@/api/client", () => ({ api }));
 
@@ -324,6 +327,30 @@ describe("EmployeeWorkspace (edit mode): separate employment and salary saves", 
     api.previewHrCompensation.mockResolvedValue(VALID);
     api.getHrEmployee.mockResolvedValue(EMPLOYEE);
     api.getHrEmployeeCompensation.mockResolvedValue(view({}));
+    api.getHrEmployeePayBenefits.mockResolvedValue({ employee_id: 7, benefits: [] });
+  });
+
+  it("overtime and bill switches load and save on their own", async () => {
+    const user = userEvent.setup();
+    api.getHrEmployeePayBenefits.mockResolvedValue({
+      employee_id: 7,
+      benefits: [{ benefit_code: "LUNCH", enabled: true, amount_override: "80.0000" }],
+    });
+    api.replaceHrEmployeePayBenefits.mockImplementation((_id: number, benefits: unknown) =>
+      Promise.resolve({ employee_id: 7, benefits }),
+    );
+    await openEdit(user);
+    expect(((await screen.findByLabelText("Lunch bill own amount")) as HTMLInputElement).value).toBe("80");
+    const save = screen.getByRole("button", { name: "Save overtime & allowances" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true); // nothing changed yet
+    await user.click(screen.getByLabelText(/^Overtime/));
+    await waitFor(() => expect(save.disabled).toBe(false));
+    await user.click(save);
+    expect(await screen.findByText("Overtime & allowances saved.")).toBeTruthy();
+    const sent = api.replaceHrEmployeePayBenefits.mock.calls[0]?.[1] as { benefit_code: string; enabled: boolean; amount_override: string | null }[];
+    expect(sent.find((b) => b.benefit_code === "OVERTIME")).toEqual({ benefit_code: "OVERTIME", enabled: false, amount_override: null });
+    expect(sent.find((b) => b.benefit_code === "LUNCH")).toEqual({ benefit_code: "LUNCH", enabled: true, amount_override: "80" });
+    expect(api.replaceHrEmployeeCompensation).not.toHaveBeenCalled();
   });
 
   it("Change salary starts from the pay in force: above the grade means an override of the current basic", async () => {
@@ -394,7 +421,9 @@ describe("EmployeeWorkspace (edit mode): separate employment and salary saves", 
     await waitFor(() => expect(save.disabled).toBe(false), { timeout: 2000 });
     await user.click(save);
     expect(await screen.findByText("New salary saved from 2026-12-01.")).toBeTruthy();
-    expect(api.replaceHrEmployeeCompensation).toHaveBeenCalledWith(7, { structure_id: 4, bd_wage_rate_id: 9, base_salary: "9000", effective_from: "2026-12-01" });
+    expect(api.replaceHrEmployeeCompensation).toHaveBeenCalledWith(7, {
+      structure_id: 4, bd_wage_rate_id: 9, base_salary: "9000", effective_from: "2026-12-01", change_type: "INCREMENT", change_note: null,
+    });
     expect(screen.getByText("9000 / 15000")).toBeTruthy();
     expect(screen.queryByLabelText("New salary starts on *")).toBeNull();
     expect(screen.getByRole("button", { name: "Change salary" })).toBeTruthy();
@@ -443,7 +472,9 @@ describe("EmployeeWorkspace (edit mode): separate employment and salary saves", 
     await user.click(save);
 
     expect(await screen.findByText(/Salary not saved: Payroll is finalized up to 2026-11-30/)).toBeTruthy();
-    expect(api.replaceHrEmployeeCompensation).toHaveBeenCalledWith(7, { structure_id: 4, bd_wage_rate_id: 9, base_salary: null, effective_from: "2026-11-15" });
+    expect(api.replaceHrEmployeeCompensation).toHaveBeenCalledWith(7, {
+      structure_id: 4, bd_wage_rate_id: 9, base_salary: null, effective_from: "2026-11-15", change_type: "INCREMENT", change_note: null,
+    });
     expect((screen.getByLabelText("New salary starts on *") as HTMLInputElement).value).toBe("2026-11-15");
     expect((screen.getByLabelText("Device PIN") as HTMLInputElement).value).toBe("55");
     expect(api.updateHrEmployee).not.toHaveBeenCalled();
@@ -454,3 +485,4 @@ describe("EmployeeWorkspace (edit mode): separate employment and salary saves", 
     expect((screen.getByLabelText("New salary starts on *") as HTMLInputElement).value).toBe("2026-11-15");
   });
 });
+

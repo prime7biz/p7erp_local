@@ -8,14 +8,16 @@ import {
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { listPageRootClass } from "@/components/app/listPageLayout";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
-import { logApiError } from "@/utils/logApiError";
+import { logApiError } from "@/utils/logApiError";
+import { useConfirm } from "@/components/app/useConfirm";
 
 const NATURES = ["Asset", "Liability", "Income", "Expense", "Equity"] as const;
 const NORMAL_BALANCE = ["debit", "credit"] as const;
 
 type ViewMode = "list" | "hierarchy" | "design";
 
-export function AccountGroupsPage() {
+export function AccountGroupsPage() {
+  const confirm = useConfirm();
   const [rows, setRows] = useState<AccountGroupResponse[]>([]);
   const [hierarchy, setHierarchy] = useState<AccountGroupHierarchyNode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -148,7 +150,7 @@ export function AccountGroupsPage() {
   }
 
   async function remove(id: number) {
-    if (!window.confirm("Delete this account group? Child groups must be removed or reparented first.")) return;
+    if (!(await confirm({ title: "Delete this account group? Child groups must be removed or reparented first.", danger: true }))) return;
     try {
       await api.deleteAccountGroup(id);
       await load();

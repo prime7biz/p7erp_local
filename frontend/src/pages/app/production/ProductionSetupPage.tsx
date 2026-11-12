@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type HrDesignationResponse } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { useConfirm } from "@/components/app/useConfirm";
 
 function crewEmpOptionKey(designationId: number | null | undefined, designationFilter: string | null | undefined) {
   if (designationId != null && designationId > 0) return `id:${designationId}`;
@@ -51,6 +52,7 @@ function mapProductionSettings(
 }
 
 export function ProductionSetupPage() {
+  const confirm = useConfirm();
   const [settings, setSettings] = useState<ProductionSettingsState | null>(null);
   const [factoryProfiles, setFactoryProfiles] = useState<
     Array<{ key: string; label: string; description: string }>
@@ -394,7 +396,7 @@ export function ProductionSetupPage() {
   };
 
   const deleteLine = async (id: number) => {
-    if (!window.confirm("Delete this sewing line?")) return;
+    if (!(await confirm({ title: "Delete this sewing line?", danger: true }))) return;
     try {
       await api.deleteSewingLine(id);
       await load();
@@ -657,7 +659,7 @@ export function ProductionSetupPage() {
   };
 
   const deleteCrewRole = async (id: number) => {
-    if (!window.confirm("Delete this crew role?")) return;
+    if (!(await confirm({ title: "Delete this crew role?", danger: true }))) return;
     try {
       await api.deleteCrewRole(id);
       await reloadCrewRoles(crewDept);
@@ -697,7 +699,7 @@ export function ProductionSetupPage() {
   };
 
   const deleteShift = async (id: number) => {
-    if (!window.confirm("Delete this shift?")) return;
+    if (!(await confirm({ title: "Delete this shift?", danger: true }))) return;
     try {
       await api.deleteProductionShift(id);
       await load();

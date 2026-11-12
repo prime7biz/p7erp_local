@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import ROUND_HALF_UP, Decimal
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -16,6 +17,14 @@ from app.modules.facility.constants import (
     SOURCE_FACILITY_DISBURSE,
     SOURCE_FACILITY_REPAYMENT,
 )
+
+CENT = Decimal("0.01")
+
+
+def _money2(value: object) -> Decimal:
+    """Facility vouchers are 2-dp money in the base currency (rate 1); Decimal only, half-up."""
+    d = value if isinstance(value, Decimal) else Decimal(str(value if value is not None else 0))
+    return d.quantize(CENT, rounding=ROUND_HALF_UP)
 
 
 async def _validate_posting_account(db: AsyncSession, tenant_id: int, account_id: int) -> ChartOfAccount:
@@ -54,7 +63,7 @@ async def create_facility_journal_draft(
     reference: str | None,
     debit_account_id: int,
     credit_account_id: int,
-    amount: float,
+    amount: Decimal | str | float,
     facility_utilization_id: int,
     source_module: str,
     source_module_ref: str | None,
@@ -95,14 +104,17 @@ async def create_facility_journal_draft(
     )
     db.add(voucher)
     await db.flush()
-    amount_str = f"{float(amount):.2f}"
+    money = _money2(amount)
+    if money <= 0:
+        raise HTTPException(status_code=400, detail="Facility voucher amount must be greater than zero")
     db.add(
         VoucherLine(
             tenant_id=tenant_id,
             voucher_id=voucher.id,
             account_id=debit_account_id,
             entry_type="DEBIT",
-            amount=amount_str,
+            amount=money,
+            base_amount=money,
             notes="Facility auto entry",
         )
     )
@@ -112,7 +124,8 @@ async def create_facility_journal_draft(
             voucher_id=voucher.id,
             account_id=credit_account_id,
             entry_type="CREDIT",
-            amount=amount_str,
+            amount=money,
+            base_amount=money,
             notes="Facility auto entry",
         )
     )
@@ -126,7 +139,7 @@ async def create_disbursement_draft(
     tenant_id: int,
     user_id: int | None,
     util_id: int,
-    principal: float,
+    principal: Decimal | str | float,
     bank_or_cash_account_id: int,
     liability_account_id: int,
     voucher_date: date,
@@ -157,7 +170,7 @@ async def create_accrual_draft(
     tenant_id: int,
     user_id: int | None,
     util_id: int,
-    interest_amount: float,
+    interest_amount: Decimal | str | float,
     expense_account_id: int,
     interest_payable_account_id: int,
     voucher_date: date,
@@ -189,8 +202,8 @@ async def create_repayment_draft(
     user_id: int | None,
     util_id: int,
     schedule_line_id: int,
-    principal_part: float,
-    interest_part: float,
+    principal_part: Decimal | str | float,
+    interest_part: Decimal | str | float,
     liability_account_id: int,
     interest_payable_account_id: int,
     bank_account_id: int,
@@ -202,7 +215,12 @@ async def create_repayment_draft(
     await _validate_posting_account(db, tenant_id, liability_account_id)
     await _validate_posting_account(db, tenant_id, interest_payable_account_id)
     await _validate_posting_account(db, tenant_id, bank_account_id)
-    total = round(float(principal_part) + float(interest_part), 2)
+    principal_part = _money2(principal_part)
+    interest_part = _money2(interest_part)
+    # Built from the rounded parts, so the bank credit always equals the two debits.
+    total = principal_part + interest_part
+    if total <= 0:
+        raise HTTPException(status_code=400, detail="Repayment amount must be greater than zero")
     voucher_number, series_seq, series_key, fy = await allocate_series_voucher_number(
         db,
         tenant_id=tenant_id,
@@ -241,7 +259,8 @@ async def create_repayment_draft(
                 voucher_id=voucher.id,
                 account_id=liability_account_id,
                 entry_type="DEBIT",
-                amount=f"{principal_part:.2f}",
+                amount=principal_part,
+                base_amount=principal_part,
                 notes="Principal",
             )
         )
@@ -252,7 +271,8 @@ async def create_repayment_draft(
                 voucher_id=voucher.id,
                 account_id=interest_payable_account_id,
                 entry_type="DEBIT",
-                amount=f"{interest_part:.2f}",
+                amount=interest_part,
+                base_amount=interest_part,
                 notes="Interest",
             )
         )
@@ -262,7 +282,8 @@ async def create_repayment_draft(
             voucher_id=voucher.id,
             account_id=bank_account_id,
             entry_type="CREDIT",
-            amount=f"{total:.2f}",
+            amount=total,
+            base_amount=total,
             notes="Payment",
         )
     )

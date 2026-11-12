@@ -17,6 +17,9 @@ import { exportCsv, exportXlsx } from "./exportRows";
 import { SavedViewsMenu } from "./SavedViewsMenu";
 import type { GridColumn, GridDensity } from "./types";
 import { todayLocalISO } from "@/lib/dates";
+import { InventoryListViewToggle } from "@/components/inventory/InventoryMobileList";
+import { useResponsiveListPreference } from "@/hooks/useInventoryListView";
+import { GridMobileCards } from "./GridMobileCards";
 
 export type { GridColumn, GridDensity } from "./types";
 
@@ -34,6 +37,11 @@ type DataGridProps<T> = {
   /** Lets saved views capture/restore the page's URL filters as well as the grid layout. */
   savedViews?: { getQuery: () => string; applyQuery: (query: string) => void };
   footer?: ReactNode;
+  /**
+   * Phone card layout (tenant switch `mobile_ui_v2`): below 768px rows show as cards built from each
+   * column's `mobile` role, with a Cards / Table toggle. Off: the grid is exactly the table it was.
+   */
+  mobileCards?: boolean;
 };
 
 type StoredLayout = { hidden?: string[]; density?: GridDensity };
@@ -85,8 +93,11 @@ export function DataGrid<T>({
   bulkActions,
   savedViews,
   footer,
+  mobileCards = false,
 }: DataGridProps<T>) {
   const initial = useMemo(() => readLayout(tableKey), [tableKey]);
+  const listView = useResponsiveListPreference(tableKey, mobileCards);
+  const cardMode = listView.showCards;
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [density, setDensity] = useState<GridDensity>(initial.density ?? "comfortable");
@@ -194,15 +205,45 @@ export function DataGrid<T>({
 
   const cellPad = density === "compact" ? "px-3 py-1.5" : "px-4 py-3";
   const firstDataColId = visibleColumns[0]?.id;
+  // Phones with mobile_ui_v2: 44px toolbar buttons; desktop keeps the compact toolbar.
+  const btnClass = cn(toolbarBtn, listView.showToggle && "min-h-11 px-3 text-sm");
+  const sortableColumns = columns.filter((c) => (c.enableSorting ?? !!c.value) && columnVisibility[c.id] !== false);
+  const sortValue = sorting[0] ? `${sorting[0].id}:${sorting[0].desc ? "desc" : "asc"}` : "";
 
   return (
     <div className="min-w-0">
       <div className="flex flex-wrap items-center justify-end gap-2 border-b border-border px-3 py-2">
+        {listView.showToggle ? (
+          <div className="mr-auto w-full sm:w-auto">
+            <InventoryListViewToggle value={listView.view} onChange={listView.setView} />
+          </div>
+        ) : null}
+        {cardMode && sortableColumns.length > 0 ? (
+          <select
+            aria-label="Sort cards by"
+            className="min-h-11 flex-1 rounded-lg border border-border-strong bg-surface-raised px-3 text-sm text-text-secondary"
+            value={sortValue}
+            onChange={(e) => {
+              const [id, dir] = e.target.value.split(":");
+              setSorting(id ? [{ id, desc: dir === "desc" }] : []);
+            }}
+          >
+            <option value="">Sort: default order</option>
+            {sortableColumns.flatMap((c) => [
+              <option key={`${c.id}:asc`} value={`${c.id}:asc`}>
+                {c.header} (A–Z / low–high)
+              </option>,
+              <option key={`${c.id}:desc`} value={`${c.id}:desc`}>
+                {c.header} (Z–A / high–low)
+              </option>,
+            ])}
+          </select>
+        ) : null}
         {savedViews ? (
           <SavedViewsMenu tableKey={tableKey} getCurrentConfig={getCurrentConfig} applyConfig={applyConfig} />
         ) : null}
         <div ref={colsRef} className="relative">
-          <button type="button" className={toolbarBtn} aria-expanded={colsOpen} onClick={() => setColsOpen((o) => !o)}>
+          <button type="button" className={btnClass} aria-expanded={colsOpen} onClick={() => setColsOpen((o) => !o)}>
             <Columns3 className="h-3.5 w-3.5" aria-hidden /> Columns
           </button>
           {colsOpen ? (
@@ -222,18 +263,20 @@ export function DataGrid<T>({
             </div>
           ) : null}
         </div>
-        <button
-          type="button"
-          className={toolbarBtn}
-          onClick={() => setDensity((d) => (d === "compact" ? "comfortable" : "compact"))}
-          aria-label={`Switch to ${density === "compact" ? "comfortable" : "compact"} rows`}
-        >
-          <Rows3 className="h-3.5 w-3.5" aria-hidden /> {density === "compact" ? "Compact" : "Comfortable"}
-        </button>
+        {cardMode ? null : (
+          <button
+            type="button"
+            className={btnClass}
+            onClick={() => setDensity((d) => (d === "compact" ? "comfortable" : "compact"))}
+            aria-label={`Switch to ${density === "compact" ? "comfortable" : "compact"} rows`}
+          >
+            <Rows3 className="h-3.5 w-3.5" aria-hidden /> {density === "compact" ? "Compact" : "Comfortable"}
+          </button>
+        )}
         <div ref={exportRef} className="relative">
           <button
             type="button"
-            className={toolbarBtn}
+            className={btnClass}
             aria-expanded={exportOpen}
             disabled={visibleRows.length === 0}
             onClick={() => setExportOpen((o) => !o)}
@@ -277,12 +320,34 @@ export function DataGrid<T>({
         >
           <span className="font-semibold text-text-primary">{selectedRows.length} selected</span>
           {bulkActions!(selectedRows, clearSelection)}
-          <button type="button" onClick={clearSelection} className="ml-auto text-text-muted underline">
+          <button
+            type="button"
+            onClick={clearSelection}
+            className={cn("ml-auto text-text-muted underline", listView.showToggle && "min-h-11 px-2 text-sm")}
+          >
             Clear
           </button>
         </div>
       ) : null}
 
+      {cardMode ? (
+        <GridMobileCards
+          columns={columns}
+          rows={table.getRowModel().rows.map((r) => ({
+            id: r.id,
+            row: r.original,
+            selected: r.getIsSelected(),
+            toggle: r.getToggleSelectedHandler(),
+          }))}
+          columnVisibility={columnVisibility}
+          loading={loading}
+          emptyState={emptyState}
+          selectable={selectable}
+          allSelected={table.getIsAllRowsSelected()}
+          someSelected={table.getIsSomeRowsSelected()}
+          onToggleAll={table.getToggleAllRowsSelectedHandler()}
+        />
+      ) : (
       <div className="overflow-x-auto">
         <table className="w-full min-w-[720px] border-collapse text-sm">
           <thead className="bg-surface-subtle">
@@ -372,6 +437,7 @@ export function DataGrid<T>({
           </tbody>
         </table>
       </div>
+      )}
       {footer}
     </div>
   );

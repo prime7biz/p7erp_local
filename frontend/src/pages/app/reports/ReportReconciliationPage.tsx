@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "@/api/client";
-import { logApiError } from "@/utils/logApiError";
+import { logApiError } from "@/utils/logApiError";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
 
 export function ReportReconciliationPage() {
   const [tbBalanced, setTbBalanced] = useState<boolean | null>(null);
@@ -39,19 +40,7 @@ export function ReportReconciliationPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-text-primary">Data Reconciliation</h1>
-        <p className="text-text-muted text-sm mt-0.5">
-          Quick cross-checks across GL, inventory valuation, and bank reconciliation status.{" "}
-          <Link to="/app/accounts/reports/trial-balance" className="text-brand-primary hover:underline">
-            Trial balance
-          </Link>{" "}
-          ·{" "}
-          <Link to="/app/inventory/stock-valuation" className="text-brand-primary hover:underline">
-            Stock valuation
-          </Link>
-        </p>
-      </header>
+      <AppPageHeader title="Data Reconciliation" description="Quick cross-checks across GL, inventory valuation, and bank reconciliation status." actions={<><Link to="/app/accounts/reports/trial-balance" className="text-brand-primary hover:underline"> Trial balance </Link> <Link to="/app/inventory/stock-valuation" className="text-brand-primary hover:underline"> Stock valuation </Link></>} />
       {error && (
         <div className="rounded-lg bg-status-danger-subtle border border-status-danger/20 px-4 py-3 text-sm text-status-danger-foreground">
           {error}

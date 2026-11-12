@@ -57,7 +57,10 @@ async def suggest_bom_from_similar_style(
         }
     stmt = (
         select(Bom, GarmentStyle.style_code, GarmentStyle.name)
-        .join(GarmentStyle, GarmentStyle.id == Bom.style_id)
+        .join(
+            GarmentStyle,
+            (GarmentStyle.id == Bom.style_id) & (GarmentStyle.tenant_id == tenant_id),
+        )
         .where(Bom.tenant_id == tenant_id)
     )
     if department:

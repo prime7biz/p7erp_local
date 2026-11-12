@@ -732,7 +732,7 @@ async def calculate_interest(
     details = []
     total = Decimal("0")
     for bill in bills:
-        interest = await calculate_bill_interest(db, bill.id, as_of)
+        interest = await calculate_bill_interest(db, bill.id, as_of, tenant_id=tenant.id)
         days = (as_of - bill.due_date).days if bill.due_date else 0
         details.append(
             {

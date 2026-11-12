@@ -1,12 +1,12 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { BookOpen, CircleHelp } from "lucide-react";
-import type { TutorialArticle } from "@/data/tutorials/types";
+import { findHelpEntries, type TutorialHelpEntry } from "@/data/tutorials/helpIndex";
 import { resolveHrHelpPath } from "@/components/hr/kit/hrHubs";
 import { useAuth } from "@/context/AuthContext";
 import { logApiError } from "@/utils/logApiError";
 
-type FindArticles = (pathname: string) => TutorialArticle[];
+type FindArticles = (pathname: string) => TutorialHelpEntry[];
 
 const MAX_ARTICLES = 5;
 const LOAD_DELAY_MS = 1500;
@@ -14,22 +14,12 @@ const LOAD_DELAY_MS = 1500;
 let findArticlesPromise: Promise<FindArticles> | null = null;
 
 /**
- * Tutorial content is large, so it is loaded in its own chunk (shared with the Help pages)
- * instead of being bundled into the app shell.
+ * Loads only the small generated route index (titles, summaries, routes). The full tutorial
+ * library stays in its own chunk and is downloaded only on the Help pages.
  */
 function loadFindArticles(): Promise<FindArticles> {
-  findArticlesPromise ??= import("@/data/tutorials")
-    .then(({ getArticlesForAppPath, normalizeAppPath, tutorialSections }) => (pathname: string) => {
-      const path = normalizeAppPath(pathname).replace(/(.)\/+$/, "$1");
-      return getArticlesForAppPath(tutorialSections, path).filter(
-        (article) =>
-          path === "/app" ||
-          article.relatedAppRoutes.some((route) => {
-            const r = normalizeAppPath(route);
-            return r !== "/app" && (path === r || path.startsWith(`${r}/`));
-          }),
-      );
-    })
+  findArticlesPromise ??= import("@/data/tutorials/helpIndex.generated")
+    .then(({ tutorialHelpIndex }) => (pathname: string) => findHelpEntries(tutorialHelpIndex, pathname))
     .catch((e: unknown) => {
       findArticlesPromise = null;
       logApiError("PageHelpButton.loadTutorials", e);

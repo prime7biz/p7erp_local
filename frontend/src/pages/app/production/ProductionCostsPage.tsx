@@ -4,6 +4,7 @@ import { api, type ChartOfAccountResponse } from "@/api/client";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
+import { getChartOfAccountsCached, getCostCentersCached } from "@/lib/masterData";
 
 function todayISO() {
   return todayLocalISO();
@@ -89,7 +90,7 @@ export function ProductionCostsPage() {
         api.getCmAnalysis(period),
         api.getCmAlerts(),
         api.listWipJournals(),
-        api.listChartOfAccounts({ active_only: true }),
+        getChartOfAccountsCached({ active_only: true }),
       ]);
       if (!latest.isCurrent(token)) return;
       setCmItems((cm.items as CmAnalysisRow[]) ?? []);
@@ -109,7 +110,7 @@ export function ProductionCostsPage() {
               { id: -5, tenant_id: 0, cost_category: "bank_interest", account_id: null, cost_center_id: null, allocation_method: "equal", is_active: true },
             ],
       );
-      const cc = await api.listCostCenters({ active_only: true });
+      const cc = await getCostCentersCached({ active_only: true });
       if (!latest.isCurrent(token)) return;
       setCostCenters((cc as Array<{ id: number; center_code: string; name: string }>) ?? []);
     } catch (e) {

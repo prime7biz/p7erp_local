@@ -52,26 +52,121 @@ async def active_wage_assignment(
     ).scalar_one_or_none()
 
 
-async def structure_gross(db: AsyncSession, tenant_id: int, structure_id: int, basic: Decimal) -> Decimal:
-    """Monthly earnings of a structure for a basic: FIXED lines plus PERCENT_OF_BASE lines, deductions excluded."""
-    lines = (
-        await db.execute(
-            select(PayrollStructureLine, PayrollComponent)
-            .join(PayrollComponent, PayrollComponent.id == PayrollStructureLine.component_id)
-            .where(PayrollStructureLine.tenant_id == tenant_id, PayrollStructureLine.structure_id == structure_id)
-        )
-    ).all()
-    gross = Decimal("0")
+BASIC_COMPONENT_CODES = frozenset({"BD-BASIC", "BASIC"})
+MONTHLY_TYPES = frozenset({"FIXED", "PERCENT_OF_BASE"})
+HUNDRED = Decimal("100")
+
+
+@dataclass
+class ComponentRow:
+    """One active structure line priced for a basic (monthly view, as payroll pays it before loss of pay)."""
+
+    component_id: int
+    code: str
+    name: str
+    component_type: str
+    calculation_type: str
+    rule_amount: Decimal
+    standard_amount: Decimal | None
+    amount: Decimal | None
+    is_basic: bool
+    editable: bool
+    overridden: bool
+
+
+def is_basic_line(line: PayrollStructureLine, comp: PayrollComponent) -> bool:
+    """The line that pays the basic itself. Its amount always comes from the assignment's base salary."""
+    if (comp.code or "").strip().upper() in BASIC_COMPONENT_CODES:
+        return True
+    calc = (comp.calculation_type or "FIXED").strip().upper()
+    return (
+        calc == "PERCENT_OF_BASE"
+        and (comp.component_type or "EARNING").strip().upper() != "DEDUCTION"
+        and api_money_to_decimal(line.amount) == HUNDRED
+    )
+
+
+def is_overridable_line(line: PayrollStructureLine, comp: PayrollComponent) -> bool:
+    """Only monthly earnings other than the basic can get a per-employee amount."""
+    calc = (comp.calculation_type or "FIXED").strip().upper()
+    return (
+        (comp.component_type or "EARNING").strip().upper() != "DEDUCTION"
+        and calc in MONTHLY_TYPES
+        and not is_basic_line(line, comp)
+    )
+
+
+async def active_structure_lines(
+    db: AsyncSession, tenant_id: int, structure_id: int
+) -> list[tuple[PayrollStructureLine, PayrollComponent]]:
+    """Lines payroll uses: active components only, in payroll order."""
+    return list(
+        (
+            await db.execute(
+                select(PayrollStructureLine, PayrollComponent)
+                .join(PayrollComponent, PayrollComponent.id == PayrollStructureLine.component_id)
+                .where(
+                    PayrollStructureLine.tenant_id == tenant_id,
+                    PayrollStructureLine.structure_id == structure_id,
+                    PayrollComponent.tenant_id == tenant_id,
+                    PayrollComponent.is_active.is_(True),
+                )
+                .order_by(PayrollStructureLine.sort_order.asc(), PayrollStructureLine.id.asc())
+            )
+        ).all()
+    )
+
+
+def price_lines(
+    lines: list[tuple[PayrollStructureLine, PayrollComponent]], basic: Decimal, overrides: dict | None
+) -> list[ComponentRow]:
+    """Price each line the way payroll does (``_override_payload`` semantics) for a monthly view."""
+    from app.modules.hr_payroll.payroll_calculation_service import _override_payload
+
+    rows: list[ComponentRow] = []
     for line, comp in lines:
-        if (comp.component_type or "").upper() == "DEDUCTION":
-            continue
-        amount = api_money_to_decimal(line.amount)
-        calc = (comp.calculation_type or "FIXED").upper()
-        if calc == "PERCENT_OF_BASE":
-            gross += basic * amount / Decimal("100")
-        elif calc == "FIXED":
-            gross += amount
+        rule_amount = api_money_to_decimal(line.amount)
+        native = (comp.calculation_type or "FIXED").strip().upper()
+        override_amt, override_type = _override_payload(overrides, comp)
+        calc = (override_type or native).strip().upper()
+        source = override_amt if override_amt is not None else rule_amount
+
+        def monthly(kind: str, value: Decimal) -> Decimal | None:
+            if kind == "PERCENT_OF_BASE":
+                return (basic * value / HUNDRED).quantize(Decimal("0.01"))
+            if kind == "FIXED":
+                return value.quantize(Decimal("0.01"))
+            return None
+
+        rows.append(
+            ComponentRow(
+                component_id=comp.id,
+                code=comp.code,
+                name=comp.name,
+                component_type=(comp.component_type or "EARNING").strip().upper(),
+                calculation_type=native,
+                rule_amount=rule_amount,
+                standard_amount=monthly(native, rule_amount),
+                amount=monthly(calc, source),
+                is_basic=is_basic_line(line, comp),
+                editable=is_overridable_line(line, comp),
+                overridden=override_amt is not None or override_type is not None,
+            )
+        )
+    return rows
+
+
+def gross_of(rows: list[ComponentRow]) -> Decimal:
+    gross = sum((r.amount for r in rows if r.component_type != "DEDUCTION" and r.amount is not None), Decimal("0"))
     return gross.quantize(Decimal("0.01"))
+
+
+async def structure_gross(
+    db: AsyncSession, tenant_id: int, structure_id: int, basic: Decimal, overrides: dict | None = None
+) -> Decimal:
+    """Monthly earnings of a structure for a basic: FIXED lines plus PERCENT_OF_BASE lines (with the
+    employee's component overrides), deductions and inactive components excluded."""
+    return gross_of(price_lines(await active_structure_lines(db, tenant_id, structure_id), basic, overrides))
 
 
 async def pay_snapshot(
@@ -84,7 +179,8 @@ async def pay_snapshot(
     if asgn is not None:
         structure = await db.get(PayrollStructure, asgn.structure_id)
         code = structure.code if structure and structure.tenant_id == tenant_id else None
-        gross = await structure_gross(db, tenant_id, asgn.structure_id, basic)
+        overrides = asgn.component_overrides if isinstance(asgn.component_overrides, dict) else None
+        gross = await structure_gross(db, tenant_id, asgn.structure_id, basic, overrides)
     rate: HrBdWageScheduleRate | None = None
     source: str | None = None
     wa = await active_wage_assignment(db, tenant_id, employee.id, as_of)

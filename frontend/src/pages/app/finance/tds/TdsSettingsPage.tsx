@@ -7,7 +7,8 @@ import {
   type TdsSectionResponse,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
-import { logApiError } from "@/utils/logApiError";
+import { logApiError } from "@/utils/logApiError";
+import { getChartOfAccountsCached } from "@/lib/masterData";
 
 const emptySectionForm = (): TdsSectionBody & { id?: number } => ({
   section_code: "",
@@ -37,7 +38,7 @@ export function TdsSettingsPage() {
       const [sections, settings, coa] = await Promise.all([
         api.listTdsSections(),
         api.getTdsSettings(),
-        api.listChartOfAccounts({ active_only: true }),
+        getChartOfAccountsCached({ active_only: true }),
       ]);
       setRows(sections.rows);
       setAccounts(coa);

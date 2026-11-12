@@ -148,7 +148,7 @@ async def create_bill_from_voucher_line(
     )
     db.add(bill)
     await db.flush()
-    await update_party_ledger_balance(db, pl.id)
+    await update_party_ledger_balance(db, pl.id, tenant_id=tenant_id)
     return bill
 
 
@@ -272,7 +272,7 @@ async def allocate_to_bill(
         if notes:
             existing.notes = notes
         await db.flush()
-        await update_party_ledger_balance(db, bill.party_ledger_id)
+        await update_party_ledger_balance(db, bill.party_ledger_id, tenant_id=tenant_id)
         return existing
 
     bill.pending_amount = _money(_d(bill.pending_amount) - amt)
@@ -292,7 +292,7 @@ async def allocate_to_bill(
     )
     db.add(alloc)
     await db.flush()
-    await update_party_ledger_balance(db, bill.party_ledger_id)
+    await update_party_ledger_balance(db, bill.party_ledger_id, tenant_id=tenant_id)
     return alloc
 
 
@@ -382,9 +382,11 @@ async def calculate_bill_interest(
     db: AsyncSession,
     bill_id: int,
     as_of_date: date | None = None,
+    *,
+    tenant_id: int,
 ) -> Decimal:
     bill = await db.get(PartyLedgerBill, bill_id)
-    if not bill:
+    if not bill or bill.tenant_id != tenant_id:
         return ZERO
     if bill.status in {"SETTLED", "CANCELLED"}:
         return _d(bill.interest_accrued)
@@ -393,7 +395,7 @@ async def calculate_bill_interest(
     rate = bill.interest_rate_monthly
     if rate is None:
         pl = await db.get(PartyLedger, bill.party_ledger_id)
-        rate = pl.interest_rate_monthly if pl else None
+        rate = pl.interest_rate_monthly if pl and pl.tenant_id == tenant_id else None
     if rate is None or _d(rate) <= ZERO:
         return _d(bill.interest_accrued)
     if not bill.due_date or bill.due_date >= as_of:
@@ -452,7 +454,7 @@ async def calculate_all_interest(
     total = ZERO
     n = 0
     for bill in bills:
-        interest = await calculate_bill_interest(db, bill.id, as_of)
+        interest = await calculate_bill_interest(db, bill.id, as_of, tenant_id=tenant_id)
         if interest > ZERO:
             n += 1
             total += interest
@@ -487,7 +489,7 @@ async def cancel_bills_for_voucher(
     touched_pl: set[int] = set()
     for alloc in allocs:
         bill = await db.get(PartyLedgerBill, alloc.bill_id)
-        if bill and bill.status != "CANCELLED":
+        if bill and bill.tenant_id == tenant_id and bill.status != "CANCELLED":
             bill.pending_amount = _money(_d(bill.pending_amount) + _d(alloc.allocated_amount))
             bill.settled_amount = _money(max(ZERO, _d(bill.settled_amount) - _d(alloc.allocated_amount)))
             _refresh_bill_status(bill)
@@ -501,7 +503,7 @@ async def cancel_bills_for_voucher(
         touched_pl.add(bill.party_ledger_id)
 
     for pl_id in touched_pl:
-        await update_party_ledger_balance(db, pl_id)
+        await update_party_ledger_balance(db, pl_id, tenant_id=tenant_id)
     await db.flush()
     return len(bills)
 

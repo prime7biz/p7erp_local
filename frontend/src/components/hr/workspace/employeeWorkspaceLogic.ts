@@ -14,7 +14,11 @@ import type {
   HrOnboardingRequest,
   HrOnboardingRun,
   HrOnboardingSteps,
+  HrPayBenefit,
+  HrPayBenefitCode,
+  HrSalaryChangeType,
   HrSalaryPaymentMethod,
+  HrStructureLine,
 } from "@/api/models";
 import { readExtractedField, type HrExtractionTarget } from "@/lib/hrExtractedFields";
 
@@ -110,6 +114,9 @@ export type EmployeeFormState = {
  * `enabled` is "Set salary now" (create) or an open "Change salary" form (edit); when false no salary is sent.
  * With a wage grade the basic is the grade minimum unless `override` is on; without a grade the basic is required.
  * `acknowledged` is the on-screen override confirmation only; it is never sent to the API.
+ * `component_overrides` holds per-employee monthly amounts by component code (never the basic line;
+ * the basic is `base_salary`). `change_type` is set in edit mode only (create is always JOINING).
+ * `increment_mode` / `increment_value` only help type the new basic; they are never sent.
  */
 export type SalaryFormState = {
   enabled: boolean;
@@ -119,6 +126,11 @@ export type SalaryFormState = {
   base_salary: string;
   effective_from: string;
   acknowledged: boolean;
+  component_overrides: Record<string, string>;
+  change_type: HrSalaryChangeType | null;
+  change_note: string;
+  increment_mode: "percent" | "amount";
+  increment_value: string;
 };
 
 export const PRESENT_KEYS = [
@@ -170,7 +182,11 @@ export function emptyEmployeeForm(): EmployeeFormState {
 }
 
 export function emptySalaryForm(): SalaryFormState {
-  return { enabled: false, structure_id: null, bd_wage_rate_id: null, override: false, base_salary: "", effective_from: "", acknowledged: false };
+  return {
+    enabled: false, structure_id: null, bd_wage_rate_id: null, override: false, base_salary: "", effective_from: "",
+    acknowledged: false, component_overrides: {}, change_type: null, change_note: "", increment_mode: "percent",
+    increment_value: "",
+  };
 }
 
 const s = (v: string | null | undefined): string => v ?? "";
@@ -421,21 +437,141 @@ export function updateSalary(prev: SalaryFormState, patch: Partial<SalaryFormSta
   const payKeys = ["enabled", "structure_id", "bd_wage_rate_id", "override", "base_salary"] as const;
   if (!("acknowledged" in patch) && payKeys.some((k) => k in patch && patch[k] !== prev[k])) next.acknowledged = false;
   if (next.bd_wage_rate_id === null) next.override = false;
+  // Component codes belong to one structure; another structure starts from its own standard amounts.
+  if ("structure_id" in patch && patch.structure_id !== prev.structure_id && !("component_overrides" in patch)) {
+    next.component_overrides = {};
+  }
   return next;
 }
 
 /** "Change salary" starts from the pay in force, so saving without edits never lowers the basic. */
 export function salaryFormFromSnapshot(snapshot: HrEmployeePaySnapshot | null | undefined): SalaryFormState {
-  const base = { ...emptySalaryForm(), enabled: true };
+  const base: SalaryFormState = { ...emptySalaryForm(), enabled: true, change_type: "INCREMENT" };
   if (!snapshot) return base;
+  // Existing per-employee amounts are kept, so an increment never silently drops them.
+  const overrides = Object.fromEntries(
+    Object.entries(snapshot.component_overrides ?? {}).map(([code, amount]) => [code, normalizeMoney(amount)]),
+  );
   // An assignment without a stored basic reports "0"; that is "no basic", not a basic below the grade.
   const basic = normalizeMoney(snapshot.basic);
   const storedBasic = snapshot.structure_id !== null && basic !== "0" && basic !== "" ? basic : "";
   if (snapshot.wage_rate_id !== null) {
     const aboveGrade = storedBasic !== "" && snapshot.wage_grade_basic !== null && storedBasic !== normalizeMoney(snapshot.wage_grade_basic);
-    return { ...base, structure_id: snapshot.structure_id, bd_wage_rate_id: snapshot.wage_rate_id, override: aboveGrade, base_salary: aboveGrade ? storedBasic : "" };
+    return {
+      ...base, structure_id: snapshot.structure_id, bd_wage_rate_id: snapshot.wage_rate_id, override: aboveGrade,
+      base_salary: aboveGrade ? storedBasic : "", component_overrides: overrides,
+    };
   }
-  return { ...base, structure_id: snapshot.structure_id, base_salary: storedBasic };
+  return { ...base, structure_id: snapshot.structure_id, base_salary: storedBasic, component_overrides: overrides };
+}
+
+/** Basic after an increment of `value` percent or taka on `currentBasic`; null while the input is incomplete. */
+export function calculateIncrementBasic(currentBasic: string, mode: "percent" | "amount", value: string): string | null {
+  const base = Number(normalizeMoney(currentBasic));
+  const v = value.trim();
+  if (!isMoneyInput(v) || !Number.isFinite(base) || base < 0) return null;
+  const n = Number(v);
+  const next = mode === "percent" ? base + (base * n) / 100 : base + n;
+  return normalizeMoney(next.toFixed(2));
+}
+
+/**
+ * Patch for an increment: the new basic is typed into the basic field (an override of the grade
+ * standard when a grade is chosen), so the person can still adjust it before saving.
+ */
+export function incrementPatch(
+  salary: SalaryFormState,
+  currentBasic: string,
+  patch: Partial<Pick<SalaryFormState, "increment_mode" | "increment_value">>,
+): Partial<SalaryFormState> {
+  const mode = patch.increment_mode ?? salary.increment_mode;
+  const value = patch.increment_value ?? salary.increment_value;
+  const next = calculateIncrementBasic(currentBasic, mode, value);
+  if (next === null) return patch;
+  return { ...patch, base_salary: next, override: salary.bd_wage_rate_id !== null };
+}
+
+export type ComponentRowKind = "basic" | "editable" | "readonly";
+export type ComponentRowView = {
+  code: string;
+  name: string;
+  kind: ComponentRowKind;
+  /** "50% of basic", "Per day", ... */
+  rule: string;
+  /** Monthly amount from the structure for this basic (null for per-day / per-piece / OT lines). */
+  standard: string | null;
+  /** What this employee gets per month (the typed override, else the standard). */
+  value: string | null;
+  overridden: boolean;
+  deduction: boolean;
+};
+
+const RULE_LABELS: Record<string, string> = {
+  PER_DAY: "Per paid day",
+  PER_HOUR_OT: "Per overtime hour",
+  PER_PIECE: "Per piece",
+  PER_SAM_MINUTE: "Per standard minute",
+};
+
+/** "50% of basic", "Fixed amount", "Per paid day (60)" for a structure line. */
+export function componentRuleLabel(calculationType: string, ruleAmount: string | null | undefined): string {
+  const calc = calculationType.toUpperCase();
+  const amount = normalizeMoney(ruleAmount ?? "0");
+  if (calc === "PERCENT_OF_BASE") return `${amount}% of basic`;
+  if (calc === "FIXED") return "Fixed amount";
+  return `${RULE_LABELS[calc] ?? calc} (${amount})`;
+}
+
+function money2(n: number): string {
+  return normalizeMoney((Math.round(n * 100) / 100).toFixed(2));
+}
+
+/** The component table: one row per active structure line, priced for `basic` (display only; the API decides). */
+export function buildComponentRows(
+  lines: readonly HrStructureLine[],
+  basic: string,
+  overrides: Readonly<Record<string, string>>,
+): ComponentRowView[] {
+  const b = isMoneyInput(basic) ? Number(basic) : 0;
+  return lines.map((line) => {
+    const calc = line.calculation_type.toUpperCase();
+    const amount = Number(normalizeMoney(line.amount ?? "0")) || 0;
+    const kind: ComponentRowKind = line.is_basic ? "basic" : line.editable ? "editable" : "readonly";
+    let standard: string | null = null;
+    const rule = componentRuleLabel(calc, line.amount);
+    if (calc === "PERCENT_OF_BASE") standard = money2((b * amount) / 100);
+    else if (calc === "FIXED") standard = money2(amount);
+    if (kind === "basic") standard = isMoneyInput(basic) ? normalizeMoney(basic) : standard;
+    const typed = overrides[line.code];
+    const overridden = kind === "editable" && typed !== undefined && typed.trim() !== "";
+    return {
+      code: line.code,
+      name: line.name,
+      kind,
+      rule,
+      standard,
+      value: overridden ? typed.trim() : standard,
+      overridden,
+      deduction: line.component_type.toUpperCase() === "DEDUCTION",
+    };
+  });
+}
+
+/** Monthly gross shown under the table: earnings only, typed amounts included. */
+export function componentRowsGross(rows: readonly ComponentRowView[]): string | null {
+  const earnings = rows.filter((r) => !r.deduction && r.value !== null);
+  if (earnings.length === 0) return null;
+  return money2(earnings.reduce((sum, r) => sum + (isMoneyInput(r.value ?? "") ? Number(r.value) : 0), 0));
+}
+
+/** Overrides worth sending: the non-blank typed amounts (a blank box means "use the standard"). */
+export function cleanOverrides(overrides: Readonly<Record<string, string>>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [code, value] of Object.entries(overrides)) {
+    const v = value.trim();
+    if (v !== "") out[code] = v;
+  }
+  return out;
 }
 
 export type SalaryDateSource = "custom" | "joining" | "company_today" | "missing";
@@ -461,12 +597,19 @@ export function resolveSalaryEffectiveDate(
 /** Compensation payload; null whenever salary set-up is off, whatever hidden fields still hold. */
 export function buildCompensation(salary: SalaryFormState, effectiveFrom: string | null): HrCompensationInput | null {
   if (!salary.enabled || !salary.structure_id) return null;
-  return {
+  const overrides = cleanOverrides(salary.component_overrides);
+  const out: HrCompensationInput = {
     structure_id: salary.structure_id,
     bd_wage_rate_id: salary.bd_wage_rate_id,
     base_salary: salaryNeedsAmount(salary) ? t(salary.base_salary) : null,
     effective_from: effectiveFrom ? t(effectiveFrom) : null,
   };
+  if (Object.keys(overrides).length > 0) out.component_overrides = overrides;
+  if (salary.change_type) {
+    out.change_type = salary.change_type;
+    out.change_note = salary.change_note.trim() || null;
+  }
+  return out;
 }
 
 /** The request to preview, or null while required parts are still missing. */
@@ -474,6 +617,7 @@ export function previewableCompensation(salary: SalaryFormState, effectiveFrom: 
   const req = buildCompensation(salary, effectiveFrom);
   if (!req || !req.effective_from) return null;
   if (salaryNeedsAmount(salary) && !isMoneyInput(salary.base_salary)) return null;
+  if (Object.values(req.component_overrides ?? {}).some((v) => !isMoneyInput(v))) return null;
   return req;
 }
 
@@ -494,6 +638,15 @@ export function previewKey(req: HrCompensationInput | null): string | null {
     bd_wage_rate_id: req.bd_wage_rate_id ?? null,
     base_salary: req.base_salary ?? null,
     effective_from: req.effective_from ?? null,
+    ...(req.employee_id ? { employee_id: req.employee_id } : {}),
+    // The preview request body is parsed back from this key, so overrides stay an object (sorted keys).
+    ...(req.component_overrides && Object.keys(req.component_overrides).length > 0
+      ? {
+          component_overrides: Object.fromEntries(
+            Object.entries(req.component_overrides).sort(([a], [b]) => a.localeCompare(b)),
+          ),
+        }
+      : {}),
   });
 }
 
@@ -505,7 +658,7 @@ export function salaryBlocker(
   salary: SalaryFormState,
   effectiveFrom: string,
   preview: SalaryPreviewState,
-  opts: { mode: WorkspaceMode; joiningDate: string; joiningDateUnsaved?: boolean },
+  opts: { mode: WorkspaceMode; joiningDate: string; joiningDateUnsaved?: boolean; currentStart?: string | null },
 ): string | null {
   if (!salary.enabled) return null;
   if (opts.mode === "edit" && opts.joiningDateUnsaved) return "Save employment first: the joining date has unsaved changes.";
@@ -514,15 +667,29 @@ export function salaryBlocker(
     if (!salary.base_salary.trim()) return "Enter the basic salary.";
     if (!isMoneyInput(salary.base_salary)) return "Basic salary must be a number such as 12500 or 12500.50 (no commas).";
   }
+  const badOverride = Object.entries(cleanOverrides(salary.component_overrides)).find(([, v]) => !isMoneyInput(v));
+  if (badOverride) return `The amount for ${badOverride[0]} must be a number such as 750 or 750.50 (no commas).`;
   if (!effectiveFrom) {
     return opts.mode === "edit" ? "Choose the date the new salary starts." : "Enter a joining date or a salary start date.";
   }
   if (opts.joiningDate && effectiveFrom < opts.joiningDate) return "The salary cannot start before the joining date.";
+  if (opts.mode === "edit" && opts.currentStart && effectiveFrom <= opts.currentStart) {
+    const fixesCurrent = salary.change_type === "CORRECTION" && effectiveFrom === opts.currentStart;
+    if (!fixesCurrent) {
+      return effectiveFrom === opts.currentStart
+        ? `The current salary already starts on ${opts.currentStart}. Choose a later date, or choose Correction to fix it.`
+        : `The new salary must start after ${opts.currentStart} (when the current salary started).`;
+    }
+  }
   if (salary.bd_wage_rate_id !== null && salary.override && !salary.acknowledged) {
     return "Tick the confirmation box to use a basic salary different from the grade standard.";
   }
   const key = previewKey(previewableCompensation(salary, effectiveFrom));
-  if (preview.key !== key || preview.status === "pending" || preview.status === "idle") return "Checking the salary…";
+  // The preview request also carries employee_id (for the tax estimate); it does not change the salary check.
+  const previewSalaryKey = preview.key
+    ? JSON.stringify(Object.fromEntries(Object.entries(JSON.parse(preview.key) as Record<string, unknown>).filter(([k]) => k !== "employee_id")))
+    : null;
+  if (previewSalaryKey !== key || preview.status === "pending" || preview.status === "idle") return "Checking the salary…";
   if (preview.status === "error") return preview.message || "Could not check the salary. Try again.";
   if (preview.status === "invalid") return preview.message || "The salary is below the legal minimum.";
   return null;
@@ -544,22 +711,80 @@ export function buildOnboardingRequest(
   issueTempGatePass: boolean,
   omit: readonly string[] = [],
   asOf: string | null = null,
+  payBenefits: HrPayBenefit[] | null = null,
 ): HrOnboardingRequest {
-  return {
+  const body: HrOnboardingRequest = {
     request_id: requestId,
     employee: buildEmployeeCreate(form, omit),
     compensation: buildCompensation(salary, resolveSalaryEffectiveDate(salary, "create", form.joining_date, asOf).date),
     issue_temp_gate_pass: issueTempGatePass,
   };
+  if (payBenefits && payBenefits.length > 0) body.pay_benefits = payBenefits;
+  return body;
 }
 
 /** Body to resume a partly failed onboarding: retry only the steps that did not finish. */
 export function buildResumeSteps(run: HrOnboardingRun, request: HrOnboardingRequest): HrOnboardingSteps {
   const pending = (st: string) => st === "FAILED" || st === "PENDING";
-  return {
+  const steps: HrOnboardingSteps = {
     compensation: pending(run.steps.payroll) ? request.compensation ?? null : null,
     issue_temp_gate_pass: pending(run.steps.gate_pass) ? Boolean(request.issue_temp_gate_pass) : false,
   };
+  if (pending(run.steps.payroll) && request.pay_benefits) steps.pay_benefits = request.pay_benefits;
+  return steps;
+}
+
+// --- Overtime and bill switches ------------------------------------------------------------------------
+
+export const PAY_BENEFIT_CODES: readonly HrPayBenefitCode[] = ["OVERTIME", "FRIDAY", "TIFFIN", "LUNCH", "DINNER", "NIGHT"];
+export const PAY_BENEFIT_LABELS: Record<HrPayBenefitCode, string> = {
+  OVERTIME: "Overtime",
+  FRIDAY: "Friday allowance",
+  TIFFIN: "Tiffin bill",
+  LUNCH: "Lunch bill",
+  DINNER: "Dinner bill",
+  NIGHT: "Night bill",
+};
+
+/** One switch per code; `amount` is the employee's own amount per qualifying day ("" = company rate). */
+export type PayBenefitsState = Record<HrPayBenefitCode, { enabled: boolean; amount: string }>;
+
+/** Everything on at the company rate: the same as an employee with no saved switches. */
+export function emptyPayBenefits(): PayBenefitsState {
+  return Object.fromEntries(PAY_BENEFIT_CODES.map((c) => [c, { enabled: true, amount: "" }])) as PayBenefitsState;
+}
+
+export function payBenefitsFromApi(rows: readonly HrPayBenefit[] | null | undefined): PayBenefitsState {
+  const state = emptyPayBenefits();
+  for (const row of rows ?? []) {
+    if (!(row.benefit_code in state)) continue;
+    state[row.benefit_code] = {
+      enabled: row.enabled,
+      amount: row.benefit_code === "OVERTIME" ? "" : normalizeMoney(row.amount_override ?? ""),
+    };
+  }
+  return state;
+}
+
+export function buildPayBenefitsPayload(state: PayBenefitsState): HrPayBenefit[] {
+  return PAY_BENEFIT_CODES.map((code) => {
+    const amount = state[code].amount.trim();
+    return {
+      benefit_code: code,
+      enabled: state[code].enabled,
+      amount_override: code === "OVERTIME" || !state[code].enabled || amount === "" ? null : amount,
+    };
+  });
+}
+
+/** Why the switches cannot be saved yet, or null. */
+export function payBenefitsBlocker(state: PayBenefitsState): string | null {
+  for (const code of PAY_BENEFIT_CODES) {
+    const { enabled, amount } = state[code];
+    if (code === "OVERTIME" || !enabled || amount.trim() === "") continue;
+    if (!isMoneyInput(amount)) return `${PAY_BENEFIT_LABELS[code]}: the amount must be a number such as 50 or 50.50 (no commas).`;
+  }
+  return null;
 }
 
 /** 4xx step errors (bad salary, missing data) need a correction, not a retry. */

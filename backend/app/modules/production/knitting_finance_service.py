@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -12,12 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.business_date import today_local
 from app.common.codegen import next_tenant_code
 from app.models import Customer, OutstandingBill, ProcessOrder, Tenant, Vendor
-from app.modules.finance.auto_posting_service import AutoPostingLine, create_system_voucher
+from app.modules.finance.auto_posting_service import AutoPostingLine, create_system_voucher, to_money_decimal
 from app.services.inventory_account_resolver import resolve_inventory_accounts
 
 
-def _money_to_decimal(amount: float) -> Decimal:
-    return Decimal(str(round(float(amount), 2)))
+def _money_to_decimal(amount: Decimal | str | float) -> Decimal:
+    """Knitting charges are 2-dp money; legacy float callers are read through str, never binary maths."""
+    return to_money_decimal(amount, field="knitting_charge_amount").quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 async def maybe_post_knitting_subcontract_accrual_before_receive_gl(
@@ -26,7 +27,7 @@ async def maybe_post_knitting_subcontract_accrual_before_receive_gl(
     tenant_id: int,
     user_id: int | None,
     po: ProcessOrder,
-    knitting_charge_amount: float,
+    knitting_charge_amount: Decimal | str | float,
     movement_date: date,
 ) -> None:
     """Subcontract knitting: debit WIP, credit AP (before FG receipt clears WIP at full cost)."""
@@ -37,7 +38,7 @@ async def maybe_post_knitting_subcontract_accrual_before_receive_gl(
         return
     if po.knitting_service_voucher_id is not None:
         return
-    if knitting_charge_amount <= 0:
+    if _money_to_decimal(knitting_charge_amount) <= 0:
         return
     if po.vendor_id is None:
         raise HTTPException(
@@ -84,7 +85,7 @@ async def maybe_post_knitting_subcontract_accrual_before_receive_gl(
     po.knitting_service_voucher_id = v.id
     await db.flush()
 
-    vr = await db.execute(select(Vendor).where(Vendor.id == po.vendor_id))
+    vr = await db.execute(select(Vendor).where(Vendor.id == po.vendor_id, Vendor.tenant_id == tenant_id))
     vendor = vr.scalars().first()
     party_name = vendor.name.strip() if vendor and vendor.name else f"VENDOR-{po.vendor_id}"
     prefix = "AP-"
@@ -103,7 +104,7 @@ async def maybe_post_knitting_subcontract_accrual_before_receive_gl(
         bill_type="PAYABLE",
         bill_date=doc_date,
         due_date=due,
-        amount=str(round(float(knitting_charge_amount), 2)),
+        amount=str(amt),
         paid_amount="0",
         currency=base_currency,
         status="OPEN",
@@ -119,7 +120,7 @@ async def maybe_post_knitting_jobwork_revenue_after_receive_gl(
     tenant_id: int,
     user_id: int | None,
     po: ProcessOrder,
-    knitting_charge_amount: float,
+    knitting_charge_amount: Decimal | str | float,
     movement_date: date,
 ) -> None:
     """Customer job knitting: debit AR / credit Service revenue after greige receipt (charge excluded from stock value)."""
@@ -130,7 +131,7 @@ async def maybe_post_knitting_jobwork_revenue_after_receive_gl(
         return
     if po.knitting_service_voucher_id is not None:
         return
-    if knitting_charge_amount <= 0:
+    if _money_to_decimal(knitting_charge_amount) <= 0:
         return
     if po.customer_id is None:
         raise HTTPException(
@@ -167,7 +168,7 @@ async def maybe_post_knitting_jobwork_revenue_after_receive_gl(
     po.knitting_service_voucher_id = v.id
     await db.flush()
 
-    cr = await db.execute(select(Customer).where(Customer.id == po.customer_id))
+    cr = await db.execute(select(Customer).where(Customer.id == po.customer_id, Customer.tenant_id == tenant_id))
     customer = cr.scalars().first()
     party_name = customer.name.strip() if customer and customer.name else f"CUSTOMER-{po.customer_id}"
 
@@ -182,7 +183,7 @@ async def maybe_post_knitting_jobwork_revenue_after_receive_gl(
         bill_type="RECEIVABLE",
         bill_date=doc_date,
         due_date=due,
-        amount=str(round(float(knitting_charge_amount), 2)),
+        amount=str(amt),
         paid_amount="0",
         currency=currency,
         status="OPEN",

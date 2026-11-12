@@ -1,18 +1,33 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Link } from "react-router-dom";
-import type { HrCompensationOptions, HrEmployeeCompensationView } from "@/api/client";
+import type {
+  HrCompensationComponent,
+  HrCompensationOptions,
+  HrEmployeeCompensationView,
+  HrSalaryChangeType,
+} from "@/api/client";
 import { CheckboxField, Section, SelectField, TextField } from "./formControls";
 import {
   addFacility,
+  buildComponentRows,
+  componentRowsGross,
+  componentRuleLabel,
   FACILITY_SUGGESTIONS,
+  incrementPatch,
+  isMoneyInput,
   normalizeMoney,
+  salaryNeedsAmount,
   toggleFacility,
+  type ComponentRowView,
   type EmployeeFormState,
+  type PayBenefitsState,
   type SalaryDateSource,
   type SalaryFormState,
   type SalaryPreviewState,
   type WorkspaceMode,
 } from "./employeeWorkspaceLogic";
+import { PayBenefitsSection } from "./PayBenefitsSection";
+import { SalaryTdsCard, TdsEstimateBox } from "./SalaryTdsCard";
 
 export type SalaryStatus = { kind: "success" | "error"; text: string } | null;
 
@@ -36,7 +51,164 @@ type Props = {
   onSaveSalary?: () => void;
   savingSalary?: boolean;
   salaryStatus?: SalaryStatus;
+  /** Overtime + bill switches (payroll permission only). */
+  payBenefits?: PayBenefitsState;
+  onPayBenefitsChange?: (next: PayBenefitsState) => void;
+  payBenefitsBlocker?: string | null;
+  onSavePayBenefits?: () => void;
+  savingPayBenefits?: boolean;
+  payBenefitsStatus?: SalaryStatus;
+  payBenefitsDirty?: boolean;
+  /** Edit mode: saved employee id, and a reload of the current salary after the tax profile changed. */
+  employeeId?: number;
+  onTaxProfileSaved?: () => void;
 };
+
+const CHANGE_TYPES: { value: HrSalaryChangeType; label: string }[] = [
+  { value: "INCREMENT", label: "Increment" },
+  { value: "PROMOTION", label: "Promotion" },
+  { value: "CORRECTION", label: "Correction (fix a mistake)" },
+];
+
+const CHANGE_HINTS: Record<HrSalaryChangeType, string> = {
+  INCREMENT: "A raise from a later date. The new basic is calculated below and you can still change it.",
+  PROMOTION: "New grade or structure from a later date.",
+  CORRECTION: "Fixes a wrong salary. Use the current start date to correct it in place (only before payroll is run for it).",
+};
+
+function ComponentTable({
+  rows,
+  gross,
+  overrides,
+  onOverride,
+}: {
+  rows: ComponentRowView[];
+  gross: string | null;
+  overrides: Readonly<Record<string, string>>;
+  onOverride: (code: string, value: string | null) => void;
+}) {
+  if (rows.length === 0) {
+    return (
+      <p className="sm:col-span-2 lg:col-span-3 text-xs text-text-muted">
+        This structure has no active components yet. Add them under Payroll → Salary structures.
+      </p>
+    );
+  }
+  return (
+    <div className="sm:col-span-2 lg:col-span-3 overflow-x-auto rounded-lg border border-border">
+      <table className="min-w-full text-sm">
+        <thead className="bg-surface-subtle text-xs text-text-muted">
+          <tr>
+            <th className="px-3 py-2 text-left font-medium">Component</th>
+            <th className="px-3 py-2 text-left font-medium">Rule</th>
+            <th className="px-3 py-2 text-right font-medium">Standard</th>
+            <th className="px-3 py-2 text-right font-medium">This employee (per month)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.code} className="border-t border-border">
+              <td className="px-3 py-2">
+                <span className="font-medium text-text-primary">{r.name}</span>
+                {r.deduction && <span className="ml-2 rounded bg-surface-subtle px-1.5 py-0.5 text-[11px] text-text-muted">Deduction</span>}
+              </td>
+              <td className="px-3 py-2 text-xs text-text-muted">{r.rule}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{r.standard ?? "—"}</td>
+              <td className="px-3 py-2 text-right">
+                {r.kind === "editable" ? (
+                  <div className="flex items-center justify-end gap-2">
+                    <input
+                      aria-label={`${r.name} amount for this employee`}
+                      className="w-28 rounded border border-border-strong bg-surface-raised px-2 py-1 text-right text-sm tabular-nums"
+                      inputMode="numeric"
+                      placeholder={r.standard ?? ""}
+                      value={overrides[r.code] ?? ""}
+                      onChange={(e) => onOverride(r.code, e.target.value)}
+                    />
+                    {r.overridden && (
+                      <button type="button" className="text-xs text-brand-primary hover:underline" onClick={() => onOverride(r.code, null)}>
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                ) : r.kind === "basic" ? (
+                  <span className="tabular-nums text-text-primary" title="Change the basic salary above">
+                    {r.value ?? "—"} <span className="text-xs text-text-muted">(basic)</span>
+                  </span>
+                ) : (
+                  <span className="text-xs text-text-muted">{r.value ?? "Calculated in payroll"}</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="border-t border-border bg-surface-subtle">
+            <td className="px-3 py-2 text-sm font-semibold text-text-primary" colSpan={3}>
+              Monthly gross
+            </td>
+            <td className="px-3 py-2 text-right text-sm font-semibold tabular-nums text-text-primary">{gross ?? "—"}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
+/** The salary in force, line by line (read-only). */
+function CurrentComponents({ components, gross }: { components: HrCompensationComponent[]; gross: string }) {
+  const earnings = components.filter((c) => c.component_type !== "DEDUCTION");
+  const deductions = components.filter((c) => c.component_type === "DEDUCTION");
+  const row = (c: HrCompensationComponent) => (
+    <tr key={c.code} className="border-t border-border">
+      <td className="px-3 py-1.5">
+        <span className="text-text-primary">{c.name}</span>
+        {c.overridden && (
+          <span className="ml-2 rounded bg-status-warning-subtle px-1.5 py-0.5 text-[11px] text-text-secondary">Own amount</span>
+        )}
+      </td>
+      <td className="px-3 py-1.5 text-text-muted">{componentRuleLabel(c.calculation_type, c.rule_amount)}</td>
+      <td className="px-3 py-1.5 text-right tabular-nums text-text-primary">
+        {c.amount !== null ? normalizeMoney(c.amount) : <span className="text-text-muted">Calculated in payroll</span>}
+        {c.overridden && c.standard_amount !== null && (
+          <span className="block text-[11px] text-text-muted">Standard {normalizeMoney(c.standard_amount)}</span>
+        )}
+      </td>
+    </tr>
+  );
+  return (
+    <div className="sm:col-span-2 lg:col-span-3 overflow-x-auto rounded-lg border border-border">
+      <table className="min-w-full text-xs">
+        <thead className="bg-surface-subtle">
+          <tr>
+            <th className="px-3 py-1.5 text-left uppercase">Component</th>
+            <th className="px-3 py-1.5 text-left uppercase">Rule</th>
+            <th className="px-3 py-1.5 text-right uppercase">Per month</th>
+          </tr>
+        </thead>
+        <tbody>{earnings.map(row)}</tbody>
+        <tbody>
+          <tr className="border-t border-border bg-surface-subtle font-semibold">
+            <td className="px-3 py-1.5 text-text-primary" colSpan={2}>
+              Gross salary
+            </td>
+            <td className="px-3 py-1.5 text-right tabular-nums text-text-primary">{normalizeMoney(gross)}</td>
+          </tr>
+        </tbody>
+        {deductions.length > 0 && (
+          <tbody>
+            <tr className="border-t border-border">
+              <td className="px-3 pt-2 text-[11px] font-semibold uppercase text-text-muted" colSpan={3}>
+                Deductions
+              </td>
+            </tr>
+            {deductions.map(row)}
+          </tbody>
+        )}
+      </table>
+    </div>
+  );
+}
 
 const PAYMENT_METHODS = [
   { value: "bank", label: "Bank transfer" },
@@ -46,7 +218,7 @@ const PAYMENT_METHODS = [
 
 function dateHint(mode: WorkspaceMode, effective: Props["effective"]): string {
   if (mode === "edit") return "The current salary period ends the day before this date.";
-  if (effective.source === "joining") return `Leave empty to start on the joining date (${effective.date}).`;
+  if (effective.source === "joining") return "Taken from the joining date. Type another date to change it.";
   if (effective.source === "company_today") return `No joining date yet, so the salary starts today (${effective.date}). Enter a date to change it.`;
   if (effective.source === "missing") return "Enter a joining date on this tab or a salary start date.";
   return "";
@@ -95,6 +267,8 @@ function PreviewBox({ preview }: { preview: SalaryPreviewState }) {
 export function SalaryTab({
   mode, canManagePayroll, options, salary, onSalaryChange, preview, effective, blocker, form, setField, masked,
   current, onStartChange, onCancelChange, onSaveSalary, savingSalary, salaryStatus,
+  payBenefits, onPayBenefitsChange, payBenefitsBlocker, onSavePayBenefits, savingPayBenefits, payBenefitsStatus,
+  payBenefitsDirty, employeeId, onTaxProfileSaved,
 }: Props) {
   const [customFacility, setCustomFacility] = useState("");
   const grades = options?.wage_grades ?? [];
@@ -114,7 +288,26 @@ export function SalaryTab({
     gradeOptions.unshift({ value: String(snapshot.wage_rate_id), label: `${snapshot.wage_rate_code ?? "Current"} (current)` });
   }
   const standardBasic = grade?.basic ?? (snapshot?.wage_rate_id === salary.bd_wage_rate_id ? snapshot?.wage_grade_basic : null) ?? null;
+  const gradeGross = grade?.gross ?? (snapshot?.wage_rate_id === salary.bd_wage_rate_id ? snapshot?.wage_grade_gross : null) ?? null;
   const showForm = salary.enabled;
+
+  const structureLines = options?.structures.find((s) => s.id === salary.structure_id)?.lines ?? [];
+  const effectiveBasic = salaryNeedsAmount(salary) ? salary.base_salary.trim() : normalizeMoney(standardBasic ?? "");
+  const componentRows = buildComponentRows(structureLines, effectiveBasic, salary.component_overrides);
+  const previewGross = preview.status === "valid" || preview.status === "invalid" ? preview.preview?.gross ?? null : null;
+  const tableGross = previewGross ? normalizeMoney(previewGross) : componentRowsGross(componentRows);
+  const setOverride = (code: string, value: string | null) => {
+    const next = { ...salary.component_overrides };
+    if (value === null) delete next[code];
+    else next[code] = value;
+    onSalaryChange({ component_overrides: next });
+  };
+
+  const currentBasic = snapshot ? normalizeMoney(snapshot.basic) : "";
+  const defaultIncrementPct = normalizeMoney(grade?.annual_increment_pct ?? options?.annual_increment_pct ?? "5");
+  const changeIncrement = (patch: Partial<Pick<SalaryFormState, "increment_mode" | "increment_value">>) =>
+    onSalaryChange(incrementPatch(salary, currentBasic, patch));
+  const shownDate = salary.effective_from || (mode === "create" ? effective.date : "");
 
   const statusBox = salaryStatus && (
     <div
@@ -151,7 +344,15 @@ export function SalaryTab({
                     <p className="text-xs text-text-muted">Wage grade</p>
                     <p className="text-text-primary">{snapshot.wage_rate_code ?? "—"}</p>
                   </div>
+                  {(snapshot.components ?? []).length > 0 && (
+                    <CurrentComponents components={snapshot.components ?? []} gross={snapshot.gross} />
+                  )}
                 </>
+              )}
+              {employeeId != null && (current?.tds_estimate || canManagePayroll) && (
+                <div className="sm:col-span-2 lg:col-span-3">
+                  <SalaryTdsCard employeeId={employeeId} estimate={current?.tds_estimate} canManage={canManagePayroll} onSaved={() => onTaxProfileSaved?.()} />
+                </div>
               )}
               {current && current.structure_assignments.length > 0 && (
                 <div className="sm:col-span-2 lg:col-span-3 overflow-x-auto">
@@ -215,6 +416,62 @@ export function SalaryTab({
               )}
               {showForm && (
                 <>
+                  {mode === "edit" && (
+                    <div className="sm:col-span-2 lg:col-span-3 grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface-subtle p-3 sm:grid-cols-2 lg:grid-cols-3">
+                      <SelectField
+                        label="Type of change *"
+                        value={salary.change_type ?? "INCREMENT"}
+                        onChange={(v) => onSalaryChange({ change_type: (v || "INCREMENT") as HrSalaryChangeType })}
+                        options={CHANGE_TYPES}
+                        allowEmpty={false}
+                        hint={CHANGE_HINTS[salary.change_type ?? "INCREMENT"]}
+                      />
+                      {(salary.change_type ?? "INCREMENT") === "INCREMENT" && (
+                        <div>
+                          <p className="mb-1 text-xs font-medium text-text-muted">Increment</p>
+                          <div className="flex gap-2">
+                            <select
+                              aria-label="Increment type"
+                              className="rounded border border-border-strong bg-surface-raised px-2 py-2 text-sm"
+                              value={salary.increment_mode}
+                              onChange={(e) => changeIncrement({ increment_mode: e.target.value as "percent" | "amount" })}
+                            >
+                              <option value="percent">% of basic</option>
+                              <option value="amount">Taka</option>
+                            </select>
+                            <input
+                              aria-label="Increment value"
+                              className="w-full rounded border border-border-strong bg-surface-raised px-3 py-2 text-sm"
+                              inputMode="numeric"
+                              placeholder={salary.increment_mode === "percent" ? defaultIncrementPct : "e.g. 500"}
+                              value={salary.increment_value}
+                              onChange={(e) => changeIncrement({ increment_value: e.target.value })}
+                            />
+                          </div>
+                          <p className="mt-1 text-xs text-text-muted">
+                            Current basic {currentBasic || "—"}.{" "}
+                            <button
+                              type="button"
+                              className="text-brand-primary hover:underline"
+                              onClick={() => changeIncrement({ increment_mode: "percent", increment_value: defaultIncrementPct })}
+                            >
+                              Use the annual increment ({defaultIncrementPct}%)
+                            </button>
+                          </p>
+                          {salary.increment_value.trim() !== "" && !isMoneyInput(salary.increment_value) && (
+                            <p className="mt-1 text-xs text-status-danger">Type a number such as 5 or 500.</p>
+                          )}
+                        </div>
+                      )}
+                      <TextField
+                        label="Note (optional)"
+                        value={salary.change_note}
+                        onChange={(v) => onSalaryChange({ change_note: v })}
+                        maxLength={2000}
+                        placeholder="e.g. Annual increment 2026"
+                      />
+                    </div>
+                  )}
                   <SelectField
                     label="Salary structure *"
                     value={salary.structure_id ? String(salary.structure_id) : ""}
@@ -242,6 +499,17 @@ export function SalaryTab({
                         : "The legal minimum pay. A salary below it is refused."
                     }
                   />
+                  <div className="rounded-lg border border-border bg-surface-subtle px-3 py-2 text-sm">
+                    <p className="text-xs font-medium text-text-muted">Legal minimum</p>
+                    {salary.bd_wage_rate_id !== null && (standardBasic || gradeGross) ? (
+                      <p className="mt-1 text-text-primary">
+                        Basic <span className="font-semibold">{normalizeMoney(standardBasic ?? "") || "—"}</span> · Gross{" "}
+                        <span className="font-semibold">{normalizeMoney(gradeGross ?? "") || "—"}</span>
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-xs text-text-muted">No wage grade chosen, so no legal minimum is checked.</p>
+                    )}
+                  </div>
                   {salary.bd_wage_rate_id !== null ? (
                     <div className="text-sm">
                       <p className="text-xs font-medium text-text-muted">Standard basic salary</p>
@@ -290,15 +558,19 @@ export function SalaryTab({
                       </div>
                     </>
                   )}
+                  {salary.structure_id !== null && (
+                    <ComponentTable rows={componentRows} gross={tableGross} overrides={salary.component_overrides} onOverride={setOverride} />
+                  )}
                   <TextField
                     label={mode === "edit" ? "New salary starts on" : "Salary starts on"}
                     required={mode === "edit"}
                     type="date"
-                    value={salary.effective_from}
+                    value={shownDate}
                     onChange={(v) => onSalaryChange({ effective_from: v })}
                     hint={dateHint(mode, effective)}
                   />
                   <PreviewBox preview={preview} />
+                  <TdsEstimateBox estimate={preview.preview?.tds_estimate} title="Income tax (TDS) for this salary" />
                   {blocker && preview.status !== "pending" && (
                     <p className="sm:col-span-2 lg:col-span-3 text-xs font-medium text-status-warning-foreground" role="status">
                       {mode === "create" ? "Before you can create the employee: " : "Before you can save: "}
@@ -329,6 +601,19 @@ export function SalaryTab({
                 </>
               )}
             </Section>
+          )}
+          {payBenefits && onPayBenefitsChange && (
+            <PayBenefitsSection
+              mode={mode}
+              value={payBenefits}
+              onChange={onPayBenefitsChange}
+              billRules={options?.bill_rules ?? []}
+              blocker={payBenefitsBlocker ?? null}
+              dirty={payBenefitsDirty ?? false}
+              onSave={onSavePayBenefits}
+              saving={savingPayBenefits}
+              status={payBenefitsStatus}
+            />
           )}
         </>
       ) : (
@@ -367,7 +652,7 @@ export function SalaryTab({
         ))}
       </Section>
 
-      <Section title="Facilities" description="Printed on the appointment letter.">
+      <Section title="Facilities" description="Printed on the appointment letter." collapsibleOnPhone>
         <div className="sm:col-span-2 lg:col-span-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[...FACILITY_SUGGESTIONS, ...form.facilities.filter((f) => !(FACILITY_SUGGESTIONS as readonly string[]).includes(f))].map((name) => (
             <CheckboxField key={name} label={name} checked={form.facilities.includes(name)} onChange={() => setField("facilities", toggleFacility(form.facilities, name))} />
@@ -402,3 +687,4 @@ export function SalaryTab({
     </div>
   );
 }
+

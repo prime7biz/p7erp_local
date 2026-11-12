@@ -1,5 +1,5 @@
 /**
- * Tiffin / dinner / night bills from attendance, production bonus from output, and the optional
+ * Tiffin / lunch / dinner / night bills and the Friday allowance from attendance, production bonus from output, and the optional
  * Eid / festival bonus. Entries are generated, reviewed, approved by a manager and then picked up
  * by the next payroll run (or a final settlement) exactly once.
  */
@@ -14,12 +14,19 @@ import { HrPageHeader } from "@/components/hr/HrPageHeader";
 
 type Tab = "meal" | "production" | "festival";
 
-const BILL_LABEL: Record<string, string> = { TIFFIN: "Tiffin bill", DINNER: "Dinner bill", NIGHT: "Night bill" };
+const BILL_LABEL: Record<string, string> = {
+  TIFFIN: "Tiffin bill",
+  LUNCH: "Lunch bill",
+  DINNER: "Dinner bill",
+  NIGHT: "Night bill",
+  FRIDAY: "Friday allowance",
+};
 const BASIS_LABEL: Record<string, string> = {
   PRESENT: "Every present day",
   NIGHT_SHIFT: "Night-shift day",
   MIN_WORK_MINUTES: "Worked at least N minutes",
   MIN_OT_MINUTES: "Overtime at least N minutes",
+  WEEKLY_HOLIDAY: "Present on the weekly holiday (Friday)",
 };
 
 function monthStart(): string {
@@ -55,7 +62,10 @@ function MealBills() {
   return (
     <div className="space-y-4">
       <Messages error={error || rules.error || entries.error} notice={notice} />
-      <Card title="Bill rules" description="Company rules for tiffin, dinner and night bills. A manager approves a rule before it is used.">
+      <Card
+        title="Bill rules"
+        description="Company rules for tiffin, lunch, dinner and night bills and the Friday allowance. A manager approves a rule before it is used. Each employee's profile can switch a bill off or set an own amount."
+      >
         <div className="grid gap-3 sm:grid-cols-4">
           <Field label="Code" htmlFor="al-code">
             <input id="al-code" className={inputCls} maxLength={24} value={rule.code} onChange={(e) => setRule((r) => ({ ...r, code: e.target.value }))} />
@@ -546,13 +556,13 @@ export function HrAllowancesBonusesPage() {
     <div className="space-y-6">
       <HrPageHeader
         title="Allowances & bonuses"
-        description="Tiffin, dinner and night bills, production bonus and the Eid / festival bonus. Each needs its switch in Settings → Configuration (off by default)."
+        description="Tiffin, lunch, dinner and night bills, the Friday allowance, production bonus and the Eid / festival bonus. Each needs its switch in Settings → Configuration (off by default)."
         breadcrumbs={[{ label: "HR", href: "/app/hr" }, { label: "Payroll", href: "/app/hr/payroll/runs" }, { label: "Allowances & bonuses" }]}
       />
       <div role="tablist" className="flex flex-wrap gap-2 border-b border-border pb-2">
         {(
           [
-            ["meal", "Tiffin / dinner / night bills"],
+            ["meal", "Bills & Friday allowance"],
             ["production", "Production bonus"],
             ["festival", "Eid / festival bonus"],
           ] as const

@@ -24,6 +24,8 @@ import { findPartyLedgerByAccount } from "@/lib/remoteSelectFetchers";
 import { voucherPrintVerificationUrl } from "@/utils/verifyPrintUrl";
 import { moneyEquals, sumMoneyBy } from "@/lib/money";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { getChartOfAccountsCached, getCostCentersCached } from "@/lib/masterData";
+import { useConfirm } from "@/components/app/useConfirm";
 
 const WORKFLOW_STEPS = ["DRAFT", "SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED", "POSTED"];
 const ACTION_TO_STATUS: Record<string, string> = {
@@ -66,6 +68,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export function VoucherDetailPage() {
+  const confirm = useConfirm();
   const { voucherId } = useParams<{ voucherId: string }>();
   const navigate = useNavigate();
   const { me } = useAuth();
@@ -105,8 +108,8 @@ export function VoucherDetailPage() {
     try {
       const [v, a, c] = await Promise.all([
         api.getVoucher(id),
-        api.listChartOfAccounts({ active_only: false }),
-        api.listCostCenters({ active_only: false }),
+        getChartOfAccountsCached({ active_only: false }),
+        getCostCentersCached({ active_only: false }),
       ]);
       if (!latest.isCurrent(token)) return;
       setVoucher(v);
@@ -265,9 +268,11 @@ export function VoucherDetailPage() {
           return;
         }
         if (pre.warnings?.length && (pre.mode === "warn" || pre.status === "near_limit" || pre.status === "exceeded")) {
-          const ok = window.confirm(
-            `${pre.warning_message || pre.warnings.join("\n")}\n\nPost this voucher anyway?`,
-          );
+          const ok = await confirm({
+            title: "Post this voucher anyway?",
+            description: pre.warning_message || pre.warnings.join("\n"),
+            confirmLabel: "Post anyway",
+          });
           if (!ok) return;
         }
         await runAction("post", "");
@@ -283,7 +288,7 @@ export function VoucherDetailPage() {
 
   async function handleDelete() {
     if (!voucher) return;
-    if (!window.confirm("Delete this voucher permanently?")) return;
+    if (!(await confirm({ title: "Delete this voucher permanently?", danger: true }))) return;
     try {
       await api.deleteVoucher(voucher.id);
       navigate("/app/accounts/vouchers");

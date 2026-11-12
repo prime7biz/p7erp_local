@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models import ProformaInvoice, ProformaInvoiceOrder, Voucher
 from app.models.commercial import ProformaReceiptAllocation
-from app.modules.finance.auto_posting_service import AutoPostingLine, create_system_voucher
+from app.modules.finance.auto_posting_service import AutoPostingLine, create_system_voucher, quantize_rate
 
 ACTIVE_ALLOCATION_STATUSES = ("PENDING", "POSTED")
 POSTED_ALLOCATION_STATUS = "POSTED"
@@ -173,6 +173,7 @@ async def create_receipt_from_proforma(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="exchange_rate_to_base must be greater than zero",
         )
+    rate = quantize_rate(rate)  # same 6-dp rate the voucher stores, so allocation and voucher agree
 
     outstanding = await get_proforma_outstanding(db, tenant_id=tenant_id, pi=pi)
     if amt > outstanding.outstanding_for_new:
@@ -217,7 +218,7 @@ async def create_receipt_from_proforma(
         source_module_ref=str(pi.id),
         currency=cur,
         base_currency=None,
-        exchange_rate=float(rate),
+        exchange_rate=rate,
         auto_post=False,
     )
     voucher.order_id = primary_order_id

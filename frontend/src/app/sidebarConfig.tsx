@@ -100,6 +100,11 @@ export interface MenuSection {
   /** When set, render collapsible sub-groups instead of a flat item list. */
   subsections?: NavSubsection[];
   visibleFor?: TenantTypeFilter[];
+  /**
+   * Left out of the phone / tablet More menu when the tenant flag `mobile_ui_v2` is on.
+   * Navigation only: the desktop sidebar, header search, routes and permissions are unchanged.
+   */
+  hideInMobileMenu?: boolean;
 }
 
 export interface BottomNavItem {
@@ -113,6 +118,8 @@ export interface BottomNavItem {
   isMore?: boolean;
   /** Same RBAC key as the matching sidebar section; checked only while RBAC is enforced. */
   permissionKey?: string;
+  /** Sidebar section this tab belongs to; with `mobile_ui_v2` the tab shows only while that section is visible. */
+  section?: string;
 }
 
 const PREFIX = "/app";
@@ -608,6 +615,7 @@ export const menuSections: MenuSection[] = [
   {
     section: "AI Tools",
     icon: Sparkles,
+    hideInMobileMenu: true,
     items: [
       { icon: Sparkles, label: "AI Assistant", href: `${PREFIX}/ai/assistant` },
       { icon: Zap, label: "AI Automation", href: `${PREFIX}/ai/automation` },
@@ -858,6 +866,7 @@ export const menuSections: MenuSection[] = [
   {
     section: "Reports",
     icon: BarChart3,
+    hideInMobileMenu: true,
     items: [
       { icon: BarChart3, label: "Analytics", href: `${PREFIX}/reports` },
       { icon: Shirt, label: "Merchandising", href: `${PREFIX}/reports/merchandising` },
@@ -882,6 +891,7 @@ export const menuSections: MenuSection[] = [
   {
     section: "Settings",
     icon: Settings,
+    hideInMobileMenu: true,
     items: [
       { icon: Wrench, label: "Configuration", href: `${PREFIX}/settings/config` },
       { icon: Settings, label: "Settings", href: `${PREFIX}/settings` },
@@ -902,68 +912,104 @@ export const menuSections: MenuSection[] = [
   },
 ];
 
-export const bottomNavItems: BottomNavItem[] = [
-  {
-    key: "home",
-    icon: LayoutDashboard,
-    label: "Home",
-    href: `${PREFIX}`,
-    exact: true,
-  },
-  {
-    key: "sales",
-    icon: ShoppingCart,
-    label: "Sales",
-    href: `${PREFIX}/orders`,
-    permissionKey: "merch.access",
-    matchPrefixes: [
-      `${PREFIX}/orders`,
-      `${PREFIX}/inquiries`,
-      `${PREFIX}/quotations`,
-      `${PREFIX}/customers`,
-      `${PREFIX}/merchandising`,
-      `${PREFIX}/bom`,
-      `${PREFIX}/commercial`,
-      `${PREFIX}/trade`,
-      `${PREFIX}/logistics`,
-      `${PREFIX}/followup`,
-      `${PREFIX}/parties`,
-      `${PREFIX}/flow`,
-    ],
-  },
-  {
-    key: "inventory",
-    icon: Package,
-    label: "Stock",
-    href: `${PREFIX}/inventory`,
-    permissionKey: "inventory.access",
-    matchPrefixes: [`${PREFIX}/inventory`],
-  },
-  {
-    key: "finance",
-    icon: DollarSign,
-    label: "Finance",
-    href: `${PREFIX}/accounts`,
-    permissionKey: "finance.access",
-    matchPrefixes: [`${PREFIX}/accounts`, `${PREFIX}/banking`, `${PREFIX}/finance`, `${PREFIX}/cashflow`],
-  },
-  {
-    key: "more",
-    icon: Menu,
-    label: "More",
-    href: "#",
-    isMore: true,
-    matchPrefixes: [
-      `${PREFIX}/hr`,
-      `${PREFIX}/production`,
-      `${PREFIX}/tna`,
-      `${PREFIX}/quality`,
-      `${PREFIX}/reports`,
-      `${PREFIX}/settings`,
-      `${PREFIX}/approvals`,
-      `${PREFIX}/ai`,
-      `${PREFIX}/tutorials`,
-      `${PREFIX}/samples`,
-    ],
-  },
-];
+const homeTab: BottomNavItem = {
+  key: "home",
+  icon: LayoutDashboard,
+  label: "Home",
+  href: `${PREFIX}`,
+  exact: true,
+};
+
+const salesTab: BottomNavItem = {
+  key: "sales",
+  icon: ShoppingCart,
+  label: "Sales",
+  href: `${PREFIX}/orders`,
+  permissionKey: "merch.access",
+  section: "Merchandising",
+  matchPrefixes: [
+    `${PREFIX}/orders`,
+    `${PREFIX}/inquiries`,
+    `${PREFIX}/quotations`,
+    `${PREFIX}/customers`,
+    `${PREFIX}/merchandising`,
+    `${PREFIX}/bom`,
+    `${PREFIX}/commercial`,
+    `${PREFIX}/trade`,
+    `${PREFIX}/logistics`,
+    `${PREFIX}/followup`,
+    `${PREFIX}/parties`,
+    `${PREFIX}/flow`,
+  ],
+};
+
+const stockTab: BottomNavItem = {
+  key: "inventory",
+  icon: Package,
+  label: "Stock",
+  href: `${PREFIX}/inventory`,
+  permissionKey: "inventory.access",
+  section: "Inventory",
+  matchPrefixes: [`${PREFIX}/inventory`],
+};
+
+const financeTab: BottomNavItem = {
+  key: "finance",
+  icon: DollarSign,
+  label: "Finance",
+  href: `${PREFIX}/accounts`,
+  permissionKey: "finance.access",
+  section: "Finance",
+  matchPrefixes: [`${PREFIX}/accounts`, `${PREFIX}/banking`, `${PREFIX}/finance`, `${PREFIX}/cashflow`],
+};
+
+const productionTab: BottomNavItem = {
+  key: "production",
+  icon: Factory,
+  label: "Production",
+  href: `${PREFIX}/production`,
+  permissionKey: "production.access",
+  section: "Manufacturing",
+  matchPrefixes: [`${PREFIX}/production`],
+};
+
+const hrTab: BottomNavItem = {
+  key: "hr",
+  icon: UserCheck,
+  label: "HR",
+  href: `${PREFIX}/hr`,
+  permissionKey: "hr.access",
+  section: "HR",
+  matchPrefixes: [`${PREFIX}/hr`],
+};
+
+const moreTab: BottomNavItem = {
+  key: "more",
+  icon: Menu,
+  label: "More",
+  href: "#",
+  isMore: true,
+  matchPrefixes: [
+    `${PREFIX}/hr`,
+    `${PREFIX}/production`,
+    `${PREFIX}/tna`,
+    `${PREFIX}/quality`,
+    `${PREFIX}/reports`,
+    `${PREFIX}/settings`,
+    `${PREFIX}/approvals`,
+    `${PREFIX}/ai`,
+    `${PREFIX}/tutorials`,
+    `${PREFIX}/samples`,
+  ],
+};
+
+export const bottomNavItems: BottomNavItem[] = [homeTab, salesTab, stockTab, financeTab, moreTab];
+
+/**
+ * With `mobile_ui_v2`: Home, then the first three of these whose section the user can see, then More.
+ * Order is fixed so every user with the same access gets the same menu.
+ */
+export const MOBILE_TAB_CANDIDATES: BottomNavItem[] = [salesTab, stockTab, financeTab, productionTab, hrTab];
+export const MOBILE_MAX_MODULE_TABS = 3;
+export const mobileHomeTab = homeTab;
+export const mobileMoreTab = moreTab;

@@ -145,3 +145,46 @@ describe("HrEmployeesPage", () => {
     expect(await screen.findByText("New employee workspace")).toBeTruthy();
   });
 });
+
+describe("HrEmployeesPage on a phone (mobile_ui_v2)", () => {
+  function mockPhone(isPhone: boolean) {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes("767px") ? isPhone : false,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+  }
+
+  afterEach(() => {
+    // jsdom has no matchMedia; remove the mock so other tests see the desktop default.
+    delete (window as { matchMedia?: unknown }).matchMedia;
+  });
+
+  it("starts on Cards even when the old shared setting says Table", async () => {
+    mockPhone(true);
+    localStorage.setItem("p7.hr.employees.view", "table");
+    me = { feature_flags: { mobile_ui_v2: true }, role_name: "manager" };
+    renderPage();
+    const name = await screen.findByText("Rahim");
+    expect(name.closest("tr")).toBeNull();
+    expect(screen.getByRole("button", { name: "Cards" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("remembers Table for phones only", async () => {
+    const user = userEvent.setup();
+    mockPhone(true);
+    me = { feature_flags: { mobile_ui_v2: true }, role_name: "manager" };
+    renderPage();
+    await screen.findByText("Rahim");
+    await user.click(screen.getByRole("button", { name: "Table" }));
+    expect(localStorage.getItem("p7_list_view:hr.employees")).toBe("table");
+    expect(screen.getByText("Rahim").closest("tr")).toBeTruthy();
+  });
+
+  it("keeps today's table when the switch is off", async () => {
+    mockPhone(true);
+    renderPage();
+    expect((await screen.findByText("Rahim")).closest("tr")).toBeTruthy();
+  });
+});

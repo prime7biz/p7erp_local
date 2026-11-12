@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import hash_password
+from app.common.demo_credentials import KNOWN_DEMO_PASSWORDS, seed_password
 from app.database import AsyncSessionLocal
 from app.external_access.constants import (
     FF_EXTERNAL_PORTAL_DOCUMENT_DOWNLOADS_ENABLED,
@@ -171,6 +172,8 @@ async def run_financier_portal_demo_seed(
     )
     principal = pr_row.scalar_one_or_none()
     if not principal:
+        if demo_password in KNOWN_DEMO_PASSWORDS:
+            demo_password = seed_password("SEED_FINANCIER_DEMO_PASSWORD", demo_password)
         principal = ExternalPrincipal(
             tenant_id=tid,
             principal_type=PRINCIPAL_FINANCIER,

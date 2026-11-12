@@ -22,6 +22,7 @@ import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { fetchCustomerPage, fetchOrderPage, fetchVendorPage, hydrateCustomer, hydrateOrder, hydrateVendor } from "@/lib/remoteSelectFetchers";
 import { todayLocalISO } from "@/lib/dates";
 import { addMoney, sumMoneyBy } from "@/lib/money";
+import { getChartOfAccountsCached } from "@/lib/masterData";
 
 type Tab = "shipments" | "statements" | "rules";
 type Option = { id: number; label: string };
@@ -43,7 +44,7 @@ function useOptions() {
   useEffect(() => {
     Promise.all([
       api.listIntermediaries({ is_active: true }),
-      api.listChartOfAccounts(),
+      getChartOfAccountsCached(),
     ])
       .then(([a, coa]) => {
         setAgents(a.map((x) => ({ id: x.id, label: x.name })));

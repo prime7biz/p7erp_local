@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import calendar
 from datetime import date, timedelta
+from decimal import Decimal
 
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.business_date import today_local
 from app.models.facility import Facility, FacilityUtilization, RepaymentScheduleLine
 
-from app.modules.facility.emi_service import preview_emi
+from app.modules.facility.emi_service import _d, preview_emi
 
 PAID_LINE_STATUSES = ("paid", "partially_paid")
 
@@ -79,8 +80,8 @@ async def replace_schedule_for_utilization(
     await db.flush()
 
     policy = (util.repayment_policy or "emi_reducing").lower()
-    principal = float(util.principal_amount or 0)
-    rate = float(util.interest_rate if util.interest_rate is not None else facility.interest_rate or 0)
+    principal = _d(util.principal_amount)
+    rate = _d(util.interest_rate if util.interest_rate is not None else facility.interest_rate)
     itype = (util.interest_type or facility.interest_type or "reducing_balance") or "reducing_balance"
     n = int(util.num_installments or 0)
     freq = util.installment_frequency or "monthly"
@@ -106,19 +107,19 @@ async def replace_schedule_for_utilization(
         moratorium_months=moratorium,
         interest_type=itype,
     )
-    util.emi_amount = float(preview.emi_amount) if preview.emi_amount != "0" else None
-    util.total_interest = float(preview.total_interest) if preview.total_interest else None
-    util.total_repayable = float(preview.total_repayable) if preview.total_repayable else None
+    util.emi_amount = _d(preview.emi_amount) if preview.emi_amount != "0" else None
+    util.total_interest = _d(preview.total_interest) if preview.total_interest else None
+    util.total_repayable = _d(preview.total_repayable) if preview.total_repayable else None
 
     for row in preview.rows:
         if row.installment_number in kept_numbers:
             continue
         due = add_period(first_due, freq, row.installment_number - 1)
         gd = due + timedelta(days=max(0, int(grace_days)))
-        pr = float(row.principal_component)
-        ir = float(row.interest_component)
-        em = float(row.emi_amount)
-        ob = float(row.outstanding_after)
+        pr = _d(row.principal_component)
+        ir = _d(row.interest_component)
+        em = _d(row.emi_amount)
+        ob = _d(row.outstanding_after)
         line = RepaymentScheduleLine(
             tenant_id=util.tenant_id,
             facility_utilization_id=util.id,
@@ -148,8 +149,8 @@ async def refresh_facility_utilized_amount(db: AsyncSession, facility_id: int, t
         )
     )
     utils = list(r.scalars().all())
-    used = sum(float(u.principal_amount or 0) for u in utils if u.status == "active")
+    used = sum((_d(u.principal_amount) for u in utils if u.status == "active"), Decimal("0"))
     fac.utilized_amount = used
-    san = float(fac.sanctioned_amount or 0)
-    fac.available_amount = max(san - used, 0) if san else None
+    san = _d(fac.sanctioned_amount)
+    fac.available_amount = max(san - used, Decimal("0")) if san else None
     await db.flush()

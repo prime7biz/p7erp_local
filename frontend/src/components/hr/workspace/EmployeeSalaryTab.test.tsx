@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import type { HrCompensationOptions, HrCompensationPreview } from "@/api/models";
+import type { HrCompensationComponent, HrCompensationOptions, HrCompensationPreview, HrEmployeeCompensationView } from "@/api/models";
 
 const previewHrCompensation = vi.fn();
 vi.mock("@/api/client", () => ({ api: { previewHrCompensation: (...a: unknown[]) => previewHrCompensation(...a) } }));
@@ -45,6 +45,8 @@ function Harness({
   initialSalary,
   onSave = vi.fn(),
   onForm,
+  options = OPTIONS,
+  current = null,
 }: {
   mode?: WorkspaceMode;
   canManagePayroll?: boolean;
@@ -53,6 +55,8 @@ function Harness({
   initialSalary?: SalaryFormState;
   onSave?: () => void;
   onForm?: (f: EmployeeFormState) => void;
+  options?: HrCompensationOptions;
+  current?: HrEmployeeCompensationView | null;
 }) {
   const [salary, setSalary] = useState(initialSalary ?? emptySalaryForm());
   const [form, setForm] = useState({ ...emptyEmployeeForm(), joining_date: joiningDate });
@@ -64,7 +68,8 @@ function Harness({
       <SalaryTab
         mode={mode}
         canManagePayroll={canManagePayroll}
-        options={OPTIONS}
+        options={options}
+        current={current}
         salary={salary}
         onSalaryChange={(patch) => setSalary((p) => updateSalary(p, patch))}
         preview={preview}
@@ -98,7 +103,8 @@ describe("Employment & Salary: salary set-up", () => {
     expect(screen.queryByLabelText("Salary structure *")).toBeNull();
     await user.click(screen.getByLabelText(/^Set salary now/));
     expect(screen.getByLabelText("Salary structure *")).toBeTruthy();
-    expect(screen.getByText(/start on the joining date \(2026-11-15\)/)).toBeTruthy();
+    expect(screen.getByText(/Taken from the joining date/)).toBeTruthy();
+    expect((screen.getByLabelText("Salary starts on") as HTMLInputElement).value).toBe("2026-11-15");
     await user.click(screen.getByLabelText(/^Set salary now/));
     expect(screen.queryByLabelText("Salary structure *")).toBeNull();
   });
@@ -206,5 +212,108 @@ describe("Employment & Salary: salary set-up", () => {
     await user.click(screen.getByRole("button", { name: "Add" }));
     expect(last!.facilities).toEqual(["Transport", "Night snack"]);
     expect((screen.getByLabelText("Night snack") as HTMLInputElement).checked).toBe(true);
+  });
+
+  const WITH_LINES: HrCompensationOptions = {
+    ...OPTIONS,
+    structures: [
+      {
+        id: 4,
+        code: "BD-W-G4",
+        name: "Worker grade 4",
+        lines: [
+          { component_id: 1, code: "BD-BASIC", name: "Basic wage", component_type: "EARNING", calculation_type: "PERCENT_OF_BASE", amount: "100.0000", is_basic: true, editable: false },
+          { component_id: 2, code: "BD-HRENT", name: "House rent", component_type: "EARNING", calculation_type: "PERCENT_OF_BASE", amount: "50.0000", is_basic: false, editable: true },
+          { component_id: 3, code: "BD-MEDICAL", name: "Medical", component_type: "EARNING", calculation_type: "FIXED", amount: "750.0000", is_basic: false, editable: true },
+        ],
+      },
+    ],
+  };
+
+  it("shows every component of the structure with the grade and sends a typed component amount", async () => {
+    const user = userEvent.setup();
+    previewHrCompensation.mockResolvedValue(preview({ basic: "7050.0000", gross: "11975.0000" }));
+    render(<Harness options={WITH_LINES} initialSalary={{ ...emptySalaryForm(), enabled: true }} />);
+    await user.selectOptions(screen.getByLabelText("Salary structure *"), "4");
+    await user.selectOptions(screen.getByLabelText("Bangladesh wage grade"), "9");
+    expect(screen.getByText("Legal minimum")).toBeTruthy();
+    expect(screen.getByText("House rent")).toBeTruthy();
+    expect(screen.getByText("3525")).toBeTruthy(); // 50% of the grade basic 7050
+    expect(screen.queryByLabelText("Basic wage amount for this employee")).toBeNull(); // the basic is not typed in the table
+    await user.type(screen.getByLabelText("Medical amount for this employee"), "900");
+    await waitFor(() =>
+      expect(previewHrCompensation).toHaveBeenLastCalledWith({
+        structure_id: 4, bd_wage_rate_id: 9, base_salary: null, effective_from: "2026-11-15", component_overrides: { "BD-MEDICAL": "900" },
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Reset" }));
+    await waitFor(() =>
+      expect(previewHrCompensation).toHaveBeenLastCalledWith({ structure_id: 4, bd_wage_rate_id: 9, base_salary: null, effective_from: "2026-11-15" }),
+    );
+  });
+
+  it("edit: the current salary lists every component with own amounts marked", () => {
+    const comp = (code: string, name: string, amount: string, extra: Partial<HrCompensationComponent> = {}): HrCompensationComponent => ({
+      component_id: 1, code, name, component_type: "EARNING", calculation_type: "FIXED", rule_amount: amount,
+      standard_amount: amount, amount, is_basic: false, editable: true, overridden: false, ...extra,
+    });
+    const current: HrEmployeeCompensationView = {
+      employee_id: 7,
+      snapshot: {
+        as_of: "2026-11-12", basic: "15000.0000", gross: "25000.0000", structure_id: 4, structure_code: "BD-E-G1",
+        structure_assignment_id: 1, structure_effective_from: "2026-11-12", structure_effective_to: null, wage_rate_id: 9,
+        wage_rate_code: "E-G1", wage_grade_basic: "15000.0000", wage_grade_gross: "25000.0000", wage_assignment_id: 2,
+        wage_effective_from: "2026-11-12",
+        components: [
+          comp("BD-BASIC", "Basic wage", "15000.0000", { calculation_type: "PERCENT_OF_BASE", rule_amount: "100.0000", is_basic: true, editable: false }),
+          comp("BD-HRENT", "House rent", "7500.0000", { calculation_type: "PERCENT_OF_BASE", rule_amount: "50.0000" }),
+          comp("BD-MEDICAL", "Medical allowance", "1000.0000", { rule_amount: "750.0000", standard_amount: "750.0000", overridden: true }),
+          comp("BD-FOOD", "Food allowance", "1500.0000"),
+          comp("PF", "Provident fund", "200.0000", { component_type: "DEDUCTION", editable: false }),
+        ],
+      },
+      structure_assignments: [],
+      wage_assignments: [],
+    };
+    render(<Harness mode="edit" current={current} />);
+    expect(screen.getByText("Basic wage")).toBeTruthy();
+    expect(screen.getByText("50% of basic")).toBeTruthy();
+    expect(screen.getByText("7500")).toBeTruthy();
+    expect(screen.getByText("Own amount")).toBeTruthy();
+    expect(screen.getByText("Standard 750")).toBeTruthy();
+    expect(screen.getByText("Gross salary")).toBeTruthy();
+    expect(screen.getByText("Deductions")).toBeTruthy();
+    expect(screen.getByText("Provident fund")).toBeTruthy();
+  });
+
+  it("edit: an increment of 5% types the new basic, which can still be changed", async () => {
+    const user = userEvent.setup();
+    previewHrCompensation.mockResolvedValue(preview({ basic: "7402.5000", gross: "12000.0000" }));
+    const current: HrEmployeeCompensationView = {
+      employee_id: 7,
+      snapshot: {
+        as_of: "2026-11-09", basic: "7050.0000", gross: "12500.0000", structure_id: 4, structure_code: "BD-W-G4",
+        structure_assignment_id: 1, structure_effective_from: "2026-01-01", structure_effective_to: null, wage_rate_id: 9,
+        wage_rate_code: "W-G4", wage_grade_basic: "7050.0000", wage_grade_gross: "12500.0000", wage_assignment_id: 2,
+        wage_effective_from: "2026-01-01",
+      },
+      structure_assignments: [],
+      wage_assignments: [],
+    };
+    render(
+      <Harness
+        mode="edit"
+        options={WITH_LINES}
+        current={current}
+        initialSalary={{ ...emptySalaryForm(), enabled: true, structure_id: 4, bd_wage_rate_id: 9, change_type: "INCREMENT" }}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Use the annual increment \(5%\)/ }));
+    expect((screen.getByLabelText("Employee basic salary *") as HTMLInputElement).value).toBe("7402.5");
+    await user.clear(screen.getByLabelText("Employee basic salary *"));
+    await user.type(screen.getByLabelText("Employee basic salary *"), "7500");
+    expect((screen.getByLabelText("Employee basic salary *") as HTMLInputElement).value).toBe("7500");
+    await user.selectOptions(screen.getByLabelText("Type of change *"), "CORRECTION");
+    expect(screen.getByText(/Fixes a wrong salary/)).toBeTruthy();
   });
 });

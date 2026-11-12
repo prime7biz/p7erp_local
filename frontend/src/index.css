@@ -261,6 +261,24 @@ body {
   }
 }
 
+/*
+  Tenant switch `mobile_ui_v2` (class `p7-mobile-v2` on <html>, set by Layout): 44px touch targets
+  on phones. Zero specificity, so a size a component sets itself still wins; desktop and tablets
+  (768px and up) and tenants without the switch are not affected. Table header sort buttons are
+  left alone so the full Table view stays compact.
+*/
+@media screen and (max-width: 767px) {
+  :where(html.p7-mobile-v2 .erp-main-content)
+    :where(
+      button:not(thead button),
+      select,
+      input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"])
+    ),
+  :where(html.p7-mobile-v2) :where([role="menuitem"]) {
+    min-height: 44px;
+  }
+}
+
 .print-only {
   display: none;
 }

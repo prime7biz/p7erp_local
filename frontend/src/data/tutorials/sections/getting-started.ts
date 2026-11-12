@@ -527,7 +527,7 @@ Every page in P7 ERP sits inside the same frame: the **sidebar** on the left, th
 1. **Logo** — click it to go to the Dashboard. The **‹** button next to it collapses the sidebar to icons; **›** opens it again. The choice is remembered.
 2. **Your card** — your name, your company and **Code:** (your company code).
 3. **Favorites** — pages you starred (★ in Ctrl+K search). One click jumps back. Until you star a page it shows a short hint instead.
-4. **Sections** — **Dashboard**, **Support**, **Merchandising**, **Export & Import**, **Operations**, **Inventory**, **Manufacturing**, **Quality**, **AI Tools**, **HR**, **Finance**, **Workflow**, **Reports**, **Settings**. Click a section name to open it; click again to close. Only one section is open at a time, and the last one you opened is remembered on this browser. While you scroll a long section, its name stays pinned at the top of the sidebar.
+4. **Sections** — **Dashboard**, **Support**, **Merchandising**, **Export & Import**, **Operations**, **Inventory**, **Manufacturing**, **Quality**, **AI Tools**, **HR**, **Finance**, **Workflow**, **Reports**, **Settings**. Click a section name to open it; click again to close. Only one section is open at a time: opening another closes the first. After you sign in every section starts **closed**. The section you open stays open while you move between pages (also pages of other modules) and after a refresh, until you close it or sign in again. The section of the page you are on is highlighted even when it is closed. While you scroll a long section, its name stays pinned at the top of the sidebar.
 5. Big sections are split into **sub-groups** (for example Merchandising → **Sales**, **Planning**, **Analytics**, **Operations**).
 6. The page you are on has a short **orange bar** on its left.
 7. **Help & Tutorials** at the very bottom opens these guides (\`/app/tutorials\`).
@@ -563,8 +563,8 @@ Every page in P7 ERP sits inside the same frame: the **sidebar** on the left, th
 - **A section disappeared** → your admin changed your role or switched off a feature. See *What decides the menus you see*.
 - **The sidebar is missing** → the window is narrow (tablet / phone). Use the bottom bar and **More** instead. See *Using P7 ERP on a phone*.`,
       tags: ["navigation", "sidebar", "menu", "top bar", "breadcrumbs", "favorites"],
-      keywords: ["left menu", "collapse sidebar", "where is", "find page", "help and tutorials", "footer", "portals menu"],
-      lastUpdated: "2026-11-09",
+      keywords: ["left menu", "collapse sidebar", "where is", "find page", "help and tutorials", "footer", "portals menu", "open section", "close section"],
+      lastUpdated: "2026-11-11",
       relatedAppRoutes: ["/app", "/app/tutorials"],
       relatedArticleIds: [
         "gs-global-search-and-new-menu",
@@ -730,7 +730,7 @@ Two buttons in the top bar help you stay on top of work:
 2. The **Prime7 AI Assistant** panel opens on the right (*Available from any app page*). Earlier messages show under **Conversation**.
 3. Type a question in plain English in the box at the bottom, for example *Which orders ship this week?* or *Explain this order*, and click **Send**.
 4. On a record page a chip such as **Asking about this order** appears above the box — the assistant uses that screen as context. Click its **×** for a general answer instead.
-5. While it works you see *Local AI is thinking...*. Some questions offer a cloud AI step that you must approve first.
+5. While it works you see *AI is thinking... checking your data can take up to 30 seconds.* Some questions offer a cloud AI step that you must approve first.
 6. Click **+ New** for a fresh conversation, and **×** to close the panel. A full-page assistant is in **AI Tools → AI Assistant**.
 
 ## What happens next
@@ -746,10 +746,10 @@ Two buttons in the top bar help you stay on top of work:
 ## Common problems
 
 - **The red number does not go away** → it also counts pending approvals and alerts. Clear those in their lists; **Mark all read** only clears notifications.
-- **AI says it is thinking for a long time** → the local AI may be busy. Try again later or ask a shorter question.`,
+- **AI says it is thinking for a long time** → the AI may be busy or checking several areas. Wait up to 30 seconds, then try a shorter question.`,
       tags: ["notifications", "bell", "alerts", "ai", "assistant", "chat"],
       keywords: ["notification", "unread", "mark all read", "ai chat", "prime7 ai", "ask ai", "copilot", "what is waiting"],
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-12",
       relatedAppRoutes: ["/app", "/app/approvals", "/app/ai/assistant"],
       relatedArticleIds: ["wf-approvals", "gs-dashboard", "gs-sidebar"],
     },
@@ -855,7 +855,7 @@ Some shop-floor and self-service screens have a small **English / বাংল�
             },
             {
               title: "More → All Modules",
-              body: "The same sections as the computer sidebar, a **Filter modules and pages…** box, **Mobile shortcuts** and **Stakeholder portals**.",
+              body: "The same modules as the computer sidebar, all closed — tap one to open its pages. Plus a **Filter modules and pages…** box, **Mobile shortcuts** and **Stakeholder portals**.",
               imageSrc: "/tutorials/screens/gs-mobile-more.jpg",
               imageAlt: "All Modules drawer on a phone with a filter box and mobile shortcuts",
             },
@@ -886,9 +886,13 @@ P7 ERP works in the phone's browser — no app to install. On small screens the 
    - **Finance** — the Chart of Accounts and other finance pages.
    - **More** — opens **All Modules**.
    Tabs for modules your role cannot open (for example **Finance**) are not shown.
-2. **More → All Modules:** it lists exactly the same sections and pages as the sidebar on a computer. Type in **Filter modules and pages…** to find a page by name (only the matching pages stay), or scroll the sections. Close it with **×**, by tapping outside, or by opening a page. With the filter empty, the top shows:
-   - **Mobile shortcuts** — **Scan barcode / stock**, **Quick clock-in** (your attendance), **Report defect** (production quality). A shortcut only appears when you can open its module.
-   - **Stakeholder portals** — **Customer portal login**, **Financier portal login**, **Manage external access** (only with Settings access).
+2. **More → All Modules:** it lists exactly the same modules and pages as the sidebar on a computer. Every module starts **closed**, so the list is short:
+   - Tap a module (for example **Finance**) to open its pages; the number on the right is how many pages it has. Tap it again to close it. Opening another module closes the first one. The module you opened stays open the next time you tap **More** (and in the computer sidebar) until you close it or sign in again.
+   - The module of the page you are on is orange and says **You are here**.
+   - A module with a single page (such as **Dashboard**) opens that page straight away.
+   - Type in **Filter modules and pages…** to find a page by name: matching modules open by themselves and only the matching pages stay.
+   - Close the menu with **×**, by tapping outside, or by opening a page.
+   With the filter empty, the top also shows **Mobile shortcuts** — **Scan barcode / stock**, **Quick clock-in** (your attendance), **Report defect** (production quality); a shortcut only appears when you can open its module. **Stakeholder portals** (closed like a module) holds **Customer portal login**, **Financier portal login** and **Manage external access** (only with Settings access).
 3. **Round + button** (above the bottom bar, right side) — opens a quick-create menu. Tap again (**×**) to close. It is hidden on *new* and *edit* forms and on shop-floor entry screens (**Hourly production**, **Scan station**, **Gate scan**) so it never covers a **Save** button.
 4. **Search** — tap the search box at the top; it works the same as **Ctrl+K** on a computer. The **bell** and **Help** panels open full width on a phone.
 5. **Refresh the dashboard** — pull the page down until it says **Release to refresh**.
@@ -897,6 +901,15 @@ P7 ERP works in the phone's browser — no app to install. On small screens the 
 8. **Export / Download** (CSV, Excel, PDF) — on Android the file goes to **Downloads**. On iPhone and iPad the **share sheet** opens: tap **Save to Files** (or send it by mail or WhatsApp).
 
 > **Tip:** P7 ERP always uses its light colours, even when the phone is in dark mode, so screens and printouts stay readable.
+
+## Simpler mobile layout (when your company turns it on)
+
+Your admin can switch on **Simpler mobile layout** in **Settings → Configuration** (*More features* view). The computer screen does not change. On phones and tablets:
+
+1. **Bottom bar** — **Home**, then up to three modules you can open, in this order: **Sales**, **Stock**, **Finance**, **Production**, **HR**, then **More**. Someone who only works in HR sees **Home**, **HR**, **More**.
+2. **More** is shorter — it lists **Shortcuts**, then **Current module** (the module of the page you are on, already open), then **Other modules** (closed; tap to open). **Reports**, **AI Tools** and **Settings** are left out of this menu. If you are allowed to open them, find them with the **search box at the top** (for example type *Configuration* or *Trial balance*) or use a computer.
+3. **Card lists** — **Orders**, **Purchase Orders**, **Warehouse Transfers**, **Employees** and **Stock Inventory Summary** open as cards on a phone. Each card shows the code, status and the few values you need, with **More details** for the rest and the usual **Actions** menu. Tap **Table** above the list for the full table; the phone remembers your choice for that list. Cards can be sorted with **Sort cards by** and ticked one by one or with **Select all visible** for bulk actions.
+4. **Forms** — one field per row, bigger buttons and boxes, the right keyboard for numbers and phone numbers, and optional parts folded away (for example **Commission details (optional)** on an order, **BTB LC and notes (optional)** on a PO, **Notes (optional)** on a transfer, **Facilities (optional)** on an employee). The **Save** button stays visible at the bottom.
 
 ## What happens next
 
@@ -913,11 +926,20 @@ P7 ERP works in the phone's browser — no app to install. On small screens the 
 - **I signed in on the phone and my PC logged out** → expected; only one device can be active per user.
 - **A button is hidden off the screen** → scroll the table sideways or turn the phone to landscape.
 - **Nothing happens when I tap Download on iPhone** → look for the share sheet at the bottom of the screen; if you closed it, tap **Download** again.
-- **The print shows only one page** → refresh the page so the phone loads the latest version of P7 ERP, then print again.`,
+- **The print shows only one page** → refresh the page so the phone loads the latest version of P7 ERP, then print again.
+- **Settings / Reports are missing from More** → your company uses the *Simpler mobile layout*. Use the search box at the top, or a computer.`,
       tags: ["mobile", "phone", "tablet", "bottom navigation", "quick create", "print", "download"],
-      keywords: ["android", "iphone", "smartphone", "mobile app", "bottom bar", "more menu", "scan barcode", "clock in", "report defect", "pull to refresh", "save pdf", "export csv", "share sheet", "save to files", "dark mode"],
-      lastUpdated: "2026-11-09",
-      relatedAppRoutes: ["/app", "/app/inventory/stock-inventory-summary", "/app/hr/ess/attendance", "/app/production/quality"],
+      keywords: ["android", "iphone", "smartphone", "mobile app", "bottom bar", "more menu", "open module", "collapse", "scan barcode", "clock in", "report defect", "pull to refresh", "save pdf", "export csv", "share sheet", "save to files", "dark mode", "simpler mobile layout", "cards", "card view", "mobile_ui_v2"],
+      lastUpdated: "2026-11-12",
+      relatedAppRoutes: [
+        "/app",
+        "/app/inventory/stock-inventory-summary",
+        "/app/hr/ess/attendance",
+        "/app/production/quality",
+        "/app/orders",
+        "/app/inventory/purchase-orders",
+        "/app/inventory/warehouse-transfers",
+      ],
       relatedArticleIds: ["gs-sidebar", "gs-global-search-and-new-menu", "gs-session-replaced"],
     },
     {

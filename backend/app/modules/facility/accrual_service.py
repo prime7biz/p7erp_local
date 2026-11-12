@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.business_date import today_local
@@ -16,6 +18,9 @@ from app.modules.facility.constants import SOURCE_FACILITY_ACCRUAL
 from app.modules.facility.emi_service import accrue_simple_monthly_interest, _d
 from app.modules.facility.account_resolver import resolve_facility_accounts
 from app.modules.facility.gl_service import create_accrual_draft, create_facility_journal_draft
+
+logger = logging.getLogger(__name__)
+ACCRUAL_UNIQUE_KEY = "uq_interest_accruals_tenant_util_month"
 
 
 def accrual_month_key(d: date) -> str:
@@ -30,7 +35,11 @@ async def run_monthly_accrual(
     accrual_month: str,
     accrual_date: date | None = None,
 ) -> dict[str, int]:
-    """Create one accrual per active utilization per month (skip if exists). Returns counts."""
+    """Create one accrual per active utilization per month (skip if exists). Returns counts.
+
+    Safe to run twice at the same time: the unique key (tenant, utilization, month) stops the second
+    insert, and that utilization is counted as skipped instead of failing the whole run.
+    """
     created = 0
     skipped = 0
     adate = accrual_date or today_local()
@@ -42,10 +51,12 @@ async def run_monthly_accrual(
         )
     )
     utils = list(r.scalars().all())
+    t = await db.get(Tenant, tenant_id)
+    base_ccy = (t.base_currency if t else None) or "BDT"
     for util in utils:
         existing = (
             await db.execute(
-                select(InterestAccrual).where(
+                select(InterestAccrual.id).where(
                     InterestAccrual.tenant_id == tenant_id,
                     InterestAccrual.facility_utilization_id == util.id,
                     InterestAccrual.accrual_month == accrual_month,
@@ -59,7 +70,7 @@ async def run_monthly_accrual(
         if not fac or fac.tenant_id != tenant_id:
             continue
         rate = util.interest_rate if util.interest_rate is not None else fac.interest_rate
-        if rate is None or float(rate) <= 0:
+        if rate is None or _d(rate) <= 0:
             skipped += 1
             continue
         principal = _d(util.outstanding_principal if util.outstanding_principal is not None else util.principal_amount)
@@ -72,40 +83,64 @@ async def run_monthly_accrual(
         if not exp_id or not pay_id:
             skipped += 1
             continue
-        int_amt = float(accrue_simple_monthly_interest(principal, _d(rate)))
+        int_amt = accrue_simple_monthly_interest(principal, _d(rate))
         if int_amt <= 0:
             skipped += 1
             continue
-        row = InterestAccrual(
-            tenant_id=tenant_id,
-            facility_utilization_id=util.id,
-            accrual_month=accrual_month,
-            accrual_date=adate,
-            outstanding_principal_at_accrual=float(principal),
-            interest_amount=int_amt,
-            status="pending",
-        )
-        db.add(row)
-        await db.flush()
-        t = await db.get(Tenant, tenant_id)
-        base_ccy = (t.base_currency if t else None) or "BDT"
-        v = await create_accrual_draft(
-            db,
-            tenant_id=tenant_id,
-            user_id=user_id,
-            util_id=util.id,
-            interest_amount=int_amt,
-            expense_account_id=exp_id,
-            interest_payable_account_id=pay_id,
-            voucher_date=adate,
-            accrual_id=row.id,
-            base_currency=base_ccy,
-        )
-        row.journal_voucher_id = v.id
-        row.status = "pending"  # becomes accrued when voucher is POSTED (posting hook)
+        try:
+            async with db.begin_nested():
+                row = InterestAccrual(
+                    tenant_id=tenant_id,
+                    facility_utilization_id=util.id,
+                    accrual_month=accrual_month,
+                    accrual_date=adate,
+                    outstanding_principal_at_accrual=principal,
+                    interest_amount=int_amt,
+                    status="pending",
+                )
+                db.add(row)
+                await db.flush()
+                v = await create_accrual_draft(
+                    db,
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    util_id=util.id,
+                    interest_amount=int_amt,
+                    expense_account_id=exp_id,
+                    interest_payable_account_id=pay_id,
+                    voucher_date=adate,
+                    accrual_id=row.id,
+                    base_currency=base_ccy,
+                )
+                row.journal_voucher_id = v.id
+                row.status = "pending"  # becomes accrued when voucher is POSTED (posting hook)
+                await db.flush()
+        except IntegrityError as exc:
+            # Only "this month's accrual already exists" (a parallel run won) counts as skipped.
+            if ACCRUAL_UNIQUE_KEY not in str(getattr(exc, "orig", exc)):
+                raise
+            logger.info(
+                "facility accrual already exists tenant_id=%s utilization_id=%s month=%s", tenant_id, util.id, accrual_month
+            )
+            skipped += 1
+            continue
         created += 1
     await db.flush()
     return {"created": created, "skipped": skipped}
+
+
+async def _lock_accrual(db: AsyncSession, tenant_id: int, accrual_id: int) -> InterestAccrual:
+    row = (
+        await db.execute(
+            select(InterestAccrual)
+            .where(InterestAccrual.id == accrual_id, InterestAccrual.tenant_id == tenant_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Accrual not found")
+    return row
 
 
 async def reverse_accrual(
@@ -116,18 +151,19 @@ async def reverse_accrual(
     reason: str,
     user_id: int | None,
 ) -> InterestAccrual | None:
-    row = await db.get(InterestAccrual, accrual_id)
-    if not row or row.tenant_id != tenant_id:
-        raise HTTPException(status_code=404, detail="Accrual not found")
+    # Lock first, then check the guard, so two clicks cannot both create a reversal draft.
+    row = await _lock_accrual(db, tenant_id, accrual_id)
     if row.reversal_voucher_id:
         raise HTTPException(status_code=400, detail="Reversal already created")
     if row.status == "pending":
         # Draft accrual not posted — remove voucher and row
         if row.journal_voucher_id:
             v0 = await db.get(Voucher, row.journal_voucher_id)
-            if v0 and v0.status == "DRAFT":
+            if v0 and v0.tenant_id == tenant_id and v0.status == "DRAFT":
                 vlines = (
-                    await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == v0.id))
+                    await db.execute(
+                        select(VoucherLine).where(VoucherLine.voucher_id == v0.id, VoucherLine.tenant_id == tenant_id)
+                    )
                 ).scalars().all()
                 for vl in vlines:
                     await db.delete(vl)
@@ -139,17 +175,19 @@ async def reverse_accrual(
         raise HTTPException(status_code=400, detail="Only posted accruals can be reversed this way")
     # Reversal: swap DR/CR on same accounts via journal — reuse create with swapped accounts
     v_orig = await db.get(Voucher, row.journal_voucher_id)
-    if not v_orig:
+    if not v_orig or v_orig.tenant_id != tenant_id:
         raise HTTPException(status_code=400, detail="Original voucher missing")
     lines = list(
-        (await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == v_orig.id))).scalars().all()
+        (
+            await db.execute(
+                select(VoucherLine).where(VoucherLine.voucher_id == v_orig.id, VoucherLine.tenant_id == tenant_id)
+            )
+        ).scalars().all()
     )
     if len(lines) != 2:
         raise HTTPException(status_code=400, detail="Expected two-line accrual voucher")
     dr = next(x for x in lines if x.entry_type == "DEBIT")
     cr = next(x for x in lines if x.entry_type == "CREDIT")
-    amt = float(dr.amount or 0)
-    util = await db.get(FacilityUtilization, row.facility_utilization_id)
     t = await db.get(Tenant, tenant_id)
     base_ccy = (t.base_currency if t else None) or "BDT"
     rev = await create_facility_journal_draft(
@@ -161,7 +199,7 @@ async def reverse_accrual(
         reference=f"FAC-ACC-REV-{accrual_id}",
         debit_account_id=cr.account_id,
         credit_account_id=dr.account_id,
-        amount=amt,
+        amount=_d(dr.amount),
         facility_utilization_id=row.facility_utilization_id,
         source_module=SOURCE_FACILITY_ACCRUAL,
         source_module_ref=f"accrual_reversal:{accrual_id}",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 
 # The whole suite runs from one client address; the per-IP limit for anonymous API calls
@@ -10,6 +11,7 @@ os.environ.setdefault("ANON_RATE_LIMIT_REQUESTS_PER_MINUTE", "0")
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 
@@ -27,6 +29,52 @@ def _async_database_url() -> str | None:
     if raw.startswith("postgresql://"):
         return raw.replace("postgresql://", "postgresql+asyncpg://", 1)
     return raw
+
+
+async def _tenant_watermark(url: str, since_id: int | None) -> tuple[int, list[str]]:
+    engine = create_async_engine(url, echo=False)
+    try:
+        async with engine.connect() as conn:
+            max_id = (await conn.execute(text("SELECT COALESCE(MAX(id), 0) FROM tenants"))).scalar_one()
+            left: list[str] = []
+            if since_id is not None:
+                rows = await conn.execute(
+                    text("SELECT company_code FROM tenants WHERE id > :since ORDER BY id"), {"since": since_id}
+                )
+                left = [r[0] or "?" for r in rows]
+            return int(max_id), left
+    finally:
+        await engine.dispose()
+
+
+def pytest_sessionstart(session):
+    """Remember the newest tenant id so the summary can list tenants that tests left behind."""
+    url = _async_database_url()
+    if not url:
+        return
+    try:
+        session.config._p7_tenant_watermark = asyncio.run(_tenant_watermark(url, None))[0]
+    except Exception:  # the residue report is informational only
+        session.config._p7_tenant_watermark = None
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    since = getattr(config, "_p7_tenant_watermark", None)
+    url = _async_database_url()
+    if since is None or not url:
+        return
+    try:
+        _max_id, left = asyncio.run(_tenant_watermark(url, since))
+    except Exception:
+        return
+    terminalreporter.section("test data residue")
+    if not left:
+        terminalreporter.write_line("No tenants left behind in the database.")
+        return
+    terminalreporter.write_line(
+        f"{len(left)} tenant(s) created during this run still exist (tests using their own sessions "
+        "must clean up in `finally`): " + ", ".join(left[:30]) + (" ..." if len(left) > 30 else "")
+    )
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -87,12 +135,15 @@ async def db_session_integration() -> AsyncSession:
     engine = create_async_engine(url, echo=False)
     async with engine.connect() as conn:
         trans = await conn.begin()
+        # commit()/rollback() inside a test act on savepoints, so app code that rolls back after a
+        # caught error keeps the test's earlier setup, and nothing reaches the dev database.
         session_factory = async_sessionmaker(
             bind=conn,
             class_=AsyncSession,
             expire_on_commit=False,
             autoflush=False,
             autocommit=False,
+            join_transaction_mode="create_savepoint",
         )
         async with session_factory() as session:
             try:

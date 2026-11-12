@@ -41,6 +41,7 @@ import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { useListPagination } from "@/hooks/useListPagination";
 import { cn } from "@/lib/utils";
 import { getWarehousesCached } from "@/lib/masterData";
+import { useConfirm } from "@/components/app/useConfirm";
 
 type TabId = "masters" | "groups" | "units" | "warehouses" | "items";
 
@@ -53,6 +54,7 @@ function tabFromSearchParam(raw: string | null): TabId | null {
 }
 
 export function InventoryItemsPage() {
+  const confirm = useConfirm();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabId>(() => tabFromSearchParam(searchParams.get("tab")) ?? "items");
   const [categories, setCategories] = useState<ItemCategoryResponse[]>([]);
@@ -413,7 +415,7 @@ export function InventoryItemsPage() {
     }
   };
   const deleteUnit = async (row: ItemUnitResponse) => {
-    if (!window.confirm(`Delete unit "${row.unit_code} – ${row.name}"?`)) return;
+    if (!(await confirm({ title: `Delete unit "${row.unit_code} – ${row.name}"?`, danger: true }))) return;
     try {
       await api.deleteInventoryItemUnit(row.id);
       await load();
@@ -467,7 +469,7 @@ export function InventoryItemsPage() {
     }
   };
   const deleteWarehouse = async (row: WarehouseResponse) => {
-    if (!window.confirm(`Delete warehouse "${row.warehouse_code} – ${row.name}"?`)) return;
+    if (!(await confirm({ title: `Delete warehouse "${row.warehouse_code} – ${row.name}"?`, danger: true }))) return;
     try {
       await api.deleteWarehouse(row.id);
       await load();
@@ -566,7 +568,7 @@ export function InventoryItemsPage() {
   };
 
   const deleteItem = async (row: InventoryItemResponse) => {
-    if (!window.confirm(`Delete item "${row.item_code} – ${row.name}"? This cannot be undone.`)) return;
+    if (!(await confirm({ title: `Delete item "${row.item_code} – ${row.name}"? This cannot be undone.`, danger: true }))) return;
     try {
       await api.deleteInventoryItem(row.id);
       await load();
@@ -577,7 +579,7 @@ export function InventoryItemsPage() {
   };
 
   const deleteCategory = async (row: ItemCategoryResponse) => {
-    if (!window.confirm(`Delete category "${row.name}"? Subcategories and items must be removed first.`)) return;
+    if (!(await confirm({ title: `Delete category "${row.name}"? Subcategories and items must be removed first.`, danger: true }))) return;
     try {
       await api.deleteInventoryItemCategory(row.id);
       await load();
@@ -613,7 +615,7 @@ export function InventoryItemsPage() {
   };
 
   const deleteSubcategoryRow = async (row: ItemSubcategoryResponse) => {
-    if (!window.confirm(`Delete subcategory "${row.name}"?`)) return;
+    if (!(await confirm({ title: `Delete subcategory "${row.name}"?`, danger: true }))) return;
     try {
       await api.deleteInventoryItemSubcategory(row.id);
       await load();

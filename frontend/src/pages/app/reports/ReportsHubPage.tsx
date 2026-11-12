@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type TenantOverviewReport } from "@/api/client";
-import { logApiError } from "@/utils/logApiError";
+import { logApiError } from "@/utils/logApiError";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
 
 const PREFIX = "/app/reports";
 const MERCH_APP = "/app/merchandising";
@@ -64,12 +65,7 @@ export function ReportsHubPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-text-primary">Reports</h1>
-        <p className="text-text-muted text-sm mt-0.5">
-          Analytics and operational reports. Tenant snapshot loads below when available.
-        </p>
-      </header>
+      <AppPageHeader title="Reports" description="Analytics and operational reports. Tenant snapshot loads below when available." />
       {loading ? (
         <div className="rounded-lg border border-border bg-surface-raised p-6 space-y-3"><div className="h-4 w-1/3 animate-pulse rounded bg-surface-subtle" /><div className="h-6 w-1/4 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-1/2 animate-pulse rounded bg-surface-subtle" /></div>
       ) : overview ? (

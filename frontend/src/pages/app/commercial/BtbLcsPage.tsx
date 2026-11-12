@@ -18,7 +18,7 @@ import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
 import { addMoney, subtractMoney, sumMoneyBy } from "@/lib/money";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
-import { getVendorsCached } from "@/lib/masterData";
+import { getChartOfAccountsCached, getVendorsCached } from "@/lib/masterData";
 
 const STATUS_OPTIONS = ["DRAFT", "OPEN", "AMENDED", "CLOSED"] as const;
 
@@ -148,7 +148,7 @@ export function BtbLcsPage() {
         api.listProformaInvoices({ direction: "EXPORT" }),
         api.listProformaInvoices({ direction: "IMPORT" }),
         api.listPurchaseOrders(),
-        api.listChartOfAccounts({ active_only: true }),
+        getChartOfAccountsCached({ active_only: true }),
         api.getMerchAlerts({
           entity_type: "btb_lc",
           page: 1,

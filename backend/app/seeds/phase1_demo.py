@@ -16,6 +16,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import hash_password
+from app.common.demo_credentials import seed_password
 from app.models import (
     AttendanceEntry,
     Bom,
@@ -140,6 +141,8 @@ async def ensure_demo_tenant(
     if not create_if_missing:
         raise ValueError(f"Tenant company_code={code!r} not found")
 
+    password = seed_password("SEED_DEMO_PASSWORD", DEMO_LOGIN_PASSWORD)
+    creds["password"] = password
     tenant = Tenant(
         name="Phase 1 Demo Tenant",
         tenant_type=TenantType.both,
@@ -158,7 +161,7 @@ async def ensure_demo_tenant(
         role_id=admin_role.id,
         username=DEMO_LOGIN_USER,
         email="demoadmin@demo.local",
-        password_hash=await hash_password(DEMO_LOGIN_PASSWORD),
+        password_hash=await hash_password(password),
         first_name="Demo",
         last_name="Admin",
         is_active=True,

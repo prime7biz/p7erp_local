@@ -5,8 +5,10 @@ import { api, type CommercialInvoiceRow } from "@/api/client";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { logApiError } from "@/utils/logApiError";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useConfirm } from "@/components/app/useConfirm";
 
 export function CommercialInvoicesPage() {
+  const confirm = useConfirm();
   const [searchParams] = useSearchParams();
   const orderIdFilter = Number(searchParams.get("order_id") || 0) || null;
   const [items, setItems] = useState<CommercialInvoiceRow[]>([]);
@@ -88,7 +90,7 @@ export function CommercialInvoicesPage() {
   };
 
   const handleCancel = async (id: number) => {
-    if (!window.confirm("Cancel this issued commercial invoice?")) return;
+    if (!(await confirm({ title: "Cancel this issued commercial invoice?", danger: true }))) return;
     setBusyId(id);
     setError("");
     try {

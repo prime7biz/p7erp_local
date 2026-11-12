@@ -12,6 +12,8 @@ import { useAuth } from "@/context/AuthContext";
 import { logApiError } from "@/utils/logApiError";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { currentMonthLocal } from "@/lib/dates";
+import { getChartOfAccountsCached, getCostCentersCached } from "@/lib/masterData";
+import { useConfirm } from "@/components/app/useConfirm";
 
 function linesToCreate(lines: BudgetResponse["lines"]): BudgetLineCreate[] {
   return lines.map((l) => ({
@@ -47,6 +49,7 @@ function utilizationBarClass(pct: number): string {
 }
 
 export function BudgetsPage() {
+  const confirm = useConfirm();
   const { me } = useAuth();
   const enforcementMode =
     typeof me?.feature_flags?.budget_enforcement_mode === "string"
@@ -83,8 +86,8 @@ export function BudgetsPage() {
       setError("");
       const [b, a, c] = await Promise.all([
         api.listBudgets(fiscalYearFilter ? { fiscal_year: fiscalYearFilter } : undefined),
-        api.listChartOfAccounts({ active_only: true }),
-        api.listCostCenters({ active_only: true }),
+        getChartOfAccountsCached({ active_only: true }),
+        getCostCentersCached({ active_only: true }),
       ]);
       if (!latest.isCurrent(token)) return;
       setBudgets(b);
@@ -156,7 +159,7 @@ export function BudgetsPage() {
   }
 
   async function removeBudget(id: number) {
-    if (!window.confirm("Delete this budget and all its lines?")) return;
+    if (!(await confirm({ title: "Delete this budget and all its lines?", danger: true }))) return;
     try {
       await api.deleteBudget(id);
       if (selectedBudgetId === id) setSelectedBudgetId(null);

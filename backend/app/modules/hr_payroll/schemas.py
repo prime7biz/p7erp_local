@@ -339,6 +339,7 @@ class PayrollEmployeeCalcPreviewOut(BaseModel):
     ot_paid_hours: str = "0.0000"
     ot_hourly_rate: str = "0.0000"
     ot_amount: str = "0.0000"
+    overtime_enabled: bool = True
 
 
 class PayrollAutoCalculatePreviewOut(BaseModel):

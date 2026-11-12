@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -12,6 +13,8 @@ from app.models import Followup, User
 from app.modules.ai_tool import repository
 from app.modules.ai_tool.authz import has_tool_permission
 from app.modules.ai_tool.security import confirmation_token_hash, confirmation_token_last4, normalize_confirmation_token
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -255,47 +258,58 @@ async def confirm_and_execute_action(
         return run, None, "Invalid confirmation token"
 
     await repository.mark_action_run_confirmed(db, row=run)
+    await db.flush()  # the confirmation stays even if the action's savepoint rolls back
 
-    output: dict[str, Any]
     try:
-        if run.action_key == "draft_reminder_followup":
-            order_id = int((run.input_json or {}).get("order_id") or 0)
-            if order_id <= 0:
-                raise ValueError("Missing order ID in action input")
-            order_row = await repository.get_order_by_id(db, tenant_id=tenant_id, order_id=order_id)
-            if not order_row:
-                raise ValueError("Order not found in tenant scope")
-            due_date_raw = (run.input_json or {}).get("due_date")
-            due = date.fromisoformat(str(due_date_raw)) if due_date_raw else None
-            row = Followup(
-                tenant_id=tenant_id,
-                order_id=order_id,
-                title="AI Draft Reminder Follow-up",
-                due_date=due,
-                status="OPEN",
-                severity="MEDIUM",
-                notes=f"[AI-DRAFT] {run.prompt_text[:500]}",
-            )
-            db.add(row)
-            await db.flush()
-            output = {"created_followup_id": row.id, "order_id": order_id, "mode": "draft_record_created"}
-        elif run.action_key == "generate_message_draft":
-            output = {"draft_message": f"Draft message:\n{run.prompt_text}", "mode": "draft_text_only"}
-        elif run.action_key == "prepare_business_summary_draft":
-            output = {"draft_summary": f"Draft business summary:\n{run.prompt_text}", "mode": "draft_text_only"}
-        elif run.action_key == "draft_reminder_trade_doc":
-            from app.modules.merch.alert_rules import rule_trade_docs_missing_before_etd
-            raw_list = await rule_trade_docs_missing_before_etd(db, tenant_id, config=None)
-            summary_lines = [f"Trade cases with documents missing before ETD: {len(raw_list)} case(s)."]
-            for p in raw_list[:10]:
-                summary_lines.append(f"  - {p.get('title', '')} (case id in alert)")
-            if len(raw_list) > 10:
-                summary_lines.append(f"  ... and {len(raw_list) - 10} more. Use Trade Control Tower for full list.")
-            output = {"draft_summary": "\n".join(summary_lines), "mode": "draft_text_only", "count": len(raw_list)}
-        else:
-            output = {"draft_note": f"Draft note/task:\n{run.prompt_text}", "mode": "draft_text_only"}
+        # Savepoint: a failed action undoes only its own writes, so the FAILED status can still be saved.
+        async with db.begin_nested():
+            output = await _execute_action(db, tenant_id=tenant_id, run=run)
         await repository.complete_action_run(db, row=run, status="EXECUTED", output_json=output)
         return run, output, None
-    except Exception as exc:
-        await repository.complete_action_run(db, row=run, status="FAILED", output_json={}, error_text=str(exc))
-        return run, None, str(exc)
+    except ValueError as exc:
+        message = str(exc)
+    except Exception:
+        logger.exception("ai action run %s failed tenant_id=%s", run.id, tenant_id)
+        message = "The action could not be completed. Please try again or contact support."
+    await repository.complete_action_run(db, row=run, status="FAILED", output_json={}, error_text=message)
+    return run, None, message
+
+
+async def _execute_action(db: AsyncSession, *, tenant_id: int, run: Any) -> dict[str, Any]:
+    """Run a confirmed action. ValueError messages are shown to the user; other errors are logged."""
+    if run.action_key == "draft_reminder_followup":
+        order_id = int((run.input_json or {}).get("order_id") or 0)
+        if order_id <= 0:
+            raise ValueError("Missing order ID in action input")
+        order_row = await repository.get_order_by_id(db, tenant_id=tenant_id, order_id=order_id)
+        if not order_row:
+            raise ValueError("Order not found in tenant scope")
+        due_date_raw = (run.input_json or {}).get("due_date")
+        due = date.fromisoformat(str(due_date_raw)) if due_date_raw else None
+        row = Followup(
+            tenant_id=tenant_id,
+            order_id=order_id,
+            title="AI Draft Reminder Follow-up",
+            due_date=due,
+            status="OPEN",
+            severity="MEDIUM",
+            notes=f"[AI-DRAFT] {run.prompt_text[:500]}",
+        )
+        db.add(row)
+        await db.flush()
+        return {"created_followup_id": row.id, "order_id": order_id, "mode": "draft_record_created"}
+    if run.action_key == "generate_message_draft":
+        return {"draft_message": f"Draft message:\n{run.prompt_text}", "mode": "draft_text_only"}
+    if run.action_key == "prepare_business_summary_draft":
+        return {"draft_summary": f"Draft business summary:\n{run.prompt_text}", "mode": "draft_text_only"}
+    if run.action_key == "draft_reminder_trade_doc":
+        from app.modules.merch.alert_rules import rule_trade_docs_missing_before_etd
+
+        raw_list = await rule_trade_docs_missing_before_etd(db, tenant_id, config=None)
+        summary_lines = [f"Trade cases with documents missing before ETD: {len(raw_list)} case(s)."]
+        for p in raw_list[:10]:
+            summary_lines.append(f"  - {p.get('title', '')} (case id in alert)")
+        if len(raw_list) > 10:
+            summary_lines.append(f"  ... and {len(raw_list) - 10} more. Use Trade Control Tower for full list.")
+        return {"draft_summary": "\n".join(summary_lines), "mode": "draft_text_only", "count": len(raw_list)}
+    return {"draft_note": f"Draft note/task:\n{run.prompt_text}", "mode": "draft_text_only"}

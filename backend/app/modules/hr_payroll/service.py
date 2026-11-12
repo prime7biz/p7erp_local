@@ -16,6 +16,7 @@ from app.common.orm_numeric import api_money_to_decimal, decimal_to_money_respon
 from app.common.tenant_feature_keys import (
     is_payroll_auto_calculate_enabled,
     is_payroll_lop_enabled,
+    is_hr_bd_salary_tds_enabled,
     is_payroll_ot_from_salary_enabled,
 )
 from app.models import (
@@ -135,6 +136,7 @@ async def create_structure_assignment(
     await comp.lock_employee(db, tenant_id, employee_id)
     await comp.structure_for_tenant(db, tenant_id, structure_id)
     overrides = _validate_component_overrides(component_overrides)
+    await comp.assert_no_basic_override(db, tenant_id, structure_id, overrides)
     tenant_row = await db.get(Tenant, tenant_id)
     await assert_base_salary_meets_grade(
         db,
@@ -260,6 +262,19 @@ async def run_applies_ot_from_salary(db: AsyncSession, *, tenant: Tenant, run: P
     return trace.get("ot_from_salary") is True
 
 
+async def run_applies_bd_tds(db: AsyncSession, *, tenant: Tenant, run: PayrollRun) -> bool:
+    """Should Bangladesh salary TDS be deducted when this run is (re)calculated?
+
+    A run that was already calculated keeps the mode of its FIRST calculation whatever the flag says now
+    (switching the company flag off never changes an open run, switching it on never changes an old one).
+    Only a run that was never calculated reads the tenant flag.
+    """
+    trace = await _first_calculation_trace(db, tenant=tenant, run=run)
+    if trace is None:
+        return is_hr_bd_salary_tds_enabled(tenant.feature_flags)
+    return trace.get("bd_tds_applied") is True
+
+
 def _line_is_manual(line: PayrollRunLine) -> bool:
     src = (line.calculation_source or "MANUAL").strip().upper()
     if src == "AUTO":
@@ -356,6 +371,13 @@ async def preview_auto_calculate(
             "the old overtime calculation"
         )
 
+    apply_bd_tds = await run_applies_bd_tds(db, tenant=tenant, run=run)
+    if not apply_bd_tds and is_hr_bd_salary_tds_enabled(tenant.feature_flags):
+        global_warnings.append(
+            "This run was first calculated before Bangladesh salary tax (TDS) was switched on, so it keeps "
+            "the old calculation without TDS"
+        )
+
     for emp in employees:
         existing_line = existing_by_emp.get(emp.id)
         has_manual = existing_line is not None and _line_is_manual(existing_line)
@@ -368,6 +390,7 @@ async def preview_auto_calculate(
             has_manual_override=has_manual,
             apply_lop=apply_lop,
             ot_from_salary=apply_ot_from_salary,
+            apply_bd_tds=apply_bd_tds,
             run_line_id=existing_line.id if existing_line is not None else None,
         )
         previews.append(row)
@@ -414,7 +437,8 @@ async def apply_auto_calculate(
     )
 
     run = await db.get(PayrollRun, run_id)
-    assert run is not None
+    if run is None or run.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Payroll run not found")
 
     existing = (
         await db.execute(

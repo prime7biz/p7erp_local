@@ -22,16 +22,18 @@ from app.database import AsyncSessionLocal
 from app.models import Tenant, Role, User
 from app.models.tenant import TenantType
 from app.common.auth import hash_password
+from app.common.demo_credentials import seed_password
 
 
 COMPANY_CODE = "LAKHSMA4821"
 TENANT_NAME = "Lakhsma Innerwear Limited"
 USERNAME = "shahriyar"
 EMAIL = "shahriyar@lakhsma.com"
-PASSWORD = "Lakhsma123"
+DEFAULT_PASSWORD = "Lakhsma123"  # development only; set SEED_LAKHSMA_PASSWORD elsewhere
 
 
 async def main() -> None:
+    PASSWORD = seed_password("SEED_LAKHSMA_PASSWORD", DEFAULT_PASSWORD)
     async with AsyncSessionLocal() as db:
         # 1. Skip if tenant already exists (idempotent)
         existing = await db.execute(

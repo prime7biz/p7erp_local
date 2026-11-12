@@ -15,6 +15,7 @@ import { QuickCreateFab } from "@/components/shell/QuickCreateFab";
 import { filterVisibleMenuSections } from "@/components/shell/sidebarNavUtils";
 import { DemoModeBanner } from "@/components/shell/DemoModeBanner";
 import { logApiError } from "@/utils/logApiError";
+import { isMobileUiV2Enabled } from "@/lib/mobileUi";
 
 export function Layout() {
   const { me, loading, error, logout, refetch, hasPermission } = useAuth();
@@ -35,6 +36,13 @@ export function Layout() {
   useEffect(() => {
     localStorage.setItem("p7_sidebar_collapsed", isCollapsed ? "1" : "0");
   }, [isCollapsed]);
+
+  // Phone touch sizes in index.css apply only while this tenant has mobile_ui_v2 on.
+  const mobileUiV2 = isMobileUiV2Enabled(me?.feature_flags);
+  useEffect(() => {
+    document.documentElement.classList.toggle("p7-mobile-v2", mobileUiV2);
+    return () => document.documentElement.classList.remove("p7-mobile-v2");
+  }, [mobileUiV2]);
 
   useEffect(() => {
     if (!me) return;

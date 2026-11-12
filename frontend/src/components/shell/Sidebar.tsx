@@ -10,6 +10,7 @@ import { SidebarSection } from "@/components/shell/SidebarSection";
 import { SidebarShortcuts } from "@/components/shell/SidebarShortcuts";
 import { SidebarTooltip } from "@/components/shell/SidebarTooltip";
 import { filterVisibleMenuSections, getNameInitial } from "@/components/shell/sidebarNavUtils";
+import { useOpenMenuSection } from "@/components/shell/menuOpenSection";
 
 export type SidebarProps = {
   tenantType: TenantType;
@@ -25,26 +26,6 @@ export type SidebarProps = {
   compact?: boolean;
 };
 
-const OPEN_SECTION_KEY = "p7_sidebar_open_section";
-
-function readSavedOpenSection(): string | null {
-  try {
-    const saved = localStorage.getItem(OPEN_SECTION_KEY);
-    if (saved === null) return "Dashboard";
-    return saved || null;
-  } catch {
-    return "Dashboard";
-  }
-}
-
-function saveOpenSection(section: string | null) {
-  try {
-    localStorage.setItem(OPEN_SECTION_KEY, section ?? "");
-  } catch {
-    /* ignore quota / private mode */
-  }
-}
-
 export function Sidebar({
   tenantType,
   tenantName,
@@ -59,8 +40,9 @@ export function Sidebar({
   compact = false,
 }: SidebarProps) {
   const location = useLocation();
-  // Saved section is only a fallback; the route effect below opens the current page's section.
-  const [openSection, setOpenSection] = useState<string | null>(readSavedOpenSection);
+  // One module open at a time; it stays open (across pages and reloads) until the user closes it
+  // or signs in again. After sign-in every module starts closed.
+  const [openSection, setOpenSection] = useOpenMenuSection();
   const [hoveredSection, setHoveredSection] = useState<string | null>(null);
   const [userPopoverOpen, setUserPopoverOpen] = useState(false);
   const activeLinkRef = useRef<HTMLAnchorElement | null>(null);
@@ -82,22 +64,6 @@ export function Sidebar({
       }),
     [tenantType, enabledOptionalProductionUnits, featureFlags, hasPermission],
   );
-
-  useEffect(() => {
-    const path = location.pathname;
-    const activeModule = filtered.find((mod) => {
-      if (mod.subsections?.length) {
-        return mod.subsections.some((sub) =>
-          sub.items.some((item) => isSidebarNavItemActive(path, item.href, item.exact)),
-        );
-      }
-      return mod.items.some((item) => isSidebarNavItemActive(path, item.href, item.exact));
-    });
-    if (activeModule) {
-      setOpenSection(activeModule.section);
-      saveOpenSection(activeModule.section);
-    }
-  }, [location.pathname, filtered]);
 
   useEffect(() => {
     if (!isCollapsed && activeLinkRef.current) {
@@ -221,9 +187,7 @@ export function Sidebar({
                 subsections={mod.subsections}
                 isOpen={openSection === mod.section}
                 onToggle={() => {
-                  const next = openSection === mod.section ? null : mod.section;
-                  setOpenSection(next);
-                  saveOpenSection(next);
+                  setOpenSection(openSection === mod.section ? null : mod.section);
                 }}
                 isActive={hasActiveItem}
                 pathname={location.pathname}

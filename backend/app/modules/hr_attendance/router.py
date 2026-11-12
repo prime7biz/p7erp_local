@@ -34,6 +34,7 @@ from app.models import (
     Tenant,
     User,
 )
+from app.modules.hr_allowances.pay_benefits import OVERTIME_OFF_DETAIL, is_employee_overtime_enabled
 from app.modules.hr_attendance.device_service import ENTRY_SOURCE_DEVICE
 from app.modules.hr_attendance.schemas import (
     AttendanceBulkEntryBody,
@@ -816,6 +817,8 @@ async def create_overtime_entry(
     await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_ATTENDANCE_MANAGE)
     await _employee_or_404(db, tenant.id, body.employee_id)
     await ensure_owned(db, OvertimeRule, body.rule_id, tenant.id, "Overtime rule")
+    if not await is_employee_overtime_enabled(db, tenant.id, body.employee_id):
+        raise HTTPException(status_code=400, detail=OVERTIME_OFF_DETAIL)
     try:
         ot_hours = Decimal(str(body.ot_hours).strip())
         rate_multiplier = Decimal(str(body.rate_multiplier).strip())
@@ -851,11 +854,20 @@ async def approve_overtime_entry(
 ):
     _ensure_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
-    row = await db.get(OvertimeEntry, entry_id)
-    if not row or row.tenant_id != tenant.id:
+    row = (
+        await db.execute(
+            select(OvertimeEntry)
+            .where(OvertimeEntry.id == entry_id, OvertimeEntry.tenant_id == tenant.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if row is None:
         raise HTTPException(status_code=404, detail="Overtime entry not found")
     if row.status != "PENDING":
         raise HTTPException(status_code=400, detail="Only pending entries can be approved")
+    if not await is_employee_overtime_enabled(db, tenant.id, row.employee_id):
+        raise HTTPException(status_code=400, detail=OVERTIME_OFF_DETAIL)
     row.status = "APPROVED"
     row.approved_by = user.id
     row.approved_at = datetime.utcnow()

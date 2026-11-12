@@ -16,4 +16,9 @@ describe("feature tiers", () => {
     expect(hiddenEnabledCount(flags, "more")).toBe(1);
     expect(hiddenEnabledCount(flags, "all")).toBe(0);
   });
+
+  it("lists the simpler mobile layout switch in the More tier", () => {
+    expect(hiddenEnabledCount({ mobile_ui_v2: true }, "essential")).toBe(1);
+    expect(hiddenEnabledCount({ mobile_ui_v2: true }, "more")).toBe(0);
+  });
 });

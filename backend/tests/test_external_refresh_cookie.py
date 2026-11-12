@@ -65,7 +65,13 @@ async def _seed(db) -> dict:
 @asynccontextmanager
 async def _client(db):
     async def override_db():
-        yield db
+        # Like app.database.get_db: a finished request commits, a failed one rolls back.
+        try:
+            yield db
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
 
     app.dependency_overrides[get_db] = override_db
     try:

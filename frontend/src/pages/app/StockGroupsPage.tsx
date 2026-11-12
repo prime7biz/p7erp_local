@@ -13,6 +13,8 @@ import { FolderTree, Plus, X, Search } from "lucide-react";
 import { erpControlFocusClass } from "@/components/app/listPageLayout";
 import { cn } from "@/lib/utils";
 import { logApiError } from "@/utils/logApiError";
+import { getChartOfAccountsCached } from "@/lib/masterData";
+import { useConfirm } from "@/components/app/useConfirm";
 
 type TreeNode = StockGroupResponse & { children: TreeNode[] };
 
@@ -102,6 +104,7 @@ function CoaSelect(props: {
 }
 
 export function StockGroupsPage({ embedded = false }: { embedded?: boolean }) {
+  const confirm = useConfirm();
   const [items, setItems] = useState<StockGroupResponse[]>([]);
   const [treeMetrics, setTreeMetrics] = useState<
     Map<number, { item_count: number; total_stock_value: string }>
@@ -137,7 +140,7 @@ export function StockGroupsPage({ embedded = false }: { embedded?: boolean }) {
     try {
       const [gr, coa] = await Promise.all([
         api.listStockGroups(),
-        api.listChartOfAccounts({ active_only: true }),
+        getChartOfAccountsCached({ active_only: true }),
       ]);
       setItems(gr);
       setCoaRows(coa);
@@ -222,7 +225,7 @@ export function StockGroupsPage({ embedded = false }: { embedded?: boolean }) {
       setError("Cannot delete: this group is used as a parent. Remove or reassign children first.");
       return;
     }
-    if (!window.confirm(`Delete group "${row.group_code} – ${row.name}"?`)) return;
+    if (!(await confirm({ title: `Delete group "${row.group_code} – ${row.name}"?`, danger: true }))) return;
     try {
       await api.deleteStockGroup(row.id);
       setError("");

@@ -30,7 +30,7 @@ export function exportCsv<T>(columns: GridColumn<T>[], rows: T[], baseName: stri
 /** Native .xlsx (numbers stay numeric); the writer is loaded only when someone exports. */
 export async function exportXlsx<T>(columns: GridColumn<T>[], rows: T[], baseName: string) {
   const { headers, body } = exportMatrix(columns, rows);
-  const { default: writeXlsxFile } = await import("write-excel-file");
+  const { default: writeXlsxFile } = await import("write-excel-file/browser");
   const data = [
     headers.map((h) => ({ value: h, fontWeight: "bold" as const })),
     ...body.map((line) =>
@@ -39,6 +39,6 @@ export async function exportXlsx<T>(columns: GridColumn<T>[], rows: T[], baseNam
       ),
     ),
   ];
-  const blob = await writeXlsxFile(data, {});
+  const blob = await writeXlsxFile(data).toBlob();
   await saveBlob(blob, `${baseName}.xlsx`);
 }

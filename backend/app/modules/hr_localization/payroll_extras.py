@@ -111,9 +111,10 @@ async def collect_extras(
         by_type: dict[str, Decimal] = {}
         for _i, amount, bill_type in rows:
             by_type[bill_type] = by_type.get(bill_type, Decimal("0")) + amount
-        for bill_type in ("TIFFIN", "DINNER", "NIGHT"):
+        for bill_type in ("TIFFIN", "LUNCH", "DINNER", "NIGHT", "FRIDAY"):
             if bill_type in by_type:
-                out.lines.append(Extra(f"BD-{bill_type}", f"{bill_type.title()} bill", by_type[bill_type]))
+                label = "Friday allowance" if bill_type == "FRIDAY" else f"{bill_type.title()} bill"
+                out.lines.append(Extra(f"BD-{bill_type}", label, by_type[bill_type]))
         if rows:
             out.sources["allowance"] = [i for i, _a, _t in rows]
 

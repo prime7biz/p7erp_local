@@ -8,6 +8,7 @@ import {
 } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
+import { getChartOfAccountsCached, getBankAccountsCached } from "@/lib/masterData";
 
 function money(n: number | null | undefined, currency?: string | null) {
   const v = Number(n ?? 0);
@@ -54,8 +55,8 @@ export function ProformaPaymentPanel({ piId, defaultCurrency, direction }: Props
     try {
       const [pay, bankList, coa] = await Promise.all([
         api.getProformaPaymentSummary(piId),
-        api.listBankAccounts({ active_only: true }),
-        api.listChartOfAccounts({ active_only: true }),
+        getBankAccountsCached({ active_only: true }),
+        getChartOfAccountsCached({ active_only: true }),
       ]);
       setSummary(pay);
       setBanks(bankList);

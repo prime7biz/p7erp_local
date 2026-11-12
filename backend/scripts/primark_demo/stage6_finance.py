@@ -629,7 +629,7 @@ async def _ensure_settled(db: AsyncSession, ctx: DemoContext, books: Books, v: V
     await auto_allocate_payment(db, ctx.tenant_id, pl.id, v, amount, allocation_method="FIFO",
                                 target_amount_type="CR" if party_type == "VENDOR" else "DR",
                                 created_by=books.user.id)
-    await update_party_ledger_balance(db, pl.id)
+    await update_party_ledger_balance(db, pl.id, tenant_id=ctx.tenant_id)
 
 
 # ---------------------------------------------------------------------------

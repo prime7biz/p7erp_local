@@ -12,6 +12,7 @@ import { todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { addMoney, subtractMoney, toMoneyString } from "@/lib/money";
+import { getBankAccountsCached } from "@/lib/masterData";
 
 const RUN_STATUSES = ["DRAFT", "APPROVED", "PROCESSED", "EXECUTED"] as const;
 
@@ -52,7 +53,7 @@ export function PaymentRunsPage() {
       setSuccess("");
       setError("");
       const [banks, bills, runs] = await Promise.all([
-        api.listBankAccounts(),
+        getBankAccountsCached(),
         api.listOutstandingBills({ bill_type: "PAYABLE" }),
         api.listPaymentRuns(runStatusFilter ? { status_filter: runStatusFilter } : undefined),
       ]);

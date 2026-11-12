@@ -119,6 +119,12 @@ services:
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-google/gemma-4-31b-it:free}
       OPENROUTER_TIER1_PREFERRED: ${OPENROUTER_TIER1_PREFERRED:-true}
       OPENROUTER_TENANT_TEXT_ENABLED: ${OPENROUTER_TENANT_TEXT_ENABLED:-true}
+      # AI chat agent mode (tenant flag ai_agent_mode_enabled). Empty model = OPENROUTER_MODEL; ":free" models are skipped.
+      AI_AGENT_MODEL: ${AI_AGENT_MODEL:-}
+      AI_AGENT_ALLOW_FREE_MODEL: ${AI_AGENT_ALLOW_FREE_MODEL:-false}
+      AI_AGENT_MAX_STEPS: ${AI_AGENT_MAX_STEPS:-6}
+      AI_AGENT_TIMEOUT_SECONDS: ${AI_AGENT_TIMEOUT_SECONDS:-35}
+      AI_AGENT_MAX_CONCURRENT: ${AI_AGENT_MAX_CONCURRENT:-4}
       OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
       OPENROUTER_SITE_URL: ${OPENROUTER_SITE_URL:-}
       OPENROUTER_APP_NAME: ${OPENROUTER_APP_NAME:-P7 ERP}
@@ -278,6 +284,8 @@ services:
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
       VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS:-localhost,127.0.0.1}
       VITE_DEV_PROXY_TARGET: ${VITE_DEV_PROXY_TARGET:-http://backend:8000}
+      # false = browser no longer reloads by itself on each saved file; press F5 to see changes.
+      VITE_DEV_HMR: ${VITE_DEV_HMR:-true}
       # Installable mobile app (docs/mobile-feasibility). Set VITE_PWA_ENABLED=true in .env to try it locally.
       VITE_PWA_ENABLED: ${VITE_PWA_ENABLED:-false}
       VITE_ANDROID_APK_URL: ${VITE_ANDROID_APK_URL:-}

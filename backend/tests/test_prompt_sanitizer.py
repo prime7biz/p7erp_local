@@ -10,3 +10,12 @@ def test_redacts_email_and_phone() -> None:
     assert "user@example.com" not in s
     assert "[EMAIL_REDACTED]" in s
     assert "[PHONE_REDACTED]" in s
+
+
+def test_redacts_bangladesh_mobile_numbers() -> None:
+    for number in ("01712345678", "01712-345678", "+8801712345678", "880 01912345678"):
+        s = redact_pii_for_external_provider(f"Call {number} now")
+        assert "345678" not in s, number
+        assert "[PHONE_REDACTED]" in s
+    # Order quantities and codes are left alone.
+    assert redact_pii_for_external_provider("Order ORD-1023 qty 12000") == "Order ORD-1023 qty 12000"

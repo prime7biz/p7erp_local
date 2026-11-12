@@ -11,6 +11,10 @@ import type {
   HrCompensationPreview,
   HrEmployeeAccess,
   HrEmployeeCompensationView,
+  HrEmployeeTaxProfile,
+  HrSalaryTdsSwitch,
+  HrPayBenefit,
+  HrPayBenefitsView,
   HrGeneratedDocument,
   HrOnboardingRequest,
   HrOnboardingRun,
@@ -424,6 +428,27 @@ export const hrApi = {
   async getHrEmployeeAccess(): Promise<HrEmployeeAccess> {
     return request<HrEmployeeAccess>("/api/v1/hr/employee-access");
   },
+  async getHrEmployeeTaxProfile(employeeId: number): Promise<{ employee_id: number; profile: HrEmployeeTaxProfile }> {
+    return request<{ employee_id: number; profile: HrEmployeeTaxProfile }>(`/api/v1/hr/employees/${employeeId}/tax-profile`);
+  },
+  async saveHrEmployeeTaxProfile(
+    employeeId: number,
+    profile: Omit<HrEmployeeTaxProfile, "exists">,
+  ): Promise<{ employee_id: number; profile: HrEmployeeTaxProfile }> {
+    return request<{ employee_id: number; profile: HrEmployeeTaxProfile }>(`/api/v1/hr/employees/${employeeId}/tax-profile`, {
+      method: "PUT",
+      body: JSON.stringify(profile),
+    });
+  },
+  async getHrSalaryTdsSwitch(): Promise<HrSalaryTdsSwitch> {
+    return request<HrSalaryTdsSwitch>("/api/v1/hr/localization/bd-rmg/salary-tds");
+  },
+  async setHrSalaryTdsSwitch(enabled: boolean): Promise<HrSalaryTdsSwitch> {
+    return request<HrSalaryTdsSwitch>("/api/v1/hr/localization/bd-rmg/salary-tds", {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    });
+  },
   async getHrCompensationOptions(): Promise<HrCompensationOptions> {
     return request<HrCompensationOptions>("/api/v1/hr/compensation/options");
   },
@@ -443,6 +468,15 @@ export const hrApi = {
     return request<HrEmployeeCompensationView>(`/api/v1/hr/employees/${employeeId}/compensation`, {
       method: "PUT",
       body: JSON.stringify(body),
+    });
+  },
+  async getHrEmployeePayBenefits(employeeId: number): Promise<HrPayBenefitsView> {
+    return request<HrPayBenefitsView>(`/api/v1/hr/employees/${employeeId}/pay-benefits`);
+  },
+  async replaceHrEmployeePayBenefits(employeeId: number, benefits: HrPayBenefit[]): Promise<HrPayBenefitsView> {
+    return request<HrPayBenefitsView>(`/api/v1/hr/employees/${employeeId}/pay-benefits`, {
+      method: "PUT",
+      body: JSON.stringify({ benefits }),
     });
   },
   async startHrOnboarding(body: HrOnboardingRequest): Promise<HrOnboardingRun> {
@@ -1162,3 +1196,4 @@ export const hrApi = {
     return request<HrPayrollReportRow[]>(`/api/v1/hr/reports/payroll${suffix}`);
   },
 };
+

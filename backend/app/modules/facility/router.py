@@ -433,7 +433,7 @@ async def activate_utilization(
                 detail=f"Already activated: disbursement voucher {existing_v.voucher_number} exists ({existing_v.status}).",
             )
     fac = await db.get(Facility, util.facility_id)
-    if not fac:
+    if not fac or fac.tenant_id != tenant.id:
         raise HTTPException(status_code=400, detail="Facility missing")
     from app.models.finance import BankAccount
     from app.modules.facility.account_resolver import resolve_facility_accounts
@@ -458,7 +458,7 @@ async def activate_utilization(
         tenant_id=tenant.id,
         user_id=user.id,
         util_id=util.id,
-        principal=float(util.principal_amount or 0),
+        principal=util.principal_amount or 0,
         bank_or_cash_account_id=bank_gl,
         liability_account_id=liability_id,
         voucher_date=util.disbursement_date or today_local(),

@@ -3,6 +3,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, status
 
+from app.common.pagination import MAX_PAGE_SIZE
 from app.modules.ai_tool.audit import log_ai_event
 from app.modules.erp_ai_phases.feature_flags import require_phase
 from app.modules.tna_unified.followup_ai_service import build_followup_insights
@@ -88,7 +89,7 @@ async def list_unified_actions(
     status_filter: str | None = Query(default=None),
     source: Literal["all", "merch", "manufacturing"] = Query(default="all"),
     overdue_only: bool = Query(default=False),
-    limit: int = Query(default=200, ge=1, le=1000),
+    limit: int = Query(default=200, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),

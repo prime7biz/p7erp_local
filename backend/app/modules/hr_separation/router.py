@@ -358,6 +358,15 @@ async def create_or_recalculate_settlement(
     if sep.status != "APPROVED":
         raise HTTPException(status_code=409, detail="Approve the separation first")
     await _locked(db, Employee, tenant.id, emp.id, "Employee")
+    from app.common.tenant_feature_keys import is_hr_bd_salary_tds_enabled
+    from app.modules.hr_localization import bd_salary_tds as tds_engine
+
+    if is_hr_bd_salary_tds_enabled(tenant.feature_flags) and tds_engine.SETTLEMENT_CLASSIFICATION_VERSION is None:
+        # Fail closed: settlement salary tax needs an approved taxable / exempt classification of each earning.
+        raise HTTPException(
+            status_code=409,
+            detail="Final-settlement income tax rules are not approved yet; the settlement cannot be calculated while salary TDS is on",
+        )
     fs = (
         await db.execute(
             select(HrFinalSettlement).where(HrFinalSettlement.tenant_id == tenant.id, HrFinalSettlement.separation_id == sep.id)

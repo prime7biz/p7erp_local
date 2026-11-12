@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type HrAttendanceReportRow, type HrReportSummaryResponse } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
 
 export function ReportEmployeeSummaryPage() {
   const [month, setMonth] = useState(() => {
@@ -37,21 +38,21 @@ export function ReportEmployeeSummaryPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">Employee Summary</h1>
-          <p className="text-text-muted text-sm mt-0.5">Headcount, attendance, and leave pipeline.</p>
-        </div>
-        <label className="flex items-center gap-2 text-sm">
-          Month
-          <input
-            type="month"
-            className="rounded border border-border-strong px-2 py-1"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-          />
-        </label>
-      </header>
+      <AppPageHeader
+        title="Employee Summary"
+        description="Headcount, attendance, and leave pipeline."
+        actions={
+          <label className="flex items-center gap-2 text-sm">
+            Month
+            <input
+              type="month"
+              className="rounded border border-border-strong px-2 py-1"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+            />
+          </label>
+        }
+      />
       {error && (
         <div className="rounded-lg bg-status-danger-subtle border border-status-danger/20 px-4 py-3 text-sm text-status-danger-foreground">
           {error}
@@ -75,7 +76,7 @@ export function ReportEmployeeSummaryPage() {
               <div className="text-2xl font-semibold">{summary.pending_leave_requests}</div>
             </div>
           </div>
-          <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+          <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
             <h2 className="border-b border-border px-4 py-2 text-sm font-semibold">Attendance by employee</h2>
             <table className="min-w-full text-sm">
               <thead className="bg-surface-subtle text-left text-text-muted">

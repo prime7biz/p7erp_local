@@ -1,6 +1,8 @@
 """Create a balanced draft finance voucher for a WIP journal (production costing)."""
 from __future__ import annotations
 
+from decimal import ROUND_HALF_UP, Decimal
+
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,15 +24,15 @@ async def create_draft_voucher_for_wip_journal(
     Build a two-line balanced DRAFT voucher: debit WIP / clearing, credit offset.
     Caller must have flushed `wip` so `wip.id` is set. Does not commit.
     """
+    from app.modules.finance.auto_posting_service import AMOUNT_QUANT, quantize_amount, quantize_rate
     from app.modules.finance.router import (
         _active_voucher_type_codes,
         _apply_internal_signature,
         _lookup_exchange_rate,
         _normalize_currency,
-        _to_float,
     )
 
-    total = float(wip.total_value or 0)
+    total = quantize_amount(wip.total_value or 0, field="total_value")
     if total <= 0:
         raise HTTPException(status_code=400, detail="Total value must be positive to create a voucher")
 
@@ -47,10 +49,11 @@ async def create_draft_voucher_for_wip_journal(
     ).strip()
     ref = f"WIP-JRN-{wip.id}"
 
-    amt_str = str(round(total, 4))
     txn_currency = _normalize_currency("BDT", default="BDT")
     base_currency = _normalize_currency("BDT", default="BDT")
     exchange_rate_value, rate_source, fetched_at = await _lookup_exchange_rate(db, tenant.id, txn_currency, base_currency)
+    line_rate = quantize_rate(exchange_rate_value or 1)
+    base_total = (total * line_rate).quantize(AMOUNT_QUANT, rounding=ROUND_HALF_UP)
 
     voucher_number, series_seq, series_key, fy = await allocate_series_voucher_number(
         db,
@@ -76,7 +79,7 @@ async def create_draft_voucher_for_wip_journal(
         allow_manual_edit=False,
         currency=txn_currency,
         base_currency=base_currency,
-        exchange_rate=str(round(exchange_rate_value or 1.0, 8)),
+        exchange_rate=line_rate,
         exchange_rate_source=rate_source,
         exchange_rate_fetched_at=fetched_at,
         trade_case_id=None,
@@ -86,9 +89,9 @@ async def create_draft_voucher_for_wip_journal(
     db.add(row)
     await db.flush()
 
-    line_specs: list[tuple[int, str, str]] = [
-        (gl_debit_account_id, "DEBIT", amt_str),
-        (gl_credit_account_id, "CREDIT", amt_str),
+    line_specs: list[tuple[int, str, Decimal]] = [
+        (gl_debit_account_id, "DEBIT", total),
+        (gl_credit_account_id, "CREDIT", total),
     ]
     created_lines: list[VoucherLine] = []
     for account_id, entry_type, amount in line_specs:
@@ -110,17 +113,14 @@ async def create_draft_voucher_for_wip_journal(
                 status_code=400,
                 detail=f"Posting not allowed to accounts in group '{grp.name}' (summary/post-disabled).",
             )
-        line_rate = exchange_rate_value or 1.0
-        amount_value = _to_float(amount)
-        base_amount_value = amount_value * line_rate
         voucher_line = VoucherLine(
             tenant_id=tenant.id,
             voucher_id=row.id,
             account_id=account_id,
             cost_center_id=cc_id,
             currency=txn_currency,
-            exchange_rate=str(round(line_rate, 8)),
-            base_amount=str(round(base_amount_value, 4)),
+            exchange_rate=line_rate,
+            base_amount=base_total,
             is_rate_overridden=False,
             rate_source=rate_source,
             entry_type=entry_type,
@@ -130,9 +130,11 @@ async def create_draft_voucher_for_wip_journal(
         db.add(voucher_line)
         created_lines.append(voucher_line)
 
-    debit_total = sum(_to_float(x.amount) for x in created_lines if x.entry_type == "DEBIT")
-    credit_total = sum(_to_float(x.amount) for x in created_lines if x.entry_type == "CREDIT")
-    if round(debit_total, 4) != round(credit_total, 4):
+    debit_total = sum((x.amount for x in created_lines if x.entry_type == "DEBIT"), Decimal("0"))
+    credit_total = sum((x.amount for x in created_lines if x.entry_type == "CREDIT"), Decimal("0"))
+    base_debit = sum((x.base_amount for x in created_lines if x.entry_type == "DEBIT"), Decimal("0"))
+    base_credit = sum((x.base_amount for x in created_lines if x.entry_type == "CREDIT"), Decimal("0"))
+    if debit_total != credit_total or base_debit != base_credit:
         raise HTTPException(status_code=400, detail="Voucher is not balanced")
 
     _apply_internal_signature(row, created_lines)

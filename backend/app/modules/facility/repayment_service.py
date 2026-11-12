@@ -34,7 +34,7 @@ async def create_repayment_draft_for_line(
     if not util or util.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="Utilization not found")
     fac = await db.get(Facility, util.facility_id)
-    if not fac:
+    if not fac or fac.tenant_id != tenant_id:
         raise HTTPException(status_code=400, detail="Facility not found")
     fac_acc = await resolve_facility_accounts(db, tenant_id, fac)
     liability_id = fac_acc["liability"]
@@ -63,8 +63,8 @@ async def create_repayment_draft_for_line(
         user_id=user_id,
         util_id=util.id,
         schedule_line_id=line.id,
-        principal_part=float(line.principal_component or 0),
-        interest_part=float(line.interest_component or 0),
+        principal_part=line.principal_component or 0,
+        interest_part=line.interest_component or 0,
         liability_account_id=liability_id,
         interest_payable_account_id=payable_id,
         bank_account_id=bank_gl,

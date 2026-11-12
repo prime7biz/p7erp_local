@@ -238,9 +238,11 @@ async def get_party_ledger_by_account(
 async def update_party_ledger_balance(
     db: AsyncSession,
     party_ledger_id: int,
+    *,
+    tenant_id: int,
 ) -> None:
     pl = await db.get(PartyLedger, party_ledger_id)
-    if not pl:
+    if not pl or pl.tenant_id != tenant_id:
         return
 
     rows = (
@@ -251,6 +253,7 @@ async def update_party_ledger_balance(
                 func.coalesce(func.sum(PartyLedgerBill.original_amount), 0),
             )
             .where(
+                PartyLedgerBill.tenant_id == tenant_id,
                 PartyLedgerBill.party_ledger_id == party_ledger_id,
                 PartyLedgerBill.status != "CANCELLED",
             )

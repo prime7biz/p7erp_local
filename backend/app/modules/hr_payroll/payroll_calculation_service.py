@@ -28,6 +28,7 @@ from app.models import (
     PayrollStructureLine,
 )
 from app.models.tenant import Tenant
+from app.modules.hr_allowances.pay_benefits import is_employee_overtime_enabled
 from app.modules.hr_leave.leave_days import each_date, non_working_dates
 from app.modules.hr_payroll.formula_engine import (
     OUTPUT_BASED_TYPES,
@@ -96,6 +97,8 @@ class EmployeeCalcPreview:
     ot_paid_hours: str = "0.0000"  # approved OT hours paid (after daily caps, inside employment dates)
     ot_hourly_rate: str = "0.0000"  # base salary / hours per month (salary in effect at the period end)
     ot_amount: str = "0.0000"  # the OT_SALARY earning line
+    # Per-employee switch (hr_employee_pay_benefits OVERTIME); False pays no overtime at all.
+    overtime_enabled: bool = True
 
 
 def _employee_display_name(employee: Employee) -> str:
@@ -509,6 +512,7 @@ async def calculate_employee_payroll(
     has_manual_override: bool = False,
     apply_lop: bool = False,
     ot_from_salary: bool = False,
+    apply_bd_tds: bool = False,
     run_line_id: int | None = None,
 ) -> EmployeeCalcPreview:
     """Build a read-only payroll preview for one employee in a pay period.
@@ -593,6 +597,8 @@ async def calculate_employee_payroll(
     ot_hours = await sum_approved_ot_hours(
         db, tenant_id=tenant_id, employee_id=employee.id, start=period.start_date, end=period.end_date
     )
+    overtime_on = await is_employee_overtime_enabled(db, tenant_id, employee.id)
+    paid_ot_hours = ot_hours if overtime_on else Decimal("0")
     paid_leave, unpaid_leave = await leave_days_in_period(
         db, tenant_id=tenant_id, employee_id=employee.id, start=period.start_date, end=period.end_date
     )
@@ -605,6 +611,8 @@ async def calculate_employee_payroll(
         warnings.append("No base_salary on assignment; PERCENT_OF_BASE uses 0 until set")
     if has_manual_override:
         warnings.append("Has manual override — will be skipped unless forced")
+    if not overtime_on and ot_hours > 0:
+        warnings.append(f"Overtime is switched off for this employee: {ot_hours} approved overtime hour(s) are not paid")
 
     lines = (
         await db.execute(
@@ -664,7 +672,7 @@ async def calculate_employee_payroll(
             amount=source_amount,
             base_salary=base,
             days_present=paid_days_for_allowance,
-            ot_hours=ot_hours,
+            ot_hours=paid_ot_hours,
             pieces=pieces,
             earned_minutes=earned_minutes,
             strict=True,
@@ -712,7 +720,7 @@ async def calculate_employee_payroll(
         )
 
     salary_ot: SalaryOvertime | None = None
-    if ot_from_salary:
+    if ot_from_salary and overtime_on:
         salary_ot = await compute_salary_overtime(
             db,
             tenant=await db.get(Tenant, tenant_id),
@@ -895,6 +903,64 @@ async def calculate_employee_payroll(
                 "PT",
             )
 
+    if apply_bd_tds:
+        from app.modules.hr_localization import bd_salary_tds as tds_engine
+        from app.modules.hr_localization.bd_salary_tds_service import (
+            BD_TDS_CODE,
+            BD_TDS_KIND,
+            BD_TDS_NAME,
+            compute_payroll_tds,
+        )
+
+        if any(c.code == BD_TDS_CODE for _sl, c in lines):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Structure line code {BD_TDS_CODE} is reserved for automatic Bangladesh salary tax. "
+                    "Remove that component from the structure."
+                ),
+            )
+        extras_total = sum((e.amount for e in extras.lines), Decimal("0"))
+        # Recurring monthly pay = this month's pay before loss of pay, without overtime and one-off extras.
+        recurring = max(gross + lop_amount - overtime_amount - extras_total, Decimal("0"))
+        tds_result = await compute_payroll_tds(
+            db,
+            tenant_id=tenant_id,
+            employee=employee,
+            period=period,
+            current_gross=quantize_money(gross),
+            recurring_monthly=quantize_money(recurring),
+        )
+        monthly_tds = tds_result["monthly_tds"]
+        warnings.extend(tds_result.get("warnings") or [])
+        statutory_trace = {**statutory_trace, "bd_tds": tds_engine.jsonable(tds_result)}
+        if monthly_tds > 0:
+            deductions += monthly_tds
+            component_out.append(
+                ComponentCalcLine(
+                    component_id=0,
+                    component_code=BD_TDS_CODE,
+                    component_name=BD_TDS_NAME,
+                    component_type="DEDUCTION",
+                    calculation_type="STATUTORY",
+                    amount=decimal_to_money_response(monthly_tds),
+                    source_amount=decimal_to_money_response(monthly_tds),
+                    is_statutory=True,
+                    statutory_kind=BD_TDS_KIND,
+                )
+            )
+            component_trace.append(
+                {
+                    "component_id": 0,
+                    "code": BD_TDS_CODE,
+                    "calculation_type": "STATUTORY",
+                    "source_amount": decimal_to_money_response(monthly_tds),
+                    "amount": decimal_to_money_response(monthly_tds),
+                    "full_amount": decimal_to_money_response(monthly_tds),
+                    "component_type": "DEDUCTION",
+                }
+            )
+
     net = quantize_money(gross - deductions)
     if net < 0:
         warnings.append("Deductions are more than earnings for this period; net pay is negative")
@@ -910,7 +976,8 @@ async def calculate_employee_payroll(
             lop_unpaid_leave_days=decimal_to_money_response(lop.unpaid_leave_days),
             lop_amount=decimal_to_money_response(quantize_money(lop_amount)),
         )
-    ot_fields: dict[str, Any] = {"ot_from_salary": salary_ot is not None}
+    # Run mode, not this employee's switch: service.run_applies_ot_from_salary reads it from any line.
+    ot_fields: dict[str, Any] = {"ot_from_salary": ot_from_salary, "overtime_enabled": overtime_on}
     if salary_ot is not None:
         ot_fields.update(
             ot_paid_hours=decimal_to_money_response(salary_ot.paid_hours),
@@ -937,6 +1004,7 @@ async def calculate_employee_payroll(
         "piece_earnings": decimal_to_money_response(quantize_money(piece_earnings)),
         "components": component_trace,
         "statutory": statutory_trace,
+        "bd_tds_applied": apply_bd_tds,
         "gross_pay": decimal_to_money_response(quantize_money(gross)),
         "deductions": decimal_to_money_response(quantize_money(deductions)),
         "net_pay": decimal_to_money_response(net),

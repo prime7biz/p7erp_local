@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, type ShipmentRow, type TradeCaseRow } from "@/api/client";
 import { addMoney } from "@/lib/money";
 import { logApiError } from "@/utils/logApiError";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
 
 export function ReportTradeOverviewPage() {
   const [cases, setCases] = useState<TradeCaseRow[]>([]);
@@ -59,19 +60,19 @@ export function ReportTradeOverviewPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 p-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-text-primary">Trade overview</h1>
-          <p className="text-sm text-text-secondary">Cases by stage and shipments by status (from current lists).</p>
-        </div>
-        <button
-          type="button"
-          className="rounded-lg border border-border-subtle px-3 py-1.5 text-sm"
-          onClick={() => void load()}
-        >
-          Refresh
-        </button>
-      </div>
+      <AppPageHeader
+        title="Trade overview"
+        description="Cases by stage and shipments by status (from current lists)."
+        actions={
+          <button
+            type="button"
+            className="rounded-lg border border-border-subtle px-3 py-1.5 text-sm"
+            onClick={() => void load()}
+          >
+            Refresh
+          </button>
+        }
+      />
 
       {error ? (
         <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">

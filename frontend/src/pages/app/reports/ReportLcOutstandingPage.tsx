@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, type MasterContractRow } from "@/api/client";
 import { subtractMoney, sumMoneyBy } from "@/lib/money";
 import { logApiError } from "@/utils/logApiError";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
 
 export function ReportLcOutstandingPage() {
   const [rows, setRows] = useState<MasterContractRow[]>([]);
@@ -42,15 +43,7 @@ export function ReportLcOutstandingPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-text-primary">LC / Master Contract Exposure</h1>
-        <p className="text-text-muted text-sm mt-0.5">
-          Export LC and sales contracts: limit, utilization, and remaining capacity.{" "}
-          <Link to="/app/commercial/master-contracts" className="text-brand-primary hover:underline">
-            Open master contracts
-          </Link>
-        </p>
-      </header>
+      <AppPageHeader title="LC / Master Contract Exposure" description="Export LC and sales contracts: limit, utilization, and remaining capacity." actions={<><Link to="/app/commercial/master-contracts" className="text-brand-primary hover:underline"> Open master contracts </Link></>} />
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-sm text-text-muted">Status</label>
         <input
@@ -79,7 +72,7 @@ export function ReportLcOutstandingPage() {
           {error}
         </div>
       )}
-      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+      <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
         {loading ? (
           <div className="space-y-3 p-6"><div className="h-4 w-3/4 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-full animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-5/6 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-2/3 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-4/5 animate-pulse rounded bg-surface-subtle" /></div>
         ) : rows.length === 0 ? (

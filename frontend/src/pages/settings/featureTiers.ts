@@ -41,6 +41,7 @@ export const TIER_KEYS: Record<Exclude<FeatureTier, "essential">, string[]> = {
     "procurement_cs_enabled",
     "payroll_auto_calculate_enabled",
     "payroll_four_eyes_approval",
+    "mobile_ui_v2",
   ],
   all: [
     "tds_system_enabled",

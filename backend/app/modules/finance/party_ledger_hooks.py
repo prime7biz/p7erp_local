@@ -209,7 +209,7 @@ async def on_voucher_posted(
                     touched_pl.add(pl.id)
 
             for pl_id in touched_pl:
-                await update_party_ledger_balance(db, pl_id)
+                await update_party_ledger_balance(db, pl_id, tenant_id=tenant_id)
     except Exception:
         logger.exception(
             "party_ledger on_voucher_posted failed tenant=%s voucher=%s",

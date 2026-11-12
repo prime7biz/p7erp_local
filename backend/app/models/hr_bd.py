@@ -274,3 +274,51 @@ class HrBdServiceBenefitCase(Base):
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class HrEmployeeTaxProfile(Base):
+    """Per-employee Bangladesh salary income tax (TDS) settings (migration 291).
+
+    One row per employee. TIN and money amounts are private to ``hr.payroll.manage`` users and are
+    never written to logs or audit details.
+    """
+
+    __tablename__ = "hr_employee_tax_profiles"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "employee_id", name="uq_hr_employee_tax_profile"),
+        CheckConstraint(
+            "tax_category_override IN ('AUTO','GENERAL','FEMALE','SENIOR_65','DISABLED','THIRD_GENDER','FREEDOM_FIGHTER')",
+            name="ck_hr_emp_tax_profile_category",
+        ),
+        CheckConstraint("rebate_mode IN ('DECLARED_INVESTMENT','NONE')", name="ck_hr_emp_tax_profile_rebate"),
+        CheckConstraint("disabled_children_count >= 0", name="ck_hr_emp_tax_profile_children"),
+        CheckConstraint(
+            "(declared_annual_investment IS NULL OR declared_annual_investment >= 0) AND "
+            "(monthly_tds_override IS NULL OR monthly_tds_override >= 0) AND "
+            "(opening_ytd_gross IS NULL OR opening_ytd_gross >= 0) AND "
+            "(opening_ytd_tds IS NULL OR opening_ytd_tds >= 0)",
+            name="ck_hr_emp_tax_profile_amounts",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("hr_employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    tds_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
+    tin_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    tax_circle: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    tax_zone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    tax_category_override: Mapped[str] = mapped_column(String(24), nullable=False, default="AUTO", server_default="AUTO")
+    category_evidence_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    disabled_children_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    is_first_time_taxpayer: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
+    rebate_mode: Mapped[str] = mapped_column(String(24), nullable=False, default="NONE", server_default="NONE")
+    declared_annual_investment: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    monthly_tds_override: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    opening_ytd_gross: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    opening_ytd_tds: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    opening_income_year_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    opening_through_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

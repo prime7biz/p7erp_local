@@ -43,22 +43,32 @@ from app.models import Role, Tenant  # noqa: E402
 FAIL_CLOSED_KEYS = (PERMISSION_HR_PAYROLL_MANAGE, PERMISSION_HR_ATTENDANCE_MANAGE, PERMISSION_HR_LEAVE_TYPES_MANAGE)
 
 
-def _ungated_route_prefixes() -> list[str]:
-    """Route prefixes whose endpoints carry no `require_internal_permission` dependency."""
-    from app.main import app
+def route_permission_keys(route) -> set[str]:
+    """Module permission keys on a route (same rule as tests/test_route_permission_inventory.py)."""
+    found: set[str] = set()
+    for dep in _walk(route.dependant):
+        keys = getattr(dep.call, "permission_keys", None)
+        if keys:
+            found.update(keys)
+    return found
 
+
+def ungated_route_prefixes(routes) -> list[str]:
+    """Route prefixes whose endpoints carry no module permission dependency."""
     ungated: Counter[str] = Counter()
-    for route in app.routes:
+    for route in routes:
         path = getattr(route, "path", "")
         if not path.startswith("/api/v1/") or not hasattr(route, "dependant"):
             continue
-        names = {
-            getattr(d.call, "__qualname__", "")
-            for d in _walk(route.dependant)
-        }
-        if not any("require_internal_permission" in n for n in names):
+        if not route_permission_keys(route):
             ungated["/".join(path.split("/")[:4])] += 1
     return [f"{p} ({n} routes)" for p, n in sorted(ungated.items())]
+
+
+def _ungated_route_prefixes() -> list[str]:
+    from app.main import app
+
+    return ungated_route_prefixes(app.routes)
 
 
 def _walk(dep):

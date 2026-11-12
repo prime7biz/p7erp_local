@@ -16,7 +16,7 @@ alwaysApply: false
 - UI: `frontend/src/pages/app/tutorials/` (`TutorialsPage`, `TutorialArticlePage`, `TutorialMarkdown.tsx`, flow/steps/images/video/callout components, `tutorialUi.ts` for sorting + heading ids).
   - Help hub lists in `TutorialsPage.tsx`: `START_HERE_IDS`, `QUICK_GUIDE_LINKS` (missing ids are skipped), `SECTION_ICONS` (add an icon for a new section), **`HELP_ROLES`** (role chips → section ids / tags / `audience` values).
   - Markdown: `##` headings feed the article's “On this page” list; `> **Tip:** …` renders a green callout, `> **Warning:** …` an amber one. No GitHub tables (no `remark-gfm`) — use lists or `steps` instead.
-  - Header **Help** button (`frontend/src/components/shell/PageHelpButton.tsx`) shows up to 5 articles whose `relatedAppRoutes` match the current page (a bare `/app` route only matches the dashboard). It loads tutorial content with a dynamic `import()` — do not import `@/data/tutorials` statically from the app shell.
+  - Header **Help** button (`frontend/src/components/shell/PageHelpButton.tsx`) shows up to 5 articles whose `relatedAppRoutes` match the current page (a bare `/app` route only matches the dashboard). It loads only the small generated index `helpIndex.generated.ts` (id / title / summary / routes; matching in `helpIndex.ts`) — never import `@/data/tutorials` from the app shell. After editing articles run `npm run generate:help-index` in `frontend/` (also run by `prebuild`); `helpIndex.test.ts` fails while the index is out of date.
 - Screenshot / video assets: `frontend/public/tutorials/` (see `README.md` there), regenerated with `tools/tutorial-capture/`. Use **local** paths only in content.
 
 ## When to update (mandatory)

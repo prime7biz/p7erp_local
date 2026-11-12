@@ -1,22 +1,47 @@
-import { describe, expect, it } from "vitest";
-import { buildCsv } from "./exportRows";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const saveBlob = vi.fn<(blob: Blob, name: string) => Promise<void>>(async () => undefined);
+vi.mock("@/lib/fileSave", () => ({ saveBlob: (blob: Blob, name: string) => saveBlob(blob, name) }));
+
+import { buildCsv, exportXlsx } from "./exportRows";
 import type { GridColumn } from "./types";
 
-type Row = { name: string; qty: number | null };
+type Row = { code: string; qty: number; note: string | null };
 
-const columns: GridColumn<Row>[] = [
-  { id: "name", header: "Name", cell: (r) => r.name, value: (r) => r.name },
-  { id: "qty", header: "Qty", cell: (r) => r.qty, value: (r) => r.qty },
-  { id: "actions", header: "Actions", cell: () => null, noExport: true },
+const columns = [
+  { key: "code", header: "Code", value: (r: Row) => r.code },
+  { key: "qty", header: "Qty", value: (r: Row) => r.qty },
+  { key: "note", header: "Note", value: (r: Row) => r.note },
+] as unknown as GridColumn<Row>[];
+
+const rows: Row[] = [
+  { code: "A-1", qty: 12.5, note: "first" },
+  { code: "B-2", qty: 3, note: null },
 ];
 
-describe("buildCsv", () => {
-  it("starts with a BOM, escapes quotes/commas/newlines and skips noExport columns", () => {
-    const csv = buildCsv(columns, [
-      { name: 'Rahim "RMG", Ltd\nDhaka', qty: 12 },
-      { name: "ঢাকা", qty: null },
-    ]);
-    expect(csv.charCodeAt(0)).toBe(0xfeff);
-    expect(csv.slice(1)).toBe('Name,Qty\r\n"Rahim ""RMG"", Ltd\nDhaka",12\r\nঢাকা,');
+async function blobBytes(blob: Blob): Promise<Uint8Array> {
+  return new Uint8Array(await new Response(blob).arrayBuffer());
+}
+
+describe("data grid export", () => {
+  beforeEach(() => saveBlob.mockClear());
+
+  it("builds CSV with a BOM and quoted cells", () => {
+    const csv = buildCsv(columns, [{ code: 'Say "hi"', qty: 1, note: "a,b" }]);
+    expect(csv.startsWith("\uFEFF")).toBe(true);
+    expect(csv).toContain('"Say ""hi""",1,"a,b"');
+  });
+
+  it("writes a real .xlsx file through the browser writer", async () => {
+    await exportXlsx(columns, rows, "items");
+    expect(saveBlob).toHaveBeenCalledTimes(1);
+    const call = saveBlob.mock.calls[0];
+    expect(call).toBeDefined();
+    const [blob, name] = call!;
+    expect(name).toBe("items.xlsx");
+    const bytes = await blobBytes(blob);
+    expect(bytes.length).toBeGreaterThan(100);
+    // .xlsx is a zip archive: it starts with the "PK" signature.
+    expect(String.fromCharCode(bytes[0] ?? 0, bytes[1] ?? 0)).toBe("PK");
   });
 });

@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.database import safe_async_session_rollback
 from app.models import Tenant, User
 from app.models.ai_tool import (
     AiActionRun,
@@ -25,6 +26,9 @@ from app.models.ai_tool import (
     AiSystemTask,
 )
 from app.modules.ai_tool import audit, repository
+from app.modules.ai_tool.agent.catalog import AgentContext
+from app.modules.ai_tool.agent.history import load_recent_history
+from app.modules.ai_tool.agent.loop import AgentOutcome, agent_mode_ready, run_agent
 from app.modules.ai_tool.artifacts import service as approval_artifact_service
 from app.modules.ai_tool.automation import confirm_and_execute_action, propose_action
 from app.modules.ai_tool.anomaly import generate_anomaly_insights
@@ -94,6 +98,9 @@ from app.modules.ai_tool.llm_provider.prompt_sanitizer import redact_pii_for_ext
 
 
 AUTO_ESCALATION_INTENTS = frozenset({"report_request", "analysis_request", "forecast_request"})
+# After a failed agent attempt this long, the legacy fallback skips its own LLM calls so the request
+# still finishes inside the 60s proxy timeout.
+AGENT_FAST_FALLBACK_AFTER_SECONDS = 15.0
 
 
 def _escalation_tool_for_auto_intent(intent: str, prompt: str) -> str:
@@ -779,6 +786,126 @@ async def list_session_messages(
     return [_message_to_schema(x) for x in messages]
 
 
+async def _session_still_usable(db: AsyncSession) -> bool:
+    """False when the transaction was aborted (then nothing else can be saved in this request)."""
+    try:
+        async with db.begin_nested():
+            await db.execute(select(1))
+        return True
+    except Exception:
+        return False
+
+
+async def _finish_agent_response(
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    user: User,
+    session: AiSession,
+    user_msg: AiMessage,
+    request_id: str,
+    intent_result: Any,
+    outcome: AgentOutcome,
+    screen_citations: list[AiCitation],
+    tracer: RequestTracer,
+    overall_start: float,
+) -> AiChatResponse:
+    """Save the agent's answer and build the same response shape as the standard pipeline."""
+    seen = {c.href for c in screen_citations}
+    citations = list(screen_citations)
+    for c in outcome.citations:
+        if c["href"] not in seen:
+            seen.add(c["href"])
+            citations.append(AiCitation(**c))
+    elapsed_ms = int((perf_counter() - overall_start) * 1000)
+    prov = build_response_envelope(
+        answer=outcome.text,
+        tool_results=outcome.tool_results,
+        primary_route="agent",
+        secondary_routes=[],
+        total_latency_ms=elapsed_ms,
+        model_used=outcome.model,
+    )
+    assistant_msg = await repository.create_message(
+        db,
+        tenant_id=tenant.id,
+        session_id=session.id,
+        sender_user_id=None,
+        role="assistant",
+        content=outcome.text,
+        content_json={
+            "request_id": request_id,
+            "mode": "agent",
+            "intent": intent_result.intent,
+            "confidence": intent_result.confidence,
+            "tool_results": [x.model_dump() for x in outcome.tool_results],
+            "blocked": False,
+            "ambiguous_rejected": False,
+            "primary_route": "agent",
+            "suggest_premium": False,
+            "provenance": prov,
+            "trace_spans": tracer.to_json(),
+            "citations": [c.model_dump() for c in citations],
+            "agent": {
+                "model": outcome.model,
+                "steps": outcome.steps,
+                "tool_calls": outcome.tool_calls,
+            },
+        },
+    )
+    await repository.touch_session_last_message(db, session=session)
+    await audit.log_ai_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        session_id=session.id,
+        message_id=assistant_msg.id,
+        action="RESPONSE_SENT",
+        request_id=request_id,
+        trace_id=request_id,
+        resource="ai.agent",
+        details=outcome.text[:500],
+        model_used=outcome.model,
+        prompt_tokens=outcome.prompt_tokens or None,
+        completion_tokens=outcome.completion_tokens or None,
+        tools_called=[x.tool_name for x in outcome.tool_results],
+        latency_ms=elapsed_ms,
+    )
+    await audit.log_ai_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        session_id=session.id,
+        message_id=assistant_msg.id,
+        action="REQUEST_COMPLETED",
+        request_id=request_id,
+        trace_id=request_id,
+        resource="ai.request",
+        details=f"Completed in {elapsed_ms}ms",
+        details_json={
+            "duration_ms": elapsed_ms,
+            "intent": intent_result.intent,
+            "mode": "agent",
+            "tool_results_count": len(outcome.tool_results),
+            "blocked": False,
+            "spans": tracer.to_json(),
+            **build_policy_metadata(decision="allow"),
+        },
+    )
+    return AiChatResponse(
+        session=_session_to_schema(session),
+        user_message=_message_to_schema(user_msg),
+        assistant_message=_message_to_schema(assistant_msg),
+        detected_intent=intent_result.intent,
+        confidence=intent_result.confidence,
+        request_id=request_id,
+        tool_results=outcome.tool_results,
+        blocked=False,
+        escalation=None,
+        citations=citations,
+    )
+
+
 async def process_prompt(
     db: AsyncSession,
     *,
@@ -892,6 +1019,63 @@ async def process_prompt(
         details_json={"intent": intent_result.intent, "confidence": intent_result.confidence},
     )
 
+    agent_attempted = False
+    if agent_mode_ready(tenant):
+        agent_attempted = True
+        t_agent = tracer.now_ms()
+        agent_ctx = AgentContext(
+            db=db,
+            tenant=tenant,
+            user=user,
+            session_id=session.id,
+            message_id=user_msg.id,
+            request_id=request_id,
+        )
+        history = await load_recent_history(
+            db, tenant_id=tenant.id, session_id=session.id, exclude_message_id=user_msg.id
+        )
+        outcome = await run_agent(agent_ctx, prompt=prompt, history=history, screen_ctx=screen_ctx)
+        tracer.span_end(
+            "agent",
+            t_agent,
+            status="ok" if outcome is not None else "error",
+            metadata={"answered": outcome is not None},
+        )
+        if outcome is None and not await _session_still_usable(db):
+            await safe_async_session_rollback(db)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="The AI assistant hit a database problem. Please send your question again.",
+            )
+        if outcome is not None:
+            return await _finish_agent_response(
+                db,
+                tenant=tenant,
+                user=user,
+                session=session,
+                user_msg=user_msg,
+                request_id=request_id,
+                intent_result=intent_result,
+                outcome=outcome,
+                screen_citations=citations,
+                tracer=tracer,
+                overall_start=overall_start,
+            )
+        await audit.log_ai_event(
+            db,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            session_id=session.id,
+            message_id=user_msg.id,
+            action="AGENT_FALLBACK",
+            severity="WARN",
+            request_id=request_id,
+            trace_id=request_id,
+            resource="ai.agent",
+            details="Agent mode could not answer; using the standard assistant.",
+        )
+    fast_fallback = agent_attempted and (perf_counter() - overall_start) > AGENT_FAST_FALLBACK_AFTER_SECONDS
+
     t_route = tracer.now_ms()
     route_decision = HybridRouter.route(intent_result=intent_result, prompt=prompt)
     tracer.span_end(
@@ -930,7 +1114,7 @@ async def process_prompt(
     # (see docs: tier-1 must not swallow summary/search queries).
     triage_text = ""
     escalation: EscalationPayload | None = None
-    if route_decision.use_tier1_triage:
+    if route_decision.use_tier1_triage and not fast_fallback:
         t_tier1 = tracer.now_ms()
         if intent_result.intent in AUTO_ESCALATION_INTENTS:
             escalation = EscalationPayload(
@@ -1595,9 +1779,12 @@ async def process_prompt(
             )
 
     t_llm = tracer.now_ms()
-    assistant_text = await _assistant_text_with_llm(
-        prompt, tool_results, intent_result.intent, blocked, tenant=tenant, screen_ctx=screen_ctx
-    )
+    if fast_fallback:
+        assistant_text = _assistant_text(tool_results, intent_result.intent, blocked)
+    else:
+        assistant_text = await _assistant_text_with_llm(
+            prompt, tool_results, intent_result.intent, blocked, tenant=tenant, screen_ctx=screen_ctx
+        )
     tracer.span_end("llm_compose", t_llm, metadata={})
     elapsed_ms = int((perf_counter() - overall_start) * 1000)
     prov = build_response_envelope(

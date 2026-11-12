@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.pagination import MAX_PAGE_SIZE
 from app.common.auth import get_current_user
 from app.common.tenant import require_tenant
 from app.database import get_db, safe_async_session_rollback
@@ -104,7 +105,7 @@ def _to_routing_step_response(row: ManufacturingRoutingStep) -> RoutingStepRespo
 @router.get("/work-centers", response_model=list[WorkCenterResponse])
 async def list_work_centers(
     active_only: bool = Query(default=False),
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -166,7 +167,7 @@ async def update_work_center(
 @router.get("/operations", response_model=list[OperationResponse])
 async def list_operations(
     active_only: bool = Query(default=False),
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -249,7 +250,7 @@ async def update_operation(
 @router.get("/routing-templates", response_model=list[RoutingTemplateResponse])
 async def list_routing_templates(
     item_id: int | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=2000),
+    limit: int = Query(default=100, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -321,7 +322,7 @@ async def update_routing_template(
 @router.get("/routing-templates/{routing_id}/steps", response_model=list[RoutingStepResponse])
 async def list_routing_steps(
     routing_id: int,
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.pagination import MAX_PAGE_SIZE
 from app.common.auth import get_current_user
 from app.common.tenant import require_tenant
 from app.database import get_db
@@ -18,7 +19,7 @@ def _ensure_user_tenant(user: User, tenant: Tenant) -> None:
 
 @router.get("", response_model=list[UserWithRoleResponse])
 async def list_users(
-    limit: int = Query(500, ge=1, le=2000, description="Max users (safety cap)"),
+    limit: int = Query(500, ge=1, le=MAX_PAGE_SIZE, description="Max users (safety cap)"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

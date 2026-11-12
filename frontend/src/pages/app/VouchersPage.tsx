@@ -55,6 +55,7 @@ import { todayLocalISO } from "@/lib/dates";
 import { fetchExchangeRate } from "@/lib/fxRates";
 import { isZeroMoney, moneyEquals, subtractMoney, sumMoneyBy, toMoneyString } from "@/lib/money";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useConfirm } from "@/components/app/useConfirm";
 
 const CTL =
   "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20";
@@ -82,6 +83,7 @@ function makeLine(accountId: number, currency: string, exchangeRate: string, ent
 }
 
 export function VouchersPage() {
+  const confirm = useConfirm();
   const { me } = useAuth();
   const gstEnabled = me?.feature_flags?.gst_system_enabled === true;
   const directPostOn = me?.feature_flags?.direct_post_vouchers === true && resolveRole(me?.role_name).isElevated;
@@ -513,9 +515,13 @@ export function VouchersPage() {
     await submitVoucher(false);
   }
 
-  function openNewVoucher(voucherType: string) {
+  async function openNewVoucher(voucherType: string) {
     const hasUnsavedLines = showCreate && form.lines.some((l) => Number(l.amount) > 0);
-    if (hasUnsavedLines && !window.confirm("Discard the voucher you are entering and start a new one?")) return;
+    if (
+      hasUnsavedLines &&
+      !(await confirm({ title: "Discard the voucher you are entering and start a new one?", danger: true }))
+    )
+      return;
     resetForm();
     setForm((p) => ({ ...p, voucher_type: voucherType }));
     setShowCreate(true);
@@ -655,7 +661,7 @@ export function VouchersPage() {
   }, [editIdFromUrl, setSearchParams, startEdit]);
 
   async function handleDelete(voucherId: number) {
-    if (!window.confirm("Delete this voucher? This cannot be undone.")) return;
+    if (!(await confirm({ title: "Delete this voucher? This cannot be undone.", danger: true }))) return;
     try {
       await api.deleteVoucher(voucherId);
       setSuccess("Voucher deleted.");

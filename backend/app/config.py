@@ -126,6 +126,14 @@ class Settings(BaseSettings):
     # When true, tenant-scoped text features (dashboard brief, weekly report, planning narrative, etc.)
     # call OpenRouter first via generate_text_for_tenant, then fall back to Gemini if configured.
     openrouter_tenant_text_enabled: bool = True
+    # AI chat agent mode (tenant flag ai_agent_mode_enabled). Empty model = OPENROUTER_MODEL.
+    # ":free" models are skipped unless ai_agent_allow_free_model is true (weak tool calling, 429s).
+    ai_agent_model: str = ""
+    ai_agent_allow_free_model: bool = False
+    ai_agent_max_steps: int = 6
+    # Keep well under the 60s Nginx proxy timeout; the legacy fallback still needs a few seconds.
+    ai_agent_timeout_seconds: int = 35
+    ai_agent_max_concurrent: int = 4
     # 0 = unlimited; otherwise max Gemini API calls per calendar month (process-wide, persisted in media/)
     ai_monthly_budget_limit: int = 0
     # Tier-1 local routing model (Docker service name by default)

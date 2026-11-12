@@ -14,6 +14,8 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useFormDirty } from "@/hooks/useFormDirty";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
+import { useMobileUiV2, useMobileUiV2Phone } from "@/hooks/useMobileUiV2";
+import { PhoneDisclosure } from "@/components/app/PhoneDisclosure";
 import { logApiError } from "@/utils/logApiError";
 import { toast } from "sonner";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
@@ -47,6 +49,8 @@ import {
   listPageToolbarButtonClass,
   listPageToolbarInputClass,
   listPageToolbarSelectClass,
+  mobileFieldClass,
+  mobileStickyActionsClass,
 } from "@/components/app/listPageLayout";
 import { cn } from "@/lib/utils";
 
@@ -152,6 +156,9 @@ function OrderSewingLineCell({ s }: { s: OrderSewingLineSummaryOut | null | unde
 
 export function OrdersPage() {
   const navigate = useNavigate();
+  const mobileV2 = useMobileUiV2();
+  const phoneUi = useMobileUiV2Phone();
+  const editFieldClass = cn("w-full rounded-lg border border-border-strong px-3 py-2 text-sm", phoneUi && mobileFieldClass);
   const [items, setItems] = useState<OrderResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -337,6 +344,7 @@ export function OrdersPage() {
       id: "code",
       header: "Code",
       alwaysVisible: true,
+      mobile: "title",
       value: (o) => o.order_code,
       cell: (o) => (
         <Link to={`/app/orders/${o.id}`} className="whitespace-nowrap font-semibold text-status-info hover:underline">
@@ -347,6 +355,7 @@ export function OrdersPage() {
     {
       id: "customer",
       header: "Customer",
+      mobile: "subtitle",
       value: displayCustomerName,
       cell: (o) => <span className="whitespace-nowrap">{displayCustomerName(o)}</span>,
     },
@@ -354,6 +363,7 @@ export function OrdersPage() {
     {
       id: "style",
       header: "Style",
+      mobile: "detail",
       value: (o) => o.style_name ?? o.style_ref ?? "",
       cell: (o) => {
         const styleName = o.style_name ?? null;
@@ -386,6 +396,7 @@ export function OrdersPage() {
     {
       id: "delivery_date",
       header: "Delivery date",
+      mobile: "detail",
       value: (o) => o.delivery_date ?? "",
       cell: (o) => <span className="whitespace-nowrap">{o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : "—"}</span>,
     },
@@ -393,6 +404,7 @@ export function OrdersPage() {
       id: "quantity",
       header: "Qty",
       align: "right",
+      mobile: "detail",
       value: (o) => o.quantity ?? null,
       cell: (o) => (o.quantity != null ? o.quantity.toLocaleString() : "—"),
     },
@@ -464,12 +476,14 @@ export function OrdersPage() {
     {
       id: "pipeline",
       header: "Pipeline",
+      mobile: "detail",
       value: (o) => o.pipeline_status ?? "",
       cell: (o) => <OrderPipelineListCell pipelineStatus={o.pipeline_status} rmPct={o.rm_inhouse_pct} />,
     },
     {
       id: "status",
       header: "Status",
+      mobile: "status",
       value: (o) => o.status,
       cell: (o) => (
         <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(o.status)}`}>{o.status}</span>
@@ -482,6 +496,7 @@ export function OrdersPage() {
       alwaysVisible: true,
       noExport: true,
       enableSorting: false,
+      mobile: "actions",
       cell: (o) => (
         <RowActionsMenu
           rowId={o.id}
@@ -608,6 +623,7 @@ export function OrdersPage() {
         <DataGrid
           tableKey="orders.list"
           exportName="orders"
+          mobileCards={mobileV2}
           columns={columns}
           rows={filteredItems}
           getRowId={(o) => o.id}
@@ -647,8 +663,14 @@ export function OrdersPage() {
       </div>
 
       {modalOpen && editing && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-xl bg-surface-raised p-6 shadow-lg">
+        // On phones (mobile_ui_v2) the dialog sits above the bottom menu (z-50) so Save is never covered.
+        <div className={cn("fixed inset-0 flex items-center justify-center bg-black/40", phoneUi ? "z-50" : "z-40")}>
+          <div
+            className={cn(
+              "w-full max-w-md rounded-xl bg-surface-raised shadow-lg",
+              phoneUi ? "max-h-[calc(100dvh-1.5rem)] overflow-y-auto overscroll-contain p-4 pb-0" : "p-6",
+            )}
+          >
             <h2 className="text-lg font-semibold text-text-primary mb-4">Edit order</h2>
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
@@ -691,7 +713,7 @@ export function OrdersPage() {
                       };
                     })
                   }
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                  className={editFieldClass}
                 >
                   <option value="">No linked quotation</option>
                   {quotations.map((q) => (
@@ -711,16 +733,17 @@ export function OrdersPage() {
                   onChange={(e) =>
                     setForm((f) => ({ ...f, style_ref: e.target.value || undefined }))
                   }
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                  className={editFieldClass}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className={cn("grid gap-3", phoneUi ? "grid-cols-1" : "grid-cols-2")}>
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1">
                     Style ID
                   </label>
                   <input
                     type="number"
+                    inputMode={phoneUi ? "numeric" : undefined}
                     value={form.style_id ?? ""}
                     onChange={(e) =>
                       setForm((f) => ({
@@ -728,7 +751,7 @@ export function OrdersPage() {
                         style_id: e.target.value ? Number(e.target.value) : undefined,
                       }))
                     }
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                    className={editFieldClass}
                   />
                 </div>
                 <div>
@@ -740,7 +763,7 @@ export function OrdersPage() {
                     onChange={(e) =>
                       setForm((f) => ({ ...f, shipping_term: e.target.value || undefined }))
                     }
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                    className={editFieldClass}
                   >
                     <option value="">Select shipping term</option>
                     {withLegacyOption(form.shipping_term, SHIPPING_TERM_OPTIONS).map((term) => (
@@ -753,7 +776,12 @@ export function OrdersPage() {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <PhoneDisclosure
+                enabled={phoneUi}
+                title="Commission details (optional)"
+                defaultOpen={Boolean(form.commission_mode || form.commission_type || form.commission_value)}
+              >
+              <div className={cn("grid gap-3", phoneUi ? "grid-cols-1" : "grid-cols-3")}>
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1">
                     Commission mode
@@ -763,7 +791,7 @@ export function OrdersPage() {
                     onChange={(e) =>
                       setForm((f) => ({ ...f, commission_mode: e.target.value || undefined }))
                     }
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                    className={editFieldClass}
                   >
                     <option value="">Select mode</option>
                     {withLegacyOption(form.commission_mode, COMMISSION_MODE_OPTIONS).map((mode) => (
@@ -784,7 +812,7 @@ export function OrdersPage() {
                     onChange={(e) =>
                       setForm((f) => ({ ...f, commission_type: e.target.value || undefined }))
                     }
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                    className={editFieldClass}
                   >
                     <option value="">Select type</option>
                     {withLegacyOption(form.commission_type, COMMISSION_TYPE_OPTIONS).map((type) => (
@@ -806,10 +834,12 @@ export function OrdersPage() {
                     onChange={(e) =>
                       setForm((f) => ({ ...f, commission_value: e.target.value || undefined }))
                     }
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                    inputMode={phoneUi ? "decimal" : undefined}
+                    className={editFieldClass}
                   />
                 </div>
               </div>
+              </PhoneDisclosure>
               <div>
                 <label className="block text-sm font-medium text-text-secondary mb-1">
                   Delivery date
@@ -820,7 +850,7 @@ export function OrdersPage() {
                   onChange={(e) =>
                     setForm((f) => ({ ...f, delivery_date: e.target.value || undefined }))
                   }
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                  className={editFieldClass}
                 />
               </div>
               <div>
@@ -829,6 +859,7 @@ export function OrdersPage() {
                 </label>
                 <input
                   type="number"
+                  inputMode={phoneUi ? "numeric" : undefined}
                   value={form.quantity ?? ""}
                   onChange={(e) =>
                     setForm((f) => ({
@@ -836,7 +867,7 @@ export function OrdersPage() {
                       quantity: e.target.value ? Number(e.target.value) : undefined,
                     }))
                   }
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                  className={editFieldClass}
                 />
               </div>
               <div>
@@ -848,7 +879,7 @@ export function OrdersPage() {
                   onChange={(e) =>
                     setForm((f) => ({ ...f, status: e.target.value || undefined }))
                   }
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                  className={editFieldClass}
                 >
                   {getOrderStatusChoices(editing?.status).map((statusValue) => (
                     <option key={statusValue} value={statusValue}>
@@ -857,17 +888,20 @@ export function OrdersPage() {
                   ))}
                 </select>
               </div>
-              <div className="flex justify-end gap-2 pt-2">
+              <div className={phoneUi ? mobileStickyActionsClass : "flex justify-end gap-2 pt-2"}>
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary"
+                  className={cn("rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary", phoneUi && "min-h-11 flex-1")}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="rounded-lg bg-brand-primary px-4 py-1.5 text-sm font-semibold text-brand-primary-foreground"
+                  className={cn(
+                    "rounded-lg bg-brand-primary px-4 py-1.5 text-sm font-semibold text-brand-primary-foreground",
+                    phoneUi && "min-h-11 flex-1",
+                  )}
                 >
                   Save
                 </button>

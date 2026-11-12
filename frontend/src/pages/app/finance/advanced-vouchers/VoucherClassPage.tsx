@@ -7,7 +7,9 @@ import {
   type VoucherClassResponse,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
-import { logApiError } from "@/utils/logApiError";
+import { logApiError } from "@/utils/logApiError";
+import { getChartOfAccountsCached, getCostCentersCached } from "@/lib/masterData";
+import { useConfirm } from "@/components/app/useConfirm";
 
 const EMPTY_LINE: VoucherClassLineTemplate = {
   account_id: 0,
@@ -28,7 +30,8 @@ const DEFAULT_FORM = {
   is_active: true,
 };
 
-export function VoucherClassPage() {
+export function VoucherClassPage() {
+  const confirm = useConfirm();
   const [rows, setRows] = useState<VoucherClassResponse[]>([]);
   const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
   const [costCenters, setCostCenters] = useState<CostCenterResponse[]>([]);
@@ -45,8 +48,8 @@ export function VoucherClassPage() {
       setError("");
       const [classesRes, coa, cc, types] = await Promise.all([
         api.listVoucherClasses(),
-        api.listChartOfAccounts({ active_only: true }),
-        api.listCostCenters({ active_only: true }),
+        getChartOfAccountsCached({ active_only: true }),
+        getCostCentersCached({ active_only: true }),
         api.getVoucherTypesMeta(),
       ]);
       setRows(classesRes.rows);
@@ -138,7 +141,7 @@ export function VoucherClassPage() {
   }
 
   async function remove(id: number) {
-    if (!window.confirm("Delete this voucher class?")) return;
+    if (!(await confirm({ title: "Delete this voucher class?", danger: true }))) return;
     try {
       await api.deleteVoucherClass(id);
       if (editingId === id) resetForm();

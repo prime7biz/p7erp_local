@@ -17,6 +17,11 @@ from typing import Any, Awaitable, Callable
 from fastapi import HTTPException
 
 from app.common.business_date import today_local
+from app.common.tenant_feature_keys import (
+    is_finance_budget_analytics_v2_enabled,
+    is_finance_control_tower_v2_enabled,
+    is_finance_statements_v2_enabled,
+)
 from app.models import Tenant
 from app.modules.finance.ai_insights.constants import (
     MAX_FACTS,
@@ -38,6 +43,7 @@ from app.modules.finance.statements.trial_balance_service import build_trial_bal
 
 ZERO = Decimal("0")
 HUNDRED = Decimal("100")
+MIN_REPORT_YEAR, MAX_REPORT_YEAR = 1900, 9990  # same bounds as the statements API fiscal_year
 _Q4 = Decimal("0.0001")
 
 
@@ -187,6 +193,9 @@ def resolve_periods(
     # Same range rules as the statements API (422 on a bad range).
     from app.modules.finance.statements.router import _fiscal_range
 
+    for d in (from_date, to_date):
+        if d is not None and not (MIN_REPORT_YEAR <= d.year <= MAX_REPORT_YEAR):
+            raise ValueError(f"Dates must be between the years {MIN_REPORT_YEAR} and {MAX_REPORT_YEAR}")
     start, end = _fiscal_range(tenant, from_date, to_date, fiscal_year)
     sm = fy_start_month(tenant.feature_flags)
     fy = fiscal_year if fiscal_year is not None else fiscal_year_of(end, sm)
@@ -445,6 +454,24 @@ REPORT_TABLE: dict[str, tuple[Fetcher, Callable[[Any], list[MetricSpec]]]] = {
     "control_tower": (_f_control, extract_control_tower),
 }
 NO_COMPARISON_REPORTS = frozenset({"control_tower"})
+
+# Commentary on a report is only available while the report's own API is switched on (same flag, same 404).
+REPORT_FLAG: dict[str, Callable[[Any], bool]] = {
+    "trial_balance": is_finance_statements_v2_enabled,
+    "balance_sheet": is_finance_statements_v2_enabled,
+    "profit_loss": is_finance_statements_v2_enabled,
+    "cash_flow_monthly": is_finance_statements_v2_enabled,
+    "funds_flow_monthly": is_finance_statements_v2_enabled,
+    "ratio_analysis": is_finance_statements_v2_enabled,
+    "budget_analytics": is_finance_budget_analytics_v2_enabled,
+    "expense_analysis": is_finance_budget_analytics_v2_enabled,
+    "control_tower": is_finance_control_tower_v2_enabled,
+}
+
+
+def report_enabled(tenant: Tenant, report: str) -> bool:
+    check = REPORT_FLAG.get(report)
+    return check is not None and check(tenant.feature_flags)
 
 
 @dataclass

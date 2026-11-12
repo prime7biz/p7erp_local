@@ -40,7 +40,9 @@ from app.modules.finance.control.constants import (
     DRAFT_OLD_DAYS,
     DRAFT_STATUS,
     HREF_TEMPLATE,
+    MAX_AS_OF_YEAR,
     MAX_BUDGETS_SCANNED,
+    MIN_AS_OF_YEAR,
     OVERDUE_CLOSED_STATUSES,
     OVERDUE_SOURCE,
     PENDING_APPROVAL_STATUSES,
@@ -522,7 +524,14 @@ def _card(code: str, result: CardResult | None, *, failed: bool = False) -> Cont
     )
 
 
+def check_as_of(as_of: date) -> None:
+    """ValueError (-> 422) when the as-of year is outside the supported range (date maths would overflow)."""
+    if not (MIN_AS_OF_YEAR <= as_of.year <= MAX_AS_OF_YEAR):
+        raise ValueError(f"as_of_date must be between the years {MIN_AS_OF_YEAR} and {MAX_AS_OF_YEAR}")
+
+
 async def build_control_tower(db: AsyncSession, tenant: Tenant, *, as_of: date, severity: str) -> ControlTowerResponse:
+    check_as_of(as_of)
     run = _Run(db, tenant, as_of)
     cards: list[ControlCard] = []
     for code, (_label, card_severity) in CARD_DEFS.items():
@@ -548,6 +557,7 @@ async def build_exception_list(
 ) -> ExceptionListResponse:
     if code not in CARD_DEFS:
         raise KeyError(code)
+    check_as_of(as_of)
     result = await _Run(db, tenant, as_of).fetch(code, limit, offset)
     label, severity = CARD_DEFS[code]
     return ExceptionListResponse(

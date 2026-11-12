@@ -33,6 +33,13 @@ ZERO = Decimal("0")
 Q4 = Decimal("0.0001")
 _FY_RE = re.compile(r"^\d{4}(-\d{2}(\d{2})?)?$")
 _MONTH_RE = re.compile(r"^(\d{4})-(0[1-9]|1[0-2])$")
+MIN_YEAR, MAX_YEAR = 1900, 9990  # same bounds as the statements API fiscal_year
+
+
+def check_report_date(d: date, name: str) -> None:
+    """ValueError (-> 422) for a date whose year is outside MIN_YEAR..MAX_YEAR (date maths would overflow)."""
+    if not (MIN_YEAR <= d.year <= MAX_YEAR):
+        raise ValueError(f"{name} must be between the years {MIN_YEAR} and {MAX_YEAR}")
 
 
 def q4(value: Any) -> Decimal:
@@ -88,13 +95,13 @@ def in_books_conditions(tenant_id: int) -> list:
     return [VoucherLine.tenant_id == tenant_id, Voucher.tenant_id == tenant_id, voucher_counts_in_books_status_clause(), voucher_in_books_clause()]
 
 
-def join_lines(stmt):
-    """Voucher line -> voucher / account / group (outer for the group so a missing group never drops money)."""
+def join_lines(stmt, tenant_id: int):
+    """Voucher line -> voucher / account / group of `tenant_id` (outer for the group so a missing group never drops money)."""
     return (
         stmt.select_from(VoucherLine)
-        .join(Voucher, VoucherLine.voucher_id == Voucher.id)
-        .join(ChartOfAccount, ChartOfAccount.id == VoucherLine.account_id)
-        .outerjoin(AccountGroup, AccountGroup.id == ChartOfAccount.group_id)
+        .join(Voucher, and_(VoucherLine.voucher_id == Voucher.id, Voucher.tenant_id == tenant_id))
+        .join(ChartOfAccount, and_(ChartOfAccount.id == VoucherLine.account_id, ChartOfAccount.tenant_id == tenant_id))
+        .outerjoin(AccountGroup, and_(AccountGroup.id == ChartOfAccount.group_id, AccountGroup.tenant_id == tenant_id))
     )
 
 
@@ -127,6 +134,8 @@ async def resolve_scope(db: AsyncSession, tenant: Any, fiscal_year: str | None, 
     sm = fy_start_month(tenant.feature_flags)
     if fiscal_year is not None and not _FY_RE.match(fiscal_year.strip()):
         raise ValueError("fiscal_year must look like 2026 or 2026-27")
+    if fiscal_year is not None and not (MIN_YEAR <= int(fiscal_year.strip()[:4]) <= MAX_YEAR):
+        raise ValueError(f"fiscal_year must be between {MIN_YEAR} and {MAX_YEAR}")
     budgets: list[Budget]
     if budget_id is not None:
         budget = await db.get(Budget, budget_id)
@@ -145,7 +154,8 @@ async def resolve_scope(db: AsyncSession, tenant: Any, fiscal_year: str | None, 
         if fiscal_year:
             label = fiscal_year.strip()
             bounds = fiscal_year_bounds_from_label(label, sm)
-            assert bounds is not None  # regex guarantees four digits
+            if bounds is None:
+                raise ValueError(f"fiscal_year must be between {MIN_YEAR} and {MAX_YEAR}")
         else:
             fy = fiscal_year_of(today_local(tenant), sm)
             label = fiscal_year_label(fy, sm)

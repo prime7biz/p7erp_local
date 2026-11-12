@@ -115,8 +115,8 @@ def negative_stock_select(tenant_id: int):
 async def grn_not_billed(db: AsyncSession, tenant_id: int, *, limit: int, offset: int) -> tuple[list[dict], int]:
     base = (
         select(GoodsReceiving, Vendor.name, PurchaseOrder.po_code)
-        .outerjoin(Vendor, Vendor.id == GoodsReceiving.vendor_id)
-        .outerjoin(PurchaseOrder, PurchaseOrder.id == GoodsReceiving.purchase_order_id)
+        .outerjoin(Vendor, and_(Vendor.id == GoodsReceiving.vendor_id, Vendor.tenant_id == tenant_id))
+        .outerjoin(PurchaseOrder, and_(PurchaseOrder.id == GoodsReceiving.purchase_order_id, PurchaseOrder.tenant_id == tenant_id))
         .where(*grn_not_billed_conditions(tenant_id))
     )
     total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
@@ -179,7 +179,7 @@ async def negative_cash_bank(db: AsyncSession, tenant_id: int, *, as_of: date) -
     accounts = (
         await db.execute(
             select(ChartOfAccount, AccountGroup)
-            .join(AccountGroup, AccountGroup.id == ChartOfAccount.group_id)
+            .join(AccountGroup, and_(AccountGroup.id == ChartOfAccount.group_id, AccountGroup.tenant_id == tenant_id))
             .where(ChartOfAccount.tenant_id == tenant_id, _cash_or_bank_clause())
         )
     ).all()

@@ -21,7 +21,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.tenant_feature_keys import get_budget_enforcement_mode
@@ -103,7 +103,8 @@ async def fetch_actual_cells(db: AsyncSession, tenant_id: int, scope: Scope) -> 
     """{(account_id, cost_center_id, month_start): signed actual} for the fiscal year. One query."""
     year_col, month_col = func.extract("year", Voucher.voucher_date), func.extract("month", Voucher.voucher_date)
     stmt = join_lines(
-        select(VoucherLine.account_id, VoucherLine.cost_center_id, year_col, month_col, func.coalesce(func.sum(signed_amount_sql()), 0))
+        select(VoucherLine.account_id, VoucherLine.cost_center_id, year_col, month_col, func.coalesce(func.sum(signed_amount_sql()), 0)),
+        tenant_id,
     ).where(
         *in_books_conditions(tenant_id),
         Voucher.voucher_date >= scope.start,
@@ -263,10 +264,12 @@ async def build_drilldown(
     if no_department:
         conds.append(dept_expr == "")
 
+    cc_join = and_(CostCenter.id == VoucherLine.cost_center_id, CostCenter.tenant_id == tenant.id)
+
     def base(stmt):
-        stmt = join_lines(stmt)
+        stmt = join_lines(stmt, tenant.id)
         if department is not None or no_department:
-            stmt = stmt.outerjoin(CostCenter, CostCenter.id == VoucherLine.cost_center_id)
+            stmt = stmt.outerjoin(CostCenter, cc_join)
         return stmt.where(*conds)
 
     total, count = (
@@ -287,8 +290,9 @@ async def build_drilldown(
             func.coalesce(VoucherLine.notes, Voucher.description),
             VoucherLine.entry_type,
             signed_amount_sql(),
-        )
-    ).outerjoin(CostCenter, CostCenter.id == VoucherLine.cost_center_id).where(*conds)
+        ),
+        tenant.id,
+    ).outerjoin(CostCenter, cc_join).where(*conds)
     page_stmt = page_stmt.order_by(Voucher.voucher_date, Voucher.id, VoucherLine.id).limit(limit).offset(offset)
     lines = [
         DrillLine(

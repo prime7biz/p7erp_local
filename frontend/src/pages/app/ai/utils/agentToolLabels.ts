@@ -7,6 +7,7 @@ const AGENT_TOOL_LABELS: Record<string, string> = {
   search_sales_orders: "Orders",
   get_pending_approvals: "Pending approvals",
   get_dashboard_summary: "Dashboard",
+  finance_statement_summary: "Finance report summary",
   get_inventory_snapshot: "Stock",
   search_inventory_shortages: "Stock shortages",
   get_production_summary: "Production",

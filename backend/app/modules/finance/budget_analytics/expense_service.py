@@ -30,6 +30,7 @@ from app.modules.finance.budget_analytics.common import (
     account_label,
     add_months,
     cc_label,
+    check_report_date,
     debit_minus_credit_sql,
     in_books_conditions,
     load_accounts,
@@ -80,6 +81,8 @@ async def build_expense_analysis(
 ) -> ExpenseAnalysisResponse:
     if group_by not in EXPENSE_GROUP_BY:
         raise ValueError(f"group_by must be one of: {', '.join(EXPENSE_GROUP_BY)}")
+    check_report_date(from_date, "from_date")
+    check_report_date(to_date, "to_date")
     if from_date > to_date:
         raise ValueError("from_date must be on or before to_date")
     if (to_date - from_date).days + 1 > MAX_ANALYSIS_DAYS:

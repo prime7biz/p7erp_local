@@ -7,6 +7,8 @@ Agents:
 - ``tna_delay``     — overdue TNA / follow-up actions (reuses the merch alert rule).
 - ``lc_expiry``     — LC / master contract expiring within 14 days (reuses the trade alert rule).
 - ``bom_shortfall`` — orders due within 45 days whose BOM materials are not fully on purchase orders.
+- ``finance_exceptions`` — Finance Control Tower cards (budget breach, negative cash, stock vs GL, old unbilled
+  GRNs); acknowledge only, never a notification.
 """
 
 from __future__ import annotations
@@ -22,6 +24,18 @@ AGENTS: dict[str, str] = {
     "tna_delay": "TNA delay",
     "lc_expiry": "LC expiry",
     "bom_shortfall": "BOM shortfall",
+    "finance_exceptions": "Finance exceptions",
+}
+# Agents that read finance data: extra gates (flags finance_ai_insights_v2 + finance_control_tower_v2, fail-closed
+# ai.tools.finance.read, soft finance.mis_report.view), acknowledge-only actions, never part of the owner brief.
+FINANCE_AGENTS = frozenset({"finance_exceptions"})
+FINANCE_GRN_UNBILLED_DAYS = 30
+# Control Tower cards the finance agent turns into findings (code -> severity of the finding).
+FINANCE_AGENT_CARDS = {
+    "BUDGET_BREACH": "high",
+    "NEGATIVE_CASH": "high",
+    "STOCK_GL_MISMATCH": "high",
+    "GRN_NOT_BILLED": "medium",
 }
 SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 BOM_HORIZON_DAYS = 45
@@ -238,10 +252,62 @@ async def detect_bom_shortfall(db: AsyncSession, tenant_id: int, *, today: date 
     return out
 
 
+async def detect_finance_exceptions(
+    db: AsyncSession, tenant_id: int, *, today: date | None = None
+) -> list[dict[str, Any]]:
+    """Read-only: budget lines at or over 100%, negative cash, stock-vs-GL mismatch, GRNs not billed for
+    FINANCE_GRN_UNBILLED_DAYS+ days. Numbers come from the Control Tower service (same figures as that page).
+    The only actions are navigation (href) and acknowledge; nothing is posted or changed."""
+    from datetime import timedelta
+
+    from app.common.business_date import today_local
+    from app.common.tenant_feature_keys import is_finance_ai_insights_v2_enabled, is_finance_control_tower_v2_enabled
+    from app.models import Tenant
+    from app.modules.finance.control.control_tower_service import build_control_tower
+
+    tenant = await db.get(Tenant, tenant_id)
+    if tenant is None or tenant.id != tenant_id:
+        return []
+    flags = tenant.feature_flags
+    if not is_finance_ai_insights_v2_enabled(flags) or not is_finance_control_tower_v2_enabled(flags):
+        return []
+    as_of = today or today_local(tenant)
+    tower = await build_control_tower(db, tenant, as_of=as_of, severity="all")
+    out: list[dict[str, Any]] = []
+    for card in tower.cards:
+        severity = FINANCE_AGENT_CARDS.get(card.code)
+        if severity is None or card.count <= 0 or (card.note and "could not be calculated" in card.note):
+            continue
+        if card.code == "GRN_NOT_BILLED":
+            # Raised once the oldest unbilled GRN is FINANCE_GRN_UNBILLED_DAYS old; count and amount cover every
+            # unbilled GRN, exactly as on the Control Tower card.
+            if card.oldest_date is None or card.oldest_date > as_of - timedelta(days=FINANCE_GRN_UNBILLED_DAYS):
+                continue
+        amount = f" totalling {tower.base_currency} {card.amount:,.2f}" if card.amount else ""
+        oldest = (
+            f" Oldest: {card.oldest_date.isoformat()} ({(as_of - card.oldest_date).days} days)."
+            if card.oldest_date
+            else ""
+        )
+        out.append(
+            _finding(
+                agent="finance_exceptions",
+                key=f"finance_exception:{card.code}",
+                severity=severity,
+                title=f"{card.label}: {card.count}",
+                detail=f"{card.count} item(s){amount}.{oldest}",
+                recommended_action="Open the Finance Control Tower list, review the items and fix them in the normal screens.",
+                href=card.href,
+            )
+        )
+    return out
+
+
 DETECTORS = {
     "tna_delay": detect_tna_delay,
     "lc_expiry": detect_lc_expiry,
     "bom_shortfall": detect_bom_shortfall,
+    "finance_exceptions": detect_finance_exceptions,
 }
 
 

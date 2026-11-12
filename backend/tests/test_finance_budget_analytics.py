@@ -524,8 +524,17 @@ async def test_flag_permission_and_validation(db_session_integration):
             (f"{API}/expense-analysis", {"group_by": "party"}), (f"{API}/expense-analysis", {"from_date": "2030-12-01", "to_date": "2030-01-01"}),
             (f"{API}/expense-analysis", {"from_date": "2000-01-01", "to_date": "2030-01-01"}), (f"{API}/expense-analysis", {"from_date": "x"}),
             (f"{API}/expense-controls", {"as_of_date": "2030-13-01"}),
+            # extreme years: 422, never a 500 from an assert or a date overflow
+            (BA, {"fiscal_year": "1"}), (BA, {"fiscal_year": "0001"}), (BA, {"fiscal_year": "9999"}), (BA, {"fiscal_year": "9991-92"}),
+            (BA, {"fiscal_year": "1899"}), (f"{BA}/drilldown", {"fiscal_year": "9999"}), (f"{BA}/export", {"fiscal_year": "0001"}),
+            (f"{API}/expense-analysis", {"from_date": "0001-01-01", "to_date": "0001-01-31"}),
+            (f"{API}/expense-analysis", {"from_date": "9999-12-01", "to_date": "9999-12-31"}),
+            (f"{API}/expense-controls", {"as_of_date": "0001-01-01"}),
+            (f"{API}/expense-controls", {"as_of_date": "9999-12-31"}),
         ):
             assert (await ac.get(path, params=params)).status_code == 422, (path, params)
+        assert (await ac.get(BA, params={"fiscal_year": "9990"})).status_code == 200
+        assert (await ac.get(BA, params={"fiscal_year": "1900-01"})).status_code == 200
         # department view needs an explicit department on the Finance cost centres; HR departments are never used
         r = await ac.get(BA, params={"dimension": "department", "fiscal_year": FY})
         assert r.status_code == 422 and "department" in r.json()["detail"].lower()

@@ -11,7 +11,6 @@ Nothing here writes finance data. Only metadata is logged / audited, never the p
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import time
@@ -30,7 +29,6 @@ from app.modules.ai_tool.policy_eval import evaluate_ai_policy
 from app.modules.finance.ai_insights.constants import (
     AI_FEATURE,
     AI_FINANCE_PERMISSION_KEY,
-    AI_TIMEOUT_SECONDS,
     MAX_PROMPT_CHARS,
     REASON_NO_FACTS,
     REASON_POLICY,
@@ -39,7 +37,7 @@ from app.modules.finance.ai_insights.constants import (
     REASON_TIMEOUT,
     REASON_VALIDATION_PREFIX,
 )
-from app.modules.finance.ai_insights.facts import FactRow, Periods, build_report_facts, resolve_periods
+from app.modules.finance.ai_insights.facts import FactRow, Periods, build_report_facts, report_enabled, resolve_periods
 from app.modules.finance.ai_insights.rules import build_deterministic
 from app.modules.finance.ai_insights.schemas import (
     CommentaryPeriod,
@@ -49,6 +47,7 @@ from app.modules.finance.ai_insights.schemas import (
     Finding,
 )
 from app.modules.finance.ai_insights.validation import ValidationFailure, validate_answer
+from app.modules.finance.fiscal_year import fiscal_year_label, fy_start_month
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +64,12 @@ async def assert_commentary_allowed(db: AsyncSession, tenant: Tenant, user: User
     await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_MIS_REPORT_VIEW)
     if not await has_tool_permission(db, user, AI_FINANCE_PERMISSION_KEY):
         raise HTTPException(status_code=403, detail="No permission to use finance AI")
+
+
+def assert_report_enabled(tenant: Tenant, report: str) -> None:
+    """404 unless the source report's own flag is on (statements / budget analytics / control tower)."""
+    if not report_enabled(tenant, report):
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 # ---- prompt ----------------------------------------------------------------------------------------------
@@ -102,6 +107,12 @@ def build_prompt(
 
 
 # ---- provider call ---------------------------------------------------------------------------------------
+def _is_timeout(exc: BaseException) -> bool:
+    """TimeoutError or a client timeout class (httpx ReadTimeout, Google DeadlineExceeded, ...)."""
+    name = type(exc).__name__.lower()
+    return isinstance(exc, TimeoutError) or "timeout" in name or "deadline" in name
+
+
 async def _try_ai(
     db: AsyncSession,
     *,
@@ -111,6 +122,7 @@ async def _try_ai(
     uid: int,
     report: str,
     periods_text: str,
+    fy_labels: list[str],
     comparison: str | None,
     currency: str,
     facts: list[FactRow],
@@ -132,22 +144,19 @@ async def _try_ai(
     prompt, sent = build_prompt(
         report=report, period_text=periods_text, comparison=comparison, currency=currency, facts=facts, question=question
     )
+    # Not wrapped in asyncio.wait_for: the provider reads and writes the request's DB session (budget, usage row), and
+    # cancelling it mid-query would leave that session unusable. Its own HTTP timeout ends a slow call.
     try:
         from app.common.gemini_client import generate_text_for_tenant
 
-        raw = await asyncio.wait_for(
-            generate_text_for_tenant(db, tid, uid, AI_FEATURE, prompt), timeout=AI_TIMEOUT_SECONDS
-        )
-    except asyncio.TimeoutError:
+        raw = await generate_text_for_tenant(db, tid, uid, AI_FEATURE, prompt)
+    except Exception as exc:
         await safe_async_session_rollback(db)
-        return None, REASON_TIMEOUT
-    except Exception:
-        await safe_async_session_rollback(db)
-        return None, REASON_PROVIDER_ERROR
+        return None, REASON_TIMEOUT if _is_timeout(exc) else REASON_PROVIDER_ERROR
     if not raw or not str(raw).strip():
         return None, REASON_PROVIDER_UNAVAILABLE
     try:
-        return validate_answer(str(raw), sent, [periods_text]), None
+        return validate_answer(str(raw), sent, [periods_text, *fy_labels]), None
     except ValidationFailure as exc:
         return None, f"{REASON_VALIDATION_PREFIX}{exc.code}"
     except Exception:  # defensive: a bug in validation must still fall back, never 500
@@ -161,6 +170,13 @@ def _period_text(periods: Periods) -> str:
     return text
 
 
+def _fy_labels(tenant: Tenant, periods: Periods) -> list[str]:
+    """Fiscal-year labels of the request ("2026" or "2026-27"); allowed in the answer like the period dates."""
+    sm = fy_start_month(tenant.feature_flags)
+    years = [periods.fiscal_year] + ([periods.prev_fiscal_year] if periods.has_prev and periods.prev_fiscal_year else [])
+    return [fiscal_year_label(fy, sm) for fy in years]
+
+
 # ---- public entry ----------------------------------------------------------------------------------------
 async def build_commentary(
     db: AsyncSession, tenant: Tenant, user: User, req: CommentaryRequest, *, audit: bool = True
@@ -171,6 +187,7 @@ async def build_commentary(
     row, the commit and every rollback; it is only valid together with `use_ai=False`."""
     if not audit and req.use_ai:
         raise ValueError("audit=False requires use_ai=False")
+    assert_report_enabled(tenant, req.report)
     started = time.monotonic()
     tid, uid = tenant.id, user.id
     periods = resolve_periods(
@@ -193,6 +210,7 @@ async def build_commentary(
             uid=uid,
             report=req.report,
             periods_text=periods_text,
+            fy_labels=_fy_labels(tenant, periods),
             comparison=comparison,
             currency=rf.base_currency,
             facts=facts,

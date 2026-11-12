@@ -30,7 +30,6 @@ MAX_SUMMARY_CHARS = 1200
 MAX_FINDING_CHARS = 600
 MAX_FACT_IDS_PER_FINDING = 10
 MAX_PROMPT_CHARS = 20000  # facts are dropped from the end until the prompt fits
-AI_TIMEOUT_SECONDS = 25
 
 # Deterministic wording thresholds
 LARGEST_CHANGES_SHOWN = 3

@@ -64,7 +64,10 @@ async def control_tower(
     db: AsyncSession = Depends(get_db),
 ):
     await _gate(db, tenant, user)
-    return await build_control_tower(db, tenant, as_of=as_of_date or today_local(tenant), severity=severity)
+    try:
+        return await build_control_tower(db, tenant, as_of=as_of_date or today_local(tenant), severity=severity)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
 
 
 @router.get("/control-tower/exceptions/{code}", response_model=ExceptionListResponse)
@@ -84,6 +87,8 @@ async def control_tower_exceptions(
         )
     except KeyError:
         raise HTTPException(status_code=404, detail="Unknown exception code") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
 
 
 # ---- profitability -----------------------------------------------------------------------------------------------

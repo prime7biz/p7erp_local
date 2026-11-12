@@ -2,7 +2,8 @@
 
   POST /finance/statements/commentary
 
-Tenant flag `finance_ai_insights_v2` must be exactly true (otherwise 404); soft `finance.mis_report.view`
+Tenant flag `finance_ai_insights_v2` must be exactly true (otherwise 404), and so must the source report's own flag
+(`finance_statements_v2`, `finance_budget_analytics_v2` or `finance_control_tower_v2`); soft `finance.mis_report.view`
 (explicit false -> 403); fail-closed `ai.tools.finance.read` (missing key -> 403 for non admin / manager roles).
 Read-only: it never posts, approves or edits anything. A provider failure never causes a 500; the response then
 carries the deterministic commentary with `deterministic_fallback: true` and a `reason`.

@@ -22,6 +22,18 @@ from app.modules.ai_tool.policy_eval import evaluate_ai_safety_for_user
 from app.modules.ai_tool.screen_context import can_access_module, resolve_screen_context_nested
 
 MAX_FOCUS_CHARS = 300
+MAX_AGENT_FINANCE_FACTS = 40
+FINANCE_REPORTS = (
+    "trial_balance",
+    "balance_sheet",
+    "profit_loss",
+    "cash_flow_monthly",
+    "funds_flow_monthly",
+    "ratio_analysis",
+    "budget_analytics",
+    "expense_analysis",
+    "control_tower",
+)
 
 
 @dataclass
@@ -355,6 +367,64 @@ async def _help_articles(ctx: AgentContext, args: dict[str, Any]) -> dict[str, A
     return {"summary": summary, "data": {"sources": sources}}
 
 
+async def _finance_statement_summary(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    """Same service and permissions as POST /finance/statements/commentary, deterministic text only (the agent
+    model itself writes the answer; no second provider call). Read-only."""
+    from datetime import date
+
+    from fastapi import HTTPException
+
+    from app.modules.finance.ai_insights.constants import AI_TOOL_NAME, COMPARISONS, REPORTS
+    from app.modules.finance.ai_insights.schemas import CommentaryRequest
+    from app.modules.finance.ai_insights.service import assert_commentary_allowed, build_commentary
+
+    def _date(key: str) -> date | None:
+        raw = args.get(key)
+        return date.fromisoformat(str(raw)) if raw else None
+
+    blocked = {"summary": "Blocked: finance statement summaries are not available to you.", "data": {}, "blocked": True}
+    ok, reason = await check_gate(ctx, AI_TOOL_NAME, GATE_FINANCE)
+    if not ok:
+        return {"summary": f"Blocked: {reason or 'no permission'}", "data": {}, "blocked": True}
+    try:
+        await assert_commentary_allowed(ctx.db, ctx.tenant, ctx.user)
+    except HTTPException:
+        return blocked
+
+    comparison = str(args.get("comparison") or "none")
+    report = str(args.get("report") or "")
+    if report not in REPORTS or comparison not in COMPARISONS:
+        return {"summary": f"report must be one of: {', '.join(REPORTS)}.", "data": {}}
+    try:
+        fy = args.get("fiscal_year")
+        req = CommentaryRequest(
+            report=report,  # type: ignore[arg-type]
+            from_date=_date("from_date"),
+            to_date=_date("to_date"),
+            fiscal_year=int(fy) if fy not in (None, "") else None,
+            comparison=comparison,  # type: ignore[arg-type]
+            question=_focus(args, "question") or None,
+            use_ai=False,
+        )
+    except (ValueError, TypeError) as exc:
+        return {"summary": f"Invalid arguments: {str(exc)[:MAX_FOCUS_CHARS]}", "data": {}}
+    try:
+        out = await build_commentary(ctx.db, ctx.tenant, ctx.user, req, audit=False)
+    except HTTPException as exc:
+        if exc.status_code in (403, 404):
+            return blocked
+        return {"summary": f"Could not build the report: {str(exc.detail)[:MAX_FOCUS_CHARS]}", "data": {}}
+    except (ValueError, LookupError) as exc:
+        return {"summary": f"Could not build the report: {str(exc)[:MAX_FOCUS_CHARS]}", "data": {}}
+    data = out.model_dump(mode="json", exclude={"summary"})
+    # Cited facts first, then the rest, so a truncated tool message still holds the numbers the findings use.
+    cited = {fid for f in data["findings"] for fid in f["fact_ids"]}
+    facts = sorted(data["facts"], key=lambda f: f["id"] not in cited)
+    data["facts_total"] = len(facts)
+    data["facts"] = facts[:MAX_AGENT_FINANCE_FACTS]
+    return {"summary": out.summary, "data": data}
+
+
 # ---- schemas --------------------------------------------------------------------------------
 
 _NO_ARGS: dict[str, Any] = {"type": "object", "properties": {}, "additionalProperties": False}
@@ -473,6 +543,27 @@ AGENT_TOOLS: dict[str, AgentTool] = {
             _NO_ARGS,
             GATE_FINANCE,
             _financial_summary,
+        ),
+        AgentTool(
+            "finance_statement_summary",
+            "Computed figures and plain commentary for one finance report (trial balance, balance sheet, profit and "
+            "loss, cash flow, funds flow, ratios, budget analytics, expense analysis, control tower), optionally "
+            "compared with the previous period or year. Every number comes with a fact id.",
+            {
+                "type": "object",
+                "properties": {
+                    "report": {"type": "string", "enum": list(FINANCE_REPORTS)},
+                    "from_date": {"type": "string", "description": "YYYY-MM-DD, optional."},
+                    "to_date": {"type": "string", "description": "YYYY-MM-DD, optional."},
+                    "fiscal_year": {"type": "integer", "description": "Year the fiscal year starts in, optional."},
+                    "comparison": {"type": "string", "enum": ["none", "previous_period", "previous_year"]},
+                    "question": {"type": "string", "description": "Optional topic, e.g. 'why did gross margin fall'."},
+                },
+                "required": ["report"],
+                "additionalProperties": False,
+            },
+            GATE_FINANCE,
+            _finance_statement_summary,
         ),
         AgentTool(
             "suggest_bom_from_similar_style",

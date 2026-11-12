@@ -20,22 +20,37 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
-from app.common.permissions import assert_delegate_manager_or_permission
+from app.common.permissions import (
+    PERMISSION_MIS_REPORT_VIEW,
+    assert_delegate_manager_or_permission,
+    assert_soft_permission_allowed,
+)
 from app.common.tenant import require_tenant
-from app.common.tenant_feature_keys import is_ai_dashboard_cards_enabled, is_ai_exception_agents_enabled
+from app.common.tenant_feature_keys import (
+    is_ai_dashboard_cards_enabled,
+    is_ai_exception_agents_enabled,
+    is_finance_ai_insights_v2_enabled,
+    is_finance_control_tower_v2_enabled,
+)
 from app.database import get_db, safe_async_session_rollback
 from app.models import Role, Tenant, User
 from app.models.ai_agents import AiAgentDecision
 from app.modules.ai_tool.audit import log_ai_event
+from app.modules.ai_tool.authz import has_tool_permission
 from app.modules.ai_tool.screen_context import can_access_module
-from app.modules.governed_ai.detectors import AGENTS, DETECTORS, sort_findings
+from app.modules.governed_ai.detectors import AGENTS, DETECTORS, FINANCE_AGENTS, sort_findings
 from app.modules.governed_ai.metrics import BY_ID, CATALOG, Metric, match_metric
 from app.modules.notifications.service import notify_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/governed-ai", tags=["governed-ai"])
 
-AGENT_PERMISSION = {"tna_delay": "merch.access", "lc_expiry": "trade.access", "bom_shortfall": "merch.access"}
+AGENT_PERMISSION = {
+    "tna_delay": "merch.access",
+    "lc_expiry": "trade.access",
+    "bom_shortfall": "merch.access",
+    "finance_exceptions": "finance.access",
+}
 NOTIFIED_HIDE_DAYS = 3
 DISMISSED_HIDE_DAYS = 7
 CONFIRM_PERMISSION = "ai.agents.confirm"
@@ -73,8 +88,26 @@ async def _can_confirm(db: AsyncSession, user: User, tenant: Tenant) -> bool:
         return False
 
 
+async def _agent_allowed(db: AsyncSession, tenant: Tenant, user: User, agent: str) -> bool:
+    if not await can_access_module(db, tenant, user, AGENT_PERMISSION[agent]):
+        return False
+    if agent in FINANCE_AGENTS:
+        # Finance agents also need the finance AI flag, the source Control Tower flag, the fail-closed finance AI key
+        # and the report view key.
+        flags = tenant.feature_flags
+        if not is_finance_ai_insights_v2_enabled(flags) or not is_finance_control_tower_v2_enabled(flags):
+            return False
+        if not await has_tool_permission(db, user, "ai.tools.finance.read"):
+            return False
+        try:
+            await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_MIS_REPORT_VIEW)
+        except HTTPException:
+            return False
+    return True
+
+
 async def _allowed_agents(db: AsyncSession, tenant: Tenant, user: User) -> list[str]:
-    return [a for a in AGENTS if await can_access_module(db, tenant, user, AGENT_PERMISSION[a])]
+    return [a for a in AGENTS if await _agent_allowed(db, tenant, user, a)]
 
 
 async def _run_agents(db: AsyncSession, tenant_id: int, agents: list[str]) -> list[dict[str, Any]]:
@@ -139,10 +172,11 @@ async def _recipients(db: AsyncSession, tenant_id: int, finding: dict[str, Any])
 
 
 def _public(f: dict[str, Any], recipients_hint: str) -> dict[str, Any]:
-    return {
-        **{k: v for k, v in f.items() if k != "assignee_user_id"},
-        "suggested_action": {"type": "notify", "label": recipients_hint},
-    }
+    if f.get("agent") in FINANCE_AGENTS:
+        action = {"type": "acknowledge", "label": "Acknowledge (hide for 7 days)"}
+    else:
+        action = {"type": "notify", "label": recipients_hint}
+    return {**{k: v for k, v in f.items() if k != "assignee_user_id"}, "suggested_action": action}
 
 
 # ---------------------------------------------------------------- exception agents
@@ -196,8 +230,10 @@ async def confirm_exception(
     agent = next((a for a in AGENTS if body.key.startswith(_key_prefix(a))), None)
     if agent is None:
         raise HTTPException(status_code=400, detail="Unknown finding")
-    if not await can_access_module(db, tenant, user, AGENT_PERMISSION[agent]):
+    if not await _agent_allowed(db, tenant, user, agent):
         raise HTTPException(status_code=403, detail="You cannot act on this finding")
+    if agent in FINANCE_AGENTS and body.decision != "dismiss":
+        raise HTTPException(status_code=400, detail="Finance findings can only be acknowledged (decision 'dismiss')")
     # Re-detect server-side: never trust a finding sent by the browser.
     current = {f["key"]: f for f in await _run_agents(db, tid, [agent])}
     finding = current.get(body.key)
@@ -249,6 +285,7 @@ def _key_prefix(agent: str) -> str:
         "tna_delay": "tna_action_overdue:",
         "lc_expiry": "trade_lc_expiry_soon:",
         "bom_shortfall": "bom_shortfall:",
+        "finance_exceptions": "finance_exception:",
     }[agent]
 
 
@@ -257,7 +294,8 @@ def _key_prefix(agent: str) -> str:
 
 async def _brief_payload(db: AsyncSession, tenant: Tenant, user: User) -> dict[str, Any]:
     tid = tenant.id
-    agents = await _allowed_agents(db, tenant, user)
+    # Finance findings never enter the owner brief: its narrative is not validated against a fact catalog.
+    agents = [a for a in await _allowed_agents(db, tenant, user) if a not in FINANCE_AGENTS]
     brief_metrics = [
         BY_ID[mid]
         for mid in ("open_orders", "late_orders", "orders_due_14d", "vouchers_in_workflow", "open_pos")

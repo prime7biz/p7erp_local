@@ -52,6 +52,7 @@ OVERDUE_SOURCE = "outstanding_bills"
 OVERDUE_CLOSED_STATUSES = ("PAID", "SETTLED", "CLOSED", "CANCELLED", "VOID", "REJECTED")
 
 HREF_TEMPLATE = "/app/finance/home?tab=exceptions&exception={code}"
+MIN_AS_OF_YEAR, MAX_AS_OF_YEAR = 1900, 9990  # same bounds as the statements API fiscal_year
 
 # ---- Profitability buckets ---------------------------------------------------------------------------------
 # P&L accounts are placed in a bucket by the account group's statement class, then refined by the line's cost nature

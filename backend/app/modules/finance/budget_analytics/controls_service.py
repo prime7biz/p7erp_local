@@ -33,6 +33,7 @@ from app.modules.finance.budget_analytics.analytics_service import status_for
 from app.modules.finance.budget_analytics.common import (
     ZERO,
     add_months,
+    check_report_date,
     debit_minus_credit_sql,
     in_books_conditions,
     month_key,
@@ -112,6 +113,7 @@ async def _sample_vouchers(
 
 
 async def build_expense_controls(db: AsyncSession, tenant: Any, *, as_of: date) -> ExpenseControlsResponse:
+    check_report_date(as_of, "as_of_date")
     sm = fy_start_month(tenant.feature_flags)
     fy_start, fy_end = fiscal_year_bounds(as_of, sm)
     fy_label = fiscal_year_label(fiscal_year_of(as_of, sm), sm)

@@ -509,6 +509,11 @@ async def test_flag_off_permission_denial_and_validation(db_session_integration)
             (f"{API}/exceptions/GRN_NOT_BILLED", {"limit": 501}),
             (f"{API}/exceptions/GRN_NOT_BILLED", {"offset": -1}),
             (f"{API}/exceptions/GRN_NOT_BILLED", {"as_of_date": "x"}),
+            # extreme years: 422, never a 500 from a date overflow
+            (API, {"as_of_date": "9999-12-31"}),
+            (API, {"as_of_date": "0001-01-01"}),
+            (f"{API}/exceptions/VOUCHERS_DRAFT_OLD", {"as_of_date": "0001-01-01"}),
+            (f"{API}/exceptions/NEGATIVE_CASH", {"as_of_date": "9999-12-31"}),
         ):
             assert (await ac.get(path, params=params)).status_code == 422, (path, params)
         for code in ("NOPE", "grn-not-billed", "DROP_TABLE", "1"):

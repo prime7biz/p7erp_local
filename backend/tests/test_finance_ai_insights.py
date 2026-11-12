@@ -15,15 +15,19 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import func, select
 
 from app.models.finance import Voucher
+from app.modules.finance.ai_insights import facts as facts_mod
 from app.modules.finance.ai_insights import service as ai_service
 from app.modules.finance.ai_insights.constants import MAX_PROMPT_CHARS, MAX_QUESTION_CHARS, REPORTS
 from app.modules.finance.ai_insights.facts import FactRow
+from app.modules.finance.ai_insights.schemas import CommentaryRequest
 from app.modules.finance.ai_insights.router import router as ai_router
 from app.modules.finance.ai_insights.validation import ValidationFailure, validate_answer
 from tests.benchmark_fixtures import api_client
@@ -31,7 +35,8 @@ from tests.finance_statement_fixtures import seed_noise_tenant, seed_world
 
 D = Decimal
 URL = "/api/v1/finance/statements/commentary"
-AI_FLAG = {"finance_ai_insights_v2": True}
+REPORT_FLAGS = {"finance_statements_v2": True, "finance_budget_analytics_v2": True, "finance_control_tower_v2": True}
+AI_FLAG = {"finance_ai_insights_v2": True, **REPORT_FLAGS}
 ENFORCE = {"rbac_enforcement": "enforce"}
 PL_2026 = {"report": "profit_loss", "from_date": "2026-01-01", "to_date": "2026-12-31"}
 
@@ -88,9 +93,41 @@ def _fmt_money(value: str) -> str:
 async def test_flag_off_or_not_strict_true_is_404(db_session_integration):
     db = db_session_integration
     for flags in ({"finance_ai_insights_v2": False}, {"finance_ai_insights_v2": "true"}, {}):
-        tenant, user, _w = await seed_world(db, flags=flags)
+        tenant, user, _w = await seed_world(db, flags={**REPORT_FLAGS, **flags})
         await db.commit()
         await _post(db, tenant, user, {**PL_2026, "use_ai": False}, expected=404)
+
+
+def test_every_report_has_its_source_flag():
+    assert set(facts_mod.REPORT_FLAG) == set(REPORTS)
+
+
+@pytest.mark.asyncio
+async def test_source_report_flag_off_is_404(db_session_integration, monkeypatch):
+    """Commentary needs the source report's own flag too (statements / budget analytics / control tower)."""
+    db = db_session_integration
+    prompts = _provider(monkeypatch, lambda _p: None)
+    cases = (
+        ("finance_statements_v2", ("trial_balance", "balance_sheet", "profit_loss", "cash_flow_monthly", "funds_flow_monthly", "ratio_analysis")),
+        ("finance_budget_analytics_v2", ("budget_analytics", "expense_analysis")),
+        ("finance_control_tower_v2", ("control_tower",)),
+    )
+    for flag, reports in cases:
+        for off in (False, "true"):
+            tenant, user, _w = await _seed(db, flags={flag: off})
+            for report in reports:
+                for use_ai in (False, True):
+                    body = {"report": report, "from_date": "2026-01-01", "to_date": "2026-12-31", "use_ai": use_ai}
+                    await _post(db, tenant, user, body, expected=404)
+            others = [r for r in REPORTS if r not in reports]
+            await _post(db, tenant, user, {"report": others[0], "from_date": "2026-01-01", "to_date": "2026-12-31", "use_ai": False})
+            # the agent tool path (audit=False) is refused the same way
+            await db.refresh(tenant)
+            req = CommentaryRequest(report=reports[0], from_date=date(2026, 1, 1), to_date=date(2026, 12, 31), use_ai=False)
+            with pytest.raises(HTTPException) as exc:
+                await ai_service.build_commentary(db, tenant, user, req, audit=False)
+            assert exc.value.status_code == 404
+    assert prompts == []
 
 
 @pytest.mark.asyncio
@@ -134,6 +171,11 @@ async def test_request_validation_422(db_session_integration):
         {**PL_2026, "fiscal_year": 2026},  # fiscal_year together with dates
         {"report": "profit_loss", "from_date": "2026-12-31", "to_date": "2026-01-01"},
         {"report": "profit_loss", "from_date": "2026-13-01"},
+        {"report": "profit_loss", "from_date": "0001-01-01", "to_date": "2026-12-31", "comparison": "previous_period"},
+        {"report": "control_tower", "from_date": "2026-01-01", "to_date": "9999-12-31"},
+        {"report": "expense_analysis", "from_date": "0001-01-01", "to_date": "0001-12-31"},
+        {"report": "budget_analytics", "fiscal_year": 1},
+        {"report": "budget_analytics", "fiscal_year": 9999},
     ):
         await _post(db, tenant, user, {**body, "use_ai": False}, expected=422)
 
@@ -188,14 +230,20 @@ async def test_provider_failures_return_deterministic_commentary(db_session_inte
     def boom(_p):
         raise RuntimeError("provider down")
 
-    async def slow(_p):
-        await asyncio.sleep(2)
-        return "{}"
+    class ReadTimeout(Exception):  # same class name as the HTTP client's timeout
+        pass
 
-    monkeypatch.setattr(ai_service, "AI_TIMEOUT_SECONDS", 0.2)
+    async def slow(_p):
+        await asyncio.sleep(0)
+        raise TimeoutError("provider took too long")
+
+    def http_timeout(_p):
+        raise ReadTimeout("read timed out")
+
     cases = (
         (boom, "provider_error"),
         (slow, "provider_timeout"),
+        (http_timeout, "provider_timeout"),
         (lambda _p: None, "provider_unavailable_or_budget_exhausted"),
         (lambda _p: "   ", "provider_unavailable_or_budget_exhausted"),
         (lambda _p: "Sure! Margins fell because costs rose.", "validation_failed:not_json"),
@@ -263,6 +311,23 @@ async def test_tenant_ai_disabled_falls_back_without_calling_the_provider(db_ses
 
 
 # ---- valid AI answer -------------------------------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_slow_provider_is_awaited_not_cancelled(db_session_integration, monkeypatch):
+    db = db_session_integration
+    tenant, user, _w = await _seed(db)
+    det = await _deterministic(db, tenant, user)
+    money = _pick_fact(det)
+    answer = {"summary": "Main figure.", "findings": [{"text": f"Value {_fmt_money(money['value'])}.", "fact_ids": [money["id"]]}]}
+
+    async def slow_but_valid(_p):
+        await asyncio.sleep(0.3)
+        return json.dumps(answer)
+
+    _provider(monkeypatch, slow_but_valid)
+    data = await _post(db, tenant, user, PL_2026)
+    assert data["source"] == "ai" and data["reason"] is None
+
+
 @pytest.mark.asyncio
 async def test_valid_ai_answer_citing_facts_is_returned(db_session_integration, monkeypatch):
     db = db_session_integration
@@ -410,3 +475,102 @@ def test_validator_rejects_invented_numbers_and_unknown_facts():
         with pytest.raises(ValidationFailure) as exc:
             validate_answer(raw, _facts(), ctx)
         assert exc.value.code == code, (raw, exc.value.code)
+
+
+# ---- validator: unit words, labels, summary, dates (security review bypasses) ------------------------------------------
+CTX = ["2026-01-01 to 2026-12-31 (fiscal year 2026)", "2026"]
+
+
+def _review_facts() -> list[FactRow]:
+    return [
+        FactRow("rent_current", "Rent expenses", D("3700000.0000"), "currency"),  # 37 lakh
+        FactRow("salary_current", "Salary expenses", D("1200000.0000"), "currency"),  # 12 lakh
+        FactRow("margin_current", "Gross margin - current", D("12.3456"), "percent"),
+        FactRow("months_current", "Months ending with negative cash", D("2"), "count"),
+        FactRow("cc_current", "CC-4521 Line 7 actual spend", D("950.0000"), "currency"),  # numbers in a user-entered name
+        FactRow("profit_change", "Nett profit - change vs previous year", D("-250000.0000"), "currency"),
+        FactRow("ratio_current", "Current ratio", D("1.5000"), "ratio"),
+    ]
+
+
+def _check(answer: dict, context: list[str] | None = None) -> None:
+    validate_answer(json.dumps(answer), _review_facts(), context or CTX)
+
+
+def _one(text: str, ids: list[str], summary: str = "Summary.") -> dict:
+    return {"summary": summary, "findings": [{"text": text, "fact_ids": ids}]}
+
+
+def _rejected(answer: dict, context: list[str] | None = None) -> None:
+    with pytest.raises(ValidationFailure) as exc:
+        _check(answer, context)
+    assert exc.value.code == "number_not_in_facts", (answer, exc.value.code)
+
+
+def test_validator_lakh_crore_need_the_unit_word_and_the_right_scale():
+    _check(_one("Rent was 37 lakh.", ["rent_current"]))
+    _check(_one("Rent was 37.00 lakhs (BDT 3,700,000).", ["rent_current"]))
+    _check(_one("Rent was 37 lac.", ["rent_current"]))
+    _check(_one("Salary was 12 Lakh.", ["salary_current"]))
+    _check(_one("Rent was 0.37 crore.", ["rent_current"]))
+    _rejected(_one("Rent rose 37%.", ["rent_current"]))  # 37% vs a 37 lakh fact
+    _rejected(_one("Rent was 37.", ["rent_current"]))  # plain numbers are never rescaled
+    _rejected(_one("Salary was 12 crore.", ["salary_current"]))  # 12 crore vs a 12 lakh fact
+    _rejected(_one("Salary was 12 cr.", ["salary_current"]))
+    _rejected(_one("Rent was 37.001 lakh.", ["rent_current"]))  # more than 2 decimals at lakh scale
+    _rejected(_one("Rent was 0 lakh.", ["rent_current"]))
+
+
+def test_validator_percent_only_matches_percent_facts():
+    _check(_one("Gross margin was 12.35% (12.3 percent).", ["margin_current"]))
+    _rejected(_one("Rent was 3,700,000%.", ["rent_current"]))  # % vs a currency fact
+    _rejected(_one("Rent was 3700000 percent.", ["rent_current"]))
+    _rejected(_one("Gross margin was 12.35.", ["margin_current"]))  # a plain number never matches a percent fact
+    _rejected(_one("Two months, 2%.", ["months_current"]))
+
+
+def test_validator_plain_numbers_match_currency_count_days_ratio_and_sign_rule():
+    _check(_one("Two months ended negative: 2.", ["months_current"]))
+    _check(_one("The current ratio was 1.5 times.", ["ratio_current"]))
+    _check(_one("Nett profit fell by 250,000.00.", ["profit_change"]))  # absolute value; wording is not checked
+    _check(_one("Nett profit changed by -250,000.", ["profit_change"]))  # explicit minus on a negative fact
+    _rejected(_one("Rent changed by -3,700,000.", ["rent_current"]))  # explicit minus on a positive fact
+
+
+def test_validator_label_numbers_only_in_findings_citing_that_fact():
+    _check(_one("CC-4521 Line 7 spent 950.", ["cc_current"]))
+    _rejected(_one("Rent was 37 lakh; 4521 lines.", ["rent_current"]))  # label number in an uncited finding
+    _rejected(_one("Line 7 was busy.", ["rent_current"]))
+    _rejected(  # label number in the summary, even though a finding cites that fact
+        {"summary": "Cost centre 4521 overspent.", "findings": [{"text": "CC-4521 spent 950.", "fact_ids": ["cc_current"]}]}
+    )
+
+
+def test_validator_summary_numbers_need_a_fact_cited_by_a_finding():
+    _check({"summary": "Rent reached 37 lakh in 2026.", "findings": [{"text": "Rent was 37 lakh.", "fact_ids": ["rent_current"]}]})
+    _rejected({"summary": "Salary was 12 lakh.", "findings": [{"text": "Rent was 37 lakh.", "fact_ids": ["rent_current"]}]})
+    _rejected({"summary": "Margin was 12.35%.", "findings": [{"text": "Rent was 37 lakh.", "fact_ids": ["rent_current"]}]})
+
+
+def test_validator_years_and_dates_only_from_the_request():
+    ok = "Rent was 37 lakh"
+    _check(_one(f"{ok} in 2026, from 2026-01-01 to 2026-12-31.", ["rent_current"]))
+    _check(_one(f"{ok} in fiscal year 2026-27.", ["rent_current"]), ["2026-07-01 to 2027-06-30 (fiscal year 2026)", "2026-27"])
+    for bad in (
+        f"{ok}, up 2,026.",  # a period year written as an amount
+        f"{ok}, up 2026%.",
+        f"{ok}, about 2026 lakh.",
+        f"{ok} in 2019.",  # a year outside the request
+        f"{ok} on 2026-03-15.",  # a date that is not a period date
+        f"{ok} in 2026-03.",  # a month key that is not in the request
+        f"{ok} in 2026-27.",  # a fiscal-year label of another tenant setting
+        f"{ok} in 1234-56.",
+    ):
+        _rejected(_one(bad, ["rent_current"]))
+
+
+def test_provider_is_not_cancelled_by_the_service():
+    import inspect
+
+    source = inspect.getsource(ai_service)
+    assert "wait_for(" not in source and "import asyncio" not in source

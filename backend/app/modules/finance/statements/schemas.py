@@ -49,12 +49,22 @@ class Period(BaseModel):
 class StatementWarning(BaseModel):
     code: str
     count: int
+    # UNCLASSIFIED_GROUPS: absolute amount. OPENING_BALANCE_DIFFERENCE: debit minus credit (positive = Dr-heavy).
     amount: Money = _ZERO
 
 
 class Reconciliation(BaseModel):
     balanced: bool
     difference: Money = _ZERO
+
+
+class SheetReconciliation(Reconciliation):
+    """Trial Balance / Balance Sheet: `difference` is what is left AFTER the disclosed opening difference line.
+
+    opening_difference = stored debit-side opening balances - stored credit-side opening balances (all ledgers).
+    """
+
+    opening_difference: Money = _ZERO
 
 
 class Envelope(BaseModel):
@@ -71,12 +81,13 @@ class Envelope(BaseModel):
 
 # ---- Trial Balance -------------------------------------------------------------------------------------
 class Drilldown(BaseModel):
-    kind: Literal["primary", "group", "ledger", "unclassified", "profit_and_loss"]
+    kind: Literal["primary", "group", "ledger", "unclassified", "profit_and_loss", "opening_difference"]
     id: int | None = None
 
 
 class TrialBalanceRow(BaseModel):
-    row_type: Literal["primary", "group", "ledger", "profit_and_loss"]
+    row_type: Literal["primary", "group", "ledger", "profit_and_loss", "opening_difference"]
+    code: str | None = None  # DIFFERENCE_IN_OPENING_BALANCES on the synthetic opening-difference row
     id: int | None = None
     parent_id: int | None = None
     name: str
@@ -104,6 +115,7 @@ class TrialBalanceTotals(BaseModel):
 class TrialBalanceResponse(Envelope):
     rows: list[TrialBalanceRow]
     totals: TrialBalanceTotals
+    reconciliation: SheetReconciliation
 
 
 # ---- Balance Sheet -------------------------------------------------------------------------------------
@@ -111,7 +123,8 @@ class SheetNode(BaseModel):
     """One line of a two-sided statement: ledgers carry inner_amount, groups carry outer_amount."""
 
     name: str
-    row_type: Literal["primary", "group", "ledger", "result"]
+    row_type: Literal["primary", "group", "ledger", "result", "opening_difference"]
+    code: str | None = None  # DIFFERENCE_IN_OPENING_BALANCES on the synthetic opening-difference line
     id: int | None = None
     inner_amount: OptMoney = None
     outer_amount: OptMoney = None
@@ -139,6 +152,7 @@ class BalanceSheetResponse(Envelope):
     assets: list[SheetNode]
     profit_and_loss: BalanceSheetProfitLoss
     totals: BalanceSheetTotals
+    reconciliation: SheetReconciliation
 
 
 # ---- Trading + Profit & Loss ---------------------------------------------------------------------------

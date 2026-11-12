@@ -131,5 +131,11 @@ PL_CREDIT_CLASSES: tuple[str, ...] = (INDIRECT_INCOMES,)
 # balance. The amount is flagged with an UNCLASSIFIED_GROUPS warning and is never put in a leaf class.
 PL_NATURES = frozenset({"income", "expense"})
 
+# Tally's "Difference in opening balances": when the ledgers' stored opening balances do not balance, the Trial
+# Balance and Balance Sheet show the difference on one synthetic line (no voucher) and warn about it.
+OPENING_DIFFERENCE_CODE = "DIFFERENCE_IN_OPENING_BALANCES"
+OPENING_DIFFERENCE_LABEL = "Difference in opening balances"
+OPENING_DIFFERENCE_WARNING = "OPENING_BALANCE_DIFFERENCE"
+
 MONEY_PLACES = 4
 MAX_GROUP_DEPTH = 50  # cycle guard for the recursive hierarchy walk

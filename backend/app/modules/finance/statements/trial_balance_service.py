@@ -1,7 +1,10 @@
 """Grouped Trial Balance (PLAN "Grouped Trial Balance", acceptance 2.3).
 
 Primary group -> account groups -> ledgers, plus a synthetic `Profit & Loss A/c` line holding the result of
-earlier fiscal years (no voucher is created). SQL: 3 statements (limit 6).
+earlier fiscal years (no voucher is created). When the ledgers' stored opening balances do not balance, a second
+synthetic line `Difference in opening balances` (as in Tally) sits on the side that balances the opening and closing
+columns (credit when the openings are debit-heavy) and an OPENING_BALANCE_DIFFERENCE warning is returned.
+SQL: 3 statements (limit 6).
 """
 
 from __future__ import annotations
@@ -14,18 +17,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.tenant import Tenant
 from app.modules.finance.fiscal_year import fiscal_year_bounds, fy_start_month
 from app.modules.finance.posting_core import BALANCE_TOLERANCE
-from app.modules.finance.statements.constants import PRIMARY_UNCLASSIFIED, TB_PRIMARY_ORDER
+from app.modules.finance.statements.constants import (
+    OPENING_DIFFERENCE_CODE,
+    OPENING_DIFFERENCE_LABEL,
+    PRIMARY_UNCLASSIFIED,
+    TB_PRIMARY_ORDER,
+)
 from app.modules.finance.statements.group_tree import (
     GroupNode,
     assemble,
     company_from,
     fiscal_period,
+    opening_difference_warning,
     unclassified_warning,
 )
-from app.modules.finance.statements.ledger_aggregate_service import LedgerCalc, build_ledger_calcs
+from app.modules.finance.statements.ledger_aggregate_service import (
+    LedgerCalc,
+    build_ledger_calcs,
+    opening_difference,
+)
 from app.modules.finance.statements.schemas import (
     Drilldown,
-    Reconciliation,
+    SheetReconciliation,
     TrialBalanceResponse,
     TrialBalanceRow,
     TrialBalanceTotals,
@@ -42,12 +55,15 @@ def _dr_cr(net: Decimal) -> str:
     return "Dr" if net > ZERO else ("Cr" if net < ZERO else "")
 
 
-def _row(row_type, id_, parent_id, name, depth, cls, opening, pdr, pcr, drill: Drilldown) -> TrialBalanceRow:
+def _row(
+    row_type, id_, parent_id, name, depth, cls, opening, pdr, pcr, drill: Drilldown, code: str | None = None
+) -> TrialBalanceRow:
     closing = opening + pdr - pcr
     od, oc = _split(opening)
     cd, cc = _split(closing)
     return TrialBalanceRow(
         row_type=row_type,
+        code=code,
         id=id_,
         parent_id=parent_id,
         name=name,
@@ -135,10 +151,21 @@ async def build_trial_balance(
             )
         )
 
+    # Unbalanced stored opening balances: the opposite amount on one line, in the opening and closing columns.
+    opening_diff = opening_difference(calcs)
+    if opening_diff != ZERO:
+        rows.append(
+            _row(
+                "opening_difference", None, None, OPENING_DIFFERENCE_LABEL, 0, None, -opening_diff, ZERO, ZERO,
+                Drilldown(kind="opening_difference"), code=OPENING_DIFFERENCE_CODE,
+            )
+        )
+
     # Grand totals from ledger lines (not from netted group rows) so debit == credit is a real check.
     totals = TrialBalanceTotals()
     for net_open, pdr, pcr in [(c.opening_net, c.period_debit, c.period_credit) for c in calcs] + [
-        (pl_bf, ZERO, ZERO)
+        (pl_bf, ZERO, ZERO),
+        (-opening_diff, ZERO, ZERO),
     ]:
         od, oc = _split(net_open)
         cd, cc = _split(net_open + pdr - pcr)
@@ -159,7 +186,10 @@ async def build_trial_balance(
         totals=totals,
         warnings=unclassified_warning(
             [(c.group_id, abs(c.closing_net)) for c in shown if c.primary == PRIMARY_UNCLASSIFIED]
+        )
+        + opening_difference_warning(opening_diff),
+        reconciliation=SheetReconciliation(
+            balanced=abs(diff) <= BALANCE_TOLERANCE, difference=diff, opening_difference=opening_diff
         ),
-        reconciliation=Reconciliation(balanced=abs(diff) <= BALANCE_TOLERANCE, difference=diff),
         data_as_of=datetime.utcnow(),
     )

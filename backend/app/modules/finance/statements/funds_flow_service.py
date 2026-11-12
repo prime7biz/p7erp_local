@@ -4,6 +4,8 @@ working capital = Current Assets - Current Liabilities, at every month boundary,
   Current Assets      = ledgers of CASH_IN_HAND, BANK_ACCOUNTS, STOCK_IN_HAND, SUNDRY_DEBTORS, CURRENT_ASSETS
   Current Liabilities = ledgers of CURRENT_LIABILITIES, SUNDRY_CREDITORS   (BANK_OD / borrowings are excluded)
 Unclassified groups are not guessed into either side.
+The Trial Balance / Balance Sheet line "Difference in opening balances" (unbalanced stored openings) is a Balance
+Sheet item with no ledger: it is never part of working capital, so funds flow is unaffected by it.
 funds_flow = closing WC - opening WC; month N closing is month N+1 opening by construction.
 """
 

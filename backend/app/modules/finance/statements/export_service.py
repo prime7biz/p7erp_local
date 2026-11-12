@@ -138,7 +138,7 @@ def table_trial_balance(r: TrialBalanceResponse) -> ExportTable:
         t.rows.append(
             ExportRow(
                 [row.name, _drcr(net_open), _money(row.period_debit), _money(row.period_credit), _drcr(net_close)],
-                bold=row.row_type in ("primary", "profit_and_loss"),
+                bold=row.row_type in ("primary", "profit_and_loss", "opening_difference"),
                 indent=row.depth,
             )
         )
@@ -163,7 +163,7 @@ def _flatten_nodes(nodes: list[SheetNode], depth: int, out: list[ExportRow]) -> 
         out.append(
             ExportRow(
                 [n.name, _money(n.inner_amount), _money(n.outer_amount)],
-                bold=n.row_type in ("primary", "result"),
+                bold=n.row_type in ("primary", "result", "opening_difference"),
                 indent=depth,
             )
         )

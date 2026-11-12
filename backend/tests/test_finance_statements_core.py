@@ -100,7 +100,7 @@ async def test_trial_balance_balances_and_reconciles(db_session_integration):
     totals = body["totals"]
     assert D(totals["closing_debit"]) == D(totals["closing_credit"]) == D("192000")
     assert D(totals["opening_debit"]) == D(totals["opening_credit"]) == D("130000")
-    assert body["reconciliation"] == {"balanced": True, "difference": "0.0000"}
+    assert body["reconciliation"] == {"balanced": True, "difference": "0.0000", "opening_difference": "0.0000"}
     assert body["base_currency"] == "BDT" and body["company"]["name"] == tenant.name
     for value in totals.values():
         assert MONEY_RE.match(value), value
@@ -302,6 +302,145 @@ async def test_july_fiscal_year_boundaries_and_brought_forward(db_session_integr
     assert D(tb["totals"]["closing_debit"]) == D(tb["totals"]["closing_credit"])
 
 
+# ---- Difference in opening balances (Tally) ------------------------------------------------------------
+OPENING_DIFF = "Difference in opening balances"
+
+
+def _opening_rows(tb: dict) -> list[dict]:
+    return [r for r in tb["rows"] if r["row_type"] == "opening_difference"]
+
+
+def _opening_warnings(body: dict) -> list[dict]:
+    return [w for w in body["warnings"] if w["code"] == "OPENING_BALANCE_DIFFERENCE"]
+
+
+def _xlsx_rows(content: bytes) -> list[list]:
+    import io
+
+    from openpyxl import load_workbook
+
+    ws = load_workbook(io.BytesIO(content)).active
+    return [[("" if c is None else c) for c in row] for row in ws.iter_rows(values_only=True)]
+
+
+async def _debit_heavy_world(db):
+    """seed_world + 6,000 more debit-side openings: classified 4,700, unclassified 300, expense 1,000."""
+    tenant, user, w = await seed_world(db)
+    g = w["groups"]
+    await make_ledger(db, tenant.id, g["cash"], "Petty Cash", "4700")
+    await make_ledger(db, tenant.id, g["misc_asset"], "Suspense", "300")  # Unclassified group still counts
+    await make_ledger(db, tenant.id, g["iexp"], "Old Rent", "1000")  # income / expense openings count too
+    return tenant, user, w
+
+
+@pytest.mark.asyncio
+async def test_opening_difference_debit_heavy_goes_to_credit_and_liabilities(db_session_integration):
+    db = db_session_integration
+    tenant, user, _w = await _debit_heavy_world(db)
+    async with api_client(db, tenant, user) as ac:
+        tb = (await _get(ac, "trial-balance", **TB_2026)).json()
+        bs = (await _get(ac, "balance-sheet", as_of_date="2026-12-31")).json()
+        pl = (await _get(ac, "profit-loss", **TB_2026)).json()
+    [row] = _opening_rows(tb)
+    assert row["name"] == OPENING_DIFF and row["code"] == "DIFFERENCE_IN_OPENING_BALANCES"
+    assert (row["opening_debit"], row["opening_credit"]) == ("0.0000", "6000.0000")
+    assert (row["closing_debit"], row["closing_credit"]) == ("0.0000", "6000.0000")
+    assert row["period_debit"] == row["period_credit"] == "0.0000" and row["dr_cr"] == "Cr"
+    t = tb["totals"]
+    assert D(t["opening_debit"]) == D(t["opening_credit"]) and D(t["closing_debit"]) == D(t["closing_credit"])
+    expected_rec = {"balanced": True, "difference": "0.0000", "opening_difference": "6000.0000"}
+    assert tb["reconciliation"] == expected_rec
+    assert _opening_warnings(tb) == [{"code": "OPENING_BALANCE_DIFFERENCE", "count": 1, "amount": "6000.0000"}]
+
+    node = _find(bs["liabilities"], OPENING_DIFF)
+    assert node["row_type"] == "opening_difference" and node["code"] == "DIFFERENCE_IN_OPENING_BALANCES"
+    assert D(node["outer_amount"]) == D("6000") and _find(bs["assets"], OPENING_DIFF) is None
+    assert D(bs["totals"]["liabilities"]) == D(bs["totals"]["assets"]) and bs["totals"]["difference"] == "0.0000"
+    assert bs["reconciliation"] == expected_rec
+    assert _opening_warnings(bs) == _opening_warnings(tb)
+    # the stored expense opening is an earlier-year result, not part of this year's P&L
+    assert pl["profit_and_loss"]["nett_result"] == {"kind": "profit", "amount": "21300.0000"}
+    assert not _opening_warnings(pl) and "opening_difference" not in pl["reconciliation"]
+
+
+@pytest.mark.asyncio
+async def test_opening_difference_credit_heavy_and_tenants_never_mixed(db_session_integration):
+    db = db_session_integration
+    other, _ou, ow = await seed_world(db)  # another tenant with a large debit-heavy difference
+    await make_ledger(db, other.id, ow["groups"]["cash"], "Foreign Cash", "999999")
+    tenant, user, w = await seed_world(db)
+    await make_ledger(db, tenant.id, w["groups"]["cl"], "Old Creditor", "2500")  # credit-side opening
+    async with api_client(db, tenant, user) as ac:
+        tb = (await _get(ac, "trial-balance", **TB_2026)).json()
+        bs = (await _get(ac, "balance-sheet", as_of_date="2026-12-31")).json()
+    [row] = _opening_rows(tb)
+    assert (row["opening_debit"], row["opening_credit"]) == ("2500.0000", "0.0000")
+    assert (row["closing_debit"], row["closing_credit"]) == ("2500.0000", "0.0000") and row["dr_cr"] == "Dr"
+    expected_rec = {"balanced": True, "difference": "0.0000", "opening_difference": "-2500.0000"}
+    assert tb["reconciliation"] == bs["reconciliation"] == expected_rec
+    assert _opening_warnings(tb) == [{"code": "OPENING_BALANCE_DIFFERENCE", "count": 1, "amount": "-2500.0000"}]
+    assert D(_find(bs["assets"], OPENING_DIFF)["outer_amount"]) == D("2500")
+    assert _find(bs["liabilities"], OPENING_DIFF) is None
+    assert D(bs["totals"]["liabilities"]) == D(bs["totals"]["assets"]) == D("173800")  # 171,300 + 2,500
+
+
+@pytest.mark.asyncio
+async def test_opening_difference_absent_when_openings_balance(db_session_integration):
+    db = db_session_integration
+    other, _ou, ow = await seed_world(db)
+    await make_ledger(db, other.id, ow["groups"]["cash"], "Foreign Cash", "999999")  # never leaks across
+    tenant, user, _w = await seed_world(db)
+    async with api_client(db, tenant, user) as ac:
+        for params in (TB_2026, {**TB_2026, "include_zero": "true"}):
+            tb = (await _get(ac, "trial-balance", **params)).json()
+            assert not _opening_rows(tb) and not _opening_warnings(tb)
+            assert tb["reconciliation"]["opening_difference"] == "0.0000"
+        bs = (await _get(ac, "balance-sheet", as_of_date="2026-12-31", include_zero="true")).json()
+    assert _find(bs["liabilities"], OPENING_DIFF) is None and _find(bs["assets"], OPENING_DIFF) is None
+    assert not _opening_warnings(bs) and bs["reconciliation"]["opening_difference"] == "0.0000"
+
+
+@pytest.mark.asyncio
+async def test_opening_difference_row_in_exports(db_session_integration):
+    pytest.importorskip("openpyxl")
+    db = db_session_integration
+    tenant, user, _w = await _debit_heavy_world(db)
+    async with api_client(db, tenant, user) as ac:
+        tbx = await ac.get(f"{API}/trial-balance/export", params={"format": "xlsx", **TB_2026})
+        bsx = await ac.get(f"{API}/balance-sheet/export", params={"format": "xlsx", "as_of_date": "2026-12-31"})
+        pdf = await ac.get(f"{API}/trial-balance/export", params={"format": "pdf", **TB_2026})
+    assert tbx.status_code == bsx.status_code == pdf.status_code == 200
+    tb_row = next(r for r in _xlsx_rows(tbx.content) if r[0] == OPENING_DIFF)
+    # opening and closing are debit-minus-credit balances: -6,000 = 6,000 Cr
+    assert D(str(tb_row[1])) == D(str(tb_row[4])) == D("-6000")
+    bs_rows = _xlsx_rows(bsx.content)
+    bs_row = next(r for r in bs_rows if r[0] == OPENING_DIFF)
+    assert D(str(bs_row[2])) == D("6000")
+    liab = next(r for r in bs_rows if r[0] == "Total Liabilities")[2]
+    assets = next(r for r in bs_rows if r[0] == "Total Assets")[2]
+    assert D(str(liab)) == D(str(assets))
+    assert bs_rows.index(bs_row) < bs_rows.index(next(r for r in bs_rows if r[0] == "Total Liabilities"))
+    assert pdf.content.startswith(b"%PDF")
+
+
+@pytest.mark.asyncio
+async def test_opening_difference_never_enters_funds_flow(db_session_integration):
+    db = db_session_integration
+    tenant, user, w = await seed_world(db)
+    async with api_client(db, tenant, user) as ac:
+        before = (await _get(ac, "funds-flow-monthly", fiscal_year=2026)).json()
+        cash_before = (await _get(ac, "cash-flow-monthly", fiscal_year=2026)).json()
+        plant = await make_group(db, tenant.id, "Plant", "Asset", "FIXED_ASSETS")
+        await make_ledger(db, tenant.id, plant, "Machine", "5000")  # unbalanced, outside working capital
+        after = (await _get(ac, "funds-flow-monthly", fiscal_year=2026)).json()
+        cash_after = (await _get(ac, "cash-flow-monthly", fiscal_year=2026)).json()
+        tb = (await _get(ac, "trial-balance", fiscal_year=2026)).json()
+    assert tb["reconciliation"]["opening_difference"] == "5000.0000" and _opening_rows(tb)
+    assert after["grand_total"] == before["grand_total"] and after["months"] == before["months"]
+    assert cash_after["grand_total"] == cash_before["grand_total"]
+    assert "opening_difference" not in after["reconciliation"]
+
+
 # ---- Classification ------------------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_inheritance_override_and_cycle_guard(db_session_integration):
@@ -339,9 +478,9 @@ async def test_inheritance_override_and_cycle_guard(db_session_integration):
     assert primary_names.index("Fixed Assets") < primary_names.index("Investments") < primary_names.index("Current Assets")
     assert sum(1 for r in rows if r["name"] == "Loop A") == 1 and sum(1 for r in rows if r["name"] == "Loop B") == 1
     assert sum(1 for r in rows if r["name"] == "Selfish") == 1
-    # the three new ledgers carry opening balances (5,000 + 10 + 20) with no offsetting entry: the report shows
-    # that difference instead of hiding it
-    assert D(body["reconciliation"]["difference"]) == D("5030") and body["reconciliation"]["balanced"] is False
+    # the three new ledgers carry opening balances (5,000 + 10 + 20) with no offsetting entry: the report discloses
+    # that difference on the "Difference in opening balances" line instead of hiding it
+    assert body["reconciliation"] == {"balanced": True, "difference": "0.0000", "opening_difference": "5030.0000"}
     assert D(_find(bs["assets"], "Fixed Assets")["outer_amount"]) == D("5000")
 
 

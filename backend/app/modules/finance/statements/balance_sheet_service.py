@@ -3,6 +3,8 @@
 Stock is the GL balance of the `STOCK_IN_HAND` ledgers, so the sheet balances with perpetual inventory.
 The result of the year so far and of earlier years sits on one line, on the liabilities side when it is a
 profit and on the assets side when it is an accumulated loss.
+When the ledgers' stored opening balances do not balance, a `Difference in opening balances` line (as in Tally) sits
+on the side that balances the sheet (liabilities when the openings are debit-heavy) and is warned about.
 """
 
 from __future__ import annotations
@@ -18,21 +20,28 @@ from app.modules.finance.posting_core import BALANCE_TOLERANCE
 from app.modules.finance.statements.constants import (
     BS_ASSET_PRIMARIES,
     BS_LIABILITY_PRIMARIES,
+    OPENING_DIFFERENCE_CODE,
+    OPENING_DIFFERENCE_LABEL,
     PRIMARY_UNCLASSIFIED,
 )
 from app.modules.finance.statements.group_tree import (
     company_from,
     fiscal_period,
+    opening_difference_warning,
     sheet_primary,
     unclassified_warning,
 )
-from app.modules.finance.statements.ledger_aggregate_service import LedgerCalc, build_ledger_calcs
+from app.modules.finance.statements.ledger_aggregate_service import (
+    LedgerCalc,
+    build_ledger_calcs,
+    opening_difference,
+)
 from app.modules.finance.statements.schemas import (
     BalanceSheetProfitLoss,
     BalanceSheetResponse,
     BalanceSheetTotals,
-    Reconciliation,
     SheetNode,
+    SheetReconciliation,
 )
 
 ZERO = Decimal("0")
@@ -107,6 +116,22 @@ async def build_balance_sheet(
         else:
             asset_total += -total_pl
 
+    # Debit-heavy openings make the assets side larger, so the difference goes on the liabilities side.
+    opening_diff = opening_difference(calcs)
+    if opening_diff != ZERO:
+        diff_node = SheetNode(
+            name=OPENING_DIFFERENCE_LABEL,
+            row_type="opening_difference",
+            code=OPENING_DIFFERENCE_CODE,
+            outer_amount=abs(opening_diff),
+        )
+        if opening_diff > ZERO:
+            liabilities.append(diff_node)
+            liab_total += opening_diff
+        else:
+            assets.append(diff_node)
+            asset_total += -opening_diff
+
     difference = liab_total - asset_total
     return BalanceSheetResponse(
         report="balance_sheet",
@@ -125,7 +150,10 @@ async def build_balance_sheet(
                 for c in calcs
                 if c.primary == PRIMARY_UNCLASSIFIED and (c.closing_net != ZERO or c.pre_fy_net != ZERO)
             ]
+        )
+        + opening_difference_warning(opening_diff),
+        reconciliation=SheetReconciliation(
+            balanced=abs(difference) <= BALANCE_TOLERANCE, difference=difference, opening_difference=opening_diff
         ),
-        reconciliation=Reconciliation(balanced=abs(difference) <= BALANCE_TOLERANCE, difference=difference),
         data_as_of=datetime.utcnow(),
     )

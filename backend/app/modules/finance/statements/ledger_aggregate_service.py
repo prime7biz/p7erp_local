@@ -62,6 +62,7 @@ class LedgerCalc:
     period_debit: Decimal
     period_credit: Decimal
     pre_fy_net: Decimal  # P&L accounts only: stored opening + movement before the fiscal year (goes to P&L b/f)
+    stored_opening: Decimal = ZERO  # chart_of_accounts.opening_balance, debit positive
 
     @property
     def closing_net(self) -> Decimal:
@@ -199,6 +200,17 @@ async def build_ledger_calcs(
                 period_debit=_q(pdr),
                 period_credit=_q(pcr),
                 pre_fy_net=pre_fy_net,
+                stored_opening=opening,
             )
         )
     return calcs, groups
+
+
+def opening_difference(calcs: list[LedgerCalc]) -> Decimal:
+    """Tally's "Difference in opening balances": debit-side minus credit-side stored opening balances.
+
+    Covers every ledger of the tenant (classified, unclassified, income and expense alike). Posted vouchers always
+    balance, so this is exactly how far the Trial Balance / Balance Sheet would be out without the synthetic line.
+    It is a Balance Sheet item only: it never enters the P&L, cash flow or working capital (funds flow).
+    """
+    return sum((c.stored_opening for c in calcs), ZERO)

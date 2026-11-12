@@ -14,7 +14,11 @@ from typing import Callable, Iterable
 from app.models.tenant import Tenant
 from app.modules.finance.fiscal_year import fiscal_year_bounds, fiscal_year_label, fiscal_year_of, fy_start_month
 from app.modules.finance.statements.classification_service import GroupInfo
-from app.modules.finance.statements.constants import CLASS_TO_PRIMARY, PRIMARY_UNCLASSIFIED
+from app.modules.finance.statements.constants import (
+    CLASS_TO_PRIMARY,
+    OPENING_DIFFERENCE_WARNING,
+    PRIMARY_UNCLASSIFIED,
+)
 from app.modules.finance.statements.ledger_aggregate_service import LedgerCalc
 from app.modules.finance.statements.schemas import Company, Period, SheetNode, StatementWarning
 
@@ -179,3 +183,10 @@ def unclassified_warning(unclassified: list[tuple[int, Decimal]]) -> list[Statem
     return [
         StatementWarning(code="UNCLASSIFIED_GROUPS", count=len({g for g, _a in unclassified}), amount=amount)
     ]
+
+
+def opening_difference_warning(difference: Decimal) -> list[StatementWarning]:
+    """`difference` is debit minus credit of the stored opening balances; no warning when they balance."""
+    if difference == ZERO:
+        return []
+    return [StatementWarning(code=OPENING_DIFFERENCE_WARNING, count=1, amount=difference)]

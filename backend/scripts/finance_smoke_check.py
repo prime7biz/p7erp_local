@@ -2,7 +2,9 @@
 
 Runs every statement / control / analytics service and prints a compact PASS / WARN / FAIL table with the
 reconciliation checks:
-  TB debit == credit (opening, period, closing); BS liabilities == assets; P&L nett == TB income-expense movement;
+  TB debit == credit (opening, period, closing); BS liabilities == assets (both after the disclosed
+  'Difference in opening balances' line, which must equal the stored openings; a WARN row reports it);
+  P&L nett == TB income-expense movement;
   cash flow monthly continuity + GL closing; funds flow continuity; Operating Cost % == 100 - Nett Profit %;
   Control Tower card total == its exception list total (count and amount), and no card failed.
 Exit code 1 on any FAIL or exception. Nothing is written: every check runs in a READ ONLY transaction that is
@@ -81,12 +83,20 @@ async def stored_opening_imbalance(db, tenant_id: int) -> Decimal:
     return Decimal(str(total)).quantize(Decimal("0.0001"))
 
 
-def _data_note(imbalance: Decimal) -> str:
+def _opening_note(imbalance: Decimal) -> str:
     side = "Dr" if imbalance > ZERO else "Cr"
-    return (
-        f"DATA: the ledgers' stored opening balances are unbalanced by {abs(imbalance)} {side} "
-        "(Tally: 'Difference in opening balances'); a finance admin must enter the opposite opening balance"
-    )
+    return f"opening balances differ by {abs(imbalance)} {side}"
+
+
+def _disclosed_difference(report, imbalance: Decimal) -> str | None:
+    """Problem text when the report's opening-difference disclosure does not match the stored openings."""
+    rec = report.reconciliation
+    if rec.opening_difference != imbalance:
+        return f"opening_difference {rec.opening_difference} != stored openings {imbalance}"
+    warned = [w for w in report.warnings if w.code == "OPENING_BALANCE_DIFFERENCE"]
+    if (imbalance != ZERO) != bool(warned) or (warned and warned[0].amount != imbalance):
+        return "OPENING_BALANCE_DIFFERENCE warning missing or wrong"
+    return None
 
 
 # ---- checks: each returns (status, detail) -------------------------------------------------------------
@@ -99,25 +109,38 @@ async def check_tb(c: Ctx):
         "closing": t.closing_debit - t.closing_credit,
     }
     bad = {k: v for k, v in diffs.items() if v != ZERO}
-    detail = f"closing Dr {t.closing_debit} = Cr {t.closing_credit}; rows {len(tb.rows)}"
-    if not bad and tb.reconciliation.balanced:
-        return PASS, detail
     imbalance = await stored_opening_imbalance(c.db, c.tenant.id)
-    if diffs["period"] == ZERO and diffs["opening"] == diffs["closing"] == imbalance != ZERO:
-        return FAIL, _data_note(imbalance)
-    return FAIL, f"debit != credit {bad}"
+    detail = f"closing Dr {t.closing_debit} = Cr {t.closing_credit}; rows {len(tb.rows)}"
+    if imbalance != ZERO:
+        detail += f"; incl. 'Difference in opening balances' {abs(imbalance)}"
+    problem = _disclosed_difference(tb, imbalance)
+    if not bad and tb.reconciliation.balanced and problem is None:
+        return PASS, detail
+    return FAIL, problem or f"debit != credit {bad}"
 
 
 async def check_bs(c: Ctx):
     bs = await build_balance_sheet(c.db, c.tenant, as_of_date=c.today, include_zero=False)
     t = bs.totals
-    detail = f"liabilities {t.liabilities} assets {t.assets} difference {t.difference}"
-    if t.liabilities == t.assets and t.difference == ZERO and bs.reconciliation.balanced:
-        return PASS, detail
     imbalance = await stored_opening_imbalance(c.db, c.tenant.id)
-    if imbalance != ZERO and t.difference == -imbalance:
-        return FAIL, f"{detail}; {_data_note(imbalance)}"
-    return FAIL, detail
+    detail = f"liabilities {t.liabilities} assets {t.assets} difference {t.difference}"
+    if imbalance != ZERO:
+        side = "liabilities" if imbalance > ZERO else "assets"
+        detail += f"; incl. 'Difference in opening balances' {abs(imbalance)} ({side})"
+    problem = _disclosed_difference(bs, imbalance)
+    if t.liabilities == t.assets and t.difference == ZERO and bs.reconciliation.balanced and problem is None:
+        return PASS, detail
+    return FAIL, f"{detail}; {problem}" if problem else detail
+
+
+async def check_opening_balances(c: Ctx):
+    imbalance = await stored_opening_imbalance(c.db, c.tenant.id)
+    if imbalance == ZERO:
+        return PASS, "stored opening balances balance"
+    return WARN, (
+        f"{_opening_note(imbalance)} (shown as 'Difference in opening balances'); "
+        "a finance admin should correct the ledgers' opening balances"
+    )
 
 
 async def check_pl(c: Ctx):
@@ -257,6 +280,7 @@ def commentary_check(report: str):
 CHECKS = [
     ("trial_balance", check_tb),
     ("balance_sheet", check_bs),
+    ("opening_balances", check_opening_balances),
     ("profit_loss", check_pl),
     ("cash_flow_monthly", check_cash),
     ("funds_flow_monthly", check_funds),

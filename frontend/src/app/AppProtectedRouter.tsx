@@ -492,6 +492,15 @@ const OrderProfitabilityGlPage = lazy(() =>
 const EntityProfitabilityGlPage = lazy(() =>
   import("@/pages/app/finance/profitability/EntityProfitabilityGlPage").then((m) => ({ default: m.EntityProfitabilityGlPage })),
 );
+const BudgetAnalyticsPage = lazy(() =>
+  import("@/pages/app/finance/budget/BudgetAnalyticsPage").then((m) => ({ default: m.BudgetAnalyticsPage })),
+);
+const ExpenseAnalysisPage = lazy(() =>
+  import("@/pages/app/finance/budget/ExpenseAnalysisPage").then((m) => ({ default: m.ExpenseAnalysisPage })),
+);
+const ExpenseControlsPage = lazy(() =>
+  import("@/pages/app/finance/budget/ExpenseControlsPage").then((m) => ({ default: m.ExpenseControlsPage })),
+);
 const TrialBalancePage = lazy(() =>
   import("@/pages/app/TrialBalancePage").then((m) => ({ default: m.TrialBalancePage })),
 );
@@ -994,6 +1003,9 @@ export function AppProtectedRouter() {
           <Route path="finance/statements/stock-vs-ledger" element={<FinanceLegacyRoute from="finance/statements/stock-vs-ledger" Page={StockGlReconciliationPage} />} />
           <Route path="finance/reports" element={<FinanceHubPage hubId="reports" />} />
           <Route path="finance/planning" element={<FinanceHubPage hubId="planning" />} />
+          <Route path="finance/budget-analytics" element={<FinanceLegacyRoute from="finance/budget-analytics" Page={BudgetAnalyticsPage} />} />
+          <Route path="finance/expense-analysis" element={<FinanceLegacyRoute from="finance/expense-analysis" Page={ExpenseAnalysisPage} />} />
+          <Route path="finance/expense-controls" element={<FinanceLegacyRoute from="finance/expense-controls" Page={ExpenseControlsPage} />} />
           <Route path="finance/profitability" element={<FinanceHubPage hubId="profitability" />} />
           <Route path="finance/tax-compliance" element={<FinanceHubPage hubId="tax-compliance" />} />
           <Route path="finance/setup" element={<FinanceHubPage hubId="setup" />} />

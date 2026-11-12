@@ -1688,5 +1688,160 @@ Both are **read-only**: nothing here posts, edits or deletes a voucher or a stoc
       ],
       relatedArticleIds: ["fin-overview", "fin-tally-statements"],
     },
+    {
+      id: "fin-budget-analytics-expense-control",
+      title: "Budget analytics and expense control",
+      summary:
+        "Budget vs actual by cost centre, account, month or department with drill-down to voucher lines, expense trends against the previous period, and expense-control alerts.",
+      content: `## Overview
+
+Three read-only pages help you watch spending against the budget:
+
+- **Budget vs Actual (analytics)**: FINAL budgets of a financial year next to the **posted** actual spend.
+- **Expense analysis**: posted expense of a period next to the period just before it.
+- **Expense controls**: checks that point at spending that needs a second look.
+
+Nothing here changes a budget or a voucher, and nothing is blocked. The existing **Budgets** page and the budget check when a voucher is posted keep working exactly as before.
+
+**Who uses it:** the finance manager, accountants and management.
+
+## Before you start
+
+1. An admin switches on **Budget analytics and expense control** in **Settings → Configuration → Finance**. It is off by default.
+2. Use the **Finance hubs** menu: **Budgets & Cash** then the tabs **Budget vs Actual (analytics)**, **Expense analysis** and **Expense controls** (they are listed first).
+3. You need permission to view finance reports. The CSV download also needs the finance report **export** permission.
+
+## Steps — budget vs actual
+
+1. Open **Finance → Budgets & Cash → Budget vs Actual (analytics)**.
+2. Choose the **Financial year** and, if you like, one **Budget** (default: all FINAL budgets of the year).
+3. Choose **Show by**: **Cost centre**, **Account**, **Month** or **Department**. Months follow your financial year.
+4. Read each row: **Budget**, **Actual**, **Variance** (budget − actual; a minus figure means over budget), **Used %** and the **Status** chip: **Within** (below 80%), **Warning** (80% or more), **Over** (100% or more), **Critical** (110% or more). A **—** in Used % means there is no budget for that row.
+5. The **Total** row at the bottom adds up every row.
+6. Click a row name (or **Total**) to open the **voucher lines** behind its Actual, 50 per page. The total of all lines is the same figure as in the table. Click a voucher number to open the voucher.
+7. Press **Export CSV** to download the same table.
+
+**Department view:** it uses the **department** written on each Finance **cost centre** (HR departments are not used). If no cost centre has a department, the page explains this instead of showing a table — fill in the department on **Finance Setup → Cost Centres** first.
+
+## Steps — expense analysis
+
+1. Open **Expense analysis** and choose a **Financial year** or **From** / **To** dates.
+2. Choose **Group by**: **Month**, **Account**, **Cost centre** or **Vendor**.
+3. Each row shows **Current**, **Previous** (the same length of time just before), **Change** and **Change %**. **—** means there was nothing in the previous period to compare with.
+4. **By expense class** adds up direct expenses, indirect expenses, purchases and cost of goods sold. Yellow **warnings** point at accounts that need a statement class.
+
+## Steps — expense controls
+
+1. Open **Expense controls** and choose the **As of** date.
+2. Each card is one check with its **severity** (High, Medium, Low), how many items it found and their amount:
+   - **Account spend far above its recent average** (more than 150% of the 3 months before),
+   - **Spend with no FINAL budget line**,
+   - **Same account, amount and party repeated within days**,
+   - **Expense lines without a cost centre**,
+   - **Budget lines at 80% / 100% / 110% or more**.
+3. Press **Show items** to see each item with its evidence (amounts, dates, months) and links to the vouchers.
+
+## Common problems
+
+- **The page says it is switched off** → ask an admin to turn on the setting above.
+- **"This view cannot be shown"** → read the message; for the department view, add departments to the cost centres.
+- **Export CSV is greyed out** → your role cannot export finance reports.
+- **Budget is 0 everywhere** → no FINAL budget covers that financial year.`,
+      tags: [
+        "budget",
+        "budget vs actual",
+        "variance",
+        "cost centre",
+        "department",
+        "expense analysis",
+        "expense control",
+        "drill-down",
+      ],
+      keywords: ["finance_budget_analytics_v2", "used percent", "over budget", "unbudgeted spend", "repeated amount", "missing cost centre"],
+      estimatedMinutes: 6,
+      lastUpdated: "2026-11-12",
+      audience: "finance",
+      infographics: [
+        {
+          type: "steps",
+          title: "Watch spending against the budget",
+          steps: [
+            { title: "Switch on", body: "Settings → Configuration → Finance → **Budget analytics and expense control**.", href: "/app/settings/config" },
+            { title: "Budget vs actual", body: "Budgets & Cash → **Budget vs Actual (analytics)**; click a row for its voucher lines.", href: "/app/finance/budget-analytics" },
+            { title: "Trends", body: "**Expense analysis** compares a period with the one before.", href: "/app/finance/expense-analysis" },
+            { title: "Alerts", body: "**Expense controls** lists spending that needs a second look.", href: "/app/finance/expense-controls" },
+          ],
+        },
+      ],
+      relatedAppRoutes: [
+        "/app/finance/planning",
+        "/app/finance/budget-analytics",
+        "/app/finance/expense-analysis",
+        "/app/finance/expense-controls",
+        "/app/accounts/budgets",
+      ],
+      relatedArticleIds: ["fin-overview", "fin-control-tower-profitability"],
+    },
+    {
+      id: "fin-ai-explain-report",
+      title: "Explain this report (AI)",
+      summary:
+        "A short written explanation of a finance report. AI is read-only and every number it uses is checked against the calculated report.",
+      content: `## Overview
+
+**Explain this report** writes a short explanation of the report you are looking at, for example *"Why did gross margin fall?"*. It appears on the Tally-style statements (Trial Balance, Balance Sheet, Profit & Loss, Cash Flow, Funds Flow, Ratio Analysis), the **Finance Control Tower**, **Budget vs Actual (analytics)** and **Expense analysis**.
+
+**AI is read-only.** It never posts, approves or changes anything. The system works out every figure first, the same way as the report itself, and the AI may only use those figures. **Every number in the answer is checked against the calculated report**; if a number cannot be checked, the AI answer is thrown away and a calculated explanation is shown instead.
+
+## Before you start
+
+1. An admin switches on **Explain this report (AI)** in **Settings → Configuration → Finance**. It is off by default.
+2. Your role needs permission to use finance AI. Without it you see *"You do not have permission to use finance AI"*.
+
+## Steps
+
+1. Open a report and choose its period as usual.
+2. Press **Explain this report**.
+3. Optional: type a **Question** (up to 300 characters) and choose **Compare with**: no comparison, the **previous period** or the **previous year**.
+4. Press **Explain**.
+5. Read the **summary** and the **findings**. Under each finding, small chips show the figures it used (name and value).
+6. The badge tells you who wrote it:
+   - **AI**: written by AI from the checked figures.
+   - **Calculated (no AI)**: written by the system from the same figures. The reason is shown in plain words (for example the AI service is not available or the company's AI budget is used up).
+7. When you change the report period, the old explanation is cleared; press **Explain** again.
+
+## Common problems
+
+- **No "Explain this report" button** → the setting is off, or this report is not covered.
+- **"You do not have permission to use finance AI"** → ask an admin for the finance AI permission.
+- **Always "Calculated (no AI)"** → the AI service or budget is not available; the calculated explanation is still correct.`,
+      tags: ["ai", "explain", "commentary", "finance ai", "statements", "control tower", "budget"],
+      keywords: ["finance_ai_insights_v2", "explain this report", "ai commentary", "why did margin fall"],
+      estimatedMinutes: 3,
+      lastUpdated: "2026-11-12",
+      audience: "finance",
+      infographics: [
+        {
+          type: "steps",
+          title: "Get a checked explanation",
+          steps: [
+            { title: "Switch on", body: "Settings → Configuration → Finance → **Explain this report (AI)**.", href: "/app/settings/config" },
+            { title: "Open a report", body: "For example **Profit & Loss**, then choose the period.", href: "/app/finance/statements/profit-loss" },
+            { title: "Explain", body: "Press **Explain this report**, add a question if you like, press **Explain**." },
+            { title: "Check the facts", body: "Each finding shows the figures it used; the badge says **AI** or **Calculated (no AI)**." },
+          ],
+        },
+      ],
+      relatedAppRoutes: [
+        "/app/finance/statements",
+        "/app/finance/statements/profit-loss",
+        "/app/finance/statements/balance-sheet",
+        "/app/finance/statements/trial-balance",
+        "/app/finance/home",
+        "/app/finance/budget-analytics",
+        "/app/finance/expense-analysis",
+      ],
+      relatedArticleIds: ["fin-tally-statements", "fin-control-tower-profitability", "fin-budget-analytics-expense-control"],
+    },
   ],
 };

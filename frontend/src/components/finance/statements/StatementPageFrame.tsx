@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { listPageRootClass } from "@/components/app/listPageLayout";
+import type { CommentaryPeriodQuery, CommentaryReport } from "@/api/financeAiInsights";
 import type { StatementEnvelope, StatementExportReport, StatementQuery } from "@/api/financeStatements";
+import { FinanceAiCommentaryPanel } from "@/components/finance/ai/FinanceAiCommentaryPanel";
 import type { StatementResource } from "@/hooks/useFinanceStatements";
 import { useStatementsEnabled } from "@/hooks/useFinanceStatements";
 import { StatementWarnings, ReconciliationBadge } from "./StatementBanners";
@@ -20,6 +22,8 @@ interface Props<T extends StatementEnvelope> {
   exportInfo?: { report: StatementExportReport; query: StatementQuery; fileBase: string };
   /** Hide the "Balanced" badge for reports that have no balance rule. */
   hideReconciliation?: boolean;
+  /** "Explain this report" (shown only while `finance_ai_insights_v2` is on). Leave out for reports AI does not cover. */
+  aiReport?: { report: CommentaryReport; period: CommentaryPeriodQuery };
   children: (data: T) => ReactNode;
 }
 
@@ -35,6 +39,7 @@ export function StatementPageFrame<T extends StatementEnvelope>({
   controls,
   exportInfo,
   hideReconciliation,
+  aiReport,
   children,
 }: Props<T>) {
   const enabled = useStatementsEnabled();
@@ -101,6 +106,7 @@ export function StatementPageFrame<T extends StatementEnvelope>({
                   {loading ? " · refreshing…" : ""}
                 </span>
               </div>
+              {aiReport ? <FinanceAiCommentaryPanel report={aiReport.report} period={aiReport.period} /> : null}
               <StatementWarnings warnings={data.warnings} />
               {children(data)}
             </>

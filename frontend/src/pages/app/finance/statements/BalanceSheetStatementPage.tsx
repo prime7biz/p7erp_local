@@ -30,6 +30,7 @@ export function BalanceSheetStatementPage() {
         description="Liabilities and assets as at a date. Inner amounts are ledgers, outer amounts are groups. Click a group or ledger to drill down."
         resource={resource}
         exportInfo={{ report: "balance-sheet", query, fileBase: `balance-sheet-${asOf}` }}
+        aiReport={{ report: "balance_sheet", period: { to_date: asOf } }}
         controls={<StatementPeriodPicker mode="as-of" value={asOf} onChange={setAsOf} />}
       >
         {(data) => (

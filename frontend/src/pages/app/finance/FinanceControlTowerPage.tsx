@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 import type { ControlCard, SeverityFilter } from "@/api/financeControl";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { FinanceAiCommentaryPanel } from "@/components/finance/ai/FinanceAiCommentaryPanel";
 import { listPageRootClass } from "@/components/app/listPageLayout";
 import { amountText, SEVERITY_CHIP, SEVERITY_LABEL } from "@/components/finance/control/controlLogic";
 import { ExceptionPanel } from "@/components/finance/control/ExceptionPanel";
@@ -96,6 +97,8 @@ export function FinanceControlTowerPage() {
               Refresh
             </button>
           </div>
+
+          <FinanceAiCommentaryPanel report="control_tower" period={{ to_date: asOf }} />
 
           {error ? (
             <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">

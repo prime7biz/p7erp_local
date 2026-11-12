@@ -35,6 +35,7 @@ export function TrialBalanceStatementPage() {
         description="Opening, period and closing balances by group and ledger. Click a group or ledger to see what is inside."
         resource={resource}
         exportInfo={{ report: "trial-balance", query, fileBase: `trial-balance-${resource.data?.period.fiscal_year ?? "report"}` }}
+        aiReport={{ report: "trial_balance", period: rangeQuery(period) }}
         controls={
           <div className="flex flex-wrap items-end gap-3">
             <StatementPeriodPicker mode="range" value={period} onChange={setPeriod} />

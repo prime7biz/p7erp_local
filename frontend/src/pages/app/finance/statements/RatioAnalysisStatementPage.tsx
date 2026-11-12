@@ -35,6 +35,7 @@ export function RatioAnalysisStatementPage() {
       resource={resource}
       hideReconciliation
       exportInfo={{ report: "ratio-analysis", query, fileBase: `ratio-analysis-${resource.data?.period.fiscal_year ?? "report"}` }}
+      aiReport={{ report: "ratio_analysis", period: query }}
       controls={<StatementPeriodPicker mode="range" value={period} onChange={setPeriod} />}
     >
       {(data) => (

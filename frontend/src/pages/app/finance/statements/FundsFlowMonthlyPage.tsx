@@ -27,6 +27,7 @@ export function FundsFlowMonthlyPage() {
         query: { fiscal_year: fiscalYear },
         fileBase: `funds-flow-${resource.data?.period.fiscal_year ?? "report"}`,
       }}
+      aiReport={{ report: "funds_flow_monthly", period: { fiscal_year: fiscalYear } }}
       controls={<StatementPeriodPicker mode="year" value={period} onChange={setPeriod} />}
     >
       {(data) => (

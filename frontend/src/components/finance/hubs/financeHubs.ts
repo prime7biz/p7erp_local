@@ -44,6 +44,22 @@ export function isFinanceControlTowerV2Enabled(featureFlags: FeatureFlags): bool
   return featureFlags?.[FINANCE_CONTROL_TOWER_FLAG] === true;
 }
 
+/** Budget analytics, expense analysis and expense controls (Finance modernization Phase 4), default OFF, strict true. */
+export const FINANCE_BUDGET_ANALYTICS_FLAG = "finance_budget_analytics_v2";
+
+/** True only for an explicit `true` (default OFF). */
+export function isFinanceBudgetAnalyticsV2Enabled(featureFlags: FeatureFlags): boolean {
+  return featureFlags?.[FINANCE_BUDGET_ANALYTICS_FLAG] === true;
+}
+
+/** "Explain this report" AI commentary (Finance modernization Phase 5), default OFF, strict true. */
+export const FINANCE_AI_INSIGHTS_FLAG = "finance_ai_insights_v2";
+
+/** True only for an explicit `true` (default OFF). */
+export function isFinanceAiInsightsV2Enabled(featureFlags: FeatureFlags): boolean {
+  return featureFlags?.[FINANCE_AI_INSIGHTS_FLAG] === true;
+}
+
 /** Profitability pages share one component with a start mode. */
 function profitabilityPage(defaultMode: "style" | "lc" | "variance"): () => HubPageModule {
   return () =>
@@ -130,6 +146,12 @@ const pages = {
     })),
   misCashScenarios: () =>
     import("@/pages/app/finance/mis/CashFlowScenarioPage").then((m) => ({ default: m.CashFlowScenarioPage })),
+  budgetAnalytics: () =>
+    import("@/pages/app/finance/budget/BudgetAnalyticsPage").then((m) => ({ default: m.BudgetAnalyticsPage })),
+  expenseAnalysis: () =>
+    import("@/pages/app/finance/budget/ExpenseAnalysisPage").then((m) => ({ default: m.ExpenseAnalysisPage })),
+  expenseControls: () =>
+    import("@/pages/app/finance/budget/ExpenseControlsPage").then((m) => ({ default: m.ExpenseControlsPage })),
   budgets: () => import("@/pages/app/BudgetsPage").then((m) => ({ default: m.BudgetsPage })),
   cashForecast: () => import("@/pages/app/CashForecastPage").then((m) => ({ default: m.CashForecastPage })),
   cashflowCalendar: () => import("@/pages/app/CashflowCalendarPage").then((m) => ({ default: m.CashflowCalendarPage })),
@@ -172,6 +194,7 @@ const pages = {
 const MIS_FLAG = "mis_reports_enabled";
 const STATEMENTS_FLAG = FINANCE_STATEMENTS_FLAG;
 const CONTROL_TOWER_FLAG = FINANCE_CONTROL_TOWER_FLAG;
+const BUDGET_ANALYTICS_FLAG = FINANCE_BUDGET_ANALYTICS_FLAG;
 const MIS_VIEW = "finance.mis_report.view";
 
 export const FINANCE_HUBS = [
@@ -416,10 +439,35 @@ export const FINANCE_HUBS = [
     id: "planning",
     path: "finance/planning",
     label: "Budgets & Cash",
-    description: "Budgets, the cash forecast and the cashflow calendar.",
+    description: "Budgets, budget analytics, expense analysis and controls, the cash forecast and the cashflow calendar.",
     icon: TrendingUp,
     permissionKey: "finance.access",
     tabs: [
+      // Budget analytics (tenant flag finance_budget_analytics_v2): read-only, listed first while the flag is on.
+      {
+        id: "budget-analytics",
+        label: "Budget vs Actual (analytics)",
+        legacyPath: "finance/budget-analytics",
+        load: pages.budgetAnalytics,
+        requiresFeatureFlag: BUDGET_ANALYTICS_FLAG,
+        permissionKey: MIS_VIEW,
+      },
+      {
+        id: "expense-analysis",
+        label: "Expense analysis",
+        legacyPath: "finance/expense-analysis",
+        load: pages.expenseAnalysis,
+        requiresFeatureFlag: BUDGET_ANALYTICS_FLAG,
+        permissionKey: MIS_VIEW,
+      },
+      {
+        id: "expense-controls",
+        label: "Expense controls",
+        legacyPath: "finance/expense-controls",
+        load: pages.expenseControls,
+        requiresFeatureFlag: BUDGET_ANALYTICS_FLAG,
+        permissionKey: MIS_VIEW,
+      },
       { id: "budgets", label: "Budgets", legacyPath: "accounts/budgets", load: pages.budgets },
       { id: "cash-forecast", label: "Cash Forecast", legacyPath: "finance/cash-forecast", load: pages.cashForecast },
       { id: "cashflow-calendar", label: "Cashflow Calendar", legacyPath: "cashflow/calendar", load: pages.cashflowCalendar },

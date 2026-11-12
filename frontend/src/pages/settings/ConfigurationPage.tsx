@@ -919,6 +919,48 @@ export function ConfigurationPage() {
               </span>
             </span>
           </label>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.finance_budget_analytics_v2 === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  finance_budget_analytics_v2: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Budget analytics and expense control</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Budgets &amp; Cash gets Budget vs Actual by cost centre, account and month with drill-down to vouchers,
+                monthly expense analysis and expense-control alerts (80 / 100 / 110% of budget, unusual increases,
+                unbudgeted spend, missing cost centre). Read-only; budget enforcement is unchanged. Off by default.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.finance_ai_insights_v2 === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  finance_ai_insights_v2: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Explain this report (AI)</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Adds an &quot;Explain this report&quot; button to Finance statements, the Control Tower and budget pages. Read-only;
+                every number the AI writes is checked against the calculated report, otherwise the calculated
+                explanation is shown. Users also need the AI finance read permission. Off by default.
+              </span>
+            </span>
+          </label>
               <span className="font-medium text-text-primary">Payroll four-eyes approval</span>
               <span className="mt-0.5 block text-xs text-text-muted">
                 The person who finalized a payroll run cannot approve it; a second admin or manager must. Needs at

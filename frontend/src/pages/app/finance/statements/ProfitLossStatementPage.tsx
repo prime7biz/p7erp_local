@@ -82,6 +82,7 @@ export function ProfitLossStatementPage() {
         description="Trading account (gross result) and Profit & Loss account (nett result) for a period. Click a group or ledger to drill down."
         resource={resource}
         exportInfo={{ report: "profit-loss", query, fileBase: `profit-loss-${resource.data?.period.fiscal_year ?? "report"}` }}
+        aiReport={{ report: "profit_loss", period: query }}
         controls={<StatementPeriodPicker mode="range" value={period} onChange={setPeriod} />}
       >
         {(data) => (

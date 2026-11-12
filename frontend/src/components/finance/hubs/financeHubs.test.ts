@@ -6,6 +6,8 @@ import type { Hub } from "@/components/app/hubs/types";
 import { filterVisibleMenuSections } from "@/components/shell/sidebarNavUtils";
 import {
   FINANCE_HUBS,
+  isFinanceAiInsightsV2Enabled,
+  isFinanceBudgetAnalyticsV2Enabled,
   isFinanceControlTowerV2Enabled,
   isFinanceHubsV2Enabled,
   isFinanceStatementsV2Enabled,
@@ -56,6 +58,10 @@ const EMBEDDABLE_ROUTES = [
   "finance/mis/comparative",
   "finance/mis/cash-scenarios",
   "accounts/budgets",
+  // Budget analytics (tenant flag finance_budget_analytics_v2): direct routes that also are Budgets & Cash hub tabs.
+  "finance/budget-analytics",
+  "finance/expense-analysis",
+  "finance/expense-controls",
   "finance/cash-forecast",
   "cashflow/calendar",
   "finance/style-profitability",
@@ -441,6 +447,69 @@ describe("Finance hub tabs", () => {
       expect(isFinanceControlTowerV2Enabled({ finance_control_tower_v2: true })).toBe(true);
       for (const flags of [undefined, null, {}, { finance_control_tower_v2: false }, { finance_control_tower_v2: "true" }]) {
         expect(isFinanceControlTowerV2Enabled(flags as never)).toBe(false);
+      }
+    });
+  });
+
+  describe("Budgets & Cash hub and finance_budget_analytics_v2", () => {
+    const planning = () => byId("planning");
+    type Flags = Record<string, boolean | string | number>;
+    const ids = (flags: Flags) => visibleHubTabs(planning(), flags).map((t) => t.id);
+    const labels = (flags: Flags) => visibleHubTabs(planning(), flags).map((t) => hubTabLabel(t, flags));
+
+    it("flag OFF keeps exactly the three existing tabs with their old names", () => {
+      const offFlags: Flags[] = [{}, { finance_budget_analytics_v2: false }, { finance_budget_analytics_v2: "true" }, { finance_budget_analytics_v2: 1 }];
+      for (const flags of offFlags) {
+        expect(ids(flags)).toEqual(["budgets", "cash-forecast", "cashflow-calendar"]);
+        expect(labels(flags)).toEqual(["Budgets", "Cash Forecast", "Cashflow Calendar"]);
+      }
+    });
+
+    it("flag ON lists the three analytics tabs first; the existing tabs are unchanged", () => {
+      const on = { finance_budget_analytics_v2: true };
+      expect(ids(on)).toEqual(["budget-analytics", "expense-analysis", "expense-controls", "budgets", "cash-forecast", "cashflow-calendar"]);
+      expect(labels(on)).toEqual([
+        "Budget vs Actual (analytics)",
+        "Expense analysis",
+        "Expense controls",
+        "Budgets",
+        "Cash Forecast",
+        "Cashflow Calendar",
+      ]);
+    });
+
+    it("the analytics tabs need the report-view permission; the existing tabs do not", () => {
+      const on = { finance_budget_analytics_v2: true };
+      expect(visibleHubTabs(planning(), on, (k) => k !== "finance.mis_report.view").map((t) => t.id)).toEqual([
+        "budgets",
+        "cash-forecast",
+        "cashflow-calendar",
+      ]);
+    });
+
+    it("the direct routes point at their own tabs", () => {
+      const target = (path: string) => findHubLegacyTarget(hubs, path)?.tab.id;
+      expect(target("finance/budget-analytics")).toBe("budget-analytics");
+      expect(target("finance/expense-analysis")).toBe("expense-analysis");
+      expect(target("finance/expense-controls")).toBe("expense-controls");
+      expect(target("accounts/budgets")).toBe("budgets");
+    });
+
+    it("palette rows follow the flag", () => {
+      const tabRows = (flags: Record<string, boolean>) =>
+        financeTabPaletteRoutes(flags).filter((r) => r.section === "Finance · Budgets & Cash").map((r) => r.href);
+      expect(tabRows({})).not.toContain("/app/finance/planning?tab=budget-analytics");
+      expect(tabRows({ finance_budget_analytics_v2: true })).toContain("/app/finance/planning?tab=budget-analytics");
+    });
+
+    it("only the exact value true counts as on (budget analytics and finance AI)", () => {
+      expect(isFinanceBudgetAnalyticsV2Enabled({ finance_budget_analytics_v2: true })).toBe(true);
+      expect(isFinanceAiInsightsV2Enabled({ finance_ai_insights_v2: true })).toBe(true);
+      for (const flags of [undefined, null, {}, { finance_budget_analytics_v2: false }, { finance_budget_analytics_v2: "true" }]) {
+        expect(isFinanceBudgetAnalyticsV2Enabled(flags as never)).toBe(false);
+      }
+      for (const flags of [undefined, null, {}, { finance_ai_insights_v2: false }, { finance_ai_insights_v2: "true" }]) {
+        expect(isFinanceAiInsightsV2Enabled(flags as never)).toBe(false);
       }
     });
   });

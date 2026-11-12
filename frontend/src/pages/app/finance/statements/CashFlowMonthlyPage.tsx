@@ -31,6 +31,7 @@ export function CashFlowMonthlyPage() {
           query: { fiscal_year: fiscalYear },
           fileBase: `cash-flow-${resource.data?.period.fiscal_year ?? "report"}`,
         }}
+        aiReport={{ report: "cash_flow_monthly", period: { fiscal_year: fiscalYear } }}
         controls={<StatementPeriodPicker mode="year" value={period} onChange={setPeriod} />}
       >
         {(data) => (

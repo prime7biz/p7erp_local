@@ -1341,6 +1341,31 @@ Each question needs a business answer before the named feature is accepted.
 24. **Should Finance Home be the first Finance link when hubs are enabled?**  
     Recommended default: yes; users land on exceptions, cash, profit and pending work rather than setup/transactions.
 
+### Decisions (owner, 2026-11-13): recommended defaults and standard (Tally-style) practice
+
+| # | Decision | Where it lives |
+|---|---|---|
+| 1 | Reports open on the tenant's own fiscal year (`fiscal_year_start_month`), year to date | statements, budget analytics |
+| 2 | Bank OD is in the cash pool (Cash Flow), in Loans (Liability) for TB / BS / Debt-Equity, outside working capital | `flow_common.py`, `constants.py` |
+| 3 | Standard classes filled automatically for system groups and Tally-style top-level groups; anything else stays Unclassified for a finance admin | `classification_rules.py`, `system_coa_templates.py` |
+| 3a | Bank ledgers (bank flag or bank-account link) count as Bank Accounts; the mapped cash-in-hand ledger as Cash-in-hand; never by name | `classification_service.py` |
+| 4 / 6 | Unidentified stock = Unclassified Stock; WIP from historical FIFO by stock nature | `stock_gl_service.py` |
+| 5 | P7 posts perpetual inventory: Trading / P&L from the ledger only; FIFO stock is a memo and a control check | `profit_loss_service.py` |
+| 7 | Working capital = Current Assets classes − Current Liabilities classes (BTB / EDF / packing credit / FOD / time loans are current, as in Tally) | `flow_common.py` |
+| 8 | "Due till today" and overdue cards: party ledgers when switched on, else outstanding bills; an explicit Settings choice wins | `resolve_finance_ar_ap_due_source` |
+| 9 | Vendor bill variance: informational above the greater of 2 % or BDT 500 | `control/constants.py` |
+| 10–14 | Profitability from explicit links only (order owns the line, LC rolls up orders, buyer = order customer, GL voucher date); no overhead allocation; purchases and COGS count as material | `profitability_service.py` |
+| 15 | Negative stock and stock-vs-ledger differences are alerts only | Control Tower |
+| 16 / 17 | Budget alerts at 80 / 100 / 110 %, informational; "department" = cost-centre department text | `budget_analytics/constants.py` |
+| 18 | Expense claims / petty cash: not built (a posting workflow needs its own CRITICAL plan) | — |
+| 19 | Statement class edits: admin / manager, audited | statements setup endpoints |
+| 20 | Classic reports stay as "(Classic)" until two month-ends reconcile | Statements hub |
+| 21 / 22 | AI via the tenant's approved provider; read-only; agents acknowledge only | `ai_insights/`, `governed_ai/` |
+| 23 | Amounts at 4 decimals; reconciliation uses the 0.01 posting tolerance and shows the exact difference | statements |
+| 24 | Finance Home (Control Tower) is the first Finance link | `financeHubs.ts` |
+| — | Operating Cost % = (Sales − Nett Profit) ÷ Sales (Tally) | `ratio_service.py` |
+| — | Unbalanced stored openings appear as "Difference in opening balances" on TB / BS with a warning (Tally) | `trial_balance_service.py`, `balance_sheet_service.py` |
+
 ## 8. Suggested implementation-agent build order
 
 ### Required sequence

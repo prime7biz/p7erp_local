@@ -13,7 +13,9 @@ as_of_date 2027-06-30. Hand-worked figures per source (base currency BDT):
                      | 50 due 09-01 (open only) | PAYABLE 900 due 06-29
                      -> debtors due 450 / open 500, creditors due 900 / open 900
                         Control Tower: receivables 2 / 450, payables 1 / 900
-Unset: ratio lines null + reason, Control Tower keeps outstanding_bills (AR 800 + USD in the count -> 2 / 800).
+Unset: the standard source is chosen automatically (`source_automatic` true): party_ledger when the tenant flag
+party_ledger_enabled is strictly true, else outstanding_bills (Control Tower: AR 800 + USD in the count -> 2 / 800,
+exactly as before). An explicit setting always wins.
 
 Run: docker compose exec -T backend pytest tests/test_finance_ar_ap_due_source.py -q
 """
@@ -27,8 +29,10 @@ import pytest
 
 from app.common.tenant_feature_keys import (
     FINANCE_AR_AP_DUE_SOURCE,
+    PARTY_LEDGER_ENABLED,
     get_finance_ar_ap_due_source,
     normalize_feature_flag_value,
+    resolve_finance_ar_ap_due_source,
 )
 from app.models.finance import BillReference, OutstandingBill
 from app.models.inventory import Vendor
@@ -105,8 +109,8 @@ async def _seed_sources(db, tenant_id: int, w: dict, scale: int = 1) -> None:
     await db.flush()
 
 
-async def _world(db, source: str | None = None):
-    flags = dict(CONTROL_FLAG)
+async def _world(db, source: str | None = None, *, extra_flags: dict | None = None):
+    flags = {**CONTROL_FLAG, **(extra_flags or {})}
     if source is not None:
         flags[FINANCE_AR_AP_DUE_SOURCE] = source
     tenant, user, w = await seed_world(db, flags=flags, permissions={"*": True})
@@ -152,19 +156,32 @@ EXPECTED_TOWER = {  # source -> ((receivables count, amount), (payables count, a
 
 
 @pytest.mark.asyncio
-async def test_unset_keeps_null_reason_and_outstanding_bills_cards(db_session_integration):
+@pytest.mark.parametrize(
+    "party_ledger_flag, expected_source",
+    [(None, "outstanding_bills"), (False, "outstanding_bills"), ("true", "outstanding_bills"), (True, "party_ledger")],
+)
+async def test_unset_uses_the_standard_source_automatically(db_session_integration, party_ledger_flag, expected_source):
     db = db_session_integration
-    tenant, user, _w = await _world(db)
+    extra = {} if party_ledger_flag is None else {PARTY_LEDGER_ENABLED: party_ledger_flag}
+    tenant, user, _w = await _world(db, extra_flags=extra)
     async with api_client(db, tenant, user) as ac:
         groups = await _due_groups(ac)
         cards = await _overdue_cards(ac)
-    for code in ("SUNDRY_DEBTORS_DUE", "SUNDRY_CREDITORS_DUE"):
-        g = groups[code]
-        assert g["amount"] is None and g["total_open"] is None and g["source"] is None
-        assert "open question 8" in g["reason"]
-    assert cards["OVERDUE_RECEIVABLES"]["source"] == "outstanding_bills"
-    assert (cards["OVERDUE_RECEIVABLES"]["count"], cards["OVERDUE_RECEIVABLES"]["amount"]) == (2, "800.0000")
-    assert (cards["OVERDUE_PAYABLES"]["count"], cards["OVERDUE_PAYABLES"]["amount"]) == (1, "500.0000")
+        drill = (await ac.get(f"{TOWER}/exceptions/OVERDUE_RECEIVABLES", params={"as_of_date": AS_OF, "limit": 50})).json()
+    debtors, creditors = groups["SUNDRY_DEBTORS_DUE"], groups["SUNDRY_CREDITORS_DUE"]
+    assert (debtors["amount"], debtors["total_open"], creditors["amount"], creditors["total_open"]) == EXPECTED_RATIO[expected_source]
+    for g in (debtors, creditors):
+        assert g["source"] == expected_source and g["source_automatic"] is True and g["reason"] is None
+        assert g["note"].startswith("Chosen automatically")
+    (rc, ra), (pc, pa) = EXPECTED_TOWER[expected_source]
+    for code, (count, amount) in (("OVERDUE_RECEIVABLES", (rc, ra)), ("OVERDUE_PAYABLES", (pc, pa))):
+        card = cards[code]
+        assert (card["count"], card["amount"]) == (count, amount)
+        assert card["source"] == expected_source and card["source_automatic"] is True
+        assert card["note"].startswith("Chosen automatically")
+    assert (drill["total"], drill["amount"], drill["source_automatic"]) == (rc, ra, True)
+    if expected_source == "outstanding_bills":  # unchanged Control Tower behaviour: USD bill counted, not summed
+        assert "1 foreign-currency bill(s) are in the count" in cards["OVERDUE_RECEIVABLES"]["note"]
 
 
 @pytest.mark.asyncio
@@ -181,6 +198,8 @@ async def test_each_source_drives_ratio_and_control_tower(db_session_integration
     assert (debtors["amount"], debtors["total_open"], creditors["amount"], creditors["total_open"]) == EXPECTED_RATIO[source]
     assert debtors["dr_cr"] == "Dr" and creditors["dr_cr"] == "Cr"
     assert debtors["source"] == creditors["source"] == source and debtors["reason"] is None
+    assert debtors["source_automatic"] is False and "Chosen automatically" not in debtors["note"]
+    assert cards["OVERDUE_RECEIVABLES"]["source_automatic"] is False
     assert "no history" in debtors["note"]
     if source == "outstanding_bills":
         assert "1 open foreign-currency bill" in debtors["note"]
@@ -203,8 +222,29 @@ async def test_switching_source_changes_figures_in_place(db_session_integration)
         assert (await _due_groups(ac))["SUNDRY_DEBTORS_DUE"]["amount"] == "1000.0000"
         await _set_source(db, tenant, "bill_references")
         assert (await _due_groups(ac))["SUNDRY_DEBTORS_DUE"]["amount"] == "450.0000"
-        await _set_source(db, tenant, None)
-        assert (await _due_groups(ac))["SUNDRY_DEBTORS_DUE"]["amount"] is None
+        await _set_source(db, tenant, None)  # back to automatic: party ledger is off here -> outstanding_bills
+        unset = (await _due_groups(ac))["SUNDRY_DEBTORS_DUE"]
+        assert (unset["amount"], unset["source"], unset["source_automatic"]) == ("800.0000", "outstanding_bills", True)
+
+
+@pytest.mark.asyncio
+async def test_explicit_setting_wins_over_party_ledger_default(db_session_integration):
+    db = db_session_integration
+    tenant, user, _w = await _world(db, "bill_references", extra_flags={PARTY_LEDGER_ENABLED: True})
+    async with api_client(db, tenant, user) as ac:
+        debtors = (await _due_groups(ac))["SUNDRY_DEBTORS_DUE"]
+    assert (debtors["amount"], debtors["source"], debtors["source_automatic"]) == ("450.0000", "bill_references", False)
+
+
+def test_resolver_defaults():
+    assert resolve_finance_ar_ap_due_source(None) == ("outstanding_bills", True)
+    assert resolve_finance_ar_ap_due_source({}) == ("outstanding_bills", True)
+    assert resolve_finance_ar_ap_due_source({PARTY_LEDGER_ENABLED: "true"}) == ("outstanding_bills", True)
+    assert resolve_finance_ar_ap_due_source({PARTY_LEDGER_ENABLED: True}) == ("party_ledger", True)
+    assert resolve_finance_ar_ap_due_source({FINANCE_AR_AP_DUE_SOURCE: "gl", PARTY_LEDGER_ENABLED: True}) == ("party_ledger", True)
+    assert resolve_finance_ar_ap_due_source(
+        {FINANCE_AR_AP_DUE_SOURCE: "outstanding_bills", PARTY_LEDGER_ENABLED: True}
+    ) == ("outstanding_bills", False)
 
 
 def test_getter_and_write_validation():

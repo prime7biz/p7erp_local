@@ -40,7 +40,11 @@ from app.modules.finance.statements.profit_loss_service import (
 )
 from app.modules.finance.statements.trial_balance_service import build_trial_balance
 from app.modules.finance.system_coa_seeding_service import seed_tenant_system_coa
-from app.modules.finance.system_coa_templates import SYSTEM_ACCOUNT_GROUPS, SYSTEM_GROUP_STATEMENT_CLASS
+from app.modules.finance.system_coa_templates import (
+    SYSTEM_ACCOUNT_GROUPS,
+    SYSTEM_GROUP_STATEMENT_CLASS,
+    SYSTEM_GROUP_STATEMENT_CLASS_STANDARD,
+)
 from tests.benchmark_fixtures import api_client
 from tests.finance_statement_fixtures import D, make_group, make_ledger, post, seed_noise_tenant, seed_world
 from tests.test_perf_inventory_reports_equivalence import QueryCounter
@@ -579,9 +583,12 @@ def test_template_classes_match_migration_and_allowlist():
     assert set(SYSTEM_GROUP_STATEMENT_CLASS) <= codes
     assert set(SYSTEM_GROUP_STATEMENT_CLASS.values()) <= K.STATEMENT_CLASS_SET
     unclassified = {g["system_code"] for g in SYSTEM_ACCOUNT_GROUPS if "statement_class" not in g}
-    assert unclassified == {
-        "CASH_AND_BANK", "TRADE_FINANCE_LIABILITIES", "DEFERRED_LIABILITIES", "SERVICE_REVENUE_GROUP", "CONTROL_ACCOUNTS",
+    assert unclassified == {"CONTROL_ACCOUNTS"}  # memorandum: a finance admin reviews it
+    assert set(SYSTEM_GROUP_STATEMENT_CLASS_STANDARD) == {
+        "CASH_AND_BANK", "TRADE_FINANCE_LIABILITIES", "DEFERRED_LIABILITIES", "SERVICE_REVENUE_GROUP",
     }
+    assert not set(SYSTEM_GROUP_STATEMENT_CLASS) & set(SYSTEM_GROUP_STATEMENT_CLASS_STANDARD)
+    assert set(SYSTEM_GROUP_STATEMENT_CLASS_STANDARD.values()) <= K.STATEMENT_CLASS_SET
     assert {c for _code, _nat, c in mig.TALLY_SEED_CODE_CLASS} <= K.STATEMENT_CLASS_SET
     stock = _load_migration("294_stock_group_stock_nature.py")
     assert tuple(stock.ALLOWED) == K.STOCK_NATURES
@@ -598,8 +605,9 @@ async def test_new_tenants_get_classified_system_groups_and_db_rejects_bad_value
     ))).all()
     got = {code: cls for code, cls in rows}
     assert len(got) == len(SYSTEM_ACCOUNT_GROUPS)
-    assert {c: v for c, v in got.items() if v} == SYSTEM_GROUP_STATEMENT_CLASS
-    assert got["RAW_MATERIAL_COGS"] == "COGS" and got["CASH_AND_BANK"] is None
+    assert {c: v for c, v in got.items() if v} == {**SYSTEM_GROUP_STATEMENT_CLASS, **SYSTEM_GROUP_STATEMENT_CLASS_STANDARD}
+    assert got["RAW_MATERIAL_COGS"] == "COGS" and got["CASH_AND_BANK"] == "BANK_ACCOUNTS"
+    assert got["CONTROL_ACCOUNTS"] is None
 
     group = await make_group(db, tenant.id, "Constraint probe", "Asset")
     with pytest.raises(IntegrityError):

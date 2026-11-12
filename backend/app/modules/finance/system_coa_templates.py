@@ -38,9 +38,8 @@ def _nb_for_nature(nature: str) -> str:
     return "debit"
 
 
-# Statement class per system group (PLAN 2A). Groups missing here stay Unclassified on purpose (mixed or
-# ambiguous content): CASH_AND_BANK (cash + bank ledgers), TRADE_FINANCE_LIABILITIES, DEFERRED_LIABILITIES,
-# SERVICE_REVENUE_GROUP, CONTROL_ACCOUNTS. Migration 293 carries its own frozen copy of this map.
+# Statement class per system group (PLAN 2A). Migration 293 carries its own frozen copy of this map, so it must
+# not change; the classes approved later live in SYSTEM_GROUP_STATEMENT_CLASS_STANDARD below.
 SYSTEM_GROUP_STATEMENT_CLASS: dict[str, str] = {
     "TRADE_RECEIVABLES": "SUNDRY_DEBTORS",
     "OTHER_RECEIVABLES": "CURRENT_ASSETS",
@@ -86,6 +85,25 @@ SYSTEM_GROUP_STATEMENT_CLASS: dict[str, str] = {
     "NON_OPERATING_INCOME": "INDIRECT_INCOMES",
 }
 
+# Standard (Tally-style) classes for the remaining system groups, approved after migration 293 (so not in its frozen
+# map). New tenants get them at seeding; existing tenants via `scripts/finance_classify_groups.py`.
+# CASH_AND_BANK holds cash + bank ledgers: the group is BANK_ACCOUNTS and the ledger-level rule
+# (`statements/classification_service.resolve_ledger_class`) moves the system cash ledger to CASH_IN_HAND.
+# Trade finance (BTB / EDF / packing credit / FOD / time loans) sits under Current Liabilities as in the Tally sample.
+# CONTROL_ACCOUNTS (memorandum) stays Unclassified: a finance admin reviews it.
+SYSTEM_GROUP_STATEMENT_CLASS_STANDARD: dict[str, str] = {
+    "CASH_AND_BANK": "BANK_ACCOUNTS",
+    "TRADE_FINANCE_LIABILITIES": "CURRENT_LIABILITIES",
+    "DEFERRED_LIABILITIES": "CURRENT_LIABILITIES",
+    "SERVICE_REVENUE_GROUP": "SALES_ACCOUNTS",
+}
+CONTROL_ACCOUNTS_SYSTEM_CODE = "CONTROL_ACCOUNTS"
+
+
+def system_group_class(system_code: str) -> str | None:
+    """Statement class a NEW system group is seeded with (None = Unclassified)."""
+    return SYSTEM_GROUP_STATEMENT_CLASS.get(system_code) or SYSTEM_GROUP_STATEMENT_CLASS_STANDARD.get(system_code)
+
 
 def _g(
     system_code: str,
@@ -116,7 +134,7 @@ def _g(
         "is_summary_group": is_summary_group,
         "description": description or f"System group: {name}",
     }
-    statement_class = SYSTEM_GROUP_STATEMENT_CLASS.get(system_code)
+    statement_class = system_group_class(system_code)
     if statement_class:
         out["statement_class"] = statement_class
     return out

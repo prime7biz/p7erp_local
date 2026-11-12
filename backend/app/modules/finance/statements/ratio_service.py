@@ -1,4 +1,4 @@
-"""Ratio Analysis (REFERENCE_REPORTS.md section 6, PLAN acceptance 2.9). SQL: 6 statements, 7 with a due source (limit 10).
+"""Ratio Analysis (REFERENCE_REPORTS.md section 6, PLAN acceptance 2.9). SQL: 7 statements (limit 10).
 
 Balance-sheet figures are the GL balances at `to_date`; income-statement figures cover from_date..to_date.
 Nett / gross result come from the P&L service (GL only, perpetual COGS). A ratio whose denominator is zero returns
@@ -8,14 +8,15 @@ Formulas (all on the figures above; CA / CL / Stock as in `flow_common`):
   Working Capital          = CA - CL                      Current Ratio   = CA : CL
   Quick Ratio              = (CA - Stock) : CL             Debt/Equity     = Loans (Liability) : (Capital + Nett Profit)
   Gross Profit %           = Gross result / Sales * 100    Nett Profit %   = Nett result / Sales * 100
-  Operating Cost %         = (Direct + Indirect Expenses) / Sales * 100      (assumption, numerator shown)
+  Operating Cost %         = (Sales - Nett result) / Sales * 100 = 100 - Nett Profit %   (Tally definition;
+                             reference sample: Nett Profit % (-)84.88 % -> Operating Cost % 184.88 %)
   Receivable Turnover days = Sundry Debtors / Sales * days in period
   ROI %                    = Nett / (Capital + Nett) * 100  Return on WC % = Nett / Working Capital * 100
   WC Turnover              = Sales / Working Capital        Inventory Turnover = Sales / Closing Stock
 Loans (Liability) = LONG_TERM_LOANS + SHORT_TERM_BORROWINGS + BANK_OD (credit balances positive).
-"Due till today" for debtors / creditors needs one authoritative bill-wise source (PLAN open question 8). Until the
-tenant setting `finance_ar_ap_due_source` names one, those two lines return null with a reason; once set, they show
-the bills due on or before the to-date (plus `total_open`) from that source (`ar_ap_due_service`, +1 statement).
+"Due till today" for debtors / creditors: the bills due on or before the to-date (plus `total_open`) from the
+tenant setting `finance_ar_ap_due_source`, or, when unset, the standard bill-wise source chosen automatically
+(`source_automatic` true; `ar_ap_due_service`, 1 statement).
 """
 
 from __future__ import annotations
@@ -34,8 +35,6 @@ from app.modules.finance.statements.constants import (
     BANK_OD,
     CAPITAL_ACCOUNT,
     CASH_IN_HAND,
-    DIRECT_EXPENSES,
-    INDIRECT_EXPENSES,
     LONG_TERM_LOANS,
     PRIMARY_UNCLASSIFIED,
     PURCHASE_ACCOUNTS,
@@ -99,7 +98,14 @@ def _due_group(code: str, label: str, due: ArApDue | None, *, credit_normal: boo
         return PrincipalGroup(code=code, label=label, reason=DUE_REASON)
     amount, total_open = (due.creditors_due, due.creditors_open) if credit_normal else (due.debtors_due, due.debtors_open)
     group = _group(code, label, amount, credit_normal=credit_normal)
-    return group.model_copy(update={"total_open": q4(total_open), "source": due.source, "note": due.note})
+    return group.model_copy(
+        update={
+            "total_open": q4(total_open),
+            "source": due.source,
+            "source_automatic": due.automatic,
+            "note": due.note,
+        }
+    )
 
 
 async def build_ratio_analysis(
@@ -128,10 +134,10 @@ async def build_ratio_analysis(
     capital = -bs_net(CAPITAL_ACCOUNT)
     sales = -pl_debit(SALES_ACCOUNTS)
     purchases = pl_debit(PURCHASE_ACCOUNTS)
-    operating_cost = pl_debit(DIRECT_EXPENSES, INDIRECT_EXPENSES)
 
     gross = pnl.trading.gross_result.amount * (1 if pnl.trading.gross_result.kind == "profit" else -1)
     nett = pnl.profit_and_loss.nett_result.amount * (1 if pnl.profit_and_loss.nett_result.kind == "profit" else -1)
+    operating_cost = sales - nett
     equity = capital + nett
     days = Decimal((to_date - from_date).days + 1)
 

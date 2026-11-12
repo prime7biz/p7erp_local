@@ -11,7 +11,8 @@ Only bills with a positive open amount count. A bill without a due date is due o
 The sources keep only the CURRENT open amount (no history), so for a past as-of date the figures are today's open
 amounts of the bills dated on or before that date.
 
-Unset: callers keep their old behaviour (Ratio Analysis shows null + reason; the Control Tower uses outstanding_bills).
+Unset: the standard bill-wise source is used automatically (party_ledger when `party_ledger_enabled` is strictly
+true, else outstanding_bills; `resolve_finance_ar_ap_due_source`) and the result says so (`automatic`, note).
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ from app.common.tenant_feature_keys import (
     AR_AP_DUE_SOURCE_BILL_REFERENCES,
     AR_AP_DUE_SOURCE_OUTSTANDING_BILLS,
     AR_AP_DUE_SOURCE_PARTY_LEDGER,
-    get_finance_ar_ap_due_source,
+    resolve_finance_ar_ap_due_source,
 )
 from app.models.finance import BillReference, OutstandingBill
 from app.models.party_ledger import PartyLedger, PartyLedgerBill
@@ -53,6 +54,14 @@ SOURCE_NOTES = {
     ),
 }
 HISTORY_NOTE = "Open amounts are current (the source keeps no history); bills dated after the as-of date are left out."
+AUTOMATIC_NOTE = (
+    "Chosen automatically (no AR/AP source set in Settings): the party ledger when it is switched on, "
+    "else outstanding bills."
+)
+
+
+def with_automatic_note(note: str, automatic: bool) -> str:
+    return f"{AUTOMATIC_NOTE} {note}" if automatic else note
 
 
 def _q(value) -> Decimal:
@@ -68,6 +77,7 @@ class ArApDue:
     creditors_open: Decimal
     foreign_bills: int  # outstanding_bills only: open foreign-currency bills left out of the amounts
     note: str
+    automatic: bool = False  # True = no setting chosen, the standard source was used
 
 
 def _source_parts(tenant: Tenant, source: str):
@@ -115,14 +125,12 @@ def _from_table(source: str):
     }[source]
 
 
-async def ar_ap_due_totals(db: AsyncSession, tenant: Tenant, *, as_of: date) -> ArApDue | None:
-    """Debtors / creditors due on or before `as_of` and total open, from the chosen source. One SQL statement.
+async def ar_ap_due_totals(db: AsyncSession, tenant: Tenant, *, as_of: date) -> ArApDue:
+    """Debtors / creditors due on or before `as_of` and total open, from the chosen (or automatic) source.
 
-    None when the tenant has not chosen a source.
+    One SQL statement.
     """
-    source = get_finance_ar_ap_due_source(tenant.feature_flags)
-    if source is None:
-        return None
+    source, automatic = resolve_finance_ar_ap_due_source(tenant.feature_flags)
     open_amt, due, bill_date, side, join, conds, currency = _source_parts(tenant, source)
     base_ccy = (tenant.base_currency or "BDT").upper()
     in_base = func.upper(currency) == base_ccy if currency is not None else true()
@@ -159,7 +167,8 @@ async def ar_ap_due_totals(db: AsyncSession, tenant: Tenant, *, as_of: date) -> 
         creditors_due=_q(c_due),
         creditors_open=_q(c_open),
         foreign_bills=int(foreign_count or 0),
-        note=note,
+        note=with_automatic_note(note, automatic),
+        automatic=automatic,
     )
 
 

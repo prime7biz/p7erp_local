@@ -105,6 +105,7 @@ class PrincipalGroup(BaseModel):
     # "Due till today" lines only (tenant setting finance_ar_ap_due_source): all open bills, the source and caveats.
     total_open: OptMoney = None
     source: str | None = None
+    source_automatic: bool | None = None  # True = no setting chosen; the standard source was used
     note: str | None = None
 
 

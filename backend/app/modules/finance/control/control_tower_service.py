@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.tenant_feature_keys import (
     AR_AP_DUE_SOURCE_BILL_REFERENCES,
     AR_AP_DUE_SOURCE_PARTY_LEDGER,
-    get_finance_ar_ap_due_source,
+    resolve_finance_ar_ap_due_source,
 )
 from app.database import safe_async_session_rollback
 from app.models.finance import Budget, OutstandingBill, Voucher, VoucherLine
@@ -57,7 +57,7 @@ from app.modules.finance.control.constants import (
 from app.modules.finance.control.schemas import ControlCard, ControlTowerResponse, ExceptionListResponse, ExceptionRow
 from app.modules.finance.fiscal_year import fiscal_year_bounds, fy_start_month
 from app.modules.finance.posting_core import line_base_amount_sql
-from app.modules.finance.statements.ar_ap_due_service import SOURCE_NOTES, overdue_select
+from app.modules.finance.statements.ar_ap_due_service import SOURCE_NOTES, overdue_select, with_automatic_note
 from app.modules.finance.statements.constants import BANK_ACCOUNTS, CASH_IN_HAND
 from app.modules.finance.statements.ledger_aggregate_service import build_ledger_calcs
 from app.modules.finance.statements.stock_gl_service import build_stock_gl
@@ -88,6 +88,7 @@ class CardResult:
     oldest: date | None = None
     rows: list[dict] = field(default_factory=list)  # standard row dicts (only when a page was requested)
     source: str | None = None
+    source_automatic: bool | None = None  # overdue cards: True = no AR/AP source set, the standard one was used
     note: str | None = None
     flagged: int = 0  # rows carrying a currency_note (amount used at rate 1 because the rate is missing)
 
@@ -304,12 +305,13 @@ async def _vendor_bill_variance(db, tenant: Tenant, as_of: date, limit: int, off
 
 
 async def _overdue(db, tenant: Tenant, as_of: date, limit: int, offset: int, *, bill_type: str) -> CardResult:
-    source = get_finance_ar_ap_due_source(tenant.feature_flags)
+    source, automatic = resolve_finance_ar_ap_due_source(tenant.feature_flags)
     if source in (AR_AP_DUE_SOURCE_PARTY_LEDGER, AR_AP_DUE_SOURCE_BILL_REFERENCES):
         base = overdue_select(tenant, source, as_of=as_of, bill_type=bill_type)
         result = await _sql_card(db, base, as_of=as_of, limit=limit, offset=offset)
         result.source = source
-        result.note = SOURCE_NOTES[source]
+        result.source_automatic = automatic
+        result.note = with_automatic_note(SOURCE_NOTES[source], automatic)
         return result
     base_ccy = (tenant.base_currency or "BDT").upper()
     due = OutstandingBill.amount - OutstandingBill.paid_amount
@@ -332,14 +334,16 @@ async def _overdue(db, tenant: Tenant, as_of: date, limit: int, offset: int, *, 
     ).where(*conds)
     result = await _sql_card(db, base, as_of=as_of, limit=limit, offset=offset)
     result.source = OVERDUE_SOURCE
+    result.source_automatic = automatic
     foreign = (
         await db.execute(
             select(func.count()).select_from(OutstandingBill).where(*conds, func.upper(OutstandingBill.currency) != base_ccy)
         )
     ).scalar_one()
-    result.note = (
+    result.note = with_automatic_note(
         f"Source: {OVERDUE_SOURCE}. Amount counts only {base_ccy} bills"
-        + (f"; {int(foreign)} foreign-currency bill(s) are in the count but not in the amount." if foreign else ".")
+        + (f"; {int(foreign)} foreign-currency bill(s) are in the count but not in the amount." if foreign else "."),
+        automatic,
     )
     return result
 
@@ -577,6 +581,7 @@ def _card(code: str, result: CardResult | None, *, failed: bool = False) -> Cont
         oldest_date=result.oldest,
         href=HREF_TEMPLATE.format(code=code),
         source=result.source,
+        source_automatic=result.source_automatic,
         note="This check could not be calculated; it is not shown as zero exceptions." if failed else result.note,
     )
 
@@ -629,6 +634,7 @@ async def build_exception_list(
         limit=limit,
         offset=offset,
         source=result.source,
+        source_automatic=result.source_automatic,
         note=result.note,
         rows=[ExceptionRow(**r) for r in result.rows],
     )

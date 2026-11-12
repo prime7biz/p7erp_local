@@ -8,7 +8,9 @@ Rules (same as the classic reports, plus the reversal note below):
   original's book impact and posts the opposite voucher, so both are needed for the net to be zero (and to
   equal chart_of_accounts.balance). DRAFT / CANCELLED vouchers never count;
 - opening = chart_of_accounts.opening_balance (stored in the account's normal direction) + all movement
-  before `from_date`.
+  before `from_date`;
+- a ledger's class = its group's effective class, then the ledger-level cash / bank rule
+  (`classification_service.resolve_ledger_class`).
 
 Signs: every "net" in this package is debit minus credit (debit positive).
 """
@@ -28,7 +30,13 @@ from app.modules.finance.advanced_voucher_service import (
     voucher_in_books_clause,
 )
 from app.modules.finance.posting_core import line_base_amount_sql
-from app.modules.finance.statements.classification_service import GroupInfo, load_group_classification
+from app.modules.finance.statements.classification_service import (
+    GroupInfo,
+    ledger_is_bank_sql,
+    ledger_is_cash_sql,
+    load_group_classification,
+    resolve_ledger_class,
+)
 from app.modules.finance.statements.constants import (
     CLASS_TO_PRIMARY,
     PL_NATURES,
@@ -150,6 +158,8 @@ async def build_ledger_calcs(
             func.coalesce(lines.c.mid, 0),
             func.coalesce(lines.c.pdr, 0),
             func.coalesce(lines.c.pcr, 0),
+            ledger_is_bank_sql(tenant_id),
+            ledger_is_cash_sql(tenant_id),
         )
         .outerjoin(lines, lines.c.account_id == ChartOfAccount.id)
         .where(ChartOfAccount.tenant_id == tenant_id)
@@ -157,9 +167,12 @@ async def build_ledger_calcs(
     )
 
     calcs: list[LedgerCalc] = []
-    for account_id, number, name, group_id, opening, pre_fy, mid, pdr, pcr in (await db.execute(stmt)).all():
+    rows = (await db.execute(stmt)).all()
+    for account_id, number, name, group_id, opening, pre_fy, mid, pdr, pcr, is_bank, is_cash in rows:
         group = groups.get(group_id)
-        eff = group.effective_class if group else None
+        eff = resolve_ledger_class(
+            group.effective_class if group else None, is_bank=bool(is_bank), is_cash=bool(is_cash)
+        )
         if eff is not None:
             is_pl = eff in PROFIT_LOSS_CLASSES
             primary = CLASS_TO_PRIMARY[eff]

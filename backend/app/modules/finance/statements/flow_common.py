@@ -1,7 +1,8 @@
 """Shared pieces of the monthly Cash Flow and Funds Flow reports.
 
 Definitions (PLAN section 5; Bank OD has three treatments and this module is only the Cash Flow / Funds Flow part):
-- cash pool        = ledgers whose effective class is CASH_IN_HAND, BANK_ACCOUNTS or BANK_OD (signed, debit minus credit);
+- cash pool        = ledgers whose resolved class (group class + ledger-level cash / bank rule) is CASH_IN_HAND,
+                     BANK_ACCOUNTS or BANK_OD (signed, debit minus credit);
 - working capital  = Current Assets primary group (CASH_IN_HAND, BANK_ACCOUNTS, STOCK_IN_HAND, SUNDRY_DEBTORS,
                      CURRENT_ASSETS) minus CURRENT_LIABILITIES + SUNDRY_CREDITORS. BANK_OD, SHORT_TERM_BORROWINGS and
                      unclassified groups are NOT in working capital.

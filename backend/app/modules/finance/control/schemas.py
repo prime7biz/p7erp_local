@@ -24,6 +24,7 @@ class ControlCard(BaseModel):
     oldest_date: date | None = None
     href: str
     source: str | None = None  # where the numbers come from, when it matters (e.g. outstanding_bills)
+    source_automatic: bool | None = None  # overdue cards: True = no AR/AP source set, the standard one was used
     note: str | None = None  # plain-language caveat (e.g. foreign-currency rows left out of the amount)
 
 
@@ -57,6 +58,7 @@ class ExceptionListResponse(BaseModel):
     limit: int
     offset: int
     source: str | None = None
+    source_automatic: bool | None = None
     note: str | None = None
     rows: list[ExceptionRow]
 

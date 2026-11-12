@@ -19,15 +19,20 @@ from app.models.tenant import Tenant
 from app.modules.finance.fiscal_year import fiscal_year_bounds, fy_start_month
 from app.modules.finance.posting_core import line_base_amount_sql
 from app.modules.finance.statements.cash_flow_service import (
+    cash_pool_clause,
     fiscal_year_range,
     parse_month,
     pool_month_flows,
 )
-from app.modules.finance.statements.classification_service import GroupInfo, load_group_classification
+from app.modules.finance.statements.classification_service import (
+    GroupInfo,
+    ledger_is_bank_sql,
+    ledger_is_cash_sql,
+    load_group_classification,
+    resolve_ledger_class,
+)
 from app.modules.finance.statements.flow_common import (
-    CASH_POOL_CLASSES,
     ZERO,
-    group_ids_for,
     q4,
     voucher_statement_clause,
 )
@@ -251,20 +256,24 @@ async def drill_cash_flow_month(
     fy_start, fy_end, _fy = fiscal_year_range(tenant, fiscal_year, today)
     span = parse_month(month, fy_start)
     groups = await load_group_classification(db, tenant.id)
-    pool_ids = group_ids_for(groups, CASH_POOL_CLASSES)
-    flows = (await pool_month_flows(db, tenant.id, pool_ids, span.start, span.end)).get(span.ym)
+    pool = cash_pool_clause(groups, tenant.id)
+    flows = (await pool_month_flows(db, tenant.id, pool, span.start, span.end)).get(span.ym)
     inflow, outflow, contra = (flows.inflow, flows.outflow, flows.contra) if flows else (ZERO, ZERO, ZERO)
 
     ledgers: list[DrillCashLedger] = []
-    if pool_ids:
+    if pool is not None:
         amount = line_base_amount_sql()
         is_debit = func.upper(VoucherLine.entry_type) == "DEBIT"
+        is_bank = ledger_is_bank_sql(tenant.id).label("is_bank")
+        is_cash = ledger_is_cash_sql(tenant.id).label("is_cash")
         rows = (
             await db.execute(
                 select(
                     ChartOfAccount.id,
                     ChartOfAccount.name,
                     ChartOfAccount.group_id,
+                    is_bank,
+                    is_cash,
                     func.coalesce(func.sum(case((is_debit, amount), else_=0)), 0),
                     func.coalesce(func.sum(case((~is_debit, amount), else_=0)), 0),
                 )
@@ -275,7 +284,7 @@ async def drill_cash_flow_month(
                     VoucherLine.tenant_id == tenant.id,
                     Voucher.tenant_id == tenant.id,
                     ChartOfAccount.tenant_id == tenant.id,
-                    ChartOfAccount.group_id.in_(pool_ids),
+                    pool,
                     Voucher.voucher_date >= span.start,
                     Voucher.voucher_date <= span.end,
                     voucher_statement_clause(),
@@ -286,9 +295,15 @@ async def drill_cash_flow_month(
         ).all()
         ledgers = [
             DrillCashLedger(
-                account_id=aid, name=name, statement_class=groups[gid].effective_class, debit=q4(d), credit=q4(c)
+                account_id=aid,
+                name=name,
+                statement_class=resolve_ledger_class(
+                    groups[gid].effective_class if gid in groups else None, is_bank=bool(bk), is_cash=bool(cs)
+                ),
+                debit=q4(d),
+                credit=q4(c),
             )
-            for aid, name, gid, d, c in rows
+            for aid, name, gid, bk, cs, d, c in rows
         ]
     total_debit = sum((x.debit for x in ledgers), ZERO)
     total_credit = sum((x.credit for x in ledgers), ZERO)

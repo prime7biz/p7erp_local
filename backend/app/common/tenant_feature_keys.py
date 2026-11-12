@@ -458,6 +458,17 @@ def get_finance_ar_ap_due_source(feature_flags: Any) -> str | None:
     return None
 
 
+def resolve_finance_ar_ap_due_source(feature_flags: Any) -> tuple[str, bool]:
+    """(source, automatic). The explicit setting wins; unset = party_ledger when the party ledger is strictly on,
+    else outstanding_bills (the standard bill-wise source of each setup)."""
+    explicit = get_finance_ar_ap_due_source(feature_flags)
+    if explicit is not None:
+        return explicit, False
+    if is_party_ledger_enabled(feature_flags):
+        return AR_AP_DUE_SOURCE_PARTY_LEDGER, True
+    return AR_AP_DUE_SOURCE_OUTSTANDING_BILLS, True
+
+
 
 
 def is_gst_system_enabled(feature_flags: Any) -> bool:
@@ -732,6 +743,7 @@ def get_eoq_holding_cost_rate(feature_flags: Any, default: float = 0.10) -> floa
 # ``get_tenant_rbac_mode`` keep tolerating legacy non-canonical values for
 # backward compatibility, but new writes must be canonical.
 ENUM_FEATURE_FLAG_VALUES: dict[str, frozenset[str]] = {
+    FINANCE_AR_AP_DUE_SOURCE: frozenset(FINANCE_AR_AP_DUE_SOURCES),
     RBAC_ENFORCEMENT: frozenset(RBAC_MODES),
     BUDGET_ENFORCEMENT_MODE: frozenset(BUDGET_ENFORCEMENT_MODES),
 }
@@ -768,7 +780,6 @@ def normalize_feature_flag_value(key: str, value: Any) -> Any:
     if not isinstance(value, str):
         raise ValueError(
             f"feature_flags['{key}'] must be one of {sorted(allowed)} "
-    FINANCE_AR_AP_DUE_SOURCE: frozenset(FINANCE_AR_AP_DUE_SOURCES),
             f"(got {type(value).__name__})"
         )
     normalized = value.strip().lower()

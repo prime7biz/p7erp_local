@@ -1,7 +1,8 @@
 """Monthly Cash Flow (PLAN "Monthly Cash Flow", acceptance 2.7, 2.11). SQL: 4 statements (limit 5).
 
-Cash pool = ledgers of CASH_IN_HAND + BANK_ACCOUNTS + BANK_OD (signed debit minus credit; Bank OD is credit-normal,
-so an overdraft lowers the pool).
+Cash pool = ledgers of CASH_IN_HAND + BANK_ACCOUNTS + BANK_OD after the ledger-level cash / bank rule
+(`classification_service.resolve_ledger_class`; signed debit minus credit; Bank OD is credit-normal, so an overdraft
+lowers the pool).
 
 Inflow / outflow, per voucher, over the pool ledgers only:
     pool_debit   = sum of debit lines on pool ledgers          pool_credit = sum of credit lines on pool ledgers
@@ -25,13 +26,19 @@ from app.models.finance import ChartOfAccount, Voucher, VoucherLine
 from app.models.tenant import Tenant
 from app.modules.finance.fiscal_year import fiscal_year_bounds, fy_start_month
 from app.modules.finance.posting_core import BALANCE_TOLERANCE, line_base_amount_sql
-from app.modules.finance.statements.classification_service import GroupInfo, load_group_classification
+from app.modules.finance.statements.classification_service import (
+    GroupInfo,
+    ledger_is_bank_sql,
+    ledger_is_cash_sql,
+    load_group_classification,
+    pool_ledgers_sql,
+    resolve_ledger_class,
+)
 from app.modules.finance.statements.constants import BANK_ACCOUNTS, BANK_OD, CASH_IN_HAND
 from app.modules.finance.statements.flow_common import (
     CASH_POOL_CLASSES,
     ZERO,
     MonthSpan,
-    group_ids_for,
     month_spans,
     q4,
     voucher_statement_clause,
@@ -64,7 +71,12 @@ def _signed_amounts():
     return amount, is_debit
 
 
-def pool_voucher_subquery(tenant_id: int, pool_group_ids: list[int], start: date, end: date, *, account_id: int | None = None):
+def cash_pool_clause(groups: dict[int, GroupInfo], tenant_id: int):
+    """WHERE clause on ChartOfAccount for the cash-pool ledgers (group class + ledger-level cash / bank rule)."""
+    return pool_ledgers_sql(groups, tenant_id, CASH_POOL_CLASSES)
+
+
+def pool_voucher_subquery(tenant_id: int, pool_clause, start: date, end: date):
     """One row per (voucher, month): pool debit and credit. The contra split happens in the outer query."""
     amount, is_debit = _signed_amounts()
     ym_key = year_month_sql().label("ym_key")  # grouped by label so the arithmetic constants are sent once
@@ -82,7 +94,7 @@ def pool_voucher_subquery(tenant_id: int, pool_group_ids: list[int], start: date
             VoucherLine.tenant_id == tenant_id,
             Voucher.tenant_id == tenant_id,
             ChartOfAccount.tenant_id == tenant_id,
-            ChartOfAccount.group_id.in_(pool_group_ids),
+            pool_clause,
             Voucher.voucher_date >= start,
             Voucher.voucher_date <= end,
             voucher_statement_clause(),
@@ -92,13 +104,11 @@ def pool_voucher_subquery(tenant_id: int, pool_group_ids: list[int], start: date
     return stmt.subquery("pool_voucher")
 
 
-async def pool_month_flows(
-    db: AsyncSession, tenant_id: int, pool_group_ids: list[int], start: date, end: date
-) -> dict[int, MonthFlow]:
-    """{yyyymm: MonthFlow}. ONE grouped statement for the whole range."""
-    if not pool_group_ids:
+async def pool_month_flows(db: AsyncSession, tenant_id: int, pool_clause, start: date, end: date) -> dict[int, MonthFlow]:
+    """{yyyymm: MonthFlow}. ONE grouped statement for the whole range. `pool_clause` from `cash_pool_clause`."""
+    if pool_clause is None:
         return {}
-    sub = pool_voucher_subquery(tenant_id, pool_group_ids, start, end)
+    sub = pool_voucher_subquery(tenant_id, pool_clause, start, end)
     contra = func.least(sub.c.pd, sub.c.pc)
     rows = (
         await db.execute(
@@ -117,11 +127,14 @@ async def pool_month_flows(
     }
 
 
-async def pool_balances_by_group(
-    db: AsyncSession, tenant_id: int, pool_group_ids: list[int], start: date, end: date
-) -> dict[int, tuple[Decimal, Decimal]]:
-    """{group_id: (net before `start`, net at `end`)} including each ledger's stored opening balance. 1 statement."""
-    if not pool_group_ids:
+async def pool_balances_by_class(
+    db: AsyncSession, groups: dict[int, GroupInfo], tenant_id: int, pool_clause, start: date, end: date
+) -> dict[str, tuple[Decimal, Decimal]]:
+    """{resolved ledger class: (net before `start`, net at `end`)} including each ledger's stored opening balance.
+
+    1 statement (grouped by group and the two ledger-rule flags; the class is resolved in Python).
+    """
+    if pool_clause is None:
         return {}
     amount, is_debit = _signed_amounts()
     signed = case((is_debit, amount), else_=-amount)
@@ -145,19 +158,31 @@ async def pool_balances_by_group(
         (func.lower(ChartOfAccount.normal_balance) == "debit", ChartOfAccount.opening_balance),
         else_=-ChartOfAccount.opening_balance,
     )
+    is_bank = ledger_is_bank_sql(tenant_id).label("is_bank")
+    is_cash = ledger_is_cash_sql(tenant_id).label("is_cash")
     rows = (
         await db.execute(
             select(
                 ChartOfAccount.group_id,
+                is_bank,
+                is_cash,
                 func.coalesce(func.sum(opening + func.coalesce(lines.c.pre, 0)), 0),
                 func.coalesce(func.sum(opening + func.coalesce(lines.c.upto, 0)), 0),
             )
             .outerjoin(lines, lines.c.account_id == ChartOfAccount.id)
-            .where(ChartOfAccount.tenant_id == tenant_id, ChartOfAccount.group_id.in_(pool_group_ids))
-            .group_by(ChartOfAccount.group_id)
+            .where(ChartOfAccount.tenant_id == tenant_id, pool_clause)
+            .group_by(ChartOfAccount.group_id, is_bank, is_cash)
         )
     ).all()
-    return {int(gid): (q4(pre), q4(upto)) for gid, pre, upto in rows}
+    out: dict[str, tuple[Decimal, Decimal]] = {}
+    for gid, bank_flag, cash_flag, pre, upto in rows:
+        info = groups.get(gid)
+        cls = resolve_ledger_class(
+            info.effective_class if info else None, is_bank=bool(bank_flag), is_cash=bool(cash_flag)
+        ) or ""
+        old_pre, old_upto = out.get(cls, (ZERO, ZERO))
+        out[cls] = (old_pre + q4(pre), old_upto + q4(upto))
+    return out
 
 
 def fiscal_year_range(tenant: Tenant, fiscal_year: int | None, today: date) -> tuple[date, date, int]:
@@ -174,16 +199,16 @@ async def build_cash_flow(
 ) -> CashFlowResponse:
     fy_start, fy_end, fy = fiscal_year_range(tenant, fiscal_year, today)
     groups = await load_group_classification(db, tenant.id)  # 2 statements
-    pool_ids = group_ids_for(groups, CASH_POOL_CLASSES)
+    pool = cash_pool_clause(groups, tenant.id)
 
-    flows = await pool_month_flows(db, tenant.id, pool_ids, fy_start, fy_end)  # 1 statement
-    balances = await pool_balances_by_group(db, tenant.id, pool_ids, fy_start, fy_end)  # 1 statement
+    flows = await pool_month_flows(db, tenant.id, pool, fy_start, fy_end)  # 1 statement
+    balances = await pool_balances_by_class(db, groups, tenant.id, pool, fy_start, fy_end)  # 1 statement
 
     opening_cash = sum((pre for pre, _ in balances.values()), ZERO)
     gl_closing = sum((upto for _, upto in balances.values()), ZERO)
     by_class: dict[str, Decimal] = {CASH_IN_HAND: ZERO, BANK_ACCOUNTS: ZERO, BANK_OD: ZERO}
-    for gid, (_pre, upto) in balances.items():
-        by_class[groups[gid].effective_class or ""] = by_class.get(groups[gid].effective_class or "", ZERO) + upto
+    for cls, (_pre, upto) in balances.items():
+        by_class[cls] = by_class.get(cls, ZERO) + upto
 
     months: list[CashFlowMonth] = []
     running = opening_cash

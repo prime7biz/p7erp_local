@@ -269,7 +269,8 @@ async def test_ratio_formulas_on_hand_computed_fixture(db_session_integration):
     ratios = {q["code"]: q for q in body["principal_ratios"]}
     # hand figures
     ca, cl, stock, debtors, sales = D(193200), D(20000), D(48000), D(41000), D(52200)
-    wc, loans, capital, gross, nett, op_cost = D(173200), D(5500), D(100000), D(35200), D(32100), D(8400)
+    wc, loans, capital, gross, nett = D(173200), D(5500), D(100000), D(35200), D(32100)
+    op_cost = sales - nett  # Tally: Operating Cost % = (Sales - Nett Profit) / Sales = 100 - Nett Profit %
     equity = capital + nett
     assert (groups["WORKING_CAPITAL"]["amount"], groups["WORKING_CAPITAL"]["dr_cr"]) == ("173200.0000", "Dr")
     assert (groups["CASH_IN_HAND"]["amount"], groups["CASH_AT_BANK"]["amount"]) == ("92100.0000", "12100.0000")
@@ -281,9 +282,12 @@ async def test_ratio_formulas_on_hand_computed_fixture(db_session_integration):
     assert (groups["NETT_RESULT"]["label"], groups["NETT_RESULT"]["amount"]) == ("Nett Profit", "32100.0000")
     assert groups["WORKING_CAPITAL_TURNOVER"]["value"] == str(_round4(sales / wc)) and groups["WORKING_CAPITAL_TURNOVER"]["unit"] == "times"
     assert groups["INVENTORY_TURNOVER"]["value"] == str(_round4(sales / stock))
-    # "due till today": undecided source (PLAN open question 8) -> null with a reason, never a guess
+    # "due till today": no source set and party ledger off -> outstanding_bills chosen automatically (no bills here)
     for code in ("SUNDRY_DEBTORS_DUE", "SUNDRY_CREDITORS_DUE"):
-        assert groups[code]["amount"] is None and "open question 8" in groups[code]["reason"]
+        g = groups[code]
+        assert (g["amount"], g["total_open"], g["reason"]) == ("0.0000", "0.0000", None)
+        assert g["source"] == "outstanding_bills" and g["source_automatic"] is True
+        assert "Chosen automatically" in g["note"]
 
     expected = {
         "CURRENT_RATIO": _round4(ca / cl),
@@ -300,6 +304,8 @@ async def test_ratio_formulas_on_hand_computed_fixture(db_session_integration):
     for code, value in expected.items():
         assert D(ratios[code]["value"]) == value, code
         assert ratios[code]["reason"] is None
+    assert (ratios["OPERATING_COST_PCT"]["numerator"], ratios["OPERATING_COST_PCT"]["denominator"]) == ("20100.0000", "52200.0000")
+    assert abs(D(ratios["OPERATING_COST_PCT"]["value"]) - (100 - D(ratios["NETT_PROFIT_PCT"]["value"]))) <= D("0.0001")
     assert ratios["CURRENT_RATIO"]["display"] == "9.66 : 1" and ratios["QUICK_RATIO"]["display"] == "7.26 : 1"
     assert ratios["GROSS_PROFIT_PCT"]["display"].endswith("%") and ratios["RECEIVABLE_TURNOVER_DAYS"]["display"].endswith("days")
     assert (ratios["CURRENT_RATIO"]["numerator"], ratios["CURRENT_RATIO"]["denominator"]) == ("193200.0000", "20000.0000")
@@ -308,6 +314,29 @@ async def test_ratio_formulas_on_hand_computed_fixture(db_session_integration):
         pnl = (await _get(ac, "profit-loss", **YEAR_2026)).json()
     assert pnl["profit_and_loss"]["nett_result"]["amount"] == "32100.0000"
     assert any(w["code"] == "UNCLASSIFIED_GROUPS" for w in body["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_operating_cost_pct_matches_the_tally_loss_sample(db_session_integration):
+    """REFERENCE_REPORTS.md section 6: Nett Profit % (-)84.88 % -> Operating Cost % 184.88 %."""
+    db = db_session_integration
+    tenant, _user = await seed_tenant_admin(db)
+    tenant.feature_flags = {"finance_statements_v2": True}
+    await db.flush()
+    t = tenant.id
+    cash_g = await make_group(db, t, "Cash", "Asset", "CASH_IN_HAND")
+    sales_g = await make_group(db, t, "Sales", "Income", "SALES_ACCOUNTS")
+    exp_g = await make_group(db, t, "Indirect Exp", "Expense", "INDIRECT_EXPENSES")
+    cash = await make_ledger(db, t, cash_g, "Cash", "0")
+    sales = await make_ledger(db, t, sales_g, "Sales")
+    expense = await make_ledger(db, t, exp_g, "Overheads")
+    await post(db, t, date(2026, 2, 1), [(cash, "DEBIT", "10000"), (sales, "CREDIT", "10000")])
+    await post(db, t, date(2026, 3, 1), [(expense, "DEBIT", "18488"), (cash, "CREDIT", "18488")])
+    body = (await build_ratio_analysis(db, tenant, from_date=date(2026, 1, 1), to_date=date(2026, 12, 31))).model_dump(mode="json")
+    ratios = {q["code"]: q for q in body["principal_ratios"]}
+    assert ratios["NETT_PROFIT_PCT"]["value"] == "-84.8800" and ratios["NETT_PROFIT_PCT"]["display"] == "-84.88 %"
+    assert ratios["OPERATING_COST_PCT"]["value"] == "184.8800" and ratios["OPERATING_COST_PCT"]["display"] == "184.88 %"
+    assert ratios["OPERATING_COST_PCT"]["numerator"] == "18488.0000"
 
 
 @pytest.mark.asyncio

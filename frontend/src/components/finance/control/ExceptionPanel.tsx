@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { RefreshCw, X } from "lucide-react";
 import type { ControlCard } from "@/api/financeControl";
 import { EXCEPTION_PAGE_SIZE, useExceptionList } from "@/hooks/useFinanceControl";
-import { amountText, detailPairs, exceptionRowHref, isLastPage, SEVERITY_CHIP, SEVERITY_LABEL } from "./controlLogic";
+import { amountText, currencyNote, detailPairs, exceptionRowHref, isLastPage, SEVERITY_CHIP, SEVERITY_LABEL } from "./controlLogic";
 
 interface Props {
   /** The card that was clicked; null keeps the panel closed. */
@@ -74,7 +74,11 @@ export function ExceptionPanel({ card, asOf, currency, onClose }: Props) {
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto">
-          {note ? <p className="border-b border-border-subtle px-4 py-2 text-xs text-text-muted">{note}</p> : null}
+          {note ? (
+            <p className="border-b border-border-subtle px-4 py-2 text-xs text-status-warning-foreground" data-testid="exception-note">
+              {note}
+            </p>
+          ) : null}
           {countChanged ? (
             <p role="status" className="border-b border-status-warning/30 bg-status-warning-subtle px-4 py-2 text-xs text-status-warning-foreground">
               The list now has {data!.total} item(s) but the card showed {card.count}. Records changed since the card was loaded; refresh the
@@ -107,6 +111,7 @@ export function ExceptionPanel({ card, asOf, currency, onClose }: Props) {
                 {data.rows.map((row, index) => {
                   const href = exceptionRowHref(data.code, row);
                   const pairs = detailPairs(row.details);
+                  const warning = currencyNote(row.details);
                   return (
                     <tr key={`${row.id ?? "x"}-${offset + index}`} className="border-t border-border-subtle align-top">
                       <td className="px-3 py-2">
@@ -119,6 +124,11 @@ export function ExceptionPanel({ card, asOf, currency, onClose }: Props) {
                         )}
                         {pairs.length ? (
                           <p className="mt-0.5 text-xs text-text-muted">{pairs.map((p) => `${p.label}: ${p.value}`).join(" · ")}</p>
+                        ) : null}
+                        {warning ? (
+                          <p className="mt-0.5 text-xs text-status-warning-foreground" data-testid="row-currency-note">
+                            {warning}
+                          </p>
                         ) : null}
                       </td>
                       <td className="px-3 py-2 tabular-nums">{row.date ?? "—"}</td>

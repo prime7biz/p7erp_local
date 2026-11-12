@@ -217,18 +217,70 @@ describe("Finance sidebar", () => {
     gst_system_enabled: true,
     tds_system_enabled: true,
   };
+  /** Classic-sidebar links to the new finance pages (hubs OFF only). */
+  const NEW_PAGE_LINKS = [
+    "/app/finance/control-tower",
+    "/app/finance/statements/trial-balance",
+    "/app/finance/budget-analytics",
+    "/app/finance/expense-analysis",
+    "/app/finance/expense-controls",
+    "/app/finance/profitability/orders",
+    "/app/finance/profitability/entity",
+  ];
 
   it("flag OFF keeps the current long Finance menu", () => {
     const original = menuSections.find((s) => s.section === "Finance")!;
     const originalHrefs = (original.subsections ?? []).flatMap((sub) => sub.items.map((i) => i.href));
-    expect(originalHrefs).toHaveLength(56);
+    // 56 classic links + 7 links to the new finance pages (each shown only when its own flag is true).
+    expect(originalHrefs).toHaveLength(63);
     const offFlags: Record<string, boolean | string>[] = [{}, { finance_hubs_v2: false }, { finance_hubs_v2: "true" }];
     for (const flags of offFlags) {
       const links = financeLinks(flags);
       expect(links).toContain("/app/accounts/vouchers");
       expect(links).toContain("/app/accounts/vouchers/print");
       expect(links.some((l) => l.includes("/finance/home"))).toBe(false);
+      for (const href of NEW_PAGE_LINKS) expect(links, href).not.toContain(href);
     }
+  });
+
+  it("hubs OFF: each new finance page link appears only when its own flag is exactly true", () => {
+    const statements = financeLinks({ finance_statements_v2: true });
+    expect(statements).toContain("/app/finance/statements/trial-balance");
+    expect(statements).not.toContain("/app/finance/budget-analytics");
+
+    const budget = financeLinks({ finance_budget_analytics_v2: true });
+    for (const href of ["/app/finance/budget-analytics", "/app/finance/expense-analysis", "/app/finance/expense-controls"]) {
+      expect(budget, href).toContain(href);
+    }
+    expect(budget).not.toContain("/app/finance/control-tower");
+
+    const tower = financeLinks({ finance_control_tower_v2: true });
+    for (const href of ["/app/finance/control-tower", "/app/finance/profitability/orders", "/app/finance/profitability/entity"]) {
+      expect(tower, href).toContain(href);
+    }
+    expect(tower).not.toContain("/app/finance/statements/trial-balance");
+
+    const notStrict = financeLinks({ finance_statements_v2: "true", finance_budget_analytics_v2: "true", finance_control_tower_v2: "true" });
+    for (const href of NEW_PAGE_LINKS) expect(notStrict, href).not.toContain(href);
+  });
+
+  it("hubs ON: the hub links still replace the whole classic section", () => {
+    const links = financeLinks({
+      finance_hubs_v2: true,
+      finance_statements_v2: true,
+      finance_budget_analytics_v2: true,
+      finance_control_tower_v2: true,
+    });
+    for (const href of NEW_PAGE_LINKS) expect(links, href).not.toContain(href);
+    expect(links).toContain("/app/finance/home");
+  });
+
+  it("the Control Tower direct route redirects to Finance Home when hubs are ON", () => {
+    expect(routeElement("finance/control-tower")).toBe(
+      '<FinanceLegacyRoute from="finance/control-tower" Page={FinanceControlTowerPage} />',
+    );
+    // No tab owns this path, so the hub redirect falls back to /app/finance/home (Control Tower tab).
+    expect(findHubLegacyTarget(hubs, "finance/control-tower")).toBeNull();
   });
 
   it("flag ON shows exactly the 10 hub links in the planned order", () => {

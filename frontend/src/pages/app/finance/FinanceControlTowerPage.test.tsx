@@ -116,6 +116,39 @@ describe("Finance Control Tower page", () => {
     expect(within(dialog).getByRole("link", { name: "ITM-26" })).toHaveAttribute("href", "/app/inventory/stock-items/26");
   });
 
+  it("shows the card note and a row's currency note as warnings, not as a grey detail", async () => {
+    const AP = card("AP_OVERDUE", {
+      label: "Payables overdue",
+      severity: "high",
+      count: 1,
+      amount: "900.0000",
+      note: "1 foreign-currency document(s) have no exchange rate and are counted at rate 1 (see currency_note).",
+    });
+    h.api.getControlTower.mockResolvedValue(tower([AP, CASH]));
+    h.api.getExceptions.mockResolvedValue(
+      exceptionList(AP, [
+        {
+          id: 5,
+          reference: "VB-005",
+          date: "2026-10-20",
+          party: "Zipper Co",
+          amount: "900.0000",
+          details: { age_days: 23, currency_note: "USD bill without an exchange rate: counted at rate 1." },
+        },
+      ]),
+    );
+    renderPage();
+    expect(await screen.findByTestId("note-AP_OVERDUE")).toHaveTextContent("counted at rate 1");
+    expect(screen.queryByTestId("note-NEGATIVE_CASH")).toBeNull();
+    fireEvent.click(screen.getByTestId("card-AP_OVERDUE"));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText("VB-005");
+    expect(within(dialog).getByTestId("exception-note")).toHaveTextContent("counted at rate 1");
+    expect(within(dialog).getByTestId("row-currency-note")).toHaveTextContent("USD bill without an exchange rate: counted at rate 1.");
+    expect(within(dialog).getByText("Age (days): 23")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/currency note:/)).toBeNull();
+  });
+
   it("opens a card straight from the address (?exception=)", async () => {
     h.api.getExceptions.mockResolvedValue(exceptionList(GRN, [], { total: 3 }));
     renderPage("/app/finance/home?tab=control-tower&exception=GRN_NOT_BILLED");

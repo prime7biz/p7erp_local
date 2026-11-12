@@ -10,6 +10,7 @@ import { useConfirm } from "@/components/app/useConfirm";
 import { listPageRootClass, listPageTableCardClass } from "@/components/app/listPageLayout";
 import { useAuth } from "@/context/AuthContext";
 import { logApiError } from "@/utils/logApiError";
+import { ACKNOWLEDGE_ONLY_NOTE, isAcknowledgeOnly } from "./agentFindings";
 
 const SEVERITY_BADGE: Record<string, string> = {
   critical: "bg-red-600 text-white",
@@ -59,7 +60,9 @@ export function AiAgentsPage() {
             ? r.recipients
               ? `Sent to ${r.recipients} person(s)`
               : "Recorded — no other recipient was found"
-            : "Dismissed for 7 days",
+            : isAcknowledgeOnly(f)
+              ? "Acknowledged — hidden for 7 days"
+              : "Dismissed for 7 days",
         );
         setNoteFor(null);
         setNote("");
@@ -104,6 +107,11 @@ export function AiAgentsPage() {
               <span className="font-medium">{f.title}</span>
             )}
             <p className="text-xs text-text-secondary">{f.detail}</p>
+            {isAcknowledgeOnly(f) ? (
+              <p className="mt-0.5 text-[11px] text-amber-700" data-testid={`ack-only-${f.key}`}>
+                {ACKNOWLEDGE_ONLY_NOTE}
+              </p>
+            ) : null}
           </div>
         ),
       },
@@ -117,7 +125,17 @@ export function AiAgentsPage() {
         cell: (f) => {
           const items: RowActionItem[] = [];
           if (f.href) items.push({ key: "open", label: "Open record", href: f.href });
-          if (data?.can_confirm) {
+          if (data?.can_confirm && isAcknowledgeOnly(f)) {
+            items.push({
+              key: "acknowledge",
+              label: f.suggested_action.label,
+              disabled: busyKey === f.key,
+              onClick: async () => {
+                if (await confirm({ title: "Acknowledge this finding?", description: "It will be hidden for 7 days unless it changes. Nobody is notified.", confirmLabel: "Acknowledge" }))
+                  void decide(f, "dismiss");
+              },
+            });
+          } else if (data?.can_confirm) {
             items.push({
               key: "notify",
               label: `${f.suggested_action.label}…`,
@@ -164,7 +182,7 @@ export function AiAgentsPage() {
     <div className={listPageRootClass}>
       <AppPageHeader
         title="Exception agents"
-        description="Agents check TNA delays, LC expiry and BOM materials not on PO. They only propose — nothing is sent until a manager confirms."
+        description="Agents check TNA delays, LC expiry, BOM materials not on PO and finance exceptions. They only propose — nothing is sent until a manager confirms. Finance findings can only be acknowledged."
       />
       <OwnerBriefCard canSend={data?.can_confirm === true} />
 

@@ -42,6 +42,23 @@ describe("filterVisibleMenuSections", () => {
     expect(sectionNames(visible)).toContain("Inventory");
   });
 
+  it("shows the new finance page links only for a strict true flag (hubs OFF)", () => {
+    const ctx = { tenantType: "both" as const, enabledOptionalProductionUnits: [], hasPermission: allow };
+    const off = allHrefs(filterVisibleMenuSections(menuSections, { ...ctx, featureFlags: {} }));
+    const on = allHrefs(
+      filterVisibleMenuSections(menuSections, {
+        ...ctx,
+        featureFlags: { finance_statements_v2: true, finance_budget_analytics_v2: true, finance_control_tower_v2: true },
+      }),
+    );
+    expect(off).not.toContain("/app/finance/control-tower");
+    expect(off).not.toContain("/app/finance/statements/trial-balance");
+    expect(on).toContain("/app/finance/control-tower");
+    expect(on).toContain("/app/finance/statements/trial-balance");
+    expect(on).toContain("/app/finance/budget-analytics");
+    expect(on).toContain("/app/finance/profitability/entity");
+  });
+
   it("shows optional production units only when they are enabled", () => {
     const ctx = { tenantType: "manufacturer" as const, featureFlags: {}, hasPermission: allow };
     const off = allHrefs(filterVisibleMenuSections(menuSections, { ...ctx, enabledOptionalProductionUnits: [] }));

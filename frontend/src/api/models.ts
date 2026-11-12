@@ -2246,7 +2246,7 @@ export interface Mushak63 {
 }
 
 export interface GovernedFinding {
-  agent: "tna_delay" | "lc_expiry" | "bom_shortfall" | string;
+  agent: "tna_delay" | "lc_expiry" | "bom_shortfall" | "finance_exceptions" | string;
   agent_label: string;
   key: string;
   severity: "critical" | "high" | "medium" | "low" | string;
@@ -2255,7 +2255,8 @@ export interface GovernedFinding {
   recommended_action: string;
   href: string | null;
   order_id: number | null;
-  suggested_action: { type: "notify"; label: string };
+  /** "acknowledge" = finance finding: it can only be acknowledged (hidden), never sent to anyone. */
+  suggested_action: { type: "notify" | "acknowledge"; label: string };
 }
 
 export interface GovernedExceptions {

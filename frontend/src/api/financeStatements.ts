@@ -185,6 +185,10 @@ export interface PrincipalGroup {
   value?: Money | null;
   unit?: string | null;
   reason?: string | null;
+  /** "Due till today" lines only (tenant setting finance_ar_ap_due_source): all open bills, the bill source and caveats. */
+  total_open?: Money | null;
+  source?: string | null;
+  note?: string | null;
 }
 
 export interface PrincipalRatio {

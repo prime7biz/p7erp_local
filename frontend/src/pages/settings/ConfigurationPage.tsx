@@ -10,6 +10,7 @@ import {
   tierVisible,
   type FeatureTier,
 } from "./featureTiers";
+import { FinanceArApDueSourceField } from "../../components/finance/settings/FinanceArApDueSourceField";
 
 const TENANT_TYPE_OPTIONS: Array<{ value: TenantType; label: string }> = [
   { value: "manufacturer", label: "Manufacturer" },
@@ -961,6 +962,19 @@ export function ConfigurationPage() {
               </span>
             </span>
           </label>
+          <FinanceArApDueSourceField
+            value={
+              typeof featureFlags.finance_ar_ap_due_source === "string" ? featureFlags.finance_ar_ap_due_source : undefined
+            }
+            onChange={(next) =>
+              setFeatureFlags((prev) => {
+                const copy = { ...prev };
+                if (next === undefined) delete copy.finance_ar_ap_due_source;
+                else copy.finance_ar_ap_due_source = next;
+                return copy;
+              })
+            }
+          />
               <span className="font-medium text-text-primary">Payroll four-eyes approval</span>
               <span className="mt-0.5 block text-xs text-text-muted">
                 The person who finalized a payroll run cannot approve it; a second admin or manager must. Needs at

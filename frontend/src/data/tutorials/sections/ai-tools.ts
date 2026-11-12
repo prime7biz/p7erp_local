@@ -303,6 +303,7 @@ The assistant only **reads**. If you want something changed (a reminder, a messa
 - **TNA delay** — follow-up / TNA actions past their planned date (critical after 7 days late).
 - **LC expiry** — trade cases whose LC or master contract expires within 14 days (or has already expired).
 - **BOM shortfall** — orders due within 45 days whose BOM materials are not fully covered by purchase orders.
+- **Finance exceptions** (only when **Finance Control Tower and GL profitability** and **Explain this report (AI)** are both switched on and you may view finance reports) — the Finance Control Tower checks. A finance finding can only be **acknowledged**: there is no Notify action, and nobody is sent anything.
 
 Who uses it: owners, merchandising managers and commercial managers, usually first thing in the morning.
 
@@ -321,6 +322,7 @@ Who uses it: owners, merchandising managers and commercial managers, usually fir
    - **Open record** — jump to the order or trade case.
    - **Notify the assignee… / Notify managers…** — a dialog opens. Add an optional **Note**, then click **Confirm & send**. The person gets it in their bell inbox with a link.
    - **Dismiss for 7 days** — hide a finding you handled another way; confirm with **Dismiss**.
+   - **Acknowledge (hide for 7 days)** — the only action on a finance finding (the row says *Finance finding: it can only be acknowledged, nobody is notified.*); confirm with **Acknowledge**.
 5. Click **Run agents** at any time to check again.
 6. **Owner brief** (top card): click **Generate** for a short morning summary from today's figures and open findings. Click **Send to managers** and confirm to deliver it to admins and managers.
 
@@ -354,7 +356,7 @@ Who uses it: owners, merchandising managers and commercial managers, usually fir
         "ai.agents.confirm",
       ],
       estimatedMinutes: 5,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-12",
       featured: true,
       coverImage: "/tutorials/screens/ai-agents.jpg",
       infographics: [

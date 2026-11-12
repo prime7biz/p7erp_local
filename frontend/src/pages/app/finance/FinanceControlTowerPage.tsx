@@ -179,6 +179,11 @@ function ControlCardButton({ card, currency, onOpen }: { card: ControlCard; curr
       <span className="mt-1 text-sm tabular-nums" data-testid={`amount-${card.code}`}>
         {currency} {amountText(card.amount)}
       </span>
+      {card.note ? (
+        <span className="mt-1 text-[11px] text-status-warning-foreground" data-testid={`note-${card.code}`}>
+          {card.note}
+        </span>
+      ) : null}
       <span className="mt-auto pt-2 text-xs text-text-muted">
         {card.oldest_date ? `Oldest ${card.oldest_date}` : clear ? "All clear" : "No date"}
       </span>

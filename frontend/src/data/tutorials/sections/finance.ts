@@ -1507,14 +1507,14 @@ Anyone who is not a manager or admin sees these fields read-only.
 
 ## Steps — read the statements
 
-Open **Finance → Statements** (\`/app/finance/statements\`). The new tabs come first: **Trial Balance**, **Balance Sheet**, **Profit & Loss**, **Cash Flow**, **Funds Flow**, **Ratio Analysis** and **Stock vs Ledger**. The old pages follow as **Trial Balance (Classic)** and so on.
+Open **Finance → Statements** (\`/app/finance/statements\`). The new tabs come first: **Trial Balance**, **Balance Sheet**, **Profit & Loss**, **Cash Flow**, **Funds Flow**, **Ratio Analysis** and **Stock vs Ledger**. The old pages follow as **Trial Balance (Classic)** and so on. Without the Finance hubs menu, use **Finance → Reports → Statements (Tally style)**; it opens the Tally-style Trial Balance.
 
 - **Trial Balance** (\`/app/finance/statements/trial-balance\`): Opening, Period (Debit, Credit) and Closing for each group and ledger. The Grand Total debit equals the credit. Tick **Show zero balances** to list empty ledgers.
 - **Balance Sheet** (\`/app/finance/statements/balance-sheet\`): Liabilities on the left and Assets on the right (stacked on a phone). Inner amounts are ledgers, outer amounts are groups. The **Profit & Loss A/c** line carries the result of earlier years and this year: a profit sits on the liabilities side, a loss on the assets side.
 - **Profit & Loss** (\`/app/finance/statements/profit-loss\`): the **Trading Account** first (gross profit or loss carried over), then the **Profit & Loss Account** (nett profit or loss). The **Memo: opening and closing stock** box is for information only and is never inside a total.
 - **Cash Flow** (\`/app/finance/statements/cash-flow\`): twelve months of Inflow, Outflow and Nett flow plus the year total. Transfers between two cash or bank ledgers (contra) are **not counted** and the page shows how much was left out. The **Cash without overdraft** figure shows cash and bank money before the bank overdraft.
 - **Funds Flow** (\`/app/finance/statements/funds-flow\`): opening and closing working capital for each month and the flow between them.
-- **Ratio Analysis** (\`/app/finance/statements/ratio-analysis\`): **Principal Groups** on the left and **Principal Ratios** on the right. A **—** means the figure cannot be worked out (for example sales are zero); the reason is written under it.
+- **Ratio Analysis** (\`/app/finance/statements/ratio-analysis\`): **Principal Groups** on the left and **Principal Ratios** on the right. A **—** means the figure cannot be worked out (for example sales are zero); the reason is written under it. **Sundry Debtors / Creditors due till today** need a bill source: an admin picks it under **Bill source for amounts due** in **Settings → Configuration → Finance** (**Outstanding bills**, **Party ledgers** or **Bill references**). Once chosen, the line shows the amount due till today, the **Total open** of all open bills, a small **Source** label and a note (for example foreign-currency bills that were left out). Until then the line shows **—** and a hint to choose the source.
 - **Stock vs Ledger** (\`/app/finance/statements/stock-vs-ledger\`): the stock value from the stock records against the stock ledgers in the books. A difference is shown as it is.
 
 Pick a **Financial year** or type **From** and **To** dates (the Balance Sheet and Stock vs Ledger use one **As of** date). A green **Balanced** badge means the statement agrees with itself; a red badge shows the **Difference**.
@@ -1605,8 +1605,9 @@ Both are **read-only**: nothing here posts, edits or deletes a voucher or a stoc
 ## Before you start
 
 1. An admin switches on **Finance Control Tower and GL profitability** in **Settings → Configuration → More features → Finance navigation**. It is off by default.
-2. Use the **Finance hubs** menu to find the pages: **Finance Home → Control Tower** and **Profitability → Order P&L (GL)** / **Style / LC / Buyer P&L (GL)**.
+2. Use the **Finance hubs** menu to find the pages: **Finance Home → Control Tower** and **Profitability → Order P&L (GL)** / **Style / LC / Buyer P&L (GL)**. Without the hubs menu, the classic Finance menu has **Reports → Finance Control Tower** and **Planning → Order P&L (GL)** / **Style / LC / Buyer P&L (GL)**.
 3. You need permission to view finance reports.
+4. Optional: choose the **Bill source for amounts due** in **Settings → Configuration → Finance** (**Outstanding bills**, **Party ledgers** or **Bill references**). The overdue receivables / payables cards read their bills from it; when nothing is chosen they use **Outstanding bills**.
 
 ## Steps — read the Control Tower
 
@@ -1624,7 +1625,13 @@ Both are **read-only**: nothing here posts, edits or deletes a voucher or a stoc
 - **Delivery challans not invoiced**: goods shipped but not invoiced. A challan has no money value, so the amount is 0.
 - **Vendor bills outside price/quantity tolerance**: information only. It never blocks a bill.
 - **Cash / bank ledgers with a credit balance** and **Items with negative stock**.
-- **Overdue receivables / payables**: from the outstanding bills list. Only bills in your base currency are added into the amount; the card note says how many foreign-currency bills were left out.
+- **Overdue receivables / payables**: from the bill source chosen in Settings (outstanding bills when none is chosen). Only bills in your base currency are added into the amount; the card note says how many foreign-currency bills were left out.
+
+A small yellow note on a card or a list row is a warning about the figure, for example a foreign-currency document with no exchange rate that was counted at rate 1.
+
+## Finance findings in Exception agents
+
+The same checks also appear in **AI Tools → Exception agents** as **Finance exceptions**. A finance finding can only be **acknowledged** (**Actions → Acknowledge (hide for 7 days)**); it is never sent to anyone, so there is no **Notify** action for it.
 - **Budget lines at 80% or 100%**: alerts only; nothing is blocked.
 - **Stock valuation differs from the GL inventory ledger**: the same comparison as **Stock vs Ledger**.
 - **Vouchers waiting for approval** and **Draft vouchers older than 7 days**.
@@ -1708,7 +1715,7 @@ Nothing here changes a budget or a voucher, and nothing is blocked. The existing
 ## Before you start
 
 1. An admin switches on **Budget analytics and expense control** in **Settings → Configuration → Finance**. It is off by default.
-2. Use the **Finance hubs** menu: **Budgets & Cash** then the tabs **Budget vs Actual (analytics)**, **Expense analysis** and **Expense controls** (they are listed first).
+2. Use the **Finance hubs** menu: **Budgets & Cash** then the tabs **Budget vs Actual (analytics)**, **Expense analysis** and **Expense controls** (they are listed first). Without the hubs menu, the classic Finance menu lists **Budget analytics**, **Expense analysis** and **Expense controls** under **Planning**.
 3. You need permission to view finance reports. The CSV download also needs the finance report **export** permission.
 
 ## Steps — budget vs actual

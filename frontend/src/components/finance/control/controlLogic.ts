@@ -58,7 +58,14 @@ const DETAIL_LABEL: Record<string, string> = {
   unclassified_stock: "Unclassified stock",
 };
 
-const HIDDEN_DETAIL_KEYS = new Set(["warehouse_id", "group_id"]);
+// currency_note is shown on its own as a warning (see currencyNote), not in the grey detail line.
+const HIDDEN_DETAIL_KEYS = new Set(["warehouse_id", "group_id", "currency_note"]);
+
+/** Warning on a list row, e.g. a foreign-currency bill counted at rate 1 because its exchange rate is missing. */
+export function currencyNote(details: Record<string, unknown> | null | undefined): string | null {
+  const raw = details?.currency_note;
+  return typeof raw === "string" && raw.trim() ? raw : null;
+}
 
 /** "Label: value" pieces for the small grey line under a list row. Money-looking text gets lakh/crore grouping. */
 export function detailPairs(details: Record<string, unknown>): { label: string; value: string }[] {

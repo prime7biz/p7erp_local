@@ -793,6 +793,19 @@ export const menuSections: MenuSection[] = [
       {
         label: "Reports",
         items: [
+          // New finance pages (strict `true` flags). With finance_hubs_v2 ON the hub links replace this section.
+          {
+            icon: Gauge,
+            label: "Finance Control Tower",
+            href: `${PREFIX}/finance/control-tower`,
+            requiresFeatureFlag: "finance_control_tower_v2",
+          },
+          {
+            icon: FileBarChart,
+            label: "Statements (Tally style)",
+            href: `${PREFIX}/finance/statements/trial-balance`,
+            requiresFeatureFlag: "finance_statements_v2",
+          },
           { icon: BookOpen, label: "Day Book", href: `${PREFIX}/accounts/reports/day-book` },
           { icon: FileBarChart, label: "Trial Balance", href: `${PREFIX}/accounts/reports/trial-balance` },
           { icon: BarChart3, label: "Financial Statements", href: `${PREFIX}/accounts/reports/financial-statements` },
@@ -844,6 +857,36 @@ export const menuSections: MenuSection[] = [
           { icon: Target, label: "Style Profitability", href: `${PREFIX}/finance/style-profitability` },
           { icon: Globe, label: "LC Profitability", href: `${PREFIX}/finance/lc-profitability` },
           { icon: BarChart3, label: "Costing Variance", href: `${PREFIX}/finance/costing-variance` },
+          {
+            icon: PieChart,
+            label: "Budget analytics",
+            href: `${PREFIX}/finance/budget-analytics`,
+            requiresFeatureFlag: "finance_budget_analytics_v2",
+          },
+          {
+            icon: BarChart3,
+            label: "Expense analysis",
+            href: `${PREFIX}/finance/expense-analysis`,
+            requiresFeatureFlag: "finance_budget_analytics_v2",
+          },
+          {
+            icon: AlertTriangle,
+            label: "Expense controls",
+            href: `${PREFIX}/finance/expense-controls`,
+            requiresFeatureFlag: "finance_budget_analytics_v2",
+          },
+          {
+            icon: TrendingUp,
+            label: "Order P&L (GL)",
+            href: `${PREFIX}/finance/profitability/orders`,
+            requiresFeatureFlag: "finance_control_tower_v2",
+          },
+          {
+            icon: Target,
+            label: "Style / LC / Buyer P&L (GL)",
+            href: `${PREFIX}/finance/profitability/entity`,
+            requiresFeatureFlag: "finance_control_tower_v2",
+          },
         ],
       },
       {

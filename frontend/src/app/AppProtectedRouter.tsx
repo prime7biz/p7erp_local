@@ -501,6 +501,10 @@ const ExpenseAnalysisPage = lazy(() =>
 const ExpenseControlsPage = lazy(() =>
   import("@/pages/app/finance/budget/ExpenseControlsPage").then((m) => ({ default: m.ExpenseControlsPage })),
 );
+// Finance Control Tower (tenant flag finance_control_tower_v2): direct route for the classic sidebar; with hubs ON it opens Finance Home.
+const FinanceControlTowerPage = lazy(() =>
+  import("@/pages/app/finance/FinanceControlTowerPage").then((m) => ({ default: m.FinanceControlTowerPage })),
+);
 const TrialBalancePage = lazy(() =>
   import("@/pages/app/TrialBalancePage").then((m) => ({ default: m.TrialBalancePage })),
 );
@@ -991,6 +995,7 @@ export function AppProtectedRouter() {
         <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.finance} />}>
           {/* Finance hubs (tenant flag finance_hubs_v2): existing pages shown as ?tab= (see components/finance/hubs/financeHubs.ts). */}
           <Route path="finance/home" element={<FinanceHubPage hubId="home" />} />
+          <Route path="finance/control-tower" element={<FinanceLegacyRoute from="finance/control-tower" Page={FinanceControlTowerPage} />} />
           <Route path="finance/vouchers-payables" element={<FinanceHubPage hubId="vouchers-payables" />} />
           <Route path="finance/banking" element={<FinanceHubPage hubId="banking" />} />
           <Route path="finance/statements" element={<FinanceHubPage hubId="statements" />} />

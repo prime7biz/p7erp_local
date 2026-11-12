@@ -293,6 +293,46 @@ describe("Ratio Analysis statement", () => {
     expect(within(null1).getByText("Sales are zero")).toBeInTheDocument();
     expect(screen.getByTestId("group-SUNDRY_DEBTORS_DUE")).toHaveTextContent("—");
     expect(screen.getByText("No authoritative due-date source yet.")).toBeInTheDocument();
+    // No bill source chosen: tell the user where to choose one; nothing else is made up.
+    expect(screen.getByTestId("group-SUNDRY_DEBTORS_DUE")).toHaveTextContent("Choose the bill source in Settings → Configuration → Finance.");
+    expect(screen.queryByTestId("total-open-SUNDRY_DEBTORS_DUE")).toBeNull();
+    expect(screen.queryByTestId("source-SUNDRY_DEBTORS_DUE")).toBeNull();
+    expect(screen.getByTestId("group-WORKING_CAPITAL")).not.toHaveTextContent("Choose the bill source");
+  });
+
+  it("shows due till today, total open, the bill source and its note once a source is chosen", async () => {
+    h.api.getRatioAnalysis.mockResolvedValue({
+      ...envelope("ratio_analysis"),
+      principal_groups: [
+        {
+          code: "SUNDRY_DEBTORS_DUE",
+          label: "Sundry Debtors due till today",
+          amount: "150000.0000",
+          dr_cr: "Dr",
+          total_open: "250000.0000",
+          source: "outstanding_bills",
+          note: "Amounts count only BDT bills; 2 open foreign-currency bill(s) are left out.",
+        },
+        {
+          code: "SUNDRY_CREDITORS_DUE",
+          label: "Sundry Creditors due till today",
+          amount: "0.0000",
+          dr_cr: "Cr",
+          total_open: "0.0000",
+          source: "party_ledger",
+          note: null,
+        },
+      ],
+      principal_ratios: [],
+    });
+    renderPage(<RatioAnalysisStatementPage />);
+    const debtors = await screen.findByTestId("group-SUNDRY_DEBTORS_DUE");
+    expect(debtors).toHaveTextContent("1,50,000.00 Dr");
+    expect(screen.getByTestId("total-open-SUNDRY_DEBTORS_DUE")).toHaveTextContent("Total open: 2,50,000.00");
+    expect(screen.getByTestId("source-SUNDRY_DEBTORS_DUE")).toHaveTextContent("Source: Outstanding bills");
+    expect(debtors).toHaveTextContent("2 open foreign-currency bill(s) are left out.");
+    expect(debtors).not.toHaveTextContent("Choose the bill source");
+    expect(screen.getByTestId("source-SUNDRY_CREDITORS_DUE")).toHaveTextContent("Source: Party ledgers");
   });
 });
 

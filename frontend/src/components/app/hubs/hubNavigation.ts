@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import { hubTabLabel, pickActiveHubTab, visibleHubTabs } from "./hubVisibility";
 import type { Hub, HubAccessCheck, HubFeatureFlags, HubTab } from "./types";
 
-/** `/app/<hub.path>` or `/app/<hub.path>?tab=<tab id>`. */
+/** The hub URL under the app root, optionally with `?tab=<tab id>`. */
 export function hubHref(hub: Hub, tabId?: string): string {
   return tabId ? `/app/${hub.path}?tab=${encodeURIComponent(tabId)}` : `/app/${hub.path}`;
 }

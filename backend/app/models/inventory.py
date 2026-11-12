@@ -78,6 +78,8 @@ class StockGroup(Base):
         ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
     )
     default_valuation_method: Mapped[str] = mapped_column(String(8), nullable=False, default="FIFO")
+    # RAW_MATERIAL | WORK_IN_PROCESS | FINISHED_GOODS | OTHER (PLAN 2B). NULL = unclassified stock.
+    stock_nature: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow

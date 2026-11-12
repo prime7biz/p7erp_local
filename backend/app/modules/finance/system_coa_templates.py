@@ -20,6 +20,7 @@ class SystemGroupTemplate(TypedDict, total=False):
     allow_posting: bool
     is_summary_group: bool
     description: str
+    statement_class: str  # optional; absent = Unclassified
 
 
 class SystemLedgerTemplate(TypedDict, total=False):
@@ -35,6 +36,55 @@ def _nb_for_nature(nature: str) -> str:
     if nature in ("Liability", "Equity", "Income"):
         return "credit"
     return "debit"
+
+
+# Statement class per system group (PLAN 2A). Groups missing here stay Unclassified on purpose (mixed or
+# ambiguous content): CASH_AND_BANK (cash + bank ledgers), TRADE_FINANCE_LIABILITIES, DEFERRED_LIABILITIES,
+# SERVICE_REVENUE_GROUP, CONTROL_ACCOUNTS. Migration 293 carries its own frozen copy of this map.
+SYSTEM_GROUP_STATEMENT_CLASS: dict[str, str] = {
+    "TRADE_RECEIVABLES": "SUNDRY_DEBTORS",
+    "OTHER_RECEIVABLES": "CURRENT_ASSETS",
+    "ADVANCES_AND_DEPOSITS": "CURRENT_ASSETS",
+    "INVENTORY_GROUP": "STOCK_IN_HAND",
+    "GOODS_IN_TRANSIT": "CURRENT_ASSETS",
+    "IMPORT_PURCHASE_CLEARING": "CURRENT_ASSETS",
+    "PREPAID_EXPENSES": "CURRENT_ASSETS",
+    "TAX_RECEIVABLES_RECOVERABLE": "CURRENT_ASSETS",
+    "TRADE_PAYABLES": "SUNDRY_CREDITORS",
+    "ACCOUNTS_PAYABLE": "SUNDRY_CREDITORS",
+    "ACCRUED_EXPENSES": "CURRENT_LIABILITIES",
+    "PAYROLL_LIABILITIES": "CURRENT_LIABILITIES",
+    "TAX_AND_VAT_PAYABLES": "CURRENT_LIABILITIES",
+    "STATUTORY_DEDUCTIONS_PAYABLE": "CURRENT_LIABILITIES",
+    "UTILITY_PAYABLES": "CURRENT_LIABILITIES",
+    "SHORT_TERM_BORROWINGS": "SHORT_TERM_BORROWINGS",
+    "CURRENT_PORTION_LTD": "CURRENT_LIABILITIES",
+    "LC_BTB_LIABILITIES": "CURRENT_LIABILITIES",
+    "GRNI_RECEIPT_CLEARING": "CURRENT_LIABILITIES",
+    "TERM_LOANS": "LONG_TERM_LOANS",
+    "LONG_TERM_BORROWINGS": "LONG_TERM_LOANS",
+    "RAW_MATERIAL_COGS": "COGS",
+    "DIRECT_WAGES": "DIRECT_EXPENSES",
+    "FACTORY_UTILITIES": "DIRECT_EXPENSES",
+    "DIRECT_PRODUCTION_COST": "DIRECT_EXPENSES",
+    "IMPORT_COST_ADJUSTMENT": "DIRECT_EXPENSES",
+    "WASTAGE_PROCESS_LOSS": "DIRECT_EXPENSES",
+    "FACTORY_OVERHEAD": "DIRECT_EXPENSES",
+    "ADMIN_EXPENSE": "INDIRECT_EXPENSES",
+    "SELLING_DISTRIBUTION": "INDIRECT_EXPENSES",
+    "GENERAL_EXPENSES": "INDIRECT_EXPENSES",
+    "OFFICE_UTILITY_EXPENSES": "INDIRECT_EXPENSES",
+    "TRAVEL_CONVEYANCE": "INDIRECT_EXPENSES",
+    "COMMUNICATION_INTERNET": "INDIRECT_EXPENSES",
+    "REPAIR_MAINTENANCE": "INDIRECT_EXPENSES",
+    "FINANCE_COSTS": "INDIRECT_EXPENSES",
+    "INTEREST_EXPENSE_GROUP": "INDIRECT_EXPENSES",
+    "LC_COMMISSION_GROUP": "INDIRECT_EXPENSES",
+    "BANK_CHARGES_GROUP": "INDIRECT_EXPENSES",
+    "SALES_REVENUE": "SALES_ACCOUNTS",
+    "OTHER_INCOME": "INDIRECT_INCOMES",
+    "NON_OPERATING_INCOME": "INDIRECT_INCOMES",
+}
 
 
 def _g(
@@ -53,7 +103,7 @@ def _g(
     nb = default_normal_balance or _nb_for_nature(nature)
     # Prefix avoids collisions with tenant default groups (CAPITAL, CURRENT_ASSETS, …)
     code = ("SC_" + system_code)[:32]
-    return {
+    out: SystemGroupTemplate = {
         "system_code": system_code,
         "name": name,
         "code": code,
@@ -66,6 +116,10 @@ def _g(
         "is_summary_group": is_summary_group,
         "description": description or f"System group: {name}",
     }
+    statement_class = SYSTEM_GROUP_STATEMENT_CLASS.get(system_code)
+    if statement_class:
+        out["statement_class"] = statement_class
+    return out
 
 
 def _l(

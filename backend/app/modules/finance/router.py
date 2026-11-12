@@ -46,7 +46,9 @@ from app.common.permissions import (
 )
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.modules.finance.advanced_voucher_service import voucher_book_impact_applied, voucher_in_books_clause
+from app.modules.audit.service import log_action
 from app.modules.finance.budget_enforcement_service import evaluate_voucher_budget
+from app.modules.finance.statements.schemas import validate_statement_class
 from app.modules.finance.posting_core import (
     apply_amount_to_account,
     apply_voucher_to_books,
@@ -334,6 +336,14 @@ class AccountGroupBody(BaseModel):
     allow_posting: bool = True
     is_summary_group: bool = False
     last_reviewed_at: date | None = None
+    # Optional statement classification (allowlist in finance/statements/constants.py; null = Unclassified).
+    # On PATCH it is only applied when the client sends it, so older clients never wipe a class.
+    statement_class: str | None = None
+
+    @field_validator("statement_class")
+    @classmethod
+    def _check_statement_class(cls, v: str | None) -> str | None:
+        return validate_statement_class(v)
 
 
 class AccountGroupOut(AccountGroupBody):
@@ -1582,10 +1592,22 @@ async def create_account_group(
             width=coa_cfg["group_code_width"],
         )
     await ensure_owned(db, AccountGroup, body.parent_group_id, tenant.id, "Parent account group")
+    if body.statement_class is not None:
+        await _require_manager_or_admin(db, user, tenant.id)  # classification is manager/admin only (PLAN Q19)
     payload = body.model_dump(exclude={"code"})
     payload["code"] = code
     row = AccountGroup(tenant_id=tenant.id, **payload)
     db.add(row)
+    await db.flush()
+    if row.statement_class is not None:
+        await log_action(
+            db,
+            tenant.id,
+            "finance.account_group.statement_class.update",
+            user_id=user.id,
+            resource=f"account_group:{row.id}",
+            details=json.dumps({"from": None, "to": row.statement_class, "group": row.name}),
+        )
     await db.commit()
     await _invalidate_account_group_hierarchy_cache(tenant.id)
     await db.refresh(row)
@@ -1621,10 +1643,25 @@ async def update_account_group(
             status_code=400,
             detail="Cannot set parent: would create a circular reference in account group hierarchy.",
         )
+    previous_class = row.statement_class
+    sent = body.model_fields_set
+    if "statement_class" in sent and body.statement_class != previous_class:
+        await _require_manager_or_admin(db, user, tenant.id)  # classification is manager/admin only (PLAN Q19)
     for key, value in body.model_dump().items():
         if key == "code":
             continue
+        if key == "statement_class" and key not in sent:
+            continue  # older clients omit it; never wipe a classification by accident
         setattr(row, key, value)
+    if row.statement_class != previous_class:
+        await log_action(
+            db,
+            tenant.id,
+            "finance.account_group.statement_class.update",
+            user_id=user.id,
+            resource=f"account_group:{row.id}",
+            details=json.dumps({"from": previous_class, "to": row.statement_class, "group": row.name}),
+        )
     await db.commit()
     await _invalidate_account_group_hierarchy_cache(tenant.id)
     await db.refresh(row)
@@ -1675,28 +1712,30 @@ async def seed_account_groups(
     existing = await db.execute(select(AccountGroup).where(AccountGroup.tenant_id == tenant.id).limit(1))
     if not existing.scalars().first():
         defaults = [
-            {"name": "Capital Account", "code": "CAPITAL", "nature": "Equity", "sort_order": 1},
+            {"name": "Capital Account", "code": "CAPITAL", "nature": "Equity", "sort_order": 1, "statement_class": "CAPITAL_ACCOUNT"},
             {"name": "Loans (Liability)", "code": "LOANS_LIABILITY", "nature": "Liability", "sort_order": 3},
-            {"name": "Current Liabilities", "code": "CURRENT_LIABILITIES", "nature": "Liability", "sort_order": 6},
-            {"name": "Current Assets", "code": "CURRENT_ASSETS", "nature": "Asset", "sort_order": 9},
-            {"name": "Fixed Assets", "code": "FIXED_ASSETS", "nature": "Asset", "sort_order": 16},
-            {"name": "Investments", "code": "INVESTMENTS", "nature": "Asset", "sort_order": 17},
+            {"name": "Current Liabilities", "code": "CURRENT_LIABILITIES", "nature": "Liability", "sort_order": 6, "statement_class": "CURRENT_LIABILITIES"},
+            {"name": "Current Assets", "code": "CURRENT_ASSETS", "nature": "Asset", "sort_order": 9, "statement_class": "CURRENT_ASSETS"},
+            {"name": "Fixed Assets", "code": "FIXED_ASSETS", "nature": "Asset", "sort_order": 16, "statement_class": "FIXED_ASSETS"},
+            {"name": "Investments", "code": "INVESTMENTS", "nature": "Asset", "sort_order": 17, "statement_class": "INVESTMENTS"},
             {
                 "name": "Direct Expenses",
                 "code": "DIRECT_EXPENSES",
                 "nature": "Expense",
                 "sort_order": 18,
+                "statement_class": "DIRECT_EXPENSES",
                 "affects_gross_profit": True,
             },
-            {"name": "Indirect Expenses", "code": "INDIRECT_EXPENSES", "nature": "Expense", "sort_order": 20},
+            {"name": "Indirect Expenses", "code": "INDIRECT_EXPENSES", "nature": "Expense", "sort_order": 20, "statement_class": "INDIRECT_EXPENSES"},
             {
                 "name": "Direct Income",
                 "code": "DIRECT_INCOME",
                 "nature": "Income",
                 "sort_order": 21,
+                "statement_class": "DIRECT_INCOMES",
                 "affects_gross_profit": True,
             },
-            {"name": "Indirect Income", "code": "INDIRECT_INCOME", "nature": "Income", "sort_order": 23},
+            {"name": "Indirect Income", "code": "INDIRECT_INCOME", "nature": "Income", "sort_order": 23, "statement_class": "INDIRECT_INCOMES"},
         ]
         for d in defaults:
             row = AccountGroup(
@@ -1706,6 +1745,7 @@ async def seed_account_groups(
                 nature=d["nature"],
                 sort_order=d["sort_order"],
                 affects_gross_profit=d.get("affects_gross_profit", False),
+                statement_class=d.get("statement_class"),
                 is_bank_group=False,
                 is_active=True,
             )
@@ -7934,3 +7974,9 @@ async def finance_maturity_ladder(
     return await build_maturity_ladder(
         db, tenant_id=tenant.id, master_contract_id=master_contract_id
     )
+
+
+# Statements API + classification setup (finance_statements_v2). Registered last; keeps main.py untouched.
+from app.modules.finance.statements.router import router as _statements_router  # noqa: E402
+
+router.include_router(_statements_router)

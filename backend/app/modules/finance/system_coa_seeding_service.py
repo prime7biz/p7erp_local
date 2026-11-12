@@ -66,6 +66,7 @@ def seed_tenant_system_coa_sync_session(session: Session, tenant_id: int) -> dic
             system_code=sc,
             is_system=True,
             is_protected=True,
+            statement_class=g.get("statement_class"),
         )
         session.add(row)
         session.flush()

@@ -1,0 +1,135 @@
+"""Allowlists, report rollups and display order for the statements package (PLAN 2A / 2B)."""
+
+from __future__ import annotations
+
+# ---- 2A. account group statement classes (leaf classes) -------------------------------------------------
+CAPITAL_ACCOUNT = "CAPITAL_ACCOUNT"
+LONG_TERM_LOANS = "LONG_TERM_LOANS"
+SHORT_TERM_BORROWINGS = "SHORT_TERM_BORROWINGS"
+BANK_OD = "BANK_OD"
+CURRENT_LIABILITIES = "CURRENT_LIABILITIES"
+SUNDRY_CREDITORS = "SUNDRY_CREDITORS"
+FIXED_ASSETS = "FIXED_ASSETS"
+INVESTMENTS = "INVESTMENTS"
+CURRENT_ASSETS = "CURRENT_ASSETS"
+SUNDRY_DEBTORS = "SUNDRY_DEBTORS"
+CASH_IN_HAND = "CASH_IN_HAND"
+BANK_ACCOUNTS = "BANK_ACCOUNTS"
+STOCK_IN_HAND = "STOCK_IN_HAND"
+SALES_ACCOUNTS = "SALES_ACCOUNTS"
+PURCHASE_ACCOUNTS = "PURCHASE_ACCOUNTS"
+DIRECT_INCOMES = "DIRECT_INCOMES"
+DIRECT_EXPENSES = "DIRECT_EXPENSES"
+INDIRECT_INCOMES = "INDIRECT_INCOMES"
+INDIRECT_EXPENSES = "INDIRECT_EXPENSES"
+COGS = "COGS"
+
+STATEMENT_CLASSES: tuple[str, ...] = (
+    CAPITAL_ACCOUNT,
+    LONG_TERM_LOANS,
+    SHORT_TERM_BORROWINGS,
+    BANK_OD,
+    CURRENT_LIABILITIES,
+    SUNDRY_CREDITORS,
+    FIXED_ASSETS,
+    INVESTMENTS,
+    CURRENT_ASSETS,
+    SUNDRY_DEBTORS,
+    CASH_IN_HAND,
+    BANK_ACCOUNTS,
+    STOCK_IN_HAND,
+    SALES_ACCOUNTS,
+    PURCHASE_ACCOUNTS,
+    DIRECT_INCOMES,
+    DIRECT_EXPENSES,
+    INDIRECT_INCOMES,
+    INDIRECT_EXPENSES,
+    COGS,
+)
+STATEMENT_CLASS_SET = frozenset(STATEMENT_CLASSES)
+
+# ---- 2B. stock group natures ----------------------------------------------------------------------------
+STOCK_NATURES: tuple[str, ...] = ("RAW_MATERIAL", "WORK_IN_PROCESS", "FINISHED_GOODS", "OTHER")
+STOCK_NATURE_SET = frozenset(STOCK_NATURES)
+
+# ---- rollups: leaf class -> Tally primary group (REFERENCE_REPORTS.md) ----------------------------------
+# Each primary group sits on one statement side. "Loans (Liability)" holds Bank OD for the Trial Balance and
+# Balance Sheet (PLAN section 5, "Bank OD intentionally has three treatments").
+PRIMARY_CAPITAL = "Capital Account"
+PRIMARY_LOANS = "Loans (Liability)"
+PRIMARY_CURRENT_LIABILITIES = "Current Liabilities"
+PRIMARY_FIXED_ASSETS = "Fixed Assets"
+PRIMARY_INVESTMENTS = "Investments"
+PRIMARY_CURRENT_ASSETS = "Current Assets"
+PRIMARY_SALES = "Sales Accounts"
+PRIMARY_PURCHASE = "Purchase Accounts"
+PRIMARY_COGS = "Cost of Goods Sold"
+PRIMARY_DIRECT_EXPENSES = "Direct Expenses"
+PRIMARY_DIRECT_INCOMES = "Direct Incomes"
+PRIMARY_INDIRECT_INCOMES = "Indirect Incomes"
+PRIMARY_INDIRECT_EXPENSES = "Indirect Expenses"
+PRIMARY_UNCLASSIFIED = "Unclassified"
+
+CLASS_TO_PRIMARY: dict[str, str] = {
+    CAPITAL_ACCOUNT: PRIMARY_CAPITAL,
+    LONG_TERM_LOANS: PRIMARY_LOANS,
+    SHORT_TERM_BORROWINGS: PRIMARY_LOANS,
+    BANK_OD: PRIMARY_LOANS,
+    CURRENT_LIABILITIES: PRIMARY_CURRENT_LIABILITIES,
+    SUNDRY_CREDITORS: PRIMARY_CURRENT_LIABILITIES,
+    FIXED_ASSETS: PRIMARY_FIXED_ASSETS,
+    INVESTMENTS: PRIMARY_INVESTMENTS,
+    CURRENT_ASSETS: PRIMARY_CURRENT_ASSETS,
+    SUNDRY_DEBTORS: PRIMARY_CURRENT_ASSETS,
+    CASH_IN_HAND: PRIMARY_CURRENT_ASSETS,
+    BANK_ACCOUNTS: PRIMARY_CURRENT_ASSETS,
+    STOCK_IN_HAND: PRIMARY_CURRENT_ASSETS,
+    SALES_ACCOUNTS: PRIMARY_SALES,
+    PURCHASE_ACCOUNTS: PRIMARY_PURCHASE,
+    COGS: PRIMARY_COGS,
+    DIRECT_EXPENSES: PRIMARY_DIRECT_EXPENSES,
+    DIRECT_INCOMES: PRIMARY_DIRECT_INCOMES,
+    INDIRECT_INCOMES: PRIMARY_INDIRECT_INCOMES,
+    INDIRECT_EXPENSES: PRIMARY_INDIRECT_EXPENSES,
+}
+
+# Display order in the Trial Balance (reference sample order, with Direct Incomes / COGS added).
+TB_PRIMARY_ORDER: tuple[str, ...] = (
+    PRIMARY_CAPITAL,
+    PRIMARY_LOANS,
+    PRIMARY_CURRENT_LIABILITIES,
+    PRIMARY_FIXED_ASSETS,
+    PRIMARY_INVESTMENTS,
+    PRIMARY_CURRENT_ASSETS,
+    PRIMARY_SALES,
+    PRIMARY_PURCHASE,
+    PRIMARY_COGS,
+    PRIMARY_DIRECT_EXPENSES,
+    PRIMARY_DIRECT_INCOMES,
+    PRIMARY_INDIRECT_INCOMES,
+    PRIMARY_INDIRECT_EXPENSES,
+    PRIMARY_UNCLASSIFIED,
+)
+
+# Balance Sheet sides (primary groups, in display order).
+BS_LIABILITY_PRIMARIES: tuple[str, ...] = (PRIMARY_CAPITAL, PRIMARY_LOANS, PRIMARY_CURRENT_LIABILITIES)
+BS_ASSET_PRIMARIES: tuple[str, ...] = (PRIMARY_FIXED_ASSETS, PRIMARY_INVESTMENTS, PRIMARY_CURRENT_ASSETS)
+
+# Classes that belong to the Balance Sheet vs the income statement.
+BALANCE_SHEET_CLASSES = frozenset(
+    c for c, p in CLASS_TO_PRIMARY.items() if p in BS_LIABILITY_PRIMARIES + BS_ASSET_PRIMARIES
+)
+PROFIT_LOSS_CLASSES = STATEMENT_CLASS_SET - BALANCE_SHEET_CLASSES
+
+# Trading account sides / profit-and-loss sides (PLAN P&L section; COGS is the debit side of Trading).
+TRADING_DEBIT_CLASSES: tuple[str, ...] = (COGS, PURCHASE_ACCOUNTS, DIRECT_EXPENSES)
+TRADING_CREDIT_CLASSES: tuple[str, ...] = (SALES_ACCOUNTS, DIRECT_INCOMES)
+PL_DEBIT_CLASSES: tuple[str, ...] = (INDIRECT_EXPENSES,)
+PL_CREDIT_CLASSES: tuple[str, ...] = (INDIRECT_INCOMES,)
+
+# Income-statement group "nature" values; used only to place UNCLASSIFIED groups so the statements still
+# balance. The amount is flagged with an UNCLASSIFIED_GROUPS warning and is never put in a leaf class.
+PL_NATURES = frozenset({"income", "expense"})
+
+MONEY_PLACES = 4
+MAX_GROUP_DEPTH = 50  # cycle guard for the recursive hierarchy walk

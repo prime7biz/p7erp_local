@@ -50,6 +50,9 @@ class AccountGroup(Base):
     system_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_protected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Statement classification (docs/finance-modernization/PLAN.md 2A). NULL = Unclassified (never guessed);
+    # a descendant without its own value inherits the nearest ancestor's. Allowlist: finance/statements/constants.py.
+    statement_class: Mapped[str | None] = mapped_column(String(40), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow

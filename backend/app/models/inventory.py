@@ -404,10 +404,20 @@ class StockReservation(Base):
         ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True
     )
     bom_id: Mapped[int | None] = mapped_column(ForeignKey("boms.id", ondelete="SET NULL"), nullable=True)
-    reserved_qty: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False, default=0)
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default="HARD", index=True)  # SOFT|HARD|RELEASED
+    reserved_qty: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=0)
+    # Legacy: SOFT|HARD|RELEASED. Manufacturing Intelligence Phase 2 rows use ACTIVE + reservation_kind.
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="HARD", index=True)
     reserved_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     released_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Migration 295 (all NULL on legacy rows): HARD_ATP | TENTATIVE | INFORMATIONAL, writer tag, expiry,
+    # Order BOM line, optimistic lock counter.
+    reservation_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    reservation_source: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    bom_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("bom_items.id", ondelete="SET NULL"), nullable=True
+    )
+    lock_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     created_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

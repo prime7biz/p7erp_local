@@ -1039,6 +1039,30 @@ async def rule_production_cm_overrun(
     return out
 
 
+def _mfg_predictive_rule(kind: str):
+    """Manufacturing Intelligence Phase 4: reads stored, alert-eligible findings only (returns [] while the strict
+    flag mfg_predictive_intelligence_v1 is off). Imported lazily so the merch alert engine never depends on it."""
+
+    async def _rule(db: AsyncSession, tenant_id: int, config: dict[str, Any] | None) -> list[dict[str, Any]]:
+        from app.modules.mfg_planning.predictive_alert_rules import run_kind
+
+        return await run_kind(db, tenant_id, kind, config)
+
+    _rule.__name__ = f"rule_mfg_{kind.lower()}"
+    return _rule
+
+
+MFG_PREDICTIVE_RULES: dict[str, tuple[str, str, str, str]] = {
+    # rule_key: (finding kind, name, default severity, entity type)
+    "mfg_delivery_risk": ("DELIVERY_RISK", "Predicted late delivery", "high", "order"),
+    "mfg_late_material": ("LATE_MATERIAL", "Material arriving late for production", "high", "order"),
+    "mfg_capacity_overload": ("CAPACITY_OVERLOAD", "Sewing line overloaded", "high", "sewing_line"),
+    "mfg_line_idle": ("LINE_IDLE", "Sewing line idle", "medium", "sewing_line"),
+    "mfg_output_drop": ("OUTPUT_DROP", "Unusual output drop", "medium", "sewing_line"),
+    "mfg_quality_spike": ("QUALITY_SPIKE", "Unusual rejection spike", "medium", "sewing_line"),
+}
+
+
 RULE_REGISTRY: dict[str, callable] = {
     "followup_overdue": rule_followup_overdue,
     "tna_action_overdue": rule_tna_action_overdue,
@@ -1055,6 +1079,7 @@ RULE_REGISTRY: dict[str, callable] = {
     "master_contract_btb_utilization_risk": rule_master_contract_btb_utilization_risk,
     "btb_lc_maturity_due_or_overdue": rule_btb_lc_maturity_due_or_overdue,
     "production_cm_overrun": rule_production_cm_overrun,
+    **{key: _mfg_predictive_rule(spec[0]) for key, spec in MFG_PREDICTIVE_RULES.items()},
 }
 
 DEFAULT_DEFINITIONS: list[dict[str, Any]] = [
@@ -1073,4 +1098,8 @@ DEFAULT_DEFINITIONS: list[dict[str, Any]] = [
     {"rule_key": "master_contract_btb_utilization_risk", "name": "Master contract BTB utilization risk", "severity_default": "high", "entity_type": "master_contract"},
     {"rule_key": "btb_lc_maturity_due_or_overdue", "name": "BTB LC maturity due/overdue", "severity_default": "high", "entity_type": "btb_lc"},
     {"rule_key": "production_cm_overrun", "name": "Production CM overrun vs quote", "severity_default": "high", "entity_type": "order"},
+    *(
+        {"rule_key": key, "name": name, "severity_default": severity, "entity_type": entity}
+        for key, (_kind, name, severity, entity) in MFG_PREDICTIVE_RULES.items()
+    ),
 ]

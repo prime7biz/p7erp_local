@@ -44,6 +44,9 @@ from app.workers import advanced_voucher_worker as _advanced_voucher_worker  # n
 from app.workers import statutory_remittance_worker as _statutory_remittance_worker  # noqa: E402, F401
 from app.workers import medical_certificate_expiry_worker as _medical_certificate_expiry_worker  # noqa: E402, F401
 from app.workers import mis_report_worker as _mis_report_worker  # noqa: E402, F401
+from app.workers import mfg_planning_worker as _mfg_planning_worker  # noqa: E402, F401
+from app.workers import mfg_predictive_worker as _mfg_predictive_worker  # noqa: E402, F401
+from celery.schedules import crontab as _crontab  # noqa: E402
 
 # Optional beat schedule (enabled when a beat worker is running).
 celery_app.conf.beat_schedule = {
@@ -83,6 +86,15 @@ celery_app.conf.beat_schedule = {
     "finance-weekly-mis-report": {
         "task": "finance.weekly_mis_report",
         "schedule": 60 * 60 * 24 * 7,
+    },
+    "mfg-planning-lifecycle-daily": {
+        "task": "mfg.planning_lifecycle_daily",
+        "schedule": 60 * 60 * 24,
+    },
+    # Manufacturing Intelligence Phase 4: 19:30 UTC = 01:30 Asia/Dhaka (each tenant is a no-op while its flag is off).
+    "mfg-predictive-daily": {
+        "task": "mfg.predictive_daily",
+        "schedule": _crontab(minute=30, hour=19),
     },
 }
 

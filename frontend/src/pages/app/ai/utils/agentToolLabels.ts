@@ -23,6 +23,9 @@ const AGENT_TOOL_LABELS: Record<string, string> = {
   analyze_structured_metrics: "Analysis",
   search_notes: "Notes",
   search_help_articles: "Help articles",
+  mfg_delivery_forecast: "Delivery forecast",
+  mfg_bottlenecks: "Production bottlenecks",
+  mfg_supplier_lateness: "Supplier lateness",
 };
 
 export function agentToolLabel(toolName: string): string {

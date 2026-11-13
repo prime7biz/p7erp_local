@@ -30,6 +30,7 @@ from app.models import (
     User,
 )
 from app.modules.merch import constants as merch_c
+from app.modules.merch import route_stages
 from app.modules.merch.deps import ensure_tenant as _ensure_tenant
 from app.modules.merch.permissions import MERCH_PERMISSION_TNA_MANAGE, require_merch_permission
 
@@ -56,9 +57,76 @@ class FollowupActionTemplateOut(BaseModel):
     is_mandatory: bool
     is_active: bool
     buyer_id: int | None
+    product_type: str | None = None
+    sourcing_mode: str | None = None
+    route_code: str | None = None
+    gate_class: str | None = None
+    predecessor_codes: list[str] | None = None
+    lag_days: int | None = None
+    stage_kind: str | None = None
+    stage_position: str | None = None
+    lead_time_days: int | None = None
 
 
-class FollowupActionTemplateCreate(BaseModel):
+class _TemplateRouteFields(BaseModel):
+    """Optional route stage fields (migration 299); allowlists in merch/route_stages.py."""
+
+    product_type: str | None = Field(None, max_length=100)
+    sourcing_mode: str | None = None
+    route_code: str | None = None
+    gate_class: str | None = None
+    predecessor_codes: list[str] | None = Field(None, max_length=route_stages.MAX_PREDECESSORS)
+    lag_days: int | None = Field(None, ge=-route_stages.MAX_LAG_DAYS, le=route_stages.MAX_LAG_DAYS)
+    stage_kind: str | None = None
+    stage_position: str | None = None
+    lead_time_days: int | None = Field(None, ge=0, le=route_stages.MAX_LEAD_TIME_DAYS)
+
+    @field_validator("sourcing_mode")
+    @classmethod
+    def _v_sourcing(cls, v: str | None) -> str | None:
+        return route_stages.choice(v, route_stages.SOURCING_MODES, "sourcing_mode")
+
+    @field_validator("gate_class")
+    @classmethod
+    def _v_gate(cls, v: str | None) -> str | None:
+        return route_stages.choice(v, route_stages.GATE_CLASSES, "gate_class")
+
+    @field_validator("stage_kind")
+    @classmethod
+    def _v_kind(cls, v: str | None) -> str | None:
+        return route_stages.choice(v, route_stages.STAGE_KINDS, "stage_kind")
+
+    @field_validator("stage_position")
+    @classmethod
+    def _v_position(cls, v: str | None) -> str | None:
+        return route_stages.choice(v, route_stages.STAGE_POSITIONS, "stage_position")
+
+    @field_validator("route_code")
+    @classmethod
+    def _v_route(cls, v: str | None) -> str | None:
+        return route_stages.route_code(v)
+
+    @field_validator("predecessor_codes")
+    @classmethod
+    def _v_preds(cls, v: list[str] | None) -> list[str] | None:
+        return route_stages.predecessor_codes(v)
+
+    @field_validator("product_type")
+    @classmethod
+    def _v_product(cls, v: str | None) -> str | None:
+        return (v or "").strip() or None
+
+
+def _template_out(r: FollowupActionTemplate) -> FollowupActionTemplateOut:
+    return FollowupActionTemplateOut(
+        id=r.id, code=r.code, name=r.name, phase=r.phase, action_group=r.action_group,
+        sequence_no=r.sequence_no, default_days_before_delivery=r.default_days_before_delivery,
+        is_mandatory=r.is_mandatory, is_active=r.is_active, buyer_id=r.buyer_id,
+        **{f: getattr(r, f, None) for f in route_stages.TEMPLATE_ROUTE_FIELDS},
+    )
+
+
+class FollowupActionTemplateCreate(_TemplateRouteFields):
     code: str
     name: str
     phase: str
@@ -113,6 +181,11 @@ class OrderFollowupActionOut(BaseModel):
     external_id: int | None
     created_at: datetime
     updated_at: datetime
+    route_code: str | None = None
+    stage_kind: str | None = None
+    stage_position: str | None = None
+    gate_class: str | None = None
+    lead_time_days: int | None = None
 
 
 class FollowupActionCommentOut(BaseModel):
@@ -301,6 +374,7 @@ def _followup_action_to_out(
         completed_at=a.completed_at,
         milestone_type=a.milestone_type,
         external_id=a.external_id,
+        **{f: getattr(a, f, None) for f in route_stages.ACTION_ROUTE_FIELDS},
         created_at=a.created_at,
         updated_at=a.updated_at,
     )
@@ -350,21 +424,7 @@ async def list_followup_templates(
             )
         )
         rows = result.scalars().all()
-    return [
-        FollowupActionTemplateOut(
-            id=r.id,
-            code=r.code,
-            name=r.name,
-            phase=r.phase,
-            action_group=r.action_group,
-            sequence_no=r.sequence_no,
-            default_days_before_delivery=r.default_days_before_delivery,
-            is_mandatory=r.is_mandatory,
-            is_active=r.is_active,
-            buyer_id=r.buyer_id,
-        )
-        for r in rows
-    ]
+    return [_template_out(r) for r in rows]
 
 
 @router.get("/followup-templates/{template_id}", response_model=FollowupActionTemplateOut)
@@ -378,11 +438,7 @@ async def get_followup_template(
     row = await db.get(FollowupActionTemplate, template_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Template not found")
-    return FollowupActionTemplateOut(
-        id=row.id, code=row.code, name=row.name, phase=row.phase, action_group=row.action_group,
-        sequence_no=row.sequence_no, default_days_before_delivery=row.default_days_before_delivery,
-        is_mandatory=row.is_mandatory, is_active=row.is_active, buyer_id=row.buyer_id,
-    )
+    return _template_out(row)
 
 
 @router.post("/followup-templates", status_code=201, response_model=FollowupActionTemplateOut)
@@ -399,14 +455,10 @@ async def create_followup_template(
     db.add(row)
     await db.commit()
     await db.refresh(row)
-    return FollowupActionTemplateOut(
-        id=row.id, code=row.code, name=row.name, phase=row.phase, action_group=row.action_group,
-        sequence_no=row.sequence_no, default_days_before_delivery=row.default_days_before_delivery,
-        is_mandatory=row.is_mandatory, is_active=row.is_active, buyer_id=row.buyer_id,
-    )
+    return _template_out(row)
 
 
-class FollowupActionTemplateUpdate(BaseModel):
+class FollowupActionTemplateUpdate(_TemplateRouteFields):
     name: str | None = None
     phase: str | None = None
     action_group: str | None = None
@@ -445,13 +497,13 @@ async def update_followup_template(
         v = getattr(body, f)
         if v is not None:
             setattr(row, f, v)
+    # Route fields: a field sent as null clears it.
+    for f in route_stages.TEMPLATE_ROUTE_FIELDS:
+        if f in body.model_fields_set:
+            setattr(row, f, getattr(body, f))
     await db.commit()
     await db.refresh(row)
-    return FollowupActionTemplateOut(
-        id=row.id, code=row.code, name=row.name, phase=row.phase, action_group=row.action_group,
-        sequence_no=row.sequence_no, default_days_before_delivery=row.default_days_before_delivery,
-        is_mandatory=row.is_mandatory, is_active=row.is_active, buyer_id=row.buyer_id,
-    )
+    return _template_out(row)
 
 
 @router.delete("/followup-templates/{template_id}", status_code=204)
@@ -681,6 +733,7 @@ async def generate_followup_actions(
             planned_date=planned,
             status="pending",
             milestone_type=t.code,
+            **route_stages.action_route_values(t),
         )
         db.add(action)
         created.append(action)

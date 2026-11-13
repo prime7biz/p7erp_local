@@ -72,6 +72,7 @@ from app.modules.orders.schemas import (
   PromiseCheckLine,
   PromiseCheckOut,
 )
+from app.modules.merch.route_stages import action_route_values
 from app.modules.merch.costing_variance_service import (
   build_order_cost_variance,
   list_order_profitability_summary,
@@ -197,6 +198,13 @@ async def _is_tenant_admin(user: User, db: AsyncSession) -> bool:
   return role.name.lower() in {"admin", "super_admin", "superadmin", "owner"}
 
 
+async def _release_material_allocation_on_cancel(db: AsyncSession, tenant: Tenant, order: Order, user: User) -> None:
+  """Cancel hook: free the order's material holds / pegs when allocation is on (never fails the cancel)."""
+  from app.modules.inventory.allocation_reconcile_service import release_allocation_on_cancel
+
+  await release_allocation_on_cancel(db, tenant, order, user.id)
+
+
 async def _validate_customer_intermediary(
   db: AsyncSession, *, tenant_id: int, customer_id: int, customer_intermediary_id: int
 ) -> None:
@@ -282,6 +290,7 @@ async def _auto_generate_followup_actions_if_missing(
         planned_date=planned_date,
         status="pending",
         milestone_type=template.code,
+        **action_route_values(template),
       )
     )
 
@@ -906,6 +915,8 @@ async def update_order(
     order.remarks = body.remarks
 
   await db.flush()
+  if body.status is not None and (order.status or "").strip().upper() == "CANCELLED":
+    await _release_material_allocation_on_cancel(db, tenant, order, user)
   await _auto_generate_followup_actions_if_missing(
     db,
     tenant_id=tenant.id,
@@ -1108,6 +1119,8 @@ async def update_order_status(
     entity_label="order",
   )
   await db.flush()
+  if (order.status or "").strip().upper() == "CANCELLED":
+    await _release_material_allocation_on_cancel(db, tenant, order, user)
   await _auto_generate_followup_actions_if_missing(
     db,
     tenant_id=tenant.id,

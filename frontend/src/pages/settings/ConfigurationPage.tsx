@@ -343,6 +343,83 @@ export function ConfigurationPage() {
               </span>
             </span>
           </label>
+          {(
+            [
+              {
+                key: "manufacturing_intelligence_v1",
+                title: "Manufacturing intelligence (read-only)",
+                help: "Adds capacity, line loading, readiness and delivery-risk panels to the Control Tower; it never changes orders, plans or stock.",
+              },
+              {
+                key: "planning_math_v2",
+                title: "Corrected planning maths preview",
+                help: "Shows corrected capacity and delivery dates beside the current formula; the existing planning screens keep using the current formula.",
+              },
+              {
+                key: "mfg_order_bom_readiness_v2",
+                title: "Readiness uses the order BOM",
+                help: "Judges material readiness from the order's own BOM instead of the style BOM estimate.",
+              },
+              {
+                key: "mfg_material_allocation_v1",
+                title: "Material allocation (hold stock for orders)",
+                help: "Adds a Materials tab: preview, then confirm holds on stock and links to open purchase orders per order. Holds are advisory and never post stock or accounts. Needs Manufacturing intelligence on.",
+              },
+              {
+                key: "mfg_integrated_planning_v1",
+                title: "Integrated planning (plan changes, tentative demand, people & machines)",
+                help: "Adds tabs to propose and approve line booking changes, book inquiry / quotation demand as soft load, and assign people and machines to lines. Needs Manufacturing intelligence on.",
+              },
+              {
+                key: "mfg_plan_four_eyes",
+                title: "Four-eyes approval for plan changes",
+                help: "The person who proposes a plan change cannot approve it. Needs at least 2 active users who can approve plans (admin / manager or the plan approval permission; when role permissions are enforced, managers also need the plan view and approval permissions).",
+              },
+              {
+                key: "mfg_cost_intelligence_v1",
+                title: "Order cost at completion (Cost & cash tab)",
+                help: "Adds a Cost & cash tab with each confirmed order's estimated cost at completion and margin. Read-only estimates, never posted to the accounts. Money is visible only to admin / manager or roles with finance access plus the MIS report view. Needs Manufacturing intelligence on.",
+              },
+              {
+                key: "mfg_financial_readiness_v1",
+                title: "Cash requirement forecast (Cost & cash tab)",
+                help: "Adds a weekly cash requirement forecast (payments out, export receipts in, financing gap) to the Cost & cash tab. Read-only forecast, never posted to the accounts. Money is visible only to admin / manager or roles with finance access plus the MIS report view. Needs Manufacturing intelligence on.",
+              },
+              {
+                key: "mfg_predictive_intelligence_v1",
+                title: "Predictions (delivery forecasts, line efficiency, bottlenecks)",
+                help: "Adds a Predictions tab: likely / safe / worst-case delivery dates, on-time probability, line efficiency from history, supplier lateness, unusual production and daily bottleneck recommendations. Predictions are statistics from your own history and never change plans; accepting a recommendation only records the decision. No money. Needs Manufacturing intelligence on.",
+              },
+              {
+                key: "mfg_predictive_ai_text_v1",
+                title: "AI explanations for predictions",
+                help: "Adds an Explain button to recommendations. It sends anonymised summaries (codes, dates and percentages; no buyer, employee or supplier names) to the company's approved AI provider; the numbers always come from the statistics. Needs Predictions on.",
+              },
+              {
+                key: "mfg_advanced_planning_v1",
+                title: "Forward plan (capacity vs demand, scenarios, scheduler)",
+                help: "Adds a Forward plan tab: sewing capacity against confirmed, booked, tentative and forecast work for the next 90-180 days, what-if scenarios, a finance-limited view (with the cash forecast switch and finance access) and, with Integrated planning on, a scheduler that proposes line bookings. Everything is an estimate; a scheduler proposal changes nothing until it is approved in Plan changes. Needs Manufacturing intelligence on.",
+              },
+            ] as const
+          ).map((f) => (
+            <label key={f.key} className="flex items-start gap-3 text-sm text-text-secondary">
+              <input
+                type="checkbox"
+                className="mt-1 rounded border-border-strong"
+                checked={featureFlags[f.key] === true}
+                onChange={(e) =>
+                  setFeatureFlags((prev) => ({
+                    ...prev,
+                    [f.key]: e.target.checked,
+                  }))
+                }
+              />
+              <span>
+                <span className="font-medium text-text-primary">{f.title}</span>
+                <span className="mt-0.5 block text-xs text-text-muted">{f.help}</span>
+              </span>
+            </label>
+          ))}
           <label className="flex items-start gap-3 text-sm text-text-secondary">
             <input
               type="checkbox"
@@ -839,43 +916,6 @@ export function ConfigurationPage() {
               </span>
             </span>
           </label>
-        </div>
-
-        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3" hidden={!showTier("more")}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">HR payroll</p>
-          <label className="flex items-start gap-3 text-sm text-text-secondary">
-            <input
-              type="checkbox"
-              className="mt-1 rounded border-border-strong"
-              checked={featureFlags.payroll_auto_calculate_enabled === true}
-              onChange={(e) =>
-                setFeatureFlags((prev) => ({
-                  ...prev,
-                  payroll_auto_calculate_enabled: e.target.checked,
-                }))
-              }
-            />
-            <span>
-              <span className="font-medium text-text-primary">Payroll auto-calculate</span>
-              <span className="mt-0.5 block text-xs text-text-muted">
-                Allows applying auto-calculated run lines from employee structure assignments (preview always
-                available). Off by default.
-              </span>
-            </span>
-          </label>
-          <label className="flex items-start gap-3 text-sm text-text-secondary">
-            <input
-              type="checkbox"
-              className="mt-1 rounded border-border-strong"
-              checked={featureFlags.payroll_four_eyes_approval === true}
-              onChange={(e) =>
-                setFeatureFlags((prev) => ({
-                  ...prev,
-                  payroll_four_eyes_approval: e.target.checked,
-                }))
-              }
-            />
-            <span>
           <label className="flex items-start gap-3 text-sm text-text-secondary">
             <input
               type="checkbox"
@@ -975,6 +1015,43 @@ export function ConfigurationPage() {
               })
             }
           />
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3" hidden={!showTier("more")}>
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">HR payroll</p>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.payroll_auto_calculate_enabled === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  payroll_auto_calculate_enabled: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Payroll auto-calculate</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Allows applying auto-calculated run lines from employee structure assignments (preview always
+                available). Off by default.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.payroll_four_eyes_approval === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  payroll_four_eyes_approval: e.target.checked,
+                }))
+              }
+            />
+            <span>
               <span className="font-medium text-text-primary">Payroll four-eyes approval</span>
               <span className="mt-0.5 block text-xs text-text-muted">
                 The person who finalized a payroll run cannot approve it; a second admin or manager must. Needs at

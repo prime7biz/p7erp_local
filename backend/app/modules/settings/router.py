@@ -1,6 +1,7 @@
 from datetime import datetime
 from functools import lru_cache
 import logging
+from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import desc, func, or_, select
@@ -10,12 +11,35 @@ from app.common.pagination import MAX_PAGE_SIZE
 from app.common.auth import get_current_user, hash_password
 from app.common.email_service import send_staff_welcome_email
 from app.common.plan_enforcer import assert_can_add_user
-from app.common.permissions import permissions_registry_api_payload, require_internal_permission
+from app.common.permissions import (
+    internal_permission_granted,
+    permissions_registry_api_payload,
+    require_internal_permission,
+)
 from app.common.username import generate_unique_username_for_tenant
 from app.common.authz import ensure_user_is_tenant_admin
 from app.common.tenant import require_tenant
 from app.common.tenant_feature_keys import (
     HR_BD_SALARY_TDS_ENABLED,
+    MFG_ADVANCED_PLANNING_V1,
+    MFG_COST_INTELLIGENCE_V1,
+    MFG_FINANCIAL_READINESS_V1,
+    MFG_INTEGRATED_PLANNING_V1,
+    MFG_MATERIAL_ALLOCATION_V1,
+    MFG_PLAN_FOUR_EYES,
+    MFG_PREDICTIVE_AI_TEXT_V1,
+    MFG_PREDICTIVE_INTELLIGENCE_V1,
+    RBAC_MODE_ENFORCE,
+    get_tenant_rbac_mode,
+    is_manufacturing_intelligence_v1_enabled,
+    is_mfg_advanced_planning_v1_enabled,
+    is_mfg_cost_intelligence_v1_enabled,
+    is_mfg_financial_readiness_v1_enabled,
+    is_mfg_integrated_planning_v1_enabled,
+    is_mfg_material_allocation_v1_enabled,
+    is_mfg_plan_four_eyes_enabled,
+    is_mfg_predictive_ai_text_v1_enabled,
+    is_mfg_predictive_intelligence_v1_enabled,
     is_payroll_four_eyes_enabled,
     is_single_session_enforced,
     normalize_feature_flags,
@@ -106,6 +130,98 @@ async def _count_payroll_approvers(db: AsyncSession, tenant_id: int) -> int:
     )
 
 
+PLAN_APPROVER_ROLE_NAMES = ("admin", "manager")
+_MFG_PLAN_APPROVE_KEY = "production.planning.approve"
+_MFG_PLAN_ENDPOINT_KEYS = ("production.planning.read", _MFG_PLAN_APPROVE_KEY)
+_MAX_APPROVER_SCAN = 5000
+
+
+async def _count_plan_approvers(db: AsyncSession, tenant_id: int, *, rbac_enforced: bool = False) -> int:
+    """Active users who can approve plan revisions.
+
+    RBAC off / shadow: admin / manager role, or production.planning.approve granted. RBAC enforce: only users the
+    approve endpoint lets through (production.planning.read AND .approve granted; managers get no bypass there).
+    """
+    rows = (
+        await db.execute(
+            select(Role.name, Role.permissions)
+            .join(User, User.role_id == Role.id)
+            .where(
+                User.tenant_id == tenant_id,
+                or_(Role.tenant_id == tenant_id, Role.tenant_id.is_(None)),
+                User.is_active.is_(True),
+            )
+            .limit(_MAX_APPROVER_SCAN)
+        )
+    ).all()
+    count = 0
+    for name, permissions in rows:
+        role = SimpleNamespace(name=name, permissions=permissions)
+        if rbac_enforced:
+            if all(internal_permission_granted(role=role, permission_key=k) for k in _MFG_PLAN_ENDPOINT_KEYS):
+                count += 1
+        elif (name or "").strip().lower() in PLAN_APPROVER_ROLE_NAMES or internal_permission_granted(
+            role=role, permission_key=_MFG_PLAN_APPROVE_KEY
+        ):
+            count += 1
+    return count
+
+
+_MFG_GUARDED = (
+    (MFG_MATERIAL_ALLOCATION_V1, is_mfg_material_allocation_v1_enabled),
+    (MFG_INTEGRATED_PLANNING_V1, is_mfg_integrated_planning_v1_enabled),
+    (MFG_PLAN_FOUR_EYES, is_mfg_plan_four_eyes_enabled),
+    # Phase 3 (cost at completion, cash requirement): also need manufacturing_intelligence_v1.
+    (MFG_COST_INTELLIGENCE_V1, is_mfg_cost_intelligence_v1_enabled),
+    (MFG_FINANCIAL_READINESS_V1, is_mfg_financial_readiness_v1_enabled),
+    # Phase 4 (predictive): need manufacturing_intelligence_v1; the AI text switch also needs the predictive switch.
+    (MFG_PREDICTIVE_INTELLIGENCE_V1, is_mfg_predictive_intelligence_v1_enabled),
+    (MFG_PREDICTIVE_AI_TEXT_V1, is_mfg_predictive_ai_text_v1_enabled),
+    # Phase 5 (forward plan, scenarios): needs manufacturing_intelligence_v1.
+    (MFG_ADVANCED_PLANNING_V1, is_mfg_advanced_planning_v1_enabled),
+)
+
+
+def _predictive_effective(flags: dict) -> bool:
+    return is_manufacturing_intelligence_v1_enabled(flags) and is_mfg_predictive_intelligence_v1_enabled(flags)
+
+
+async def _check_mfg_planning_flags(db: AsyncSession, tenant_id: int, current: dict, new_flags: dict) -> list[str]:
+    """Manufacturing Intelligence Phase 2 switches (plan section 15 #17). Returns the changes to audit.
+
+    Allocation / integrated planning / Phase 3 cost intelligence and financial readiness can be switched on only
+    while manufacturing_intelligence_v1 is on; plan
+    four-eyes only with at least 2 active users who can approve plans. Switching off is always allowed.
+    """
+    changes: list[str] = []
+    mi_on = is_manufacturing_intelligence_v1_enabled(new_flags)
+    for key, enabled in _MFG_GUARDED:
+        was, now = enabled(current), enabled(new_flags)
+        if now and not was:
+            if key != MFG_PLAN_FOUR_EYES and not mi_on:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"{key} can be switched on only while manufacturing_intelligence_v1 is on.",
+                )
+            if key == MFG_PREDICTIVE_AI_TEXT_V1 and not is_mfg_predictive_intelligence_v1_enabled(new_flags):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"{key} can be switched on only while {MFG_PREDICTIVE_INTELLIGENCE_V1} is on.",
+                )
+            rbac_enforced = get_tenant_rbac_mode(new_flags) == RBAC_MODE_ENFORCE
+            if key == MFG_PLAN_FOUR_EYES and await _count_plan_approvers(db, tenant_id, rbac_enforced=rbac_enforced) < 2:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Plan four-eyes approval needs at least 2 active users who can approve plans (admin or "
+                        "manager role, or production.planning.approve); otherwise nobody could approve a plan change."
+                    ),
+                )
+        if now != was:
+            changes.append(f"{key} {'enabled' if now else 'disabled'}")
+    return changes
+
+
 async def _get_tenant_user(db: AsyncSession, tenant_id: int, user_id: int) -> User:
     result = await db.execute(select(User).where(User.id == user_id, User.tenant_id == tenant_id))
     target = result.scalar_one_or_none()
@@ -185,7 +301,31 @@ async def update_settings_config(
                         "otherwise nobody could approve a payroll run."
                     ),
                 )
+        mfg_changes = await _check_mfg_planning_flags(db, tenant.id, current, new_flags)
+        predictive_turned_off = _predictive_effective(current) and not _predictive_effective(new_flags)
         tenant.feature_flags = new_flags
+        for change in mfg_changes:
+            await log_action(
+                db,
+                tenant_id=tenant.id,
+                user_id=user.id,
+                action="SETTINGS_UPDATE",
+                resource="settings.mfg_planning_flags",
+                details=f"Manufacturing planning switch: {change}",
+            )
+        if predictive_turned_off:
+            # Plan 15 section 17.5 (a): close the predictive alerts in the same transaction.
+            from app.modules.mfg_planning.predictive_writer import resolve_all_mfg_alerts
+
+            resolved = await resolve_all_mfg_alerts(db, tenant.id)
+            await log_action(
+                db,
+                tenant_id=tenant.id,
+                user_id=user.id,
+                action="SETTINGS_UPDATE",
+                resource="settings.mfg_planning_flags",
+                details=f"Manufacturing predictive alerts resolved after switching off: {resolved}",
+            )
         if four_eyes_now != four_eyes_was:
             await log_action(
                 db,

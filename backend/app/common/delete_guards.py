@@ -24,6 +24,8 @@ from app.models import (
     LineCrewTemplate,
     ManufacturingWorkOrder,
     MerchSampleRequest,
+    MfgMaterialSupplyPegging,
+    MfgTentativeLineBooking,
     Order,
     OrderAmendment,
     OrderFollowupAction,
@@ -31,6 +33,8 @@ from app.models import (
     ProcessOrderCostLine,
     ProductionCrewRole,
     ProductionDefectCode,
+    ProductionEmployeeLineAssignment,
+    ProductionMachineLineAssignment,
     ProductionMaterialIssue,
     ProductionQcCheck,
     ProductionShift,
@@ -40,6 +44,7 @@ from app.models import (
     Quotation,
     SewingLine,
     StockMovement,
+    StockReservation,
     TradeCase,
     UnitCrewDaily,
     UnitCrewTemplate,
@@ -48,7 +53,11 @@ from app.models import (
 
 
 async def count_where(db: AsyncSession, model, tenant_id: int, *filters) -> int:
-    stmt = select(func.count()).select_from(model).where(model.tenant_id == tenant_id)
+    stmt = select(func.count()).select_from(model)
+    # Link tables such as ProformaInvoiceOrder have no tenant column: their callers filter by an id that was already
+    # tenant-checked (before this fix the guard raised AttributeError for every order delete).
+    if hasattr(model, "tenant_id"):
+        stmt = stmt.where(model.tenant_id == tenant_id)
     for f in filters:
         stmt = stmt.where(f)
     return int((await db.execute(stmt)).scalar() or 0)
@@ -139,6 +148,15 @@ async def ensure_order_deletable(db: AsyncSession, tenant_id: int, order_id: int
         db, tenant_id, reasons, "delivery challan links", DeliveryChallanOrder, DeliveryChallanOrder.order_id == order_id
     )
     await _append_count(db, tenant_id, reasons, "BOMs", Bom, Bom.order_id == order_id)
+    # Material allocation (Manufacturing Intelligence Phase 2): active holds, and any peg (the FK is RESTRICT).
+    await _append_count(
+        db, tenant_id, reasons, "material allocations", StockReservation,
+        StockReservation.order_id == order_id, StockReservation.status == "ACTIVE",
+    )
+    await _append_count(
+        db, tenant_id, reasons, "material supply pegs", MfgMaterialSupplyPegging,
+        MfgMaterialSupplyPegging.order_id == order_id,
+    )
     await _append_count(
         db,
         tenant_id,
@@ -178,6 +196,11 @@ async def ensure_quotation_deletable(db: AsyncSession, tenant_id: int, quotation
     reasons: list[str] = []
     await _append_count(db, tenant_id, reasons, "orders", Order, Order.quotation_id == quotation_id)
     await _append_count(db, tenant_id, reasons, "BOMs", Bom, Bom.quotation_id == quotation_id)
+    # any status: the inquiry XOR quotation check means SET NULL on delete would fail in the database
+    await _append_count(
+        db, tenant_id, reasons, "tentative line bookings", MfgTentativeLineBooking,
+        MfgTentativeLineBooking.quotation_id == quotation_id,
+    )
     raise_delete_conflict("quotation", reasons)
 
 
@@ -187,6 +210,10 @@ async def ensure_inquiry_deletable(db: AsyncSession, tenant_id: int, inquiry_id:
     await _append_count(db, tenant_id, reasons, "inquiry events", InquiryEvent, InquiryEvent.inquiry_id == inquiry_id)
     await _append_count(
         db, tenant_id, reasons, "sample requests", MerchSampleRequest, MerchSampleRequest.inquiry_id == inquiry_id
+    )
+    await _append_count(
+        db, tenant_id, reasons, "tentative line bookings", MfgTentativeLineBooking,
+        MfgTentativeLineBooking.inquiry_id == inquiry_id,
     )
     raise_delete_conflict("inquiry", reasons)
 
@@ -282,6 +309,18 @@ async def ensure_sewing_line_deletable(db: AsyncSession, tenant_id: int, line_id
     await _append_count(
         db, tenant_id, reasons, "weekly crew roster", CrewRosterWeekly, CrewRosterWeekly.sewing_line_id == line_id
     )
+    await _append_count(
+        db, tenant_id, reasons, "tentative line bookings", MfgTentativeLineBooking,
+        MfgTentativeLineBooking.line_id == line_id,
+    )
+    await _append_count(
+        db, tenant_id, reasons, "employee line assignments", ProductionEmployeeLineAssignment,
+        ProductionEmployeeLineAssignment.sewing_line_id == line_id,
+    )
+    await _append_count(
+        db, tenant_id, reasons, "machine line assignments", ProductionMachineLineAssignment,
+        ProductionMachineLineAssignment.sewing_line_id == line_id,
+    )
     raise_delete_conflict("sewing line", reasons)
 
 
@@ -302,6 +341,11 @@ async def ensure_shift_deletable(db: AsyncSession, tenant_id: int, shift_id: int
     )
     await _append_count(
         db, tenant_id, reasons, "weekly crew roster", CrewRosterWeekly, CrewRosterWeekly.shift_id == shift_id
+    )
+    # FK is SET NULL: without this a delete would silently move shift operators into the day pool (capacity change)
+    await _append_count(
+        db, tenant_id, reasons, "employee line assignments", ProductionEmployeeLineAssignment,
+        ProductionEmployeeLineAssignment.shift_id == shift_id,
     )
     raise_delete_conflict("shift", reasons)
 

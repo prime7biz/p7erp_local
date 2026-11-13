@@ -38,7 +38,7 @@ from app.models.ai_agents import AiAgentDecision
 from app.modules.ai_tool.audit import log_ai_event
 from app.modules.ai_tool.authz import has_tool_permission
 from app.modules.ai_tool.screen_context import can_access_module
-from app.modules.governed_ai.detectors import AGENTS, DETECTORS, FINANCE_AGENTS, sort_findings
+from app.modules.governed_ai.detectors import AGENTS, DETECTORS, FINANCE_AGENTS, MFG_AGENTS, sort_findings
 from app.modules.governed_ai.metrics import BY_ID, CATALOG, Metric, match_metric
 from app.modules.notifications.service import notify_user
 
@@ -50,6 +50,7 @@ AGENT_PERMISSION = {
     "lc_expiry": "trade.access",
     "bom_shortfall": "merch.access",
     "finance_exceptions": "finance.access",
+    "mfg_bottleneck": "production.planning.read",
 }
 NOTIFIED_HIDE_DAYS = 3
 DISMISSED_HIDE_DAYS = 7
@@ -91,6 +92,10 @@ async def _can_confirm(db: AsyncSession, user: User, tenant: Tenant) -> bool:
 async def _agent_allowed(db: AsyncSession, tenant: Tenant, user: User, agent: str) -> bool:
     if not await can_access_module(db, tenant, user, AGENT_PERMISSION[agent]):
         return False
+    if agent in MFG_AGENTS:
+        from app.modules.mfg_intelligence.flags import predictive_on
+
+        return predictive_on(tenant)
     if agent in FINANCE_AGENTS:
         # Finance agents also need the finance AI flag, the source Control Tower flag, the fail-closed finance AI key
         # and the report view key.
@@ -192,7 +197,7 @@ async def list_exceptions(
     tid = tenant.id
     agents = await _allowed_agents(db, tenant, user)
     can_confirm = await _can_confirm(db, user, tenant)
-    findings = await _run_agents(db, tid, agents)
+    findings = await _drop_mfg_material_without_inventory(db, tenant, user, await _run_agents(db, tid, agents))
     hidden = await _hidden_keys(db, tid)
     visible = [f for f in findings if f["key"] not in hidden]
     counts = {a: sum(1 for f in visible if f["agent"] == a) for a in agents}
@@ -232,6 +237,8 @@ async def confirm_exception(
         raise HTTPException(status_code=400, detail="Unknown finding")
     if not await _agent_allowed(db, tenant, user, agent):
         raise HTTPException(status_code=403, detail="You cannot act on this finding")
+    if body.key.startswith(MFG_MATERIAL_KEY_PREFIX) and not await _may_see_mfg_material(db, tenant, user):
+        raise HTTPException(status_code=403, detail="Material recommendations need inventory read access")
     if agent in FINANCE_AGENTS and body.decision != "dismiss":
         raise HTTPException(status_code=400, detail="Finance findings can only be acknowledged (decision 'dismiss')")
     # Re-detect server-side: never trust a finding sent by the browser.
@@ -254,6 +261,15 @@ async def confirm_exception(
         decided_by=uid,
     )
     db.add(decision)
+    if agent in MFG_AGENTS:
+        # Plan 15 section 17.9: DISMISSED on a Phase 4 finding = REJECTED on the finding (shared writer).
+        from app.modules.mfg_planning.predictive_writer import mark_rejected_from_governed
+
+        finding_id = _mfg_finding_id(body.key)
+        if finding_id is not None:
+            decision.finding_id = finding_id if body.decision == "dismiss" else None
+            if body.decision == "dismiss":
+                await mark_rejected_from_governed(db, tid, finding_id)
     for rid in recipients:
         notify_user(
             db,
@@ -286,7 +302,34 @@ def _key_prefix(agent: str) -> str:
         "lc_expiry": "trade_lc_expiry_soon:",
         "bom_shortfall": "bom_shortfall:",
         "finance_exceptions": "finance_exception:",
+        "mfg_bottleneck": "mfg_",
     }[agent]
+
+
+MFG_MATERIAL_KEY_PREFIX = "mfg_late_material:"
+
+
+async def _may_see_mfg_material(db: AsyncSession, tenant: Tenant, user: User) -> bool:
+    """Same inventory-read rule as the Manufacturing Intelligence /recommendations list (RBAC enforce only)."""
+    from app.modules.mfg_intelligence.router import _may_see_material_detail
+
+    return await _may_see_material_detail(db, user, tenant)
+
+
+async def _drop_mfg_material_without_inventory(
+    db: AsyncSession, tenant: Tenant, user: User, findings: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    if not any(f["key"].startswith(MFG_MATERIAL_KEY_PREFIX) for f in findings):
+        return findings
+    if await _may_see_mfg_material(db, tenant, user):
+        return findings
+    return [f for f in findings if not f["key"].startswith(MFG_MATERIAL_KEY_PREFIX)]
+
+
+def _mfg_finding_id(key: str) -> int | None:
+    """`mfg_<kind>:<finding id>` -> finding id."""
+    tail = key.rsplit(":", 1)[-1]
+    return int(tail) if tail.isdigit() else None
 
 
 # ---------------------------------------------------------------- owner brief
@@ -296,12 +339,17 @@ async def _brief_payload(db: AsyncSession, tenant: Tenant, user: User) -> dict[s
     tid = tenant.id
     # Finance findings never enter the owner brief: its narrative is not validated against a fact catalog.
     agents = [a for a in await _allowed_agents(db, tenant, user) if a not in FINANCE_AGENTS]
+    # Phase 4 findings join the (LLM-worded) brief only when the predictive AI text switch is on (plan 15 D28).
+    from app.modules.mfg_intelligence.flags import predictive_ai_text_on
+
+    if not predictive_ai_text_on(tenant):
+        agents = [a for a in agents if a not in MFG_AGENTS]
     brief_metrics = [
         BY_ID[mid]
         for mid in ("open_orders", "late_orders", "orders_due_14d", "vouchers_in_workflow", "open_pos")
         if await can_access_module(db, tenant, user, BY_ID[mid].permission)
     ]
-    findings = sort_findings(await _run_agents(db, tid, agents))
+    findings = sort_findings(await _drop_mfg_material_without_inventory(db, tenant, user, await _run_agents(db, tid, agents)))
     metrics: dict[str, Any] = {}
     for m in brief_metrics:
         try:

@@ -201,8 +201,19 @@ async def explode_bom_for_order(
     return lines
 
 
-async def _on_order_qty(db: AsyncSession, tenant_id: int, item_id: int) -> Decimal:
-    """Open PO quantity not yet fully received (best-effort: sum open PO lines)."""
+async def _on_order_qty(
+    db: AsyncSession, tenant_id: int, item_id: int, *, allocation_v1: bool | None = None
+) -> Decimal:
+    """Open PO quantity not yet fully received (best-effort: sum open PO lines).
+
+    Flag ``mfg_material_allocation_v1`` ON: net open supply from ``open_po_supply_service`` (APPROVED /
+    PARTIALLY_RECEIVED only, minus QC-accepted receipts). Callers resolve the flag once per run and pass it.
+    """
+    from app.modules.inventory.open_po_supply_service import on_order_net_by_item
+    from app.modules.inventory.reservation_service import allocation_v1_enabled
+
+    if await allocation_v1_enabled(db, tenant_id, allocation_v1):
+        return (await on_order_net_by_item(db, tenant_id, [item_id])).get(item_id, ZERO)
     open_statuses = ("DRAFT", "SUBMITTED", "APPROVED", "PARTIAL", "OPEN", "CONFIRMED")
     stmt = (
         select(PurchaseOrderItem.quantity, PurchaseOrder.status)
@@ -227,7 +238,20 @@ async def _on_order_qty(db: AsyncSession, tenant_id: int, item_id: int) -> Decim
     return total
 
 
-async def _reserved_qty(db: AsyncSession, tenant_id: int, item_id: int) -> Decimal:
+async def _reserved_qty(
+    db: AsyncSession,
+    tenant_id: int,
+    item_id: int,
+    *,
+    allocation_v1: bool | None = None,
+    exclude_order_ids: set[int] | None = None,
+) -> Decimal:
+    """Reserved stock. Flag ON: hard holds only, skipping holds of orders already in the run's gross demand."""
+    from app.modules.inventory.reservation_service import allocation_v1_enabled, hard_reserved_by_item
+
+    if await allocation_v1_enabled(db, tenant_id, allocation_v1):
+        hard = await hard_reserved_by_item(db, tenant_id, [item_id], exclude_order_ids=exclude_order_ids or ())
+        return hard.get(item_id, ZERO)
     stmt = select(StockReservation).where(
         StockReservation.tenant_id == tenant_id,
         StockReservation.item_id == item_id,
@@ -323,6 +347,12 @@ async def run_mrp(
     req_dates: dict[int, date] = {}
     source_order: dict[int, int] = {}
     source_bom: dict[int, int] = {}
+    # Material allocation flag, resolved once per run. Orders whose BOM is in the gross demand: their own holds
+    # must not be subtracted again (flag ON only).
+    from app.modules.inventory.reservation_service import allocation_v1_enabled
+
+    alloc_v1 = await allocation_v1_enabled(db, tenant_id)
+    gross_order_ids: set[int] = set()
 
     for order in orders:
         req_date = order.delivery_date or horizon_end
@@ -344,6 +374,7 @@ async def run_mrp(
             )
             continue
         result.explosion.extend(explosion)
+        gross_order_ids.add(order.id)
         for line in explosion:
             gross[line.item_id] = gross.get(line.item_id, ZERO) + line.required_qty
             prev = req_dates.get(line.item_id)
@@ -373,8 +404,10 @@ async def run_mrp(
 
         stock = _d(item.current_stock)
         safety = _d(item.safety_stock)
-        on_order = await _on_order_qty(db, tenant_id, item_id)
-        reserved = await _reserved_qty(db, tenant_id, item_id)
+        on_order = await _on_order_qty(db, tenant_id, item_id, allocation_v1=alloc_v1)
+        reserved = await _reserved_qty(
+            db, tenant_id, item_id, allocation_v1=alloc_v1, exclude_order_ids=gross_order_ids
+        )
         firmed = await _firmed_planned_qty(db, tenant_id, item_id)
         pab = stock + on_order + firmed - reserved - g_qty
         net = ZERO

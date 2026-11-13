@@ -692,6 +692,70 @@ export const tutorialHelpIndex: TutorialHelpEntry[] = [
     ]
   },
   {
+    "id": "mfg-intel-materials",
+    "title": "Materials tab: hold stock and link purchase orders to an order",
+    "summary": "Preview and confirm stock holds and purchase-order links for an order, release or move them, and fix allocation problems.",
+    "relatedAppRoutes": [
+      "/app/operations/control-tower",
+      "/app/settings/config"
+    ]
+  },
+  {
+    "id": "mfg-intel-plan-changes",
+    "title": "Plan changes: propose, preview and approve line booking changes",
+    "summary": "Collect line booking changes, see the delivery / overload / material impact before saving, and let an approver apply them.",
+    "relatedAppRoutes": [
+      "/app/operations/control-tower",
+      "/app/production/line-plan",
+      "/app/settings/config"
+    ]
+  },
+  {
+    "id": "mfg-intel-tentative-demand",
+    "title": "Tentative demand: book inquiries and quotations as soft load",
+    "summary": "Put likely inquiry / quotation work on a sewing line as soft load with a confidence %, without reducing firm capacity.",
+    "relatedAppRoutes": [
+      "/app/operations/control-tower",
+      "/app/settings/config"
+    ]
+  },
+  {
+    "id": "mfg-intel-people-machines",
+    "title": "People & machines: assign operators and machines to sewing lines",
+    "summary": "Dated line assignments for people and machines, used by capacity instead of the line default; plus style standard SMV.",
+    "relatedAppRoutes": [
+      "/app/operations/control-tower",
+      "/app/production/setup"
+    ]
+  },
+  {
+    "id": "mfg-intel-cost-cash",
+    "title": "Cost & cash: order cost at completion and the factory cash requirement",
+    "summary": "Read-only estimates of what each confirmed order will cost and earn, and a weekly forecast of the cash the factory needs, with the financing gap.",
+    "relatedAppRoutes": [
+      "/app/operations/control-tower",
+      "/app/settings/config"
+    ]
+  },
+  {
+    "id": "mfg-intel-predictions",
+    "title": "Predictions: delivery forecasts, bottlenecks and recommendations",
+    "summary": "Statistics from your own history: likely, safe and worst-case delivery dates, line efficiency, supplier lateness, unusual production and daily recommendations you can accept or reject. Nothing here changes a plan.",
+    "relatedAppRoutes": [
+      "/app/operations/control-tower",
+      "/app/settings/config"
+    ]
+  },
+  {
+    "id": "mfg-intel-forward-plan",
+    "title": "Forward plan: capacity vs demand, scenarios and the scheduler",
+    "summary": "Look 90-180 days ahead: sewing capacity against confirmed, booked, tentative and forecast work, what-if scenarios, a finance-limited view and a scheduler that proposes line bookings for approval.",
+    "relatedAppRoutes": [
+      "/app/operations/control-tower",
+      "/app/settings/config"
+    ]
+  },
+  {
     "id": "mfg-setup",
     "title": "Production setup: lines, factory units, shifts, optional units and calendar",
     "summary": "Do this once before planning: choose a factory profile, set weekends, tick optional units, add sewing lines with their factory unit, add shifts and crew roles.",

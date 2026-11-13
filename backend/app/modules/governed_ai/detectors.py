@@ -25,7 +25,10 @@ AGENTS: dict[str, str] = {
     "lc_expiry": "LC expiry",
     "bom_shortfall": "BOM shortfall",
     "finance_exceptions": "Finance exceptions",
+    "mfg_bottleneck": "Production bottlenecks",
 }
+# Manufacturing Intelligence Phase 4 agent: shows stored predictive findings (flag mfg_predictive_intelligence_v1).
+MFG_AGENTS = frozenset({"mfg_bottleneck"})
 # Agents that read finance data: extra gates (flags finance_ai_insights_v2 + finance_control_tower_v2, fail-closed
 # ai.tools.finance.read, soft finance.mis_report.view), acknowledge-only actions, never part of the owner brief.
 FINANCE_AGENTS = frozenset({"finance_exceptions"})
@@ -303,11 +306,55 @@ async def detect_finance_exceptions(
     return out
 
 
+async def detect_mfg_bottleneck(db: AsyncSession, tenant_id: int) -> list[dict[str, Any]]:
+    """OPEN Phase 4 findings (written by the daily job), highest priority first. Same minimal content as the alert
+    (plan 15 section 17.3): no vendor, PO, efficiency, lateness or probability values."""
+    from app.common.tenant_feature_keys import (
+        is_manufacturing_intelligence_v1_enabled,
+        is_mfg_predictive_intelligence_v1_enabled,
+    )
+    from app.models import Order, SewingLine, Tenant
+    from app.models.mfg_predictive import FINDING_OPEN, MfgPredictiveFinding
+    from app.modules.mfg_planning.predictive_alert_rules import alert_payload, predictions_href
+
+    flags = (await db.execute(select(Tenant.feature_flags).where(Tenant.id == tenant_id))).scalar_one_or_none()
+    if not (is_manufacturing_intelligence_v1_enabled(flags) and is_mfg_predictive_intelligence_v1_enabled(flags)):
+        return []
+    f = MfgPredictiveFinding
+    rows = (
+        await db.execute(
+            select(f, Order.order_code, SewingLine.line_code)
+            .outerjoin(Order, (Order.id == f.order_id) & (Order.tenant_id == tenant_id))
+            .outerjoin(SewingLine, (SewingLine.id == f.line_id) & (SewingLine.tenant_id == tenant_id))
+            .where(f.tenant_id == tenant_id, f.status == FINDING_OPEN, f.decision_status.is_(None))
+            .order_by(f.priority.desc(), f.id)
+            .limit(MAX_PER_AGENT)
+        )
+    ).all()
+    out: list[dict[str, Any]] = []
+    for finding, order_code, line_code in rows:
+        a = alert_payload(finding, order_code, line_code)
+        out.append(
+            _finding(
+                agent="mfg_bottleneck",
+                key=a["natural_key"],
+                severity=finding.severity,
+                title=a["title"],
+                detail=a["description"],
+                recommended_action=a["recommended_action"],
+                href=predictions_href(finding.id),
+                order_id=finding.order_id,
+            )
+        )
+    return out
+
+
 DETECTORS = {
     "tna_delay": detect_tna_delay,
     "lc_expiry": detect_lc_expiry,
     "bom_shortfall": detect_bom_shortfall,
     "finance_exceptions": detect_finance_exceptions,
+    "mfg_bottleneck": detect_mfg_bottleneck,
 }
 
 

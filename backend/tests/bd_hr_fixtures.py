@@ -85,3 +85,4 @@ async def real_db():
         for tid in tenant_ids:
             await purge_tenant(engine, tid)
         await engine.dispose()
+

@@ -260,6 +260,15 @@ from app.models.hr_attendance import (
     OvertimeEntry,
 )
 from app.models.hr_attendance_device import AttendanceDevice, AttendancePunch
+from app.models.mfg_planning import (
+    MfgMaterialSupplyPegging,
+    MfgPlanRevision,
+    MfgPlanRevisionItem,
+    MfgTentativeLineBooking,
+    ProductionEmployeeLineAssignment,
+    ProductionMachineLineAssignment,
+)
+from app.models.mfg_predictive import MfgPredictionSnapshot, MfgPredictiveFinding
 from app.models.hr_leave import (
     LeaveType,
     LeavePolicy,
@@ -777,4 +786,12 @@ __all__ = [
     "PlatformAnnouncement",
     "TenantRateLimit",
     "TenantUsageDaily",
+    "MfgMaterialSupplyPegging",
+    "MfgPlanRevision",
+    "MfgPlanRevisionItem",
+    "MfgTentativeLineBooking",
+    "ProductionEmployeeLineAssignment",
+    "ProductionMachineLineAssignment",
+    "MfgPredictionSnapshot",
+    "MfgPredictiveFinding",
 ]

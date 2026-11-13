@@ -91,6 +91,9 @@ GATE_HR = Gate("hr", "ai.tools.hr.read", ("hr.access",))
 GATE_BOM = Gate("merch", "ai.tools.inventory.read", ("merch.access",))
 GATE_SHORTAGE = Gate("merch", "ai.tools.inventory.read", ("merch.access", "inventory.access"))
 GATE_KNOWLEDGE = Gate("knowledge", "ai.tools.knowledge.read")
+# Manufacturing Intelligence Phase 4 (plan 15 section 17.7): predictive read tools.
+GATE_MFG_PRED = Gate("manufacturing", "ai.tools.production.read", ("production.access", "production.planning.read"))
+MFG_PREDICTIVE_TOOL_NAMES = frozenset({"mfg_delivery_forecast", "mfg_bottlenecks", "mfg_supplier_lateness"})
 
 # Kinds the record search / record summary tools can return, and who may see each.
 SEARCH_KIND_GATES: dict[str, Gate] = {
@@ -425,6 +428,149 @@ async def _finance_statement_summary(ctx: AgentContext, args: dict[str, Any]) ->
     return {"summary": out.summary, "data": data}
 
 
+def mfg_predictive_tools_enabled(tenant: Tenant) -> bool:
+    """The three Phase 4 tools exist only when mfg_predictive_intelligence_v1 AND mfg_predictive_ai_text_v1 are on."""
+    from app.modules.mfg_intelligence.flags import predictive_ai_text_on
+
+    return predictive_ai_text_on(tenant)
+
+
+def _jsonable(value: Any) -> Any:
+    return json.loads(json.dumps(value, default=str))
+
+
+MFG_INVENTORY_KINDS = ("LATE_MATERIAL",)
+
+
+async def _vendor_codes(ctx: AgentContext, vendor_ids: list[int]) -> dict[int, str]:
+    """Vendor code per id (`V-<id>` when the vendor has no code); this tenant only."""
+    from sqlalchemy import select
+
+    from app.models.inventory import Vendor
+
+    ids = sorted({int(i) for i in vendor_ids if i is not None})
+    found: dict[int, str] = {}
+    if ids:
+        for vid, code in (
+            await ctx.db.execute(
+                select(Vendor.id, Vendor.vendor_code).where(Vendor.tenant_id == ctx.tenant.id, Vendor.id.in_(ids))
+            )
+        ).all():
+            if (code or "").strip():
+                found[int(vid)] = code.strip()
+    return {i: found.get(i, f"V-{i}") for i in ids}
+
+
+def _without_vendor_names(value: Any) -> Any:
+    """Drop any `vendor_name` key (nested) before a result goes to the external model."""
+    if isinstance(value, dict):
+        return {k: _without_vendor_names(v) for k, v in value.items() if k != "vendor_name"}
+    if isinstance(value, list):
+        return [_without_vendor_names(v) for v in value]
+    return value
+
+
+_MFG_DISABLED = {
+    "summary": "FEATURE_DISABLED: predictive manufacturing intelligence is not switched on for this company.",
+    "data": {},
+    "blocked": True,
+}
+
+
+async def _mfg_delivery_forecast(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    from sqlalchemy import select
+
+    from app.common.business_date import today_local
+    from app.models import Order
+    from app.modules.mfg_intelligence.delivery_forecast_service import forecast_deliveries
+
+    if not mfg_predictive_tools_enabled(ctx.tenant):
+        return dict(_MFG_DISABLED)
+    stmt = select(Order).where(Order.tenant_id == ctx.tenant.id)
+    code = _focus(args, "order_code")
+    try:
+        order_id = int(args["order_id"]) if args.get("order_id") not in (None, "") else None
+    except (TypeError, ValueError):
+        return {"summary": "order_id must be a number.", "data": {}}
+    if order_id is not None:
+        stmt = stmt.where(Order.id == order_id)
+    elif code:
+        stmt = stmt.where(Order.order_code == code)
+    else:
+        return {"summary": "Give an order_code or order_id.", "data": {}}
+    order = (await ctx.db.execute(stmt.limit(1))).scalar_one_or_none()
+    if order is None:
+        return {"summary": "Order not found.", "data": {}}
+    result = (await forecast_deliveries(ctx.db, ctx.tenant, [order], today=today_local(ctx.tenant)))[0]
+    material = result.get("material") or None
+    if material and not await gate_allowed(ctx, "mfg_delivery_forecast", GATE_INVENTORY):
+        material = {k: v for k, v in material.items() if k != "po_lines"}
+    keys = ("order_id", "order_code", "target_date", "band", "on_time_probability", "probability_display",
+            "calibration_label", "spread_mode", "p50_date", "p80_date", "p90_date", "start_date", "delay_days",
+            "confidence", "efficiency_source", "drivers", "reason_codes", "missing_inputs")
+    data = {k: result.get(k) for k in keys}
+    data["material"] = material
+    href = f"/app/control-tower?tab=predictions&order={order.id}"
+    summary = (
+        f"Order {order.order_code}: {result.get('band')}, likely finish {result.get('p50_date')}, "
+        f"worst case {result.get('p90_date')}, on-time chance {result.get('probability_display') or 'not available'}."
+    )
+    return {"summary": summary, "data": _jsonable(data),
+            "citations": [{"label": f"Forecast {order.order_code}", "href": href, "record_type": "order"}]}
+
+
+async def _mfg_bottlenecks(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    from app.models.mfg_predictive import FINDING_KINDS
+    from app.modules.mfg_intelligence.predictive_read_service import recommendations_payload
+
+    if not mfg_predictive_tools_enabled(ctx.tenant):
+        return dict(_MFG_DISABLED)
+    kind = str(args.get("kind") or "").strip().upper() or None
+    if kind is not None and kind not in FINDING_KINDS:
+        return {"summary": f"kind must be one of: {', '.join(FINDING_KINDS)}.", "data": {}}
+    inventory = await gate_allowed(ctx, "mfg_bottlenecks", GATE_INVENTORY)
+    out = await recommendations_payload(
+        ctx.db, ctx.tenant.id, status="OPEN", kind=kind, limit=20,
+        hidden_kinds=() if inventory else MFG_INVENTORY_KINDS,  # same rule as GET /recommendations
+    )
+    items = []
+    for item in out["items"]:
+        payload = _without_vendor_names(dict(item.get("payload") or {}))
+        if not inventory:
+            payload.pop("material", None)  # PO / vendor detail only with the inventory gate
+        items.append({**item, "payload": payload})
+    citations = [
+        {"label": f"{i['kind']} {i.get('order_code') or i.get('line_code') or ''}".strip(),
+         "href": f"/app/control-tower?tab=predictions&finding={i['id']}", "record_type": "finding"}
+        for i in items[:10]
+    ]
+    return {"summary": f"{len(items)} open production bottleneck(s).", "data": _jsonable({"items": items}),
+            "citations": citations}
+
+
+async def _mfg_supplier_lateness(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    from app.common.business_date import today_local
+    from app.modules.mfg_intelligence.supplier_lateness_service import supplier_lateness_payload
+
+    if not mfg_predictive_tools_enabled(ctx.tenant):
+        return dict(_MFG_DISABLED)
+    ok, reason = await check_gate(ctx, "mfg_supplier_lateness", GATE_INVENTORY)
+    if not ok:
+        return {"summary": f"Blocked: {reason or 'no inventory access'}", "data": {}, "blocked": True}
+    payload = await supplier_lateness_payload(ctx.db, ctx.tenant.id, today=today_local(ctx.tenant))
+    vendors = payload["vendors"][:10]
+    codes = await _vendor_codes(ctx, [v["vendor_id"] for v in vendors])
+    # Data minimisation: the external model gets vendor codes, never vendor names.
+    vendors = [{**{k: v for k, v in row.items() if k != "vendor_name"}, "vendor_code": codes.get(row["vendor_id"])}
+               for row in vendors]
+    data = {"tenant": payload["tenant"], "vendors": vendors, "promise_basis": payload["promise_basis"],
+            "window_days": payload["window_days"]}
+    t = payload["tenant"]
+    return {"summary": f"Supplier lateness over {payload['window_days']} days: {t['n']} PO lines, median "
+                       f"{t['p50_days']} day(s), 90 % within {t['p90_days']} day(s).",
+            "data": _jsonable(data)}
+
+
 # ---- schemas --------------------------------------------------------------------------------
 
 _NO_ARGS: dict[str, Any] = {"type": "object", "properties": {}, "additionalProperties": False}
@@ -641,14 +787,54 @@ AGENT_TOOLS: dict[str, AgentTool] = {
             GATE_KNOWLEDGE,
             _help_articles,
         ),
+        AgentTool(
+            "mfg_delivery_forecast",
+            "Predicted ex-factory finish of one confirmed order: likely, safe and worst-case dates, on-time chance and "
+            "the main drivers (deterministic forecast).",
+            {
+                "type": "object",
+                "properties": {
+                    "order_code": {"type": "string", "description": "Order code, e.g. 'ORD-1023'."},
+                    "order_id": {"type": "integer", "minimum": 1},
+                },
+                "additionalProperties": False,
+            },
+            GATE_MFG_PRED,
+            _mfg_delivery_forecast,
+        ),
+        AgentTool(
+            "mfg_bottlenecks",
+            "Open production bottlenecks found by the daily check (delivery risk, late material, overloaded or idle "
+            "lines, output drops, quality spikes) with the recommended action.",
+            {
+                "type": "object",
+                "properties": {"kind": {"type": "string", "enum": [
+                    "DELIVERY_RISK", "LATE_MATERIAL", "CAPACITY_OVERLOAD", "LINE_IDLE", "OUTPUT_DROP", "QUALITY_SPIKE",
+                ]}},
+                "additionalProperties": False,
+            },
+            GATE_MFG_PRED,
+            _mfg_bottlenecks,
+        ),
+        AgentTool(
+            "mfg_supplier_lateness",
+            "How late suppliers deliver purchase orders compared with the promised date (median and 90th percentile "
+            "days, on-time rate), company-wide and per vendor.",
+            _NO_ARGS,
+            GATE_MFG_PRED,
+            _mfg_supplier_lateness,
+        ),
     ]
 }
 
 
-def openai_tool_specs() -> list[dict[str, Any]]:
+def openai_tool_specs(tenant: Tenant | None = None) -> list[dict[str, Any]]:
+    """Tools offered to the model. The Phase 4 tools only when both predictive flags are on for `tenant`."""
+    show_mfg = tenant is not None and mfg_predictive_tools_enabled(tenant)
     return [
         {"type": "function", "function": {"name": t.name, "description": t.description, "parameters": t.parameters}}
         for t in AGENT_TOOLS.values()
+        if show_mfg or t.name not in MFG_PREDICTIVE_TOOL_NAMES
     ]
 
 

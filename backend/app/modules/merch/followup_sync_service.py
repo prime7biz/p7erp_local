@@ -37,12 +37,16 @@ async def sync_order_followup_from_events(
     merch_sample_request_id: int | None = None,
     user_id: int | None = None,
     note: str | None = None,
+    rollback_on_error: bool = True,
 ) -> list[int]:
     """Mark matching open TNA actions completed. Returns completed action ids.
 
     Matching: ``milestone_type`` in codes, or linked template ``code`` in codes,
     or (for samples) ``merch_sample_request_id`` match.
     Idempotent for already-completed rows.
+
+    ``rollback_on_error=False`` re-raises instead of rolling back the whole session, for callers that run
+    the sync inside their own savepoint (``begin_nested``) and must keep the outer transaction.
     """
     completed_ids: list[int] = []
     try:
@@ -129,6 +133,8 @@ async def sync_order_followup_from_events(
             order_id,
             event_key,
         )
+        if not rollback_on_error:
+            raise
         await safe_async_session_rollback(db)
         return []
     return completed_ids

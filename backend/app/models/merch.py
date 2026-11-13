@@ -315,6 +315,14 @@ class GarmentStyle(Base):
         String(32), nullable=False, default="ACTIVE", index=True
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Governed standard SMV per piece (migration 299). Written only by PUT /mfg-intelligence/styles/{id}/standard-smv.
+    standard_smv: Mapped[Decimal | None] = mapped_column(Numeric(10, 4), nullable=True)
+    standard_smv_source: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    standard_smv_confidence: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    standard_smv_approved_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    standard_smv_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )
@@ -544,6 +552,16 @@ class FollowupActionTemplate(Base):
     buyer_id: Mapped[int | None] = mapped_column(
         ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # Route stage fields (migration 299, all optional; allowlists in app/modules/merch/route_stages.py).
+    product_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sourcing_mode: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    route_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    gate_class: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    predecessor_codes: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    lag_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    stage_kind: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    stage_position: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    lead_time_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )
@@ -604,6 +622,12 @@ class OrderFollowupAction(Base):
     )
     milestone_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     external_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Copied from the template when the TNA is generated (migration 299).
+    route_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    stage_kind: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    stage_position: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    gate_class: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    lead_time_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

@@ -22,6 +22,23 @@ describe("feature tiers", () => {
     expect(hiddenEnabledCount({ mobile_ui_v2: true }, "more")).toBe(0);
   });
 
+  it("lists the Manufacturing Intelligence cost & cash switches in the More tier", () => {
+    const flags = { mfg_cost_intelligence_v1: true, mfg_financial_readiness_v1: true };
+    expect(hiddenEnabledCount(flags, "essential")).toBe(2);
+    expect(hiddenEnabledCount(flags, "more")).toBe(0);
+  });
+
+  it("lists the Manufacturing Intelligence prediction switches in the More tier", () => {
+    const flags = { mfg_predictive_intelligence_v1: true, mfg_predictive_ai_text_v1: true };
+    expect(hiddenEnabledCount(flags, "essential")).toBe(2);
+    expect(hiddenEnabledCount(flags, "more")).toBe(0);
+  });
+
+  it("lists the Manufacturing Intelligence forward plan switch in the More tier", () => {
+    expect(hiddenEnabledCount({ mfg_advanced_planning_v1: true }, "essential")).toBe(1);
+    expect(hiddenEnabledCount({ mfg_advanced_planning_v1: true }, "more")).toBe(0);
+  });
+
   it("lists the Finance Control Tower switch in the More tier", () => {
     expect(hiddenEnabledCount({ finance_control_tower_v2: true }, "essential")).toBe(1);
     expect(hiddenEnabledCount({ finance_control_tower_v2: true }, "more")).toBe(0);

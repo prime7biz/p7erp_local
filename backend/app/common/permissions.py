@@ -907,6 +907,24 @@ async def assert_delegate_manager_or_permission(
     )
 
 
+MANAGER_ONLY_ROLES = frozenset({"admin", "manager"})
+
+
+async def assert_manager_role_only(db: AsyncSession, user: User, tenant_id: int) -> None:
+    """403 unless the user's role (in this tenant) is admin or manager.
+
+    No permission-key bypass and no RBAC-mode switch: it is enforced in the handler even when the tenant's
+    RBAC mode is off. Used for moving held material between orders and releasing hard holds / pegs
+    (Manufacturing Intelligence Phase 2, owner rule: admin / manager only).
+    """
+    if user.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
+    rn = (role.name if role else "").strip().lower()
+    if rn not in MANAGER_ONLY_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires admin or manager role")
+
+
 HR_SETUP_BYPASS_ROLES = frozenset({"admin", "manager", "super_admin", "superadmin", "owner"})
 
 

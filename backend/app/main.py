@@ -81,6 +81,15 @@ from app.modules.trade_case.router import router as trade_case_router
 from app.modules.logistics.router import router as logistics_router
 from app.modules.logistics.carton_router import router as packing_carton_router
 from app.modules.control_tower.router import router as control_tower_router
+from app.modules.mfg_intelligence.router import router as mfg_intelligence_router
+from app.modules.mfg_intelligence.finance_router import router as mfg_intelligence_finance_router
+from app.modules.mfg_intelligence.predictive_router import router as mfg_intelligence_predictive_router
+from app.modules.mfg_intelligence.advanced_planning_router import router as mfg_advanced_planning_router
+from app.modules.mfg_planning.scheduler_router import router as mfg_scheduler_write_router
+from app.modules.mfg_planning.predictive_router import router as mfg_predictive_write_router
+from app.modules.mfg_planning.allocation_router import router as mfg_allocation_router
+from app.modules.mfg_planning.planning_router import router as mfg_planning_router
+from app.modules.mfg_planning.assignments_router import router as mfg_assignments_router
 from app.modules.compliance.router import router as compliance_router
 from app.modules.compliance.bd_router import bd_trade_router, bd_vat_router
 from app.modules.data_migration.router import router as data_migration_router
@@ -517,6 +526,42 @@ app.include_router(
     control_tower_router,
     prefix=settings.api_v1_prefix,
     dependencies=[Depends(require_any_internal_permission("merch.access", "production.access"))],
+)
+app.include_router(
+    mfg_intelligence_router,
+    prefix=settings.api_v1_prefix,
+)
+app.include_router(
+    mfg_intelligence_finance_router,
+    prefix=settings.api_v1_prefix,
+)
+app.include_router(
+    mfg_intelligence_predictive_router,
+    prefix=settings.api_v1_prefix,
+)
+app.include_router(
+    mfg_advanced_planning_router,
+    prefix=settings.api_v1_prefix,
+)
+app.include_router(
+    mfg_scheduler_write_router,
+    prefix=settings.api_v1_prefix,
+)
+app.include_router(
+    mfg_predictive_write_router,
+    prefix=settings.api_v1_prefix,
+)
+app.include_router(
+    mfg_allocation_router,
+    prefix=settings.api_v1_prefix,
+)
+app.include_router(
+    mfg_planning_router,
+    prefix=settings.api_v1_prefix,
+)
+app.include_router(
+    mfg_assignments_router,
+    prefix=settings.api_v1_prefix,
 )
 app.include_router(
     compliance_router,

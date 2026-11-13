@@ -109,6 +109,7 @@ async def run_order_promise_check(
         warehouse_id=None,
         include_in_transit_po=True,
         exclude_reserved=True,
+        own_order_id=order.id or None,  # only used when mfg_material_allocation_v1 is ON
     )
 
     for line in bom_lines:

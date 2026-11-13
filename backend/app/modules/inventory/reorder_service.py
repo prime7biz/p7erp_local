@@ -34,7 +34,21 @@ async def _reserved_qty(
     tenant_id: int,
     item_id: int,
     warehouse_id: int | None = None,
+    *,
+    allocation_v1: bool | None = None,
 ) -> Decimal:
+    """Reserved stock. Flag ``mfg_material_allocation_v1`` ON: hard holds only, exact warehouse when given."""
+    from app.modules.inventory.reservation_service import (
+        WAREHOUSE_EXACT,
+        allocation_v1_enabled,
+        hard_reserved_by_item,
+    )
+
+    if await allocation_v1_enabled(db, tenant_id, allocation_v1):
+        hard = await hard_reserved_by_item(
+            db, tenant_id, [item_id], warehouse_id=warehouse_id, warehouse_mode=WAREHOUSE_EXACT
+        )
+        return hard.get(item_id, ZERO)
     stmt = select(StockReservation).where(
         StockReservation.tenant_id == tenant_id,
         StockReservation.item_id == item_id,
@@ -63,6 +77,9 @@ async def check_reorder_points(
     )
     items = list((await db.execute(stmt)).scalars().all())
     created: list[ReorderSuggestion] = []
+    from app.modules.inventory.reservation_service import allocation_v1_enabled
+
+    alloc_v1 = await allocation_v1_enabled(db, tenant_id)  # resolved once per run
 
     for item in items:
         level = _d(item.reorder_level)
@@ -70,8 +87,8 @@ async def check_reorder_points(
             continue
 
         stock = _d(item.current_stock)
-        on_order = await _on_order_qty(db, tenant_id, item.id)
-        reserved = await _reserved_qty(db, tenant_id, item.id, warehouse_id)
+        on_order = await _on_order_qty(db, tenant_id, item.id, allocation_v1=alloc_v1)
+        reserved = await _reserved_qty(db, tenant_id, item.id, warehouse_id, allocation_v1=alloc_v1)
         safety = _d(item.safety_stock)
         available = stock + on_order - reserved - safety
 

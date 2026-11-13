@@ -193,6 +193,7 @@ async def get_order_chain_readiness(db: AsyncSession, tenant_id: int, order_id: 
             warehouse_id=None,
             include_in_transit_po=True,
             exclude_reserved=True,
+            own_order_id=orow.id,  # only used when mfg_material_allocation_v1 is ON
         )
         for bi in bom_items:
             if not bi.item_id:

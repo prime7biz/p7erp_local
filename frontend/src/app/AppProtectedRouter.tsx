@@ -4,6 +4,7 @@ import { Layout } from "@/components/Layout";
 import { TradeFeatureRouteGuard } from "@/components/TradeFeatureRouteGuard";
 import { KnittingFeatureRouteGuard } from "@/components/KnittingFeatureRouteGuard";
 import { PermissionRouteGuard } from "@/components/auth/PermissionRouteGuard";
+import { ControlTowerShortLinkRedirect } from "@/components/control-tower/ControlTowerShortLinkRedirect";
 import { HrLegacyRedirect } from "@/components/hr/kit/HrLegacyRedirect";
 import { FinanceLegacyRoute } from "@/components/finance/hubs/FinanceLegacyRoute";
 import { ROUTE_PERMISSION } from "@/app/routePermissions";
@@ -958,6 +959,7 @@ export function AppProtectedRouter() {
           <Route path="commercial/btb-lcs" element={<BtbLcsPage />} />
         </Route>
         <Route path="operations/control-tower" element={<ControlTowerPage />} />
+        <Route path="control-tower" element={<ControlTowerShortLinkRedirect />} />
         <Route element={<TradeFeatureRouteGuard />}>
           <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.trade} />}>
             <Route path="trade/cases" element={<TradeCasesPage />} />

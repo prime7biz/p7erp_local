@@ -178,7 +178,31 @@ Nothing changes from this screen. To act, open the linked screen: the order (\`/
 
 - **"Orders in range: 0"** → Your window does not contain any delivery dates. Widen **Delivery from / to** (max 180 days) and click **Refresh**.
 - **"No master contracts linked to orders in this window."** → Orders are not yet linked to a master LC in Commercial.
-- **Heatmap or finance panel missing** → Your role does not include it, or the screen is too narrow.`,
+- **Heatmap or finance panel missing** → Your role does not include it, or the screen is too narrow.
+
+## Manufacturing intelligence panels
+
+An admin can tick **Manufacturing intelligence (read-only)** in **Settings → Configuration → More features**. A **Manufacturing intelligence** section then appears on the Control Tower for admin, owner, manager and planning roles. It is read-only and shows no finance data. It has its own **Window from / to** (max 180 days, default today + 89 days) and an optional **Factory unit**.
+
+- **Capacity: legacy vs corrected preview** — *Legacy (current formula)* is what the planning screens use today. *Corrected preview* is shift operator-minutes × efficiency ÷ SMV. The difference column shows how far apart they are. Turn on **Corrected planning maths preview** to see corrected values.
+- **Line loading by day** — one row per sewing line, one cell per day. Letters and colours: **O** overloaded, **L** loaded, **I** idle, **–** closed day, **?** unknown. A dashed **s** cell means only soft bookings. Hover a cell for firm / soft minutes and utilization. Bookings without an SMV are listed under the grid.
+- **Order readiness** — pick an order to see its checks (commercial, technical approval, materials, capacity, finance, full readiness). **Blockers** name the department that must act; **Information** lists notes only. Material lines show required, available and short quantities; stock is not yet shared out between orders, so two orders can look covered by the same stock. Turn on **Readiness uses the order BOM** to judge materials from the order's own BOM.
+- **Delivery risk** — counts of orders **On track**, **At risk**, **Late**, **Complete** and **Unknown**, and for the picked order the **Ex-factory target** (the order's delivery date) with optimistic, likely and pessimistic finish dates.
+
+**UNKNOWN** means a needed input is missing (for example SMV, operators, a firm line plan or the corrected maths switch). It does not mean "fine". The grey or amber chips next to it say exactly what is missing.
+
+## Planning tabs (Phase 2)
+
+More switches in **Settings → Configuration → More features** add tabs next to **Overview** in the Manufacturing intelligence section. Each one needs **Manufacturing intelligence (read-only)** on first.
+
+- **Material allocation (hold stock for orders)** adds **Materials** — see *Materials tab: hold stock and link purchase orders*.
+- **Integrated planning** adds **Plan changes**, **Tentative demand** and **People & machines** — see the matching articles. On **Overview** a picked order then also shows its **Outside processes (route)** and, when the order has a style, the style's **Standard SMV**.
+- **Four-eyes approval for plan changes** stops the person who proposed a plan change from approving it. Settings refuses it with fewer than 2 active users who can approve plans.
+- **Order cost at completion** and **Cash requirement forecast** add a **Cost & cash** tab with read-only money estimates (never posted). Only admin / manager or roles with finance access and the MIS report view see it — see *Cost & cash: order cost at completion and the factory cash requirement*.
+- **Predictions** adds a **Predictions** tab: likely / safe / worst-case delivery dates, line efficiency from your own history, supplier lateness, unusual production and daily bottleneck recommendations. They are statistics and never change plans — see *Predictions: delivery forecasts, bottlenecks and recommendations*. Alert links open \`/app/control-tower?tab=predictions&finding=…\`, which goes straight to the finding.
+- **Forward plan** adds a **Forward plan** tab: capacity against confirmed, booked, tentative and forecast work for 90-180 days, what-if scenarios, a finance-limited view and (with Integrated planning) a scheduler whose proposals go to **Plan changes** for approval — see *Forward plan: capacity vs demand, scenarios and the scheduler*. Link: \`/app/control-tower?tab=forward-plan\`.
+
+Row actions on these tabs use the single **Actions** menu; risky actions (release, cancel, deactivate) always ask you to confirm.`,
       tags: ["operations", "control tower", "planning", "master lc", "dashboard"],
       keywords: [
         "control tower",
@@ -193,8 +217,8 @@ Nothing changes from this screen. To act, open the linked screen: the order (\`/
         "morning meeting",
         "reservation",
       ],
-      estimatedMinutes: 5,
-      lastUpdated: "2026-11-06",
+      estimatedMinutes: 6,
+      lastUpdated: "2026-11-13",
       audience: "management",
       coverImage: "/tutorials/screens/ops-control-tower-orders.jpg",
       infographics: [
@@ -228,7 +252,463 @@ Nothing changes from this screen. To act, open the linked screen: the order (\`/
         },
       ],
       relatedAppRoutes: ["/app/operations/control-tower", "/app/settings/config", "/app/orders"],
-      relatedArticleIds: ["mfg-overview", "mfg-planning-deep", "mfg-line-plan-board", "gs-sidebar"],
+      relatedArticleIds: [
+        "mfg-overview",
+        "mfg-planning-deep",
+        "mfg-line-plan-board",
+        "gs-sidebar",
+        "mfg-intel-materials",
+        "mfg-intel-plan-changes",
+        "mfg-intel-tentative-demand",
+        "mfg-intel-people-machines",
+        "mfg-intel-cost-cash",
+        "mfg-intel-predictions",
+        "mfg-intel-forward-plan",
+      ],
+    },
+    {
+      id: "mfg-intel-materials",
+      title: "Materials tab: hold stock and link purchase orders to an order",
+      summary:
+        "Preview and confirm stock holds and purchase-order links for an order, release or move them, and fix allocation problems.",
+      content: `## Overview
+
+The **Materials** tab (Control Tower → Manufacturing intelligence → **Materials**) shares stock between orders. A **hold** keeps usable stock for one order; a **link** reserves quantity on an open purchase order (PO) so you know when the rest arrives. With this switched on, **Order readiness** counts a material line as ready only when issued stock plus the order's own hard holds cover it.
+
+Holds are advisory: they never post stock movements, valuation or vouchers, and the store can still issue material.
+
+## Before you start
+
+- An admin ticks **Material allocation (hold stock for orders)** in **Settings → Configuration → More features** (Manufacturing intelligence must be on).
+- The order needs an **approved (or frozen) order BOM**.
+- **Hard holds** are for confirmed orders (New, Confirmed, In progress). **Tentative holds** are for draft orders, need an expiry date (at most 180 days) and never count as ready.
+
+## Steps
+
+1. Open **Operations → Control Tower**, scroll to **Manufacturing intelligence** and click the **Materials** tab.
+2. Pick the **Order**. The table shows Required, Issued, Held, Tentative held, Linked to PO and **Still short** per item.
+3. Choose the **Kind of hold** and click **Preview allocation**. Nothing is saved yet: the preview lists what would be held from stock, which PO quantities would be linked (with expected dates) and what stays short.
+4. Click **Confirm allocation**. If stock or demand changed in the meantime, the screen says so, refreshes the preview and asks you to confirm again.
+5. Use a hold's or link's **Actions** menu to **Check item stock**, **Release** it, or (admin / manager) **Move to another order**.
+6. Open **Allocation run** to preview and confirm many orders at once (in priority order: in production, then by plan start, then by delivery date).
+7. Check **Allocation problems** for holds or links that no longer fit (order cancelled, BOM line removed, more held than needed, PO quantity gone).
+
+## Who can do what
+
+- Releasing a **hard** hold or link of a **confirmed** order, and moving held material between orders, is for **admin / manager** only and needs a reason of at least 10 characters. Other users see **Release (manager only)** greyed out.
+- Tentative and expired holds can be released by planners with approval rights.
+
+## Common problems
+
+- **"The Order BOM must be approved or frozen first"** → Approve the order BOM in Merchandising, then preview again.
+- **"Hard allocation is only for confirmed orders"** → Confirm the order, or use a tentative hold for a draft order.
+- **"You are not allowed to do this"** → Your role lacks the permission; ask an admin.`,
+      tags: ["materials", "allocation", "reservation", "hold", "purchase order", "control tower", "manufacturing intelligence"],
+      keywords: ["material hold", "stock reservation", "peg", "pegging", "ATP", "available to promise", "allocation run", "release hold"],
+      estimatedMinutes: 6,
+      lastUpdated: "2026-11-12",
+      audience: "planning",
+      infographics: [
+        {
+          type: "steps",
+          title: "Allocate materials safely",
+          steps: [
+            { title: "Pick the order", body: "Materials tab → **Order**. Check **Still short**." },
+            { title: "Preview", body: "Choose hard or tentative and click **Preview allocation**. Nothing is saved." },
+            { title: "Confirm", body: "Click **Confirm allocation**. A stale preview is refreshed automatically." },
+            { title: "Review", body: "Use **Actions** on holds and links; check **Allocation problems**." },
+          ],
+        },
+      ],
+      relatedAppRoutes: ["/app/operations/control-tower", "/app/settings/config"],
+      relatedArticleIds: ["ops-control-tower", "mfg-intel-plan-changes", "inv-overview"],
+    },
+    {
+      id: "mfg-intel-plan-changes",
+      title: "Plan changes: propose, preview and approve line booking changes",
+      summary:
+        "Collect line booking changes, see the delivery / overload / material impact before saving, and let an approver apply them.",
+      content: `## Overview
+
+The **Plan changes** tab turns line booking changes into a **proposal** that someone with approval rights applies. Before you send it you see the expected impact: each affected order's likely finish date and delivery band (before → after), extra overloaded days per line, and material warnings when a firm booking starts before materials are ready. The impact is an estimate; nothing moves until the proposal is approved.
+
+## Before you start
+
+- An admin ticks **Integrated planning** in **Settings → Configuration → More features**.
+- Proposing needs the plan write permission; approving and rejecting need plan approval.
+- **Firm booked** is only allowed for confirmed orders. A booking that is already in progress cannot be cancelled.
+
+## Steps
+
+1. Open the **Plan changes** tab. Set **From / To** (max 180 days) and optionally a **Sewing line**.
+2. In **Line bookings**, open a row's **Actions** → **Change booking…** to change the line, dates, quantity, status, operators or efficiency, then **Add to proposal**. Only the fields you change are sent. Or choose **Cancel booking**.
+3. Click **Add booking** to add a new booking for an order.
+4. In **Your proposed change**, check the list (max 50 items) and click **Preview impact**. The panel says *Preview only - nothing is saved yet*.
+5. Write a **Reason** (at least 5 characters), optionally a title, and click **Propose for approval**. The button unlocks only after **Preview impact** for the current list. A double click never creates two proposals.
+6. An approver opens **Proposed and past changes**, uses **Actions** → **View details**, then **Approve & apply** (optional note; the dialog shows the impact calculated at proposal time) or **Reject** (note required). The proposer can **Cancel proposal** while it waits.
+
+Users without planning write access see the bookings but not **Add booking** or the booking **Actions**.
+
+## Common problems
+
+- **"This change or the line plan changed since you opened it; the list was reloaded - review it again"** → Someone changed the bookings or the proposal. Nothing was written; the list reloads, so review it again (and propose a new change if the plan moved).
+- **"Four-eyes rule: someone other than the proposer must approve this change"** → Four-eyes approval is on; ask another approver.
+- **"only a confirmed order can have a FIRM_BOOKED row"** → Confirm the order first or use Soft booked.
+- **"A scheduler booking in this change now starts inside the frozen zone, so nothing was applied"** → A scheduler proposal (title *Scheduler proposal …*) waited past the frozen zone. Run the scheduler preview again on the **Forward plan** tab and send a new proposal — see *Forward plan: capacity vs demand, scenarios and the scheduler*.`,
+      tags: ["planning", "line plan", "plan revision", "approval", "four-eyes", "control tower", "manufacturing intelligence"],
+      keywords: ["what-if", "impact", "reschedule", "line booking", "propose", "approve plan"],
+      estimatedMinutes: 6,
+      lastUpdated: "2026-11-13",
+      audience: "planning",
+      infographics: [
+        {
+          type: "steps",
+          title: "From idea to applied plan",
+          steps: [
+            { title: "Collect", body: "Use booking **Actions** or **Add booking** to build the proposal." },
+            { title: "Preview impact", body: "See delivery, overload and material warnings. Nothing is saved." },
+            { title: "Propose", body: "Add a reason and click **Propose for approval**." },
+            { title: "Approve", body: "An approver uses **Approve & apply** or **Reject**." },
+          ],
+        },
+      ],
+      relatedAppRoutes: ["/app/operations/control-tower", "/app/production/line-plan", "/app/settings/config"],
+      relatedArticleIds: ["ops-control-tower", "mfg-line-plan-board", "mfg-intel-tentative-demand", "mfg-planning-deep", "mfg-intel-forward-plan"],
+    },
+    {
+      id: "mfg-intel-tentative-demand",
+      title: "Tentative demand: book inquiries and quotations as soft load",
+      summary:
+        "Put likely inquiry / quotation work on a sewing line as soft load with a confidence %, without reducing firm capacity.",
+      content: `## Overview
+
+The **Tentative demand** tab lets planners show work that may come (an inquiry or a quotation) on a sewing line. It is **soft load**: line loading shows it as soft minutes, weighted by your confidence %, but it **never reduces firm capacity or promise dates**. When an order is created from the inquiry or quotation, the order's own booking counts and the tentative one stops counting.
+
+## Before you start
+
+- An admin ticks **Integrated planning** in **Settings → Configuration → More features**.
+- Each booking needs a confidence % (0-100) unless a default is set for its stage in **Planning settings**.
+- A booking expires after the default number of days (or the date you choose, at most 180 days ahead).
+
+## Steps
+
+1. Open the **Tentative demand** tab. The top cards show how many bookings are **counted** and their SMV minutes (plain and weighted by confidence).
+2. Click **Add tentative booking**. Choose **Quotation** or **Inquiry** and search for it, then the **Sewing line**, dates, **Planned quantity**, **Confidence %** and optionally **Expires on**. Click **Add booking**.
+3. Use a row's **Actions** → **Edit** to change it, or **Cancel booking** (asks to confirm).
+4. The **Counted?** column says why a booking is not counted: expired, an order now exists, a quotation booking already covers the inquiry, or a newer quotation replaced it.
+5. Approvers can change **Planning settings**: default confidence for inquiries and quotations, default expiry (1-180 days) and the receipt buffer (0-60 days added after purchase-order expected dates). When a **Cost & cash** switch is on, a **Cost & cash timing** box adds export document / usance days, BTB usance days and a cost per minute override (changing them also needs finance access).
+
+## Common problems
+
+- **"An order already exists for this inquiry / quotation; book the order instead"** → Use **Plan changes** to book the order.
+- **"No SMV: minutes unknown"** → Approve a standard SMV for the style on **People & machines**, or link an approved operation bulletin.`,
+      tags: ["planning", "tentative", "inquiry", "quotation", "soft booking", "capacity", "manufacturing intelligence"],
+      keywords: ["forecast", "pipeline demand", "confidence", "probability", "soft load"],
+      estimatedMinutes: 5,
+      lastUpdated: "2026-11-13",
+      audience: "planning",
+      relatedAppRoutes: ["/app/operations/control-tower", "/app/settings/config"],
+      relatedArticleIds: ["ops-control-tower", "mfg-intel-plan-changes", "mfg-intel-people-machines", "mfg-intel-cost-cash"],
+    },
+    {
+      id: "mfg-intel-people-machines",
+      title: "People & machines: assign operators and machines to sewing lines",
+      summary:
+        "Dated line assignments for people and machines, used by capacity instead of the line default; plus style standard SMV.",
+      content: `## Overview
+
+The **People & machines** tab records who works on which sewing line, and which machine stands on it, from a first day (and a last day when known). Capacity then counts **operators from assignments** (and from today's attendance when it is recorded) instead of the line's default operator count. Hover a line-loading cell on **Overview** to see the assigned operators and machines for that day.
+
+People are shown by code and name only.
+
+## Before you start
+
+- An admin ticks **Integrated planning** in **Settings → Configuration → More features**.
+- One person or machine can have only one active assignment for the same dates.
+- Picking a person searches active employees by code or name (planning write access is enough; no HR access needed).
+
+## Steps
+
+1. Open the **People & machines** tab and choose **People** or **Machines**.
+2. Filter by **Sewing line** and **Working on** date (empty = any date). Tick **Show deactivated** to see old entries.
+3. Click **Assign a person** (or **Assign a machine**). Pick the person / machine, the **Sewing line**, the **Role** and optional **Shift** for people, the **First day** and optional **Last day**. Click **Assign**.
+4. Use a row's **Actions** → **Edit**, **End assignment** (choose the last day) or **Deactivate** (for a wrong entry; asks to confirm).
+5. In **Style standard SMV**, search a style to see its approved minutes per piece. Approvers can enter the SMV, where it comes from, a confidence and a reason, then click **Approve SMV**.
+
+## Common problems
+
+- **"This assignment changed since you opened it; the list was reloaded"** → Someone else edited it; the list reloads, try again.
+- **Overlap error** → The person or machine already has an active assignment for those dates; end the old one first.
+- **"The sewing line is not active" / "The employee is not active"** → Activate it in Production setup / HR first.`,
+      tags: ["planning", "operators", "machines", "line assignment", "SMV", "capacity", "manufacturing intelligence"],
+      keywords: ["manpower", "line balancing", "operator allocation", "machine allocation", "standard SMV"],
+      estimatedMinutes: 5,
+      lastUpdated: "2026-11-13",
+      audience: "planning",
+      relatedAppRoutes: ["/app/operations/control-tower", "/app/production/setup"],
+      relatedArticleIds: ["ops-control-tower", "mfg-setup", "mfg-ie-bulletins", "mfg-intel-tentative-demand"],
+    },
+    {
+      id: "mfg-intel-cost-cash",
+      title: "Cost & cash: order cost at completion and the factory cash requirement",
+      summary:
+        "Read-only estimates of what each confirmed order will cost and earn, and a weekly forecast of the cash the factory needs, with the financing gap.",
+      content: `## Overview
+
+The **Cost & cash** tab (Control Tower → Manufacturing intelligence → **Cost & cash**) answers two questions:
+
+- **What will this order cost when it is finished, and what margin is left?** (*Order cost at completion*)
+- **How much cash does the factory need in the coming weeks, and when does it run short?** (*Cash requirement*)
+
+Everything on this tab is an **estimate or forecast**. The tab says so at the top: *Estimate / forecast - not posted to the accounts*. Nothing here creates a voucher or changes the books.
+
+## Who can see it
+
+- An admin ticks **Order cost at completion** and / or **Cash requirement forecast** in **Settings → Configuration → More features** (Manufacturing intelligence must be on). Each switch adds its own card.
+- Money is shown only to **admin / manager** users, or to roles that have **finance access** and the **MIS report view**. Other planners do not see the tab at all; they still see quantities and dates on the other tabs.
+
+## Value classes: what each label means
+
+Every amount carries a small label so different kinds of numbers are never mixed:
+
+- **Actual** - posted in the accounts (the ledger).
+- **Committed** - ordered on purchase orders but not billed yet.
+- **Estimate** - calculated by the system, for example the material still to buy or the conversion cost.
+- **Forecast** - an expected cash movement on a future date.
+
+## Order cost at completion
+
+1. Open the **Cost & cash** tab. The **Order cost at completion** card lists confirmed orders (New, Confirmed, In progress), earliest ex-factory date first, 50 per page.
+2. Read each row: **Net revenue** (contract value less buying commission), **Cost at completion** (material + conversion + other cost), **Margin** and margin %, and **Progress** (sewing good pieces ÷ order quantity).
+3. The **Data** column says *Complete data*, *Partial data* or *Unknown*. Partial or unknown rows have missing inputs (for example no cost per minute, no budget or no exchange rate); unknown rows are left out of the totals.
+4. Use the row's **Actions** → **View details** to open the breakdown: revenue, **Budget vs cost at completion** per bucket (material, conversion, other), material bought on purchase orders vs still to buy, progress, and the **cost per minute (CPM)** detail.
+5. The section **From the ledger - for information, not part of the estimate** shows what the accounts already hold for the order. It is never added to the estimate.
+6. Click **Open order profitability in Finance** to see the posted figures in Finance.
+
+## Cash requirement
+
+1. In the **Cash requirement** card choose **Week 1 starts on** and the **Horizon (days)** (1-180, default 90) and click **Show forecast**.
+2. **Net cash (after drawn overdraft)** is the starting point: cash in hand + bank - bank overdraft already used. The breakdown shows each part.
+3. The **Week by week** table shows opening, cash in, cash out, net and closing for each week. Weeks that end **below zero** are shaded red. Click **Show … categories** to see what makes up the week (BTB LC payments, loan repayments, supplier bills, payroll, export receipts, orders not invoiced yet).
+4. A red **Financing gap** banner names the first week where net cash goes below zero and the **shortfall** to cover. Arrange financing or move payments before that week.
+5. **Available financing (memo, not cash)** shows unused facility limits. It is never added to the cash balance.
+6. **Items behind the figures** lists every source row with its due date, confidence (*Contract date*, *Scheduled* or *Estimated*) and an **Overdue** chip for items already past due (they are counted in week 1). When there are very many items only the first ones are listed, but the weekly totals still include all of them.
+
+## Notes you may see
+
+- **Old unpaid supplier bills left out (STALE_PAYABLES)** - posted supplier bills more than 90 days past due whose payment status is unknown are not counted as cash due now. Review them in accounts payable.
+- **Left out: no exchange rate** - foreign-currency items without a stored rate are listed by currency and not added to the totals.
+- **Only the first orders were counted** - the forecast reads a limited number of confirmed orders.
+
+## Planning settings used here
+
+With integrated planning on, approvers who also have finance access can change **Cost & cash timing** in **Tentative demand → Planning settings**: export document days (0-60), export usance days (0-365, 0 = at sight), BTB usance days (0-365) and a finance-approved **cost per minute override**. Other users see the values read-only; the CPM override stays hidden without finance access.
+
+## Common problems
+
+- **"… is switched off for your company"** → An admin must tick the switch in **Settings → Configuration**.
+- **"Money figures are only for admin / manager or users whose role has finance access and the MIS report view"** → Ask an admin to grant finance access and the MIS report view to your role.
+- **Cost per minute unknown** → The last three accounting periods are not locked yet, or no factory cost is posted; finance can set a CPM override.`,
+      tags: ["cost", "margin", "cash flow", "financing", "control tower", "manufacturing intelligence", "finance"],
+      keywords: [
+        "estimate at completion",
+        "EAC",
+        "cost at completion",
+        "order margin",
+        "cash requirement",
+        "cash forecast",
+        "financing gap",
+        "overdraft",
+        "BTB maturity",
+        "CPM",
+        "cost per minute",
+        "stale payables",
+      ],
+      estimatedMinutes: 7,
+      lastUpdated: "2026-11-13",
+      audience: "management",
+      infographics: [
+        {
+          type: "steps",
+          title: "Read cost and cash in four steps",
+          steps: [
+            { title: "Check the labels", body: "**Actual**, **Committed**, **Estimate**, **Forecast**. Nothing here is posted." },
+            { title: "Scan order margins", body: "**Order cost at completion**: net revenue, cost at completion and margin per order." },
+            { title: "Open the details", body: "**Actions** → **View details** for budget vs estimate, CPM and the ledger figures (information only)." },
+            { title: "Find the cash gap", body: "**Cash requirement**: weekly net cash, the **Financing gap** week and the shortfall." },
+          ],
+        },
+      ],
+      relatedAppRoutes: ["/app/operations/control-tower", "/app/settings/config"],
+      relatedArticleIds: ["ops-control-tower", "mfg-intel-tentative-demand", "mfg-intel-materials"],
+    },
+    {
+      id: "mfg-intel-predictions",
+      title: "Predictions: delivery forecasts, bottlenecks and recommendations",
+      summary:
+        "Statistics from your own history: likely, safe and worst-case delivery dates, line efficiency, supplier lateness, unusual production and daily recommendations you can accept or reject. Nothing here changes a plan.",
+      content: `## Overview
+
+The **Predictions** tab (Control Tower → Manufacturing intelligence → **Predictions**) answers *"What is likely to go wrong, and what should we look at first?"* Every number is a **statistical estimate from your own history** (recorded output, line plans and supplier receipts). The tab says so at the top: *Statistical estimate from your own history - never changes plans.* There is no money on this tab.
+
+## Before you start
+
+- An admin ticks **Predictions (delivery forecasts, line efficiency, bottlenecks)** in **Settings → Configuration → More features**. Manufacturing intelligence must be on first.
+- Optional: **AI explanations for predictions** adds an **Explain** button. It sends an anonymised summary (codes, dates and percentages; no buyer, employee or supplier names) to your company's approved AI provider. The numbers always come from the statistics.
+- Recommendations are found once a day (at night). A new company sees few results until some history exists.
+
+## Bottlenecks and recommendations
+
+1. The first card lists findings, highest priority first: **Delivery risk**, **Late material**, **Line overloaded**, **Line idle**, **Output drop** and **Rejection spike**. Each row shows the severity (*Critical*, *High*, *Medium*), the order or line, the **Deadline**, the confidence and the impact.
+2. Use **Show** (open, cleared or all findings) and **Kind** to filter.
+3. Open a row's **Actions** → **View details** to see the recommendation, supporting data, key dates, assumptions, alternatives, the **Responsible department** and the **Approval needed**.
+4. **Accept…** or **Reject…** records your decision. Both ask you to confirm; **Reject** needs a note (at least 5 characters, at most 500). **Accepting only records the decision** - it never changes plans, purchase orders or stock. Use **Open …** (for example *Open Line plan* or *Open Plan changes*) to act on the normal screen, where the usual approvals apply.
+5. A finding has one decision. Sending it again (a double click, or a second person) shows the stored decision and records nothing new.
+6. **Delivery forecast** in the Actions menu shows the order's forecast below.
+
+Recording a decision needs **admin / manager** or the permission to confirm AI agent actions. **Late material** findings are shown only to users with inventory read access.
+
+## Delivery forecast
+
+1. Pick the **Order**. The card shows the **Ex-factory target**, **Likely finish (P50)**, **Safe date (P80)** - 8 in 10 similar orders finish by it - and **Worst case (P90)**.
+2. **On-time probability** is the chance of finishing by the target. With fewer than 10 production days of history the card says *Not enough history for a probability yet* and uses fixed safety bands.
+3. The **Uncalibrated** label stays until at least 30 finished orders have been compared with their forecasts (see *Forecast accuracy* below).
+4. **What moves the date** names the biggest drivers: material arrival, line efficiency or line load. **Material readiness** shows when material is likely to be ready from the purchase orders and the supplier's history.
+
+## Line efficiency, suppliers, anomalies
+
+- **Line efficiency: history vs plan** - per sewing line, the **Planned** efficiency, the efficiency **From history** and the one **Used** for forecasts, with the source (*From history*, *History + plan*, *Plan only*), the confidence and the sample size. Fewer than 10 production days = planned efficiency only. Tick **Show style families** for per-family values.
+- **Supplier lateness** - how many days after the promised purchase-order date material arrives in full: likely (P50), safe (P80), worst case (P90) and the on-time share, by supplier, material category or both. Only users with inventory read access see it.
+- **Unusual production (anomalies)** - days or hours far from the line's usual result (output, efficiency, rejections). Choose **From / To** (at most 31 days).
+
+## Forecast accuracy (calibration)
+
+The last card compares past forecasts with the real ex-factory date of finished orders. Until 30 orders have been compared it says *Not enough finished orders yet*. Then it shows the **Brier score** (lower is better) and how often orders finished by the safe and worst-case dates. Results are shown only; nothing is recalibrated automatically.
+
+## Common problems
+
+- **"Predictions are switched off for your company"** → An admin must tick the switch in **Settings → Configuration**.
+- **"You are not allowed to record this decision"** → Ask an admin / manager, or for the permission to confirm AI agent actions.
+- **"This recommendation is no longer open. Refresh the list."** → The condition cleared in the meantime; the list reloads.
+- **"The linked finding was not found"** → The alert link points at a finding that was removed, or one you cannot see.`,
+      tags: ["predictions", "forecast", "bottleneck", "recommendation", "control tower", "manufacturing intelligence"],
+      keywords: [
+        "delivery forecast",
+        "P50",
+        "P80",
+        "P90",
+        "on-time probability",
+        "line efficiency",
+        "supplier lateness",
+        "anomaly",
+        "calibration",
+        "bottleneck",
+        "accept recommendation",
+      ],
+      estimatedMinutes: 7,
+      lastUpdated: "2026-11-13",
+      audience: "planning",
+      infographics: [
+        {
+          type: "steps",
+          title: "Use predictions in four steps",
+          steps: [
+            { title: "Scan the findings", body: "**Bottlenecks and recommendations**, highest priority first." },
+            { title: "Read the details", body: "**Actions** → **View details**: data, dates, alternatives, approval needed." },
+            { title: "Decide", body: "**Accept…** or **Reject…** (note required). This only records the decision." },
+            { title: "Act on the real screen", body: "Use **Open …** to change the plan or the purchase order with the normal approvals." },
+          ],
+        },
+      ],
+      relatedAppRoutes: ["/app/operations/control-tower", "/app/settings/config"],
+      relatedArticleIds: ["ops-control-tower", "mfg-intel-plan-changes", "mfg-intel-materials", "mfg-efficiency-reports"],
+    },
+    {
+      id: "mfg-intel-forward-plan",
+      title: "Forward plan: capacity vs demand, scenarios and the scheduler",
+      summary:
+        "Look 90-180 days ahead: sewing capacity against confirmed, booked, tentative and forecast work, what-if scenarios, a finance-limited view and a scheduler that proposes line bookings for approval.",
+      content: `## Overview
+
+The **Forward plan** tab (Control Tower → Manufacturing intelligence → **Forward plan**) answers *"Do we have enough sewing capacity for the next months, and what if things change?"* It shows estimates only. Nothing on this tab changes an order or a line plan; a scheduler proposal changes nothing until someone approves it in **Plan changes**.
+
+Deep link: \`/app/control-tower?tab=forward-plan\`.
+
+## Before you start
+
+- An admin ticks **Forward plan (capacity vs demand, scenarios, scheduler)** in **Settings → Configuration → More features**. Manufacturing intelligence must be on first.
+- The **Scheduler** view also needs **Integrated planning**. The **Finance** view needs **Cash requirement forecast** and is shown only to admin / manager or roles with finance access plus the MIS report view.
+- At the top choose the **Horizon** (90, 120, 150 or 180 days), **Group by** (Week or Month) and, optionally, a **Factory unit**, then click **Apply**. With many sewing lines the screen asks you to pick a factory unit.
+
+## Capacity vs demand
+
+1. Each row is a week or a month. The bar stacks the demand layers; the thin black line is the capacity.
+2. Layers, bottom to top: **Confirmed - firm booked**, **Confirmed - soft booked**, **Overdue booked work**, **Unconfirmed orders (booked)**, **Bookings without an order**, **Confirmed - not yet booked**, **Overdue - not yet booked**, tentative bookings and **Forecast (not yet ordered)**. The legend lists only the layers in the bar.
+3. **Tentative bookings** can be shown **Weighted by confidence** or at **Full quantity**. These are two views of the same bookings and are never added together.
+4. **Partial** means some line-days have unknown capacity (no shift, operators or efficiency), so the real capacity is higher and no use % is shown. **Part month** marks the first or last month that is cut by the horizon. **Overloaded** means demand is above capacity.
+5. Notes under the table list work due after the horizon, work pushed past it, and the assumptions used. Unconfirmed orders without bookings are not counted as demand.
+
+## Scenarios
+
+1. Open **Scenarios** and pick a **Preset**: **Base (most likely)**, **Optimistic**, **Conservative** (every tentative booking at full quantity plus the forecast) or **Capacity-limited** (work above a week's capacity moves to the next week).
+2. Optionally change **Efficiency**, **Overtime %** (0-25), **Absence %** (0-30, only with *Planned efficiency* because efficiency from history already includes absence), **Extra operators %** (-30 to 30) and **Extra (virtual) lines** (0-5).
+3. **Use in Capacity vs demand** shows the result. **Save my parameters** remembers them in this browser for you only.
+4. Tick up to 4 presets and click **Compare** to see capacity, demand, free / short minutes and overloaded periods side by side.
+5. **Demand forecast** shows per style family whether there is enough order history (at least 12 months for the company and 6 months with orders for the family).
+
+## Finance
+
+The **Finance** view shows, week by week, the cash forecast from **Cost & cash**, then after confirmed material still to buy, then after the tentative bookings that are kept, and finally with the facility headroom. Confirmed orders are never cut; tentative bookings the cash cannot carry are cut, lowest confidence first; forecast demand is never funded. A red message says when even confirmed work needs financing. Amounts are estimates and are never posted.
+
+## Scheduler
+
+1. Open **Scheduler**, optionally enter a **Material delay** or **BTB LC delay** (0-60 days, what-if), and click **Run preview**.
+2. The banner says *Proposal only - needs approval*. **Now** and **With proposal** compare late jobs, days late, style changeovers, jobs not placed and overtime.
+3. The scheduler moves only soft-booked rows of confirmed orders that start after the **frozen zone** and have not started, and places confirmed work that is not yet booked. **Firm bookings never move**; late ones are listed *for information* so you can change them by hand.
+4. Each job row has one **Actions** menu: **Why this line** explains the choice and why the other lines lost (finish on time first, then smallest style change, shortest idle gap, least overtime, line code). **Exclude** keeps a job where it is and runs the preview again; **Include** brings it back.
+5. *Overtime could recover the delay* is information only: proposals never add overtime.
+6. Click **Create plan revision**, write a note for the approver (5-500 characters) and confirm. The whole proposal is sent to **Plan changes** as one proposed revision. Clicking twice never creates two revisions. Then use **Open Plan changes**; an approver applies it there with the normal approval (and four-eyes rule when it is on).
+
+**Scheduler settings** at the bottom of the tab set the **Frozen zone (days)** (14-60) and the **Changeover loss %** (0-100 of the first day's minutes). Changing them needs plan approval rights.
+
+## Common problems
+
+- **"Too many sewing lines to calculate at once. Type a factory unit and try again."** → Enter a **Factory unit** and click **Apply** (or **Run preview again**).
+- **"This took too long. Try again, choose a factory unit or a shorter horizon."** → Pick a factory unit or 90 days.
+- **"Absence % can be used only with Planned efficiency"** → Set **Efficiency** to *Planned efficiency* or set absence to 0.
+- **"The line plan changed since this preview. The preview was run again"** → Someone changed the plan; check the new proposal and create the revision again.
+- **Approving says the booking now starts inside the frozen zone** → The proposal waited too long. Nothing was applied; run the scheduler preview again and send a new proposal.`,
+      tags: ["forward plan", "capacity", "scenario", "scheduler", "control tower", "manufacturing intelligence"],
+      keywords: [
+        "rough-cut capacity",
+        "RCCP",
+        "capacity vs demand",
+        "what-if",
+        "scenario",
+        "frozen zone",
+        "changeover",
+        "auto schedule",
+        "line loading",
+        "forecast demand",
+        "finance constrained",
+      ],
+      estimatedMinutes: 8,
+      lastUpdated: "2026-11-13",
+      audience: "planning",
+      infographics: [
+        {
+          type: "steps",
+          title: "Plan ahead in four steps",
+          steps: [
+            { title: "Check capacity vs demand", body: "Pick the **Horizon** and look for **Overloaded** and **Partial** periods." },
+            { title: "Try scenarios", body: "Change a preset or overtime, then **Compare** up to 4." },
+            { title: "Run the scheduler", body: "**Run preview**, read **Why this line**, **Exclude** jobs that must stay." },
+            { title: "Send for approval", body: "**Create plan revision** with a note, then approve it in **Plan changes**." },
+          ],
+        },
+      ],
+      relatedAppRoutes: ["/app/operations/control-tower", "/app/settings/config"],
+      relatedArticleIds: ["ops-control-tower", "mfg-intel-plan-changes", "mfg-intel-tentative-demand", "mfg-intel-cost-cash", "mfg-intel-predictions"],
     },
     {
       id: "mfg-setup",

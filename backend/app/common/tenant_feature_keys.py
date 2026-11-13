@@ -185,6 +185,28 @@ VOUCHER_ENTRY_ASSIST_ENABLED = "voucher_entry_assist_enabled"
 # AI chat "agent mode": the model picks read-only ERP tools itself (default OFF, strict true;
 # never add it to DEFAULT_ON_FEATURE_FLAGS).
 AI_AGENT_MODE_ENABLED = "ai_agent_mode_enabled"
+# Manufacturing Intelligence Phase 1 (read-only). All default OFF, strict true; never add to
+# DEFAULT_ON_FEATURE_FLAGS. See docs/manufacturing-intelligence/09-technical-architecture.md.
+MANUFACTURING_INTELLIGENCE_V1 = "manufacturing_intelligence_v1"
+PLANNING_MATH_V2 = "planning_math_v2"
+MFG_ORDER_BOM_READINESS_V2 = "mfg_order_bom_readiness_v2"
+# Manufacturing Intelligence Phase 2 (docs/manufacturing-intelligence/13-phase2-implementation-plan.md).
+# All strict (only an explicit true switches them on), default OFF; never add to DEFAULT_ON_FEATURE_FLAGS.
+MFG_MATERIAL_ALLOCATION_V1 = "mfg_material_allocation_v1"
+MFG_INTEGRATED_PLANNING_V1 = "mfg_integrated_planning_v1"
+MFG_PLAN_FOUR_EYES = "mfg_plan_four_eyes"
+# Manufacturing Intelligence Phase 3 (docs/manufacturing-intelligence/14-phase3-implementation-plan.md, read-only).
+# Strict, default OFF, need manufacturing_intelligence_v1; never add to DEFAULT_ON_FEATURE_FLAGS.
+MFG_COST_INTELLIGENCE_V1 = "mfg_cost_intelligence_v1"
+MFG_FINANCIAL_READINESS_V1 = "mfg_financial_readiness_v1"
+# Manufacturing Intelligence Phase 4 (docs/manufacturing-intelligence/15-phase4-implementation-plan.md).
+# Strict, default OFF, need manufacturing_intelligence_v1; never add to DEFAULT_ON_FEATURE_FLAGS.
+# The AI text flag is a separate kill switch for sending (redacted) facts to an external LLM.
+MFG_PREDICTIVE_INTELLIGENCE_V1 = "mfg_predictive_intelligence_v1"
+MFG_PREDICTIVE_AI_TEXT_V1 = "mfg_predictive_ai_text_v1"
+# Manufacturing Intelligence Phase 5 (docs/manufacturing-intelligence/16-phase5-implementation-plan.md): forward plan,
+# scenarios. Strict, default OFF, needs manufacturing_intelligence_v1; never add to DEFAULT_ON_FEATURE_FLAGS.
+MFG_ADVANCED_PLANNING_V1 = "mfg_advanced_planning_v1"
 
 # Flags that are on for every tenant (existing and new) unless explicitly set to False.
 # API payloads read by the frontend (`/auth/me`, `/settings/config`) fill these in as True when missing.
@@ -293,6 +315,50 @@ def is_ai_agent_mode_enabled(feature_flags: Any) -> bool:
     return _flag_true(feature_flags, AI_AGENT_MODE_ENABLED)
 
 
+def is_manufacturing_intelligence_v1_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, MANUFACTURING_INTELLIGENCE_V1)
+
+
+def is_planning_math_v2_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, PLANNING_MATH_V2)
+
+
+def is_mfg_order_bom_readiness_v2_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, MFG_ORDER_BOM_READINESS_V2)
+
+
+def is_mfg_material_allocation_v1_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, MFG_MATERIAL_ALLOCATION_V1)
+
+
+def is_mfg_integrated_planning_v1_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, MFG_INTEGRATED_PLANNING_V1)
+
+
+def is_mfg_plan_four_eyes_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, MFG_PLAN_FOUR_EYES)
+
+
+def is_mfg_cost_intelligence_v1_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, MFG_COST_INTELLIGENCE_V1)
+
+
+def is_mfg_financial_readiness_v1_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, MFG_FINANCIAL_READINESS_V1)
+
+
+def is_mfg_predictive_intelligence_v1_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, MFG_PREDICTIVE_INTELLIGENCE_V1)
+
+
+def is_mfg_predictive_ai_text_v1_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, MFG_PREDICTIVE_AI_TEXT_V1)
+
+
+def is_mfg_advanced_planning_v1_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, MFG_ADVANCED_PLANNING_V1)
+
+
 def is_packing_list_cartons_enabled(feature_flags: Any) -> bool:
     return _flag_default_true(feature_flags, PACKING_LIST_CARTONS_ENABLED)
 
@@ -398,43 +464,9 @@ def is_budget_enforcement_v2_enabled(feature_flags: Any) -> bool:
     return _flag_default_true(feature_flags, BUDGET_ENFORCEMENT_V2)
 
 
-def is_auto_post_wip_journal_enabled(feature_flags: Any) -> bool:
-    """WIP→GL auto-post is on unless the flag is explicitly False (missing key ⇒ True)."""
-    if not isinstance(feature_flags, dict):
-        return True
-    return feature_flags.get(AUTO_POST_WIP_JOURNAL) is not False
-
-
-def is_party_ledger_enabled(feature_flags: Any) -> bool:
-    """Strict: only explicit True enables party ledger (default off)."""
-    return _flag_true(feature_flags, PARTY_LEDGER_ENABLED)
-
-
-def is_party_ledger_auto_allocate(feature_flags: Any) -> bool:
-    """FIFO auto-allocate when party ledger is enabled, unless auto_allocate is explicitly False."""
-    if not is_party_ledger_enabled(feature_flags):
-        return False
-    if not isinstance(feature_flags, dict):
-        return True
-    return feature_flags.get(PARTY_LEDGER_AUTO_ALLOCATE) is not False
-
-
-def is_party_ledger_interest_calc(feature_flags: Any) -> bool:
-    """Interest calc only when both master flag and interest flag are True."""
-    return is_party_ledger_enabled(feature_flags) and _flag_true(feature_flags, PARTY_LEDGER_INTEREST_CALC)
-
-
-def is_stock_hierarchy_enabled(feature_flags: Any) -> bool:
-    """Strict: only explicit True enables stock hierarchy / godown matrix APIs (default off)."""
-    return _flag_true(feature_flags, STOCK_HIERARCHY_ENABLED)
-
-
-def is_batch_tracking_enabled(feature_flags: Any) -> bool:
-    """Physical batch create/allocate on GRN/DC (default off). Independent of hierarchy flag."""
-    return _flag_true(feature_flags, BATCH_TRACKING_ENABLED)
 # Bill-wise AR/AP source for "Sundry Debtors / Creditors due till today" (Ratio Analysis) and the Control Tower
-# overdue receivable / payable cards (PLAN open question 8). Unset = not decided: ratios show null + reason and
-# the Control Tower keeps its own sources.
+# overdue receivable / payable cards (PLAN open question 8). An explicit value wins; unset = the standard bill-wise
+# source chosen automatically (`resolve_finance_ar_ap_due_source`).
 FINANCE_AR_AP_DUE_SOURCE = "finance_ar_ap_due_source"
 AR_AP_DUE_SOURCE_OUTSTANDING_BILLS = "outstanding_bills"
 AR_AP_DUE_SOURCE_PARTY_LEDGER = "party_ledger"
@@ -469,6 +501,40 @@ def resolve_finance_ar_ap_due_source(feature_flags: Any) -> tuple[str, bool]:
     return AR_AP_DUE_SOURCE_OUTSTANDING_BILLS, True
 
 
+def is_auto_post_wip_journal_enabled(feature_flags: Any) -> bool:
+    """WIP→GL auto-post is on unless the flag is explicitly False (missing key ⇒ True)."""
+    if not isinstance(feature_flags, dict):
+        return True
+    return feature_flags.get(AUTO_POST_WIP_JOURNAL) is not False
+
+
+def is_party_ledger_enabled(feature_flags: Any) -> bool:
+    """Strict: only explicit True enables party ledger (default off)."""
+    return _flag_true(feature_flags, PARTY_LEDGER_ENABLED)
+
+
+def is_party_ledger_auto_allocate(feature_flags: Any) -> bool:
+    """FIFO auto-allocate when party ledger is enabled, unless auto_allocate is explicitly False."""
+    if not is_party_ledger_enabled(feature_flags):
+        return False
+    if not isinstance(feature_flags, dict):
+        return True
+    return feature_flags.get(PARTY_LEDGER_AUTO_ALLOCATE) is not False
+
+
+def is_party_ledger_interest_calc(feature_flags: Any) -> bool:
+    """Interest calc only when both master flag and interest flag are True."""
+    return is_party_ledger_enabled(feature_flags) and _flag_true(feature_flags, PARTY_LEDGER_INTEREST_CALC)
+
+
+def is_stock_hierarchy_enabled(feature_flags: Any) -> bool:
+    """Strict: only explicit True enables stock hierarchy / godown matrix APIs (default off)."""
+    return _flag_true(feature_flags, STOCK_HIERARCHY_ENABLED)
+
+
+def is_batch_tracking_enabled(feature_flags: Any) -> bool:
+    """Physical batch create/allocate on GRN/DC (default off). Independent of hierarchy flag."""
+    return _flag_true(feature_flags, BATCH_TRACKING_ENABLED)
 
 
 def is_gst_system_enabled(feature_flags: Any) -> bool:
@@ -743,9 +809,9 @@ def get_eoq_holding_cost_rate(feature_flags: Any, default: float = 0.10) -> floa
 # ``get_tenant_rbac_mode`` keep tolerating legacy non-canonical values for
 # backward compatibility, but new writes must be canonical.
 ENUM_FEATURE_FLAG_VALUES: dict[str, frozenset[str]] = {
-    FINANCE_AR_AP_DUE_SOURCE: frozenset(FINANCE_AR_AP_DUE_SOURCES),
     RBAC_ENFORCEMENT: frozenset(RBAC_MODES),
     BUDGET_ENFORCEMENT_MODE: frozenset(BUDGET_ENFORCEMENT_MODES),
+    FINANCE_AR_AP_DUE_SOURCE: frozenset(FINANCE_AR_AP_DUE_SOURCES),
 }
 
 

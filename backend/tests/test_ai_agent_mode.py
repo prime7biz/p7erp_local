@@ -173,7 +173,8 @@ async def test_agent_calls_tools_and_answers_with_citations(db_session_integrati
     # The tool results went back to the model, and the tool list offered to it has no write tools.
     assert any(order.order_code in m for m in fake.tool_messages())
     offered = {t["function"]["name"] for t in fake.bodies[0]["tools"]}
-    assert offered == set(catalog.AGENT_TOOLS)
+    # Phase 4 predictive tools are offered only when both predictive flags are on (plan 15 section 17.7).
+    assert offered == set(catalog.AGENT_TOOLS) - catalog.MFG_PREDICTIVE_TOOL_NAMES
     assert not offered & {"create_financial_voucher", "create_sales_inquiry", "process_goods_receipt", "calendar_manage"}
     # Telemetry and audit rows.
     inv = (
@@ -185,6 +186,32 @@ async def test_agent_calls_tools_and_answers_with_citations(db_session_integrati
     ).scalar()
     assert audits == 2
     assert agent_env == []
+
+
+@pytest.mark.asyncio
+async def test_mfg_predictive_tools_offered_only_with_both_flags(db_session_integration, agent_env, monkeypatch):
+    """Plan 15 section 17.7: the three Phase 4 tools appear only when mfg_predictive_intelligence_v1 AND
+    mfg_predictive_ai_text_v1 are on; the handler re-checks the flags (FEATURE_DISABLED)."""
+    db = db_session_integration
+    tenant, user, _ = await create_admin_tenant_with_user(db)
+    _customer, order = await _order_setup(db, tenant)
+    predictive = {"manufacturing_intelligence_v1": True, "mfg_predictive_intelligence_v1": True}
+    await _enable_agent(db, tenant, **predictive)
+    fake = use_model(monkeypatch, [{"tools": [("mfg_bottlenecks", {})]}, {"text": "No bottlenecks."}])
+    await _ask(db, tenant, user, "Any production bottlenecks?")
+    offered = {t["function"]["name"] for t in fake.bodies[0]["tools"]}
+    assert not offered & catalog.MFG_PREDICTIVE_TOOL_NAMES  # AI text flag off
+    assert any("FEATURE_DISABLED" in m for m in fake.tool_messages())  # called anyway: the handler refuses
+
+    await _enable_agent(db, tenant, **predictive, mfg_predictive_ai_text_v1=True)
+    fake = use_model(monkeypatch, [{"tools": [("mfg_delivery_forecast", {"order_id": order.id})]}, {"text": "ok"}])
+    await _ask(db, tenant, user, "When will my order ship?")
+    offered = {t["function"]["name"] for t in fake.bodies[0]["tools"]}
+    assert catalog.MFG_PREDICTIVE_TOOL_NAMES <= offered
+    assert offered == set(catalog.AGENT_TOOLS)
+    assert any(order.order_code in m and "band" in m for m in fake.tool_messages())
+    assert catalog.AGENT_TOOLS["mfg_supplier_lateness"].gate == catalog.GATE_MFG_PRED
+    assert catalog.GATE_MFG_PRED.access_keys == ("production.access", "production.planning.read")
 
 
 @pytest.mark.asyncio

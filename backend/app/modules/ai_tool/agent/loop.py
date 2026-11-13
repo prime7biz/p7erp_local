@@ -371,7 +371,7 @@ async def _run_loop(
     messages: list[dict[str, Any]] = [{"role": "system", "content": build_system_prompt(ctx.tenant, screen_ctx)}]
     messages.extend(history)
     messages.append({"role": "user", "content": _redact(prompt, MAX_PROMPT_CHARS)})
-    tools = openai_tool_specs()
+    tools = openai_tool_specs(ctx.tenant)
 
     outcome = AgentOutcome(text="", model=model)
     seen_hrefs: set[str] = set()

@@ -43,6 +43,8 @@ class TenantProductionSettings(Base):
     factory_profile: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # Optional override: {"enabled": true, "model": "gemini-2.0-flash-lite"} — API key stays in server env (GEMINI_API_KEY).
     ai_provider_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Migration 297: Manufacturing Intelligence planning settings (stage probability, expiry, receipt buffer).
+    mfg_planning_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -380,6 +382,10 @@ class SewingLineStyleConfig(Base):
     planned_qty: Mapped[float] = mapped_column(Numeric(18, 3), nullable=False, default=0)
     completed_qty: Mapped[float] = mapped_column(Numeric(18, 3), nullable=False, default=0)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Migration 297: a database trigger bumps lock_version when a planning field changes (plan revisions use it).
+    lock_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    schedule_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    source_smv_type: Mapped[str | None] = mapped_column(String(24), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

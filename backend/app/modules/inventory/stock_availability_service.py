@@ -47,6 +47,48 @@ async def compute_items_availability(
     include_in_transit_po: bool = True,
     exclude_reserved: bool = True,
     exclude_non_available_warehouses: bool = True,
+    own_order_id: int | None = None,
+    allocation_v1: bool | None = None,
+) -> dict[int, ItemAvailability]:
+    """Batch availability for many items.
+
+    Flag ``mfg_material_allocation_v1`` OFF (default): the legacy reader below, unchanged. ON: the hard-only
+    taxonomy reader (``reservation_service.compute_items_availability_v1``); ``own_order_id`` adds back the
+    checked order's own holds. ``allocation_v1`` lets a caller that already resolved the flag skip the lookup.
+    """
+    from app.modules.inventory.reservation_service import allocation_v1_enabled, compute_items_availability_v1
+
+    if item_ids and await allocation_v1_enabled(db, tenant_id, allocation_v1):
+        return await compute_items_availability_v1(
+            db,
+            tenant_id,
+            item_ids,
+            warehouse_id=warehouse_id,
+            include_in_transit_po=include_in_transit_po,
+            exclude_reserved=exclude_reserved,
+            exclude_non_available_warehouses=exclude_non_available_warehouses,
+            own_order_id=own_order_id,
+        )
+    return await _compute_items_availability_legacy(
+        db,
+        tenant_id,
+        item_ids,
+        warehouse_id=warehouse_id,
+        include_in_transit_po=include_in_transit_po,
+        exclude_reserved=exclude_reserved,
+        exclude_non_available_warehouses=exclude_non_available_warehouses,
+    )
+
+
+async def _compute_items_availability_legacy(
+    db: AsyncSession,
+    tenant_id: int,
+    item_ids: list[int],
+    *,
+    warehouse_id: int | None = None,
+    include_in_transit_po: bool = True,
+    exclude_reserved: bool = True,
+    exclude_non_available_warehouses: bool = True,
 ) -> dict[int, ItemAvailability]:
     """Batch availability for many items (single round-trip per sub-query where possible)."""
     if not item_ids:

@@ -7,6 +7,11 @@ import { CapacityHeatmap } from "@/components/control-tower/CapacityHeatmap";
 import { FinanceSnapshot } from "@/components/control-tower/FinanceSnapshot";
 import { MasterLcLadder } from "@/components/control-tower/MasterLcLadder";
 import { OrderExecutionGrid } from "@/components/control-tower/OrderExecutionGrid";
+import { ManufacturingIntelligenceSection } from "@/components/control-tower/intelligence/ManufacturingIntelligenceSection";
+import { readPhase2Flags } from "@/components/control-tower/intelligence/phase2/phase2Logic";
+import { readPhase3Flags } from "@/components/control-tower/intelligence/phase3/phase3Logic";
+import { parseFindingParam, parseTabParam, readPhase4Flags } from "@/components/control-tower/intelligence/phase4/phase4Logic";
+import { readPhase5Flags, scenarioStorageKey } from "@/components/control-tower/intelligence/phase5/phase5Logic";
 import { useAuth } from "@/context/AuthContext";
 import { useControlTower } from "@/hooks/useControlTower";
 import { toLocalISODate, todayLocalISO } from "@/lib/dates";
@@ -34,9 +39,11 @@ function sectionVisibility(roleName: string | undefined) {
 export function ControlTowerPage() {
   const { me } = useAuth();
   const [searchParams] = useSearchParams();
-  const focusOrderRaw = searchParams.get("focus_order");
+  const focusOrderRaw = searchParams.get("focus_order") ?? searchParams.get("order");
   const focusOrderNum = focusOrderRaw ? Number(focusOrderRaw) : null;
   const focusOrderId = focusOrderNum != null && !Number.isNaN(focusOrderNum) ? focusOrderNum : null;
+  const mfgTab = parseTabParam(searchParams.get("tab"));
+  const focusFindingId = parseFindingParam(searchParams.get("finding"));
   const flags = me?.feature_flags as Record<string, boolean> | undefined;
   const enabled = flags?.control_tower_enabled === true;
   const vis = sectionVisibility(me?.role_name);
@@ -213,6 +220,23 @@ export function ControlTowerPage() {
           highlightOrderId={focusOrderId}
         />
       </section>
+
+      {flags?.manufacturing_intelligence_v1 === true && vis.showCapacity ? (
+        <ManufacturingIntelligenceSection
+          key={`${mfgTab ?? ""}|${focusFindingId ?? ""}`}
+          enabled
+          orderOptions={summary?.orders ?? []}
+          focusOrderId={focusOrderId}
+          phase2={readPhase2Flags(flags)}
+          phase3={readPhase3Flags(flags)}
+          phase4={readPhase4Flags(flags)}
+          phase5={readPhase5Flags(flags)}
+          scenarioStorageKey={me ? scenarioStorageKey(me.tenant_id, me.user_id) : null}
+          roleName={me?.role_name}
+          initialTab={mfgTab}
+          focusFindingId={focusFindingId}
+        />
+      ) : null}
 
       {vis.showCapacity && !narrow ? (
         <section className="rounded-xl border border-border bg-surface-raised p-4">

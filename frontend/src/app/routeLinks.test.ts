@@ -56,12 +56,27 @@ function linkTargets(): { file: string; link: string }[] {
 
 describe("app route links", () => {
   it("every /app/... link points at a declared route", () => {
-    const patterns = routePatterns();
-    // Section prefixes (sidebar highlighting, prefetch groups) are valid when some route starts with them.
-    const isPrefixOfRoute = (link: string) => patterns.some((p) => p.startsWith(`${link}/`));
-    const dead = linkTargets().filter(
-      ({ link }) => !patterns.some((p) => matches(p, link)) && !isPrefixOfRoute(link),
-    );
+    // Catch-alls are filtered out, so every pattern starts with a literal segment: a link can only
+    // match (or be a prefix of) patterns that share its first segment.
+    const byFirstSegment = new Map<string, string[]>();
+    for (const p of routePatterns()) {
+      const first = p.split("/")[0] ?? "";
+      const bucket = byFirstSegment.get(first);
+      if (bucket) bucket.push(p);
+      else byFirstSegment.set(first, [p]);
+    }
+    const verdicts = new Map<string, boolean>();
+    const isLive = (link: string) => {
+      let live = verdicts.get(link);
+      if (live === undefined) {
+        const candidates = byFirstSegment.get(link.split("/")[0] ?? "") ?? [];
+        // Section prefixes (sidebar highlighting, prefetch groups) are valid when some route starts with them.
+        live = candidates.some((p) => matches(p, link) || p.startsWith(`${link}/`));
+        verdicts.set(link, live);
+      }
+      return live;
+    };
+    const dead = linkTargets().filter(({ link }) => !isLive(link));
     const report = dead.map((d) => `${d.file}: /app/${d.link}`);
     expect(report).toEqual([]);
   }, 30_000);

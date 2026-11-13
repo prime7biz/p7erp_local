@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { SOLUTION_PAGES } from "@/config/solutionPages";
 import {
   ArrowRight,
   AlertTriangle,
@@ -130,8 +131,8 @@ const faqs = [
     a: "Yes. Prime7 ERP provides real-time WIP tracking across all production stages — cutting, sewing, finishing, and packing — with line-level visibility and efficiency metrics.",
   },
   {
-    q: "Does Prime7 ERP integrate with buyer portals?",
-    a: "Prime7 ERP can export data in formats compatible with major buyer portals and supports standard EDI integrations for order and shipment data exchange.",
+    q: "Can we move our existing data into Prime7 ERP?",
+    a: "Yes. Customers, vendors and items can be imported from CSV files, a standard chart of accounts is set up for you, and the implementation team helps move opening balances and other data from Excel and Tally.",
   },
 ];
 
@@ -153,9 +154,9 @@ export function GarmentsErpPage() {
               Purpose-Built for Garment Manufacturers
             </div>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-text-primary mb-6 leading-tight">
-              The Only ERP Built Specifically for
+              Garment Manufacturing ERP Software
               <br />
-              <span className="text-primary">Garment Manufacturers</span>
+              <span className="text-primary">Built for RMG and Apparel Factories</span>
             </h1>
             <p className="text-lg md:text-xl text-text-secondary max-w-3xl mx-auto mb-8 leading-relaxed">
               From buyer inquiry to LC realization — Prime7 ERP understands your factory&apos;s unique challenges.
@@ -314,6 +315,34 @@ export function GarmentsErpPage() {
         </div>
       </section>
 
+      {/* Module pages */}
+      <section className="py-16 lg:py-20 bg-white" aria-labelledby="modules-heading">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 id="modules-heading" className="text-3xl md:text-4xl font-semibold text-text-primary mb-8 text-center">
+            Explore Each Garment ERP Module
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {SOLUTION_PAGES.filter((p) => p.path !== "/erp-bangladesh").map((p) => (
+              <Link
+                key={p.path}
+                to={p.path}
+                className="group flex items-center justify-between rounded-xl border border-primary/20 p-5 hover:border-primary/40 hover:shadow-sm transition-all"
+              >
+                <span className="font-semibold text-text-primary group-hover:text-primary">{p.label}</span>
+                <ChevronRight className="w-4 h-4 text-text-muted group-hover:text-primary" aria-hidden />
+              </Link>
+            ))}
+          </div>
+          <p className="mt-6 text-center text-text-secondary">
+            Exporting from Bangladesh? See{" "}
+            <Link to="/erp-bangladesh" className="font-semibold text-primary hover:underline">
+              garments ERP software for Bangladesh
+            </Link>
+            .
+          </p>
+        </div>
+      </section>
+
       {/* FAQ */}
       <section className="py-16 lg:py-24 bg-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -327,14 +356,15 @@ export function GarmentsErpPage() {
                 <button
                   type="button"
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                  aria-expanded={openFaq === i}
                   className="w-full flex items-center justify-between px-6 py-5 text-left hover:bg-primary/5 transition-colors"
                 >
                   <span className="font-semibold text-text-primary pr-4">{faq.q}</span>
                   <ChevronDown className={`h-5 w-5 text-text-muted shrink-0 transition-transform duration-200 ${openFaq === i ? "rotate-180" : ""}`} />
                 </button>
-                {openFaq === i && (
-                  <div className="px-6 pb-5 text-text-secondary leading-relaxed border-t border-border-subtle pt-4">{faq.a}</div>
-                )}
+                <div hidden={openFaq !== i} className="px-6 pb-5 text-text-secondary leading-relaxed border-t border-border-subtle pt-4">
+                  {faq.a}
+                </div>
               </div>
             ))}
           </div>
@@ -346,7 +376,7 @@ export function GarmentsErpPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Ready to Transform Your Factory?</h2>
           <p className="text-lg text-white/90 mb-8 max-w-2xl mx-auto leading-relaxed">
-            Join garment manufacturers who run their operations on Prime7 ERP. Start your free trial today.
+            See one of your own orders run from inquiry to shipment in Prime7 ERP. Book a demo or start your free trial today.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-white text-primary px-8 py-3 font-semibold hover:bg-surface-subtle transition-colors">

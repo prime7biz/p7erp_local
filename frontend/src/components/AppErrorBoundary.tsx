@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { NewVersionNotice } from "@/components/NewVersionNotice";
 import { isChunkLoadError, reloadOnceForNewVersion } from "@/lib/chunkReload";
+import { revealApp } from "@/lib/prerenderSnapshot";
 
 interface Props {
   children: ReactNode;
@@ -27,6 +28,8 @@ export class AppErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error("AppErrorBoundary", error, info.componentStack);
+    // The error screen is rendered in the app container; never leave it hidden behind a pre-rendered page.
+    revealApp();
     if (isChunkLoadError(error)) reloadOnceForNewVersion();
   }
 

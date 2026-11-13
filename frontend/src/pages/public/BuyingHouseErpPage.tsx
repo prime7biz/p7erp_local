@@ -201,7 +201,15 @@ export function BuyingHouseErpPage() {
               Challenges Every Buying House Faces
             </h2>
             <p className="text-lg text-text-secondary max-w-2xl mx-auto">
-              If your merchandising team is drowning in spreadsheets and WhatsApp follow-ups, P7 was built to solve exactly these problems.
+              If your merchandising team is drowning in spreadsheets and WhatsApp follow-ups, Prime7 ERP was built to solve exactly these problems. See also{" "}
+              <Link to="/garment-merchandising-software" className="font-semibold text-primary hover:underline">
+                garment merchandising and order management
+              </Link>{" "}
+              and{" "}
+              <Link to="/back-to-back-lc-management-software" className="font-semibold text-primary hover:underline">
+                back-to-back LC management
+              </Link>
+              .
             </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -306,16 +314,15 @@ export function BuyingHouseErpPage() {
                 <button
                   type="button"
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                  aria-expanded={openFaq === i}
                   className="w-full flex items-center justify-between p-5 text-left hover:bg-primary/5 transition-colors"
                 >
                   <span className="font-medium text-text-primary pr-4">{faq.q}</span>
                   <ChevronDown className={`w-5 h-5 text-text-muted flex-shrink-0 transition-transform ${openFaq === i ? "rotate-180" : ""}`} />
                 </button>
-                {openFaq === i && (
-                  <div className="px-5 pb-5 text-text-secondary text-sm leading-relaxed border-t border-border pt-4">
-                    {faq.a}
-                  </div>
-                )}
+                <div hidden={openFaq !== i} className="px-5 pb-5 text-text-secondary text-sm leading-relaxed border-t border-border pt-4">
+                  {faq.a}
+                </div>
               </div>
             ))}
           </div>

@@ -1,9 +1,10 @@
 import { useLocation } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { getSeoForPath } from "@/config/seo";
-import { getArticleBySlug } from "@/data/resourcesArticles";
+import { getArticleBySlug, ORGANIZATION_AUTHOR } from "@/data/resourcesArticles";
 import { resourceArticleDateToIsoDate, resourceArticleDateToIsoDateTime } from "@/utils/resourceArticleDates";
 import { breadcrumbJsonLd } from "@/utils/seoBreadcrumbs";
+import { jsonLd } from "@/utils/jsonLd";
 import { getRobotsMetaContent } from "@/utils/seoRobots";
 
 /** Base URL for canonical and Open Graph. Set via VITE_SITE_URL or default for production. */
@@ -12,8 +13,8 @@ const SITE_URL = raw ? raw.replace(/\/$/, "") : "https://prime7erp.com";
 
 const ORG_ID = `${SITE_URL}/#organization`;
 
-/** Default share image for Open Graph / Twitter (public/images/og-default.png). */
-const DEFAULT_OG_IMAGE = `${SITE_URL}/images/og-default.png`;
+/** Default share image for Open Graph / Twitter (public/images/og-default.jpg, 1200×630, ~60 KB). */
+const DEFAULT_OG_IMAGE = `${SITE_URL}/images/og-default.jpg`;
 
 /** JSON-LD for the landing page: Organization + SoftwareApplication + WebSite. */
 const LANDING_JSON_LD = {
@@ -58,15 +59,10 @@ const LANDING_JSON_LD = {
       url: SITE_URL,
       publisher: { "@id": ORG_ID },
       applicationCategory: "BusinessApplication",
-      operatingSystem: "Web",
+      applicationSubCategory: "Enterprise resource planning (ERP)",
+      operatingSystem: "Web browser",
       description:
-        "Cloud ERP for garment manufacturers and buying houses. Modules include merchandising, production, inventory, LC management, accounting, quality, HR, and AI analytics.",
-      offers: {
-        "@type": "Offer",
-        price: "0",
-        priceCurrency: "USD",
-        description: "Free trial available",
-      },
+        "Cloud ERP for garment manufacturers and buying houses. Modules include merchandising, costing, production, inventory, export and back-to-back LC, accounting, quality, HR, and AI assistance.",
     },
     {
       "@type": "WebSite",
@@ -129,11 +125,11 @@ export function Seo() {
         "@type": "Article",
         headline: article.title,
         datePublished,
-        author: {
-          "@type": "Person",
-          name: article.author,
-          jobTitle: article.authorRole,
-        },
+        ...(article.updated ? { dateModified: resourceArticleDateToIsoDate(article.updated) } : {}),
+        author:
+          article.author === ORGANIZATION_AUTHOR
+            ? { "@type": "Organization", "@id": ORG_ID, name: "Prime7 ERP" }
+            : { "@type": "Person", name: article.author, jobTitle: article.authorRole },
         publisher: {
           "@id": ORG_ID,
         },
@@ -161,7 +157,7 @@ export function Seo() {
       <meta property="og:description" content={meta.description} />
       <meta property="og:site_name" content="Prime7 ERP" />
       <meta property="og:image" content={DEFAULT_OG_IMAGE} />
-      <meta property="og:image:type" content="image/png" />
+      <meta property="og:image:type" content="image/jpeg" />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
       <meta property="og:image:alt" content={articleOgAlt} />
@@ -173,18 +169,10 @@ export function Seo() {
       <meta name="twitter:image:alt" content={articleOgAlt} />
       <meta name="twitter:title" content={meta.title} />
       <meta name="twitter:description" content={meta.description} />
-      {isLanding && (
-        <script type="application/ld+json">{JSON.stringify(LANDING_JSON_LD)}</script>
-      )}
-      {isContact && (
-        <script type="application/ld+json">{JSON.stringify(CONTACT_JSON_LD)}</script>
-      )}
-      {articleJsonLd && (
-        <script type="application/ld+json">{JSON.stringify(articleJsonLd)}</script>
-      )}
-      {crumbs && (
-        <script type="application/ld+json">{JSON.stringify(crumbs)}</script>
-      )}
+      {isLanding && <script type="application/ld+json">{jsonLd(LANDING_JSON_LD)}</script>}
+      {isContact && <script type="application/ld+json">{jsonLd(CONTACT_JSON_LD)}</script>}
+      {articleJsonLd && <script type="application/ld+json">{jsonLd(articleJsonLd)}</script>}
+      {crumbs && <script type="application/ld+json">{jsonLd(crumbs)}</script>}
     </Helmet>
   );
 }

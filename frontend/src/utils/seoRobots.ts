@@ -1,5 +1,5 @@
 import { LEGAL_DOC_SEGMENTS, PUBLIC_MARKETING_PATHS } from "@/config/publicMarketingPaths";
-import { getArticleBySlug } from "@/data/resourcesArticles";
+import { getArticleBySlug, isIndexableArticle } from "@/data/resourcesArticles";
 
 /** Shown in <meta name="robots"> for every route so crawlers get a clear signal after JS runs. */
 export const ROBOTS_INDEX =
@@ -19,7 +19,8 @@ const NOINDEX_EXACT = new Set([
 
 /**
  * Private or low-value URLs: keep out of the index so crawl budget focuses on marketing/content.
- * Unknown paths (true 404) are noindex. Public marketing, resources articles, /login, and /signup stay indexable.
+ * Unknown paths (true 404) are noindex. Public marketing, full resource articles (not short summaries),
+ * /login, and /signup stay indexable.
  */
 export function getRobotsMetaContent(pathname: string): string {
   if (pathname.startsWith("/app")) return ROBOTS_NOINDEX;
@@ -30,7 +31,7 @@ export function getRobotsMetaContent(pathname: string): string {
   const resourceMatch = pathname.match(/^\/resources\/([^/]+)$/);
   if (resourceMatch?.[1]) {
     const article = getArticleBySlug(resourceMatch[1]);
-    return article ? ROBOTS_INDEX : ROBOTS_NOINDEX;
+    return article && isIndexableArticle(article) ? ROBOTS_INDEX : ROBOTS_NOINDEX;
   }
 
   if (pathname === "/resources") return ROBOTS_INDEX;

@@ -79,7 +79,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14 sm:h-16 gap-2 min-w-0">
             <Link to="/" className="flex items-center gap-2 shrink-0">
-              <img src="/images/logo.png" alt="Prime7 ERP" className="h-8 sm:h-10 w-auto" />
+              <img src="/images/logo-header.png" alt="Prime7 ERP" width={324} height={80} className="h-8 sm:h-10 w-auto" />
             </Link>
 
             <nav className="hidden xl:flex items-center gap-0.5 flex-shrink-0" aria-label="Main">
@@ -204,7 +204,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               >
                 <div className="flex h-14 sm:h-16 items-center justify-between border-b border-border-subtle px-4">
                   <Link to="/" onClick={() => setMobileOpen(false)} className="shrink-0">
-                    <img src="/images/logo.png" alt="Prime7 ERP" className="h-8 w-auto" />
+                    <img src="/images/logo-header.png" alt="Prime7 ERP" width={324} height={80} className="h-8 w-auto" />
                   </Link>
                   <button
                     ref={closeButtonRef}
@@ -305,7 +305,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           <div className="grid grid-cols-2 gap-8 md:grid-cols-3 xl:grid-cols-7">
             <div className="col-span-2 md:col-span-3 xl:col-span-2">
               <div className="mb-4">
-                <img src="/images/logo-white.svg" alt="Prime7 ERP" className="h-12 w-auto" />
+                <img src="/images/logo-white.svg" alt="Prime7 ERP" width={220} height={52} loading="lazy" className="h-12 w-auto" />
               </div>
               <p className="text-sm text-white mb-6 leading-relaxed">
                 AI-driven cloud ERP built for garment manufacturers and buying houses worldwide.
@@ -369,7 +369,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   { label: "Features", to: "/features" },
                   { label: "Garments ERP", to: "/garments-erp" },
                   { label: "Buying House ERP", to: "/buying-house-erp" },
-                  { label: "ERP Bangladesh", to: "/erp-bangladesh" },
+                  { label: "Garments ERP Bangladesh", to: "/erp-bangladesh" },
                   { label: "ERP Comparison", to: "/erp-comparison" },
                   { label: "Pricing", to: "/pricing" },
                   { label: "How It Works", to: "/how-it-works" },
@@ -386,15 +386,15 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               <h3 className="text-sm font-semibold text-brand-primary-foreground uppercase tracking-wider mb-4">Modules</h3>
               <ul className="space-y-2.5">
                 {[
-                  { label: "Merchandising", to: "/features" },
-                  { label: "Inventory", to: "/features" },
-                  { label: "Accounting", to: "/features" },
-                  { label: "Production", to: "/features" },
-                  { label: "LC Processing", to: "/features" },
-                  { label: "Quality Management", to: "/features" },
-                  { label: "HR & Payroll", to: "/features" },
-                  { label: "Reports & Analytics", to: "/features" },
-                  { label: "CRM & Support", to: "/features" },
+                  { label: "Merchandising & Orders", to: "/garment-merchandising-software" },
+                  { label: "Costing & Consumption", to: "/garment-costing-software" },
+                  { label: "Production", to: "/garment-production-management-software" },
+                  { label: "Inventory & Warehouse", to: "/garment-inventory-management-software" },
+                  { label: "Commercial & BTB LC", to: "/back-to-back-lc-management-software" },
+                  { label: "Accounts & Finance", to: "/garment-accounting-software" },
+                  { label: "AI-Powered ERP", to: "/ai-garment-erp" },
+                  { label: "Quality Management", to: "/features#quality-management" },
+                  { label: "HR & Payroll", to: "/features#hr---payroll" },
                 ].map((l) => (
                   <li key={l.label}>
                     <Link to={l.to} className="text-sm text-white hover:text-brand-primary transition-colors">
@@ -407,7 +407,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             <div>
               <h3 className="text-sm font-semibold text-brand-primary-foreground uppercase tracking-wider mb-4">Resources</h3>
               <ul className="space-y-2.5">
-                <li><Link to="/blog" className="text-sm text-white hover:text-brand-primary transition-colors">Blog & Articles</Link></li>
+                <li><Link to="/resources" className="text-sm text-white hover:text-brand-primary transition-colors">Guides & Articles</Link></li>
                 <li><Link to="/about" className="text-sm text-white hover:text-brand-primary transition-colors">About Us</Link></li>
                 <li><Link to="/contact" className="text-sm text-white hover:text-brand-primary transition-colors">Contact Us</Link></li>
                 <li><Link to="/book-demo" className="text-sm text-white hover:text-brand-primary transition-colors">Book a Demo</Link></li>

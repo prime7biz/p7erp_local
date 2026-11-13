@@ -96,14 +96,6 @@ async def list_conflicts(db: AsyncSession, tenant_id: int, *, now: datetime | No
             items.append(_item("TENTATIVE_EXPIRED", "INFO", order_id=int(r.order_id), item_id=int(r.item_id),
                                reservation_id=int(r.id), qty=to_decimal(r.reserved_qty), detail="Tentative hold expired"))
             continue
-        # #region agent log
-        if r.reservation_kind == KIND_TENTATIVE and r.expires_at is not None and r.expires_at <= now:
-            import json as _j, os as _o, time as _t
-            _p = r"c:\Users\Shahariyar Khan\Documents\ERP Project\P7ERP\p7erp_local\.cursor\debug-c11f92.log"
-            _p = _p if _o.path.isdir(_o.path.dirname(_p)) else "/app/.debug-c11f92.log"
-            with open(_p, "a") as _f:
-                _f.write(_j.dumps({"sessionId": "c11f92", "runId": "pre-fix", "hypothesisId": "A", "location": "allocation_reconcile_service.py:98", "message": "expired tentative hold reached BOM check", "data": {"reservation_id": int(r.id), "bom_item_id": r.bom_item_id, "has_bom": boms.get(int(r.order_id)) is not None}, "timestamp": int(_t.time() * 1000)}) + "\n")
-        # #endregion
         bom = boms.get(int(r.order_id))
         lines = bom_line_ids.get(int(bom.id), set()) if bom else set()
         if bom is not None and (r.bom_item_id is None or int(r.bom_item_id) not in lines):

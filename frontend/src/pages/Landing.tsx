@@ -3,6 +3,8 @@ import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { motion, useInView } from "framer-motion";
 import { trackEvent } from "@/lib/analytics";
+import { jsonLd } from "@/utils/jsonLd";
+import { PRICING_PLANS, TEASER_FEATURE_COUNT } from "@/data/marketing/pricingPlans";
 import {
   Palette,
   FileText,
@@ -43,15 +45,16 @@ import {
 } from "@/components/public/landing/LandingEnhancements";
 
 const modules: { icon: LucideIcon; title: string; description: string; href: string; motif: ModuleMotif }[] = [
-  // Anchors match FeaturesPage section ids (title lowercased, non-letters → "-").
-  { icon: Palette, title: "Merchandising & Styles", description: "Manage style libraries, tech packs, BOMs, and buyer requirements in a centralized hub.", href: "/features#merchandising", motif: "swatches" },
-  { icon: FileText, title: "Order & Commercial", description: "Handle purchase orders, LC documentation, amendments, and commercial correspondence seamlessly.", href: "/features#commercial---lc", motif: "document" },
-  { icon: Package, title: "Inventory & Warehouse", description: "Real-time stock tracking, lot traceability, GRN processing, and multi-warehouse management.", href: "/features#inventory-management", motif: "grid" },
-  { icon: Factory, title: "Production & WIP", description: "Track cutting, sewing, finishing, and packing with real-time WIP visibility across lines.", href: "/features#production---wip", motif: "flow" },
-  { icon: Calculator, title: "Accounting & Finance", description: "Double-entry bookkeeping, voucher management, financial statements, and tax compliance.", href: "/features#accounting---finance", motif: "bars" },
+  // Modules with their own solution page link there (src/config/solutionPages.ts); the rest use
+  // FeaturesPage section ids (title lowercased, non-letters → "-").
+  { icon: Palette, title: "Merchandising & Styles", description: "Manage style libraries, tech packs, BOMs, and buyer requirements in a centralized hub.", href: "/garment-merchandising-software", motif: "swatches" },
+  { icon: FileText, title: "Order & Commercial", description: "Handle purchase orders, LC documentation, amendments, and commercial correspondence seamlessly.", href: "/back-to-back-lc-management-software", motif: "document" },
+  { icon: Package, title: "Inventory & Warehouse", description: "Real-time stock tracking, lot traceability, GRN processing, and multi-warehouse management.", href: "/garment-inventory-management-software", motif: "grid" },
+  { icon: Factory, title: "Production & WIP", description: "Track cutting, sewing, finishing, and packing with real-time WIP visibility across lines.", href: "/garment-production-management-software", motif: "flow" },
+  { icon: Calculator, title: "Accounting & Finance", description: "Double-entry bookkeeping, voucher management, financial statements, and tax compliance.", href: "/garment-accounting-software", motif: "bars" },
   { icon: Users, title: "HR & Payroll", description: "Employee records, attendance, leave management, and automated payroll with compliance.", href: "/features#hr---payroll", motif: "people" },
   { icon: ShieldCheck, title: "Quality Management", description: "Inline, endline, and final inspections with AQL standards, CAPA tracking, and audit reports.", href: "/features#quality-management", motif: "checklist" },
-  { icon: Brain, title: "AI Analytics", description: "Demand forecasting, anomaly detection, smart recommendations powered by machine learning.", href: "/features#ai---analytics", motif: "nodes" },
+  { icon: Brain, title: "AI Analytics", description: "Demand forecasting, anomaly detection, smart recommendations powered by machine learning.", href: "/ai-garment-erp", motif: "nodes" },
   { icon: Landmark, title: "Bank Reconciliation", description: "Automated bank statement matching, reconciliation reports, and cash flow monitoring.", href: "/features#banking---reconciliation", motif: "ledger" },
 ];
 
@@ -76,11 +79,13 @@ function FAQItem({ q, a }: { q: string; a: string }) {
         <span className="font-semibold text-text-primary pr-4">{q}</span>
         <ChevronDown className={`h-5 w-5 text-text-muted shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
       </button>
-      {open && (
-        <div className="border-t border-border-subtle px-4 pb-4 pt-3 text-text-secondary leading-relaxed max-w-3xl sm:px-6 sm:pb-5 sm:pt-4">
-          {a}
-        </div>
-      )}
+      {/* Always in the HTML (crawlers and the FAQ JSON-LD need the answer); hidden until opened. */}
+      <div
+        hidden={!open}
+        className="border-t border-border-subtle px-4 pb-4 pt-3 text-text-secondary leading-relaxed max-w-3xl sm:px-6 sm:pb-5 sm:pt-4"
+      >
+        {a}
+      </div>
     </div>
   );
 }
@@ -318,9 +323,10 @@ export function Landing() {
           <div className="mt-12 text-center">
             <p className="text-sm text-text-muted mb-4">Learn more from our resources</p>
             <div className="flex flex-wrap justify-center gap-3">
-              <Link to="/features" className="text-sm text-brand-primary hover:underline">What is Garment ERP? →</Link>
-              <Link to="/features" className="text-sm text-brand-primary hover:underline">5 Signs You Need ERP →</Link>
-              <Link to="/features" className="text-sm text-brand-primary hover:underline">AI in Apparel Industry →</Link>
+              <Link to="/resources/what-is-erp-garment-manufacturing" className="text-sm text-brand-primary hover:underline">What is Garment ERP? →</Link>
+              <Link to="/resources/how-to-choose-garments-erp-software-bangladesh" className="text-sm text-brand-primary hover:underline">How to Choose Garments ERP Software →</Link>
+              <Link to="/resources/signs-factory-needs-erp" className="text-sm text-brand-primary hover:underline">5 Signs You Need ERP →</Link>
+              <Link to="/resources/ai-transforming-apparel-industry" className="text-sm text-brand-primary hover:underline">AI in Apparel Industry →</Link>
             </div>
           </div>
         </div>
@@ -348,8 +354,11 @@ export function Landing() {
               </div>
               <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight">AI That Understands Your Business</h2>
               <p className="mt-4 text-lg text-white/90 max-w-xl leading-relaxed">
-                Leverage machine learning trained on garment industry data to make smarter, faster decisions.
+                AI that reads your own ERP data to answer questions, flag exceptions and suggest next steps, with a person confirming every action.
               </p>
+              <Link to="/ai-garment-erp" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-brand-muted hover:text-white">
+                How AI works in Prime7 ERP <ArrowRight className="h-4 w-4" aria-hidden />
+              </Link>
             </div>
             <div className="flex justify-center lg:justify-end">
               <div className="relative w-64 h-64 sm:w-80 sm:h-80">
@@ -384,15 +393,15 @@ export function Landing() {
           <div className="text-center mb-12">
             <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-text-primary">Enterprise-Grade Security</h2>
             <p className="mt-4 text-lg text-text-secondary max-w-3xl mx-auto leading-relaxed">
-              Your business data is protected with industry-leading security measures at every layer.
+              Your business data is protected by encrypted connections, role-based access, audit logs and company-level data separation.
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-4xl mx-auto">
             {[
-              { icon: Lock, title: "Encrypted Data", desc: "AES-256 encryption at rest and TLS 1.3 in transit for all data." },
+              { icon: Lock, title: "Encrypted Connections", desc: "All traffic uses HTTPS, and passwords are stored as bcrypt hashes." },
               { icon: Shield, title: "Role-Based Access", desc: "Granular permissions ensure users only see what they need." },
-              { icon: BarChart3, title: "Audit Logging", desc: "Every action tracked with timestamps for full accountability." },
-              { icon: Server, title: "Multi-Tenant Isolation", desc: "Complete data separation between organizations guaranteed." },
+              { icon: BarChart3, title: "Audit Logging", desc: "Important actions are recorded with user and time for accountability." },
+              { icon: Server, title: "Multi-Tenant Isolation", desc: "Every record belongs to one company, and access is checked on each request." },
             ].map((item) => (
               <div key={item.title} className="text-center p-6 rounded-xl bg-surface-subtle border border-border">
                 <div className="h-12 w-12 rounded-xl bg-brand-primary/10 flex items-center justify-center mx-auto mb-4">
@@ -437,11 +446,14 @@ export function Landing() {
             </Link>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-md lg:max-w-5xl mx-auto items-stretch">
-            {[
-              { name: "Starter", price: "BDT 15,000", period: "/mo", users: "Up to 10 users", features: ["Core ERP modules", "Merchandising & orders", "Basic inventory", "Email support"], highlighted: false },
-              { name: "Growth", price: "BDT 35,000", period: "/mo", users: "Up to 50 users", features: ["All Starter features", "AI analytics & forecasting", "Production tracking", "Priority support", "Includes Free Data Migration from Excel"], highlighted: true },
-              { name: "Enterprise", price: "Custom", period: "", users: "Unlimited users", features: ["All Growth features", "Custom integrations", "Dedicated account manager", "On-site training", "Includes Free Data Migration from Excel"], highlighted: false },
-            ].map((plan) => (
+            {PRICING_PLANS.map((p) => ({
+              name: p.name,
+              price: p.priceBDT === null ? "Custom" : `BDT ${p.priceBDT.toLocaleString("en-BD")}`,
+              period: p.priceBDT === null ? "" : "/mo",
+              users: p.users,
+              features: p.features.slice(0, TEASER_FEATURE_COUNT),
+              highlighted: p.popular,
+            })).map((plan) => (
               <div
                 key={plan.name}
                 className={`relative rounded-xl border bg-surface-raised p-8 lg:p-10 flex flex-col ${
@@ -491,7 +503,7 @@ export function Landing() {
 
       <Helmet>
         <script type="application/ld+json">
-          {JSON.stringify({
+          {jsonLd({
             "@context": "https://schema.org",
             "@type": "FAQPage",
             mainEntity: faqs.map((f) => ({
@@ -533,8 +545,8 @@ export function Landing() {
             <Link to="/features" className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-surface-raised border border-brand-primary/20 text-sm font-medium text-text-secondary hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary/5 transition-colors shadow-sm">
               All Features <ArrowRight className="h-3.5 w-3.5" />
             </Link>
-            <Link to="/features" className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-surface-raised border border-brand-primary/20 text-sm font-medium text-text-secondary hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary/5 transition-colors shadow-sm">
-              Blog & Resources <ArrowRight className="h-3.5 w-3.5" />
+            <Link to="/resources" className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-surface-raised border border-brand-primary/20 text-sm font-medium text-text-secondary hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary/5 transition-colors shadow-sm">
+              Guides & Resources <ArrowRight className="h-3.5 w-3.5" />
             </Link>
             <InstallAppLink
               from="landing_explore"

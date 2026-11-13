@@ -9,7 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PUBLIC_MARKETING_PATHS } from "../src/config/publicMarketingPaths.ts";
-import { resourceArticles, type ResourceArticle } from "../src/data/resourcesArticles.ts";
+import { isIndexableArticle, resourceArticles, type ResourceArticle } from "../src/data/resourcesArticles.ts";
 import { resourceArticleDateToIsoDate } from "../src/utils/resourceArticleDates.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -27,7 +27,7 @@ function xmlEscapeUrl(url: string) {
 function urlSeoMeta(path: string, article: ResourceArticle | null) {
   let lastmod: string;
   if (path.startsWith("/resources/") && article) {
-    lastmod = resourceArticleDateToIsoDate(article.date);
+    lastmod = resourceArticleDateToIsoDate(article.updated ?? article.date);
   } else {
     lastmod = STATIC_LASTMOD;
   }
@@ -58,7 +58,8 @@ function urlSeoMeta(path: string, article: ResourceArticle | null) {
 }
 
 function main() {
-  const articleEntries = resourceArticles.map((a) => ({
+  // Short summary articles are noindex until written in full, so they stay out of the sitemap.
+  const articleEntries = resourceArticles.filter(isIndexableArticle).map((a) => ({
     path: `/resources/${a.slug}`,
     article: a,
   }));

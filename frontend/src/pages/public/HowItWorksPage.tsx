@@ -7,13 +7,14 @@ const steps = [
     icon: UserPlus,
     title: "Sign Up & Configure",
     description:
-      "Create your company account in minutes. Set up your organization profile, configure your chart of accounts, and import existing data.",
+      "Create your company account, set up your organization profile and chart of accounts, and bring in your existing masters.",
     details: [
       "Create your company account with basic details",
       "Set up company profile, logo, and base currency",
-      "Import your chart of accounts (Tally-compatible)",
+      "Start from a standard chart of accounts and adjust it to your ledgers",
+      "Import customers, vendors and items from CSV files",
       "Configure fiscal year and accounting periods",
-      "Set up warehouses and processing units",
+      "Set up stores and processing units",
     ],
   },
   {
@@ -37,11 +38,11 @@ const steps = [
     description:
       "Start processing orders, track production in real time, get AI-powered insights, and scale your operations with confidence.",
     details: [
-      "Start processing purchase orders and inquiries",
-      "Track cutting, sewing, finishing in real time",
-      "Get AI-powered demand forecasting and insights",
-      "Generate financial statements and compliance reports",
-      "Scale to multiple factories and product lines",
+      "Start processing inquiries, orders and purchase orders",
+      "Record cutting, sewing and finishing output by line and hour",
+      "Ask the AI assistant about your data and act on exception alerts",
+      "Generate financial statements and registers",
+      "Add more factory units, product lines and modules as you grow",
     ],
   },
 ];
@@ -52,10 +53,11 @@ export function HowItWorksPage() {
       <section className="relative bg-gradient-to-br from-brand-primary/5 via-surface-raised to-surface-raised py-20 lg:py-28 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative">
           <h1 className="font-display text-4xl sm:text-5xl font-semibold tracking-tight text-text-primary leading-tight">
-            How It <span className="text-brand-primary">Works</span>
+            How Prime7 ERP <span className="text-brand-primary">Goes Live</span>
           </h1>
           <p className="mt-6 text-lg text-text-secondary max-w-3xl mx-auto leading-relaxed">
-            Get from sign-up to go-live in three clear steps. Prime7 ERP is designed for fast setup and ongoing growth.
+            Setting up a garment ERP is mostly about good master data, a careful cut-over and training each team on the screens they use.
+            Here is how Prime7 ERP goes from sign-up to daily use in three steps.
           </p>
           <div className="mt-8">
             <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-primary px-6 py-3 text-base font-semibold text-brand-primary-foreground hover:bg-brand-primary/90 transition-colors">
@@ -92,9 +94,58 @@ export function HowItWorksPage() {
         </div>
       </section>
 
-      <section className="py-16 lg:py-24 bg-surface-subtle">
+      <section className="py-16 lg:py-20 bg-surface-subtle" aria-labelledby="prepare-heading">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 grid gap-10 md:grid-cols-2">
+          <div>
+            <h2 id="prepare-heading" className="text-2xl font-semibold text-text-primary">What to prepare before go-live</h2>
+            <ul className="mt-4 space-y-2 text-text-secondary">
+              {[
+                "Lists of buyers, suppliers and items, cleaned of duplicates",
+                "Your ledger structure and opening balances at a cut-off date",
+                "Open orders, open purchase orders and stock on hand at the cut-off date",
+                "Users and the role each person needs",
+                "Approval rules for vouchers, purchases and stock adjustments",
+              ].map((d) => (
+                <li key={d} className="flex items-start gap-2">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-brand-primary" aria-hidden />
+                  {d}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h2 className="text-2xl font-semibold text-text-primary">A safe way to roll out</h2>
+            <ol className="mt-4 list-decimal space-y-2 pl-5 text-text-secondary">
+              <li>Start with one module or one group of orders as a pilot.</li>
+              <li>Run it fully in Prime7 ERP and compare with your old reports.</li>
+              <li>Train each team on the screens it uses, in short sessions.</li>
+              <li>Switch off the old spreadsheets for that area on a fixed date.</li>
+              <li>Add the next module once the first one is stable.</li>
+            </ol>
+            <p className="mt-4 text-text-secondary">
+              Choosing a system first? Read our{" "}
+              <Link to="/resources/how-to-choose-garments-erp-software-bangladesh" className="font-semibold text-brand-primary hover:underline">
+                buyer&apos;s checklist
+              </Link>{" "}
+              and the{" "}
+              <Link to="/resources/digital-transformation-fashion-supply-chain" className="font-semibold text-brand-primary hover:underline">
+                guide to sequencing the change
+              </Link>
+              .
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-16 lg:py-24 bg-surface-raised">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-text-secondary mb-6">Ready to get started?</p>
+          <p className="text-text-secondary mb-6">Want to plan your go-live with us?</p>
+          <Link
+            to="/book-demo"
+            className="mr-3 inline-flex items-center gap-2 rounded-lg border border-brand-primary px-6 py-3 font-semibold text-brand-primary hover:bg-brand-primary/5 transition-colors"
+          >
+            Book a demo
+          </Link>
           <Link
             to="/signup"
             className="inline-flex items-center gap-2 rounded-lg bg-brand-primary px-6 py-3 text-brand-primary-foreground font-semibold hover:bg-brand-primary/90 transition-colors"

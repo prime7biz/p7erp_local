@@ -90,6 +90,8 @@ jobs:
             VITE_PWA_ENABLED=${{ vars.VITE_PWA_ENABLED || 'false' }}
             VITE_ANDROID_APK_URL=${{ vars.VITE_ANDROID_APK_URL || '' }}
             VITE_PLAY_STORE_URL=${{ vars.VITE_PLAY_STORE_URL || '' }}
+            VITE_PLAUSIBLE_DOMAIN=${{ vars.VITE_PLAUSIBLE_DOMAIN || '' }}
+            PRERENDER_HYDRATE=${{ vars.PRERENDER_HYDRATE || 'false' }}
             PREVIOUS_FRONTEND_IMAGE=${{ steps.previous.outputs.image }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

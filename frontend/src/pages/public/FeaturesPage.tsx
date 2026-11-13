@@ -20,6 +20,19 @@ import {
   ChevronDown,
 } from "lucide-react";
 
+/** Module sections that have their own solution page (src/config/solutionPages.ts). */
+const MODULE_PAGE_LINKS: Record<string, { to: string; label: string }[]> = {
+  "Accounting & Finance": [{ to: "/garment-accounting-software", label: "Garment accounting software" }],
+  "Inventory Management": [{ to: "/garment-inventory-management-software", label: "Garment inventory management" }],
+  "Production & WIP": [{ to: "/garment-production-management-software", label: "Garment production management" }],
+  Merchandising: [
+    { to: "/garment-merchandising-software", label: "Garment merchandising software" },
+    { to: "/garment-costing-software", label: "Costing and consumption" },
+  ],
+  "Commercial & LC": [{ to: "/back-to-back-lc-management-software", label: "Back-to-back LC management" }],
+  "AI & Analytics": [{ to: "/ai-garment-erp", label: "AI-powered garment ERP" }],
+};
+
 const modules = [
   {
     icon: Calculator,
@@ -265,6 +278,15 @@ export function FeaturesPage() {
                       </li>
                     ))}
                   </ul>
+                  {MODULE_PAGE_LINKS[mod.title]?.map((link) => (
+                    <Link
+                      key={link.to}
+                      to={link.to}
+                      className="mt-6 mr-6 inline-flex items-center gap-1.5 font-semibold text-primary hover:underline"
+                    >
+                      {link.label} <ArrowRight className="w-4 h-4" aria-hidden />
+                    </Link>
+                  ))}
                 </div>
                 <div className={index % 2 === 1 ? "lg:col-start-1" : ""}>
                   <ModuleVisual mod={mod} index={index} />

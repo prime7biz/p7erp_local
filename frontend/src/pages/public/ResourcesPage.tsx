@@ -8,10 +8,13 @@ import {
   Tag,
 } from "lucide-react";
 import {
+  articleReadTime,
   getAllArticles,
   getArticleBySlug,
+  isIndexableArticle,
   type ResourceArticle,
 } from "@/data/resourcesArticles";
+import { resourceArticleDateToIsoDate } from "@/utils/resourceArticleDates";
 
 function ArticleIndex() {
   const articles = getAllArticles();
@@ -49,7 +52,7 @@ function ArticleIndex() {
                       </span>
                       <span className="flex items-center text-xs text-text-muted">
                         <Clock className="h-3 w-3 mr-1" />
-                        {article.readTime}
+                        {isIndexableArticle(article) ? articleReadTime(article) : "Summary"}
                       </span>
                     </div>
                     <h2 className="text-xl font-bold text-text-primary mb-3 group-hover:text-brand-primary transition-colors">
@@ -230,11 +233,17 @@ function ArticleView({ article }: { article: ResourceArticle }) {
               </span>
               <span className="flex items-center text-xs text-text-muted">
                 <Clock className="h-3 w-3 mr-1" />
-                {article.readTime}
+                {articleReadTime(article)}
               </span>
               <span className="flex items-center text-xs text-text-muted">
                 <Calendar className="h-3 w-3 mr-1" />
-                {article.date}
+                {article.updated ? (
+                  <>
+                    Updated <time dateTime={resourceArticleDateToIsoDate(article.updated)}>{article.updated}</time>
+                  </>
+                ) : (
+                  <time dateTime={resourceArticleDateToIsoDate(article.date)}>{article.date}</time>
+                )}
               </span>
             </div>
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-text-primary leading-tight">

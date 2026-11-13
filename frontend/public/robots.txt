@@ -1,5 +1,10 @@
 # https://www.robotstxt.org/robotstxt.html
+# robots.txt is a crawling hint, not access control: private pages are protected by login.
+# /app and /portal stay crawlable on purpose so search engines can read their "noindex" tag.
 User-agent: *
 Allow: /
+Disallow: /api/
+Disallow: /media/
+Disallow: /iclock/
 
 Sitemap: https://prime7erp.com/sitemap.xml

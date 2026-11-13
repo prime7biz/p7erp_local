@@ -20,6 +20,15 @@ ARG VITE_ANDROID_APK_URL=
 ENV VITE_ANDROID_APK_URL=${VITE_ANDROID_APK_URL}
 ARG VITE_PLAY_STORE_URL=
 ENV VITE_PLAY_STORE_URL=${VITE_PLAY_STORE_URL}
+# Public page pre-rendering (frontend/scripts/inject-static-route-html.ts, docs/seo-optimization/).
+# PRERENDER_PUBLIC_HTML=false: head tags only. PRERENDER_HYDRATE=true: React hydrates the pre-rendered HTML.
+ARG PRERENDER_PUBLIC_HTML=true
+ENV PRERENDER_PUBLIC_HTML=${PRERENDER_PUBLIC_HTML}
+ARG PRERENDER_HYDRATE=false
+ENV PRERENDER_HYDRATE=${PRERENDER_HYDRATE}
+# Plausible analytics on public marketing pages (frontend/src/lib/analytics.ts); empty = off.
+ARG VITE_PLAUSIBLE_DOMAIN=
+ENV VITE_PLAUSIBLE_DOMAIN=${VITE_PLAUSIBLE_DOMAIN}
 
 WORKDIR /app
 COPY package*.json ./

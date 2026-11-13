@@ -1,11 +1,15 @@
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, lazy, useEffect, useRef } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { ExternalAccessGuard } from "@/components/external-access/ExternalAccessGuard";
 import { PortalLegacyLoginRedirect } from "@/components/external-access/PortalLegacyLoginRedirect";
 import { PWA_ENABLED } from "@/lib/pwa/appUpdate";
+import { SOLUTION_PAGE_PATHS } from "@/config/solutionPages";
+import { startedFromPrerenderedHtml } from "@/lib/prerenderSnapshot";
+import { lazyRoute } from "@/app/lazyRoute";
 
 // Public, legal and auth pages are loaded on demand so each route only downloads its own code.
-const Landing = lazy(() => import("@/pages/Landing").then((m) => ({ default: m.Landing })));
+// Pre-rendered public pages use lazyRoute (same as React.lazy, plus preloading before hydration).
+const Landing = lazyRoute("Landing", () => import("@/pages/Landing").then((m) => m.Landing));
 const UnifiedLoginPage = lazy(() => import("@/pages/UnifiedLoginPage").then((m) => ({ default: m.UnifiedLoginPage })));
 const SignUp = lazy(() => import("@/pages/SignUp").then((m) => ({ default: m.SignUp })));
 const UnifiedForgotPasswordPage = lazy(() =>
@@ -15,45 +19,43 @@ const StaffAcceptInvitePage = lazy(() =>
   import("@/pages/StaffAcceptInvitePage").then((m) => ({ default: m.StaffAcceptInvitePage })),
 );
 const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
-const PublicLayout = lazy(() => import("@/components/public/PublicLayout").then((m) => ({ default: m.PublicLayout })));
-const FeaturesPage = lazy(() => import("@/pages/public/FeaturesPage").then((m) => ({ default: m.FeaturesPage })));
-const PricingPage = lazy(() => import("@/pages/public/PricingPage").then((m) => ({ default: m.PricingPage })));
-const AboutPage = lazy(() => import("@/pages/public/AboutPage").then((m) => ({ default: m.AboutPage })));
-const ContactPage = lazy(() => import("@/pages/public/ContactPage").then((m) => ({ default: m.ContactPage })));
-const BookDemoPage = lazy(() => import("@/pages/public/BookDemoPage").then((m) => ({ default: m.BookDemoPage })));
+const PublicLayout = lazyRoute("PublicLayout", () => import("@/components/public/PublicLayout").then((m) => m.PublicLayout));
+const FeaturesPage = lazyRoute("FeaturesPage", () => import("@/pages/public/FeaturesPage").then((m) => m.FeaturesPage));
+const PricingPage = lazyRoute("PricingPage", () => import("@/pages/public/PricingPage").then((m) => m.PricingPage));
+const AboutPage = lazyRoute("AboutPage", () => import("@/pages/public/AboutPage").then((m) => m.AboutPage));
+const ContactPage = lazyRoute("ContactPage", () => import("@/pages/public/ContactPage").then((m) => m.ContactPage));
+const BookDemoPage = lazyRoute("BookDemoPage", () => import("@/pages/public/BookDemoPage").then((m) => m.BookDemoPage));
 const InstallAppPage = lazy(() => import("@/pages/public/InstallAppPage").then((m) => ({ default: m.InstallAppPage })));
 const AccountDeletionPage = lazy(() =>
   import("@/pages/public/AccountDeletionPage").then((m) => ({ default: m.AccountDeletionPage })),
 );
-const RoiCalculatorPage = lazy(() =>
-  import("@/pages/public/RoiCalculatorPage").then((m) => ({ default: m.RoiCalculatorPage })),
+const RoiCalculatorPage = lazyRoute("RoiCalculatorPage", () =>
+  import("@/pages/public/RoiCalculatorPage").then((m) => m.RoiCalculatorPage),
 );
-const GarmentsErpPage = lazy(() => import("@/pages/public/GarmentsErpPage").then((m) => ({ default: m.GarmentsErpPage })));
-const BuyingHouseErpPage = lazy(() =>
-  import("@/pages/public/BuyingHouseErpPage").then((m) => ({ default: m.BuyingHouseErpPage })),
+const GarmentsErpPage = lazyRoute("GarmentsErpPage", () => import("@/pages/public/GarmentsErpPage").then((m) => m.GarmentsErpPage));
+const BuyingHouseErpPage = lazyRoute("BuyingHouseErpPage", () =>
+  import("@/pages/public/BuyingHouseErpPage").then((m) => m.BuyingHouseErpPage),
 );
-const LegalLayout = lazy(() => import("@/components/legal/LegalLayout").then((m) => ({ default: m.LegalLayout })));
-const LegalTermsPage = lazy(() => import("@/pages/legal/TermsPage").then((m) => ({ default: m.TermsPage })));
-const LegalPrivacyPage = lazy(() => import("@/pages/legal/PrivacyPage").then((m) => ({ default: m.PrivacyPage })));
-const DpaPage = lazy(() => import("@/pages/legal/DpaPage").then((m) => ({ default: m.DpaPage })));
-const AiDisclaimerPage = lazy(() => import("@/pages/legal/AiDisclaimerPage").then((m) => ({ default: m.AiDisclaimerPage })));
-const SlaPage = lazy(() => import("@/pages/legal/SlaPage").then((m) => ({ default: m.SlaPage })));
-const SecurityCompliancePage = lazy(() =>
-  import("@/pages/legal/SecurityCompliancePage").then((m) => ({ default: m.SecurityCompliancePage })),
+const LegalLayout = lazyRoute("LegalLayout", () => import("@/components/legal/LegalLayout").then((m) => m.LegalLayout));
+const LegalTermsPage = lazyRoute("TermsPage", () => import("@/pages/legal/TermsPage").then((m) => m.TermsPage));
+const LegalPrivacyPage = lazyRoute("PrivacyPage", () => import("@/pages/legal/PrivacyPage").then((m) => m.PrivacyPage));
+const DpaPage = lazyRoute("DpaPage", () => import("@/pages/legal/DpaPage").then((m) => m.DpaPage));
+const AiDisclaimerPage = lazyRoute("AiDisclaimerPage", () => import("@/pages/legal/AiDisclaimerPage").then((m) => m.AiDisclaimerPage));
+const SlaPage = lazyRoute("SlaPage", () => import("@/pages/legal/SlaPage").then((m) => m.SlaPage));
+const SecurityCompliancePage = lazyRoute("SecurityCompliancePage", () =>
+  import("@/pages/legal/SecurityCompliancePage").then((m) => m.SecurityCompliancePage),
 );
-const TrustCenterPage = lazy(() => import("@/pages/legal/TrustCenterPage").then((m) => ({ default: m.TrustCenterPage })));
-const HowItWorksPage = lazy(() => import("@/pages/public/HowItWorksPage").then((m) => ({ default: m.HowItWorksPage })));
-const SecurityPage = lazy(() => import("@/pages/public/SecurityPage").then((m) => ({ default: m.SecurityPage })));
-const ErpBangladeshPage = lazy(() =>
-  import("@/pages/public/ErpBangladeshPage").then((m) => ({ default: m.ErpBangladeshPage })),
+const TrustCenterPage = lazyRoute("TrustCenterPage", () => import("@/pages/legal/TrustCenterPage").then((m) => m.TrustCenterPage));
+const HowItWorksPage = lazyRoute("HowItWorksPage", () => import("@/pages/public/HowItWorksPage").then((m) => m.HowItWorksPage));
+const SecurityPage = lazyRoute("SecurityPage", () => import("@/pages/public/SecurityPage").then((m) => m.SecurityPage));
+const SolutionPage = lazyRoute("SolutionPage", () => import("@/pages/public/SolutionPage").then((m) => m.SolutionPage));
+const ErpComparisonPage = lazyRoute("ErpComparisonPage", () =>
+  import("@/pages/public/ErpComparisonPage").then((m) => m.ErpComparisonPage),
 );
-const ErpComparisonPage = lazy(() =>
-  import("@/pages/public/ErpComparisonPage").then((m) => ({ default: m.ErpComparisonPage })),
-);
-const ResourcesPage = lazy(() => import("@/pages/public/ResourcesPage").then((m) => ({ default: m.ResourcesPage })));
-const SitemapPage = lazy(() => import("@/pages/public/SitemapPage").then((m) => ({ default: m.SitemapPage })));
-const NotFoundPage = lazy(() => import("@/pages/public/NotFoundPage").then((m) => ({ default: m.NotFoundPage })));
-const SupportPage = lazy(() => import("@/pages/public/SupportPage").then((m) => ({ default: m.SupportPage })));
+const ResourcesPage = lazyRoute("ResourcesPage", () => import("@/pages/public/ResourcesPage").then((m) => m.ResourcesPage));
+const SitemapPage = lazyRoute("SitemapPage", () => import("@/pages/public/SitemapPage").then((m) => m.SitemapPage));
+const NotFoundPage = lazyRoute("NotFoundPage", () => import("@/pages/public/NotFoundPage").then((m) => m.NotFoundPage));
+const SupportPage = lazyRoute("SupportPage", () => import("@/pages/public/SupportPage").then((m) => m.SupportPage));
 const VerifyProformaPage = lazy(() =>
   import("@/pages/VerifyProformaPage").then((m) => ({ default: m.VerifyProformaPage })),
 );
@@ -225,10 +227,16 @@ function BlogSlugRedirect() {
   return <Navigate to={slug ? `/resources/${slug}` : "/resources"} replace />;
 }
 
-function ScrollToTop() {
+export function ScrollToTop() {
   const { pathname } = useLocation();
+  // A pre-rendered page was already visible (and maybe scrolled) before the app loaded.
+  const skipFirstScroll = useRef(startedFromPrerenderedHtml());
 
   useEffect(() => {
+    if (skipFirstScroll.current) {
+      skipFirstScroll.current = false;
+      return;
+    }
     window.scrollTo(0, 0);
   }, [pathname]);
 
@@ -267,7 +275,9 @@ export function AppRouter() {
         <Route path="/trust-center" element={<PublicLayout><TrustCenterPage /></PublicLayout>} />
         <Route path="/how-it-works" element={<PublicLayout><HowItWorksPage /></PublicLayout>} />
         <Route path="/security" element={<PublicLayout><SecurityPage /></PublicLayout>} />
-        <Route path="/erp-bangladesh" element={<PublicLayout><ErpBangladeshPage /></PublicLayout>} />
+        {SOLUTION_PAGE_PATHS.map((path) => (
+          <Route key={path} path={path} element={<PublicLayout><SolutionPage path={path} /></PublicLayout>} />
+        ))}
         <Route path="/erp-comparison" element={<PublicLayout><ErpComparisonPage /></PublicLayout>} />
         <Route path="/blog" element={<Navigate to="/resources" replace />} />
         <Route path="/blog/:slug" element={<BlogSlugRedirect />} />

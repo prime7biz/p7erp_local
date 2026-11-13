@@ -16,6 +16,8 @@ env/
 
 # Build / dist
 dist/
+# Node bundle used only at build time to pre-render public pages (frontend/scripts/inject-static-route-html.ts)
+dist-ssr/
 build/
 *.tsbuildinfo
 *.egg-info/

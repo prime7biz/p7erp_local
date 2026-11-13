@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useMarketingCurrency } from "@/hooks/useMarketingCurrency";
+import { PRICING_PLANS } from "@/data/marketing/pricingPlans";
 import { Link } from "react-router-dom";
 import { ArrowRight, Check, X, ChevronDown, Star, Zap, Shield, Headphones, HelpCircle, Globe } from "lucide-react";
 
-const basePricesBDT = { starter: 15000, growth: 35000 };
 const exchangeRates: Record<string, number> = {
   BDT: 1, USD: 0.00833, GBP: 0.00667, EUR: 0.00767, AED: 0.0306, INR: 0.7,
 };
@@ -53,41 +53,13 @@ export function PricingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [currency, setCurrency] = useMarketingCurrency();
   const rate = exchangeRates[currency] ?? 1;
-  const starterPrice = Math.round(basePricesBDT.starter * rate);
-  const growthPrice = Math.round(basePricesBDT.growth * rate);
 
-  const plans = [
-    {
-      name: "Starter",
-      price: formatPrice(starterPrice, currency),
-      period: "/month",
-      description: "Perfect for small garment factories getting started with digital management.",
-      popular: false,
-      features: ["Up to 5 users", "Core modules (Accounting, Inventory, Orders)", "Email support (business hours)", "1 company", "5 GB storage"],
-      cta: "Start Free Trial",
-      href: "/signup",
-    },
-    {
-      name: "Growth",
-      price: formatPrice(growthPrice, currency),
-      period: "/month",
-      description: "For growing factories that need complete ERP with AI-powered insights.",
-      popular: true,
-      features: ["Up to 25 users", "All modules included", "AI analytics & forecasting", "Priority support (24/7)", "Bank reconciliation", "50 GB storage", "API access"],
-      cta: "Start Free Trial",
-      href: "/signup",
-    },
-    {
-      name: "Enterprise",
-      price: "Custom",
-      period: "",
-      description: "For large manufacturers needing custom solutions.",
-      popular: false,
-      features: ["Unlimited users", "Custom integrations", "Dedicated account manager", "SLA guarantee", "Unlimited storage", "SSO / API"],
-      cta: "Contact Sales",
-      href: "/contact",
-    },
-  ];
+  const plans = PRICING_PLANS.map((plan) => ({
+    ...plan,
+    price: plan.priceBDT === null ? "Custom" : formatPrice(Math.round(plan.priceBDT * rate), currency),
+    period: plan.priceBDT === null ? "" : "/month",
+    features: [plan.users, ...plan.features],
+  }));
 
   const currencies = [
     { code: "BDT", label: "BDT" },

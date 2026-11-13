@@ -1,4 +1,5 @@
 import { LEGAL_DOC_SEGMENTS } from "@/config/publicMarketingPaths";
+import { getSolutionPageMeta } from "@/config/solutionPages";
 import { getArticleBySlug } from "@/data/resourcesArticles";
 
 const LEGAL_LABELS: Record<string, string> = {
@@ -20,7 +21,6 @@ const TOP_LEVEL_LABELS: Record<string, string> = {
   "/trust-center": "Trust Center",
   "/how-it-works": "How It Works",
   "/security": "Security",
-  "/erp-bangladesh": "ERP Bangladesh",
   "/erp-comparison": "ERP Comparison",
   "/resources": "Resources",
   "/support": "Support",
@@ -55,6 +55,14 @@ export function getBreadcrumbItems(pathname: string, siteUrl: string): Breadcrum
     if (article) {
       items.push({ name: article.title, path: `${siteUrl}${pathname}` });
     }
+    return items;
+  }
+
+  // Solution pages show "Home › Features › <page>" (src/pages/public/SolutionPage.tsx).
+  const solution = getSolutionPageMeta(pathname);
+  if (solution) {
+    items.push({ name: "Features", path: `${siteUrl}/features` });
+    items.push({ name: solution.label, path: `${siteUrl}${pathname}` });
     return items;
   }
 

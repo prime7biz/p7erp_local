@@ -15,6 +15,7 @@ const devHmrEnabled = process.env.VITE_DEV_HMR !== "false";
 function p7MobileAppPlugin(): Plugin {
   const enabled = process.env.VITE_PWA_ENABLED === "true";
   const version = process.env.VITE_APP_VERSION || "dev";
+  let ssrBuild = false;
   return {
     name: "p7-mobile-app",
     transformIndexHtml() {
@@ -28,7 +29,12 @@ function p7MobileAppPlugin(): Plugin {
         { tag: "meta", attrs: { name: "apple-mobile-web-app-status-bar-style", content: "default" }, injectTo: "head" },
       ];
     },
+    configResolved(config) {
+      ssrBuild = Boolean(config.build.ssr);
+    },
     generateBundle() {
+      // The Node build used for pre-rendering public pages (dist-ssr/) is never served.
+      if (ssrBuild) return;
       this.emitFile({
         type: "asset",
         fileName: "version.json",
@@ -43,7 +49,7 @@ const allowedHosts = (process.env.VITE_ALLOWED_HOSTS ?? "")
   .filter(Boolean);
 const defaultAllowedHosts = ["localhost", "127.0.0.1"];
 
-export default defineConfig(async ({ mode }) => {
+export default defineConfig(async ({ mode, isSsrBuild }) => {
   const analyzePlugins =
     mode === "analyze"
       ? [
@@ -67,6 +73,11 @@ export default defineConfig(async ({ mode }) => {
   optimizeDeps: {
     include: ["qrcode.react"],
   },
+  // Pre-render build only (vite build --ssr): react-helmet-async ships CommonJS whose named
+  // exports Node cannot import directly, so it is bundled instead of loaded from node_modules.
+  ssr: {
+    noExternal: ["react-helmet-async"],
+  },
   build: {
     minify: "esbuild",
     cssCodeSplit: true,
@@ -76,6 +87,8 @@ export default defineConfig(async ({ mode }) => {
         // Only third-party libraries get named chunks. App pages are split per route by
         // React.lazy; forcing whole page folders into one chunk made every route preload them.
         manualChunks(id) {
+          // Browser chunk names only; the pre-render build (vite build --ssr) keeps Vite's defaults.
+          if (isSsrBuild) return undefined;
           if (id.includes("node_modules")) {
             if (id.includes("react-dom") || id.includes("/react/")) return "vendor-react";
             if (id.includes("react-router")) return "vendor-react-router";

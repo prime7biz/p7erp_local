@@ -4,6 +4,7 @@
  * Public site branding: "Prime7 ERP" for consistency with legacy reference (primeX-ERP).
  */
 
+import { SOLUTION_PAGES } from "@/config/solutionPages";
 import { getArticleBySlug } from "@/data/resourcesArticles";
 
 export interface SeoMeta {
@@ -24,14 +25,14 @@ export const NOT_FOUND_SEO: SeoMeta = {
 
 export const SEO_BY_PATH: Record<string, SeoMeta> = {
   "/": {
-    title: "Prime7 ERP – Cloud ERP for Garments & Buying Houses",
+    title: "Prime7 ERP – AI-Powered Garments ERP Software",
     description:
-      "AI-powered cloud ERP for garment manufacturers and buying houses. Merchandising, production, inventory, LC management, accounting, and HR in one unified platform.",
+      "Cloud garments ERP for manufacturers and buying houses: merchandising, costing, production, inventory, back-to-back LC, accounting and HR in one system.",
   },
   "/features": {
-    title: "Features – Prime7 ERP",
+    title: "Garment ERP Features and Modules – Prime7 ERP",
     description:
-      "Explore Prime7 ERP modules: accounting, inventory, production, merchandising, LC management, quality, HR, and AI analytics built for the garment industry.",
+      "Every Prime7 ERP module for garment businesses: merchandising, costing, production, inventory, commercial and LC, accounting, quality, HR and AI.",
   },
   "/pricing": {
     title: "Pricing – Prime7 ERP",
@@ -59,14 +60,14 @@ export const SEO_BY_PATH: Record<string, SeoMeta> = {
       "Estimate how many admin hours and how much salary cost your garment team could save by moving off spreadsheets. Your numbers, transparent formula.",
   },
   "/garments-erp": {
-    title: "Garments ERP Software for RMG Factories – Prime7 ERP",
+    title: "Garment Manufacturing ERP Software – Prime7 ERP",
     description:
-      "End-to-end garments ERP for RMG factories: merchandising, costing, BOM, TNA, production, inventory, quality, accounting and HR in one cloud system.",
+      "ERP software for the garments industry: merchandising, costing, BOM, TNA, production, inventory, quality, accounts and HR for apparel factories.",
   },
   "/buying-house-erp": {
-    title: "Buying House ERP Software – Prime7 ERP",
+    title: "Buying House ERP Software for Garment Sourcing – Prime7",
     description:
-      "ERP for buying houses and sourcing offices: buyer orders, supplier follow-up, sample approvals, LC tracking, commission and commercial documents.",
+      "ERP for buying houses and sourcing offices: buyer orders, supplier follow-up, sample approvals, TNA, LC tracking, commission and commercial documents.",
   },
   "/legal/privacy": {
     title: "Privacy Policy – Prime7 ERP",
@@ -121,15 +122,10 @@ export const SEO_BY_PATH: Record<string, SeoMeta> = {
     description:
       "How Prime7 ERP protects your data: encryption in transit, role-based access, audit logs, tenant data isolation, backups and responsible disclosure.",
   },
-  "/erp-bangladesh": {
-    title: "ERP Software in Bangladesh for RMG – Prime7 ERP",
-    description:
-      "Cloud ERP built in Bangladesh for RMG factories and buying houses: BDT and multi-currency, export LC and BTB LC workflows, and local support in Dhaka.",
-  },
   "/erp-comparison": {
-    title: "Why Prime7 ERP: Garment ERP vs Generic ERP",
+    title: "Garment ERP vs Generic ERP and Spreadsheets – Prime7 ERP",
     description:
-      "Why a purpose-built garment ERP beats generic ERP and spreadsheets: industry workflows, AI insights, transparent pricing, fast setup and tenant security.",
+      "How a purpose-built garment ERP compares with generic ERP and spreadsheets: industry workflows, AI assistance, transparent pricing, setup and data security.",
   },
   "/blog": {
     title: "Blog – Prime7 ERP",
@@ -137,9 +133,9 @@ export const SEO_BY_PATH: Record<string, SeoMeta> = {
       "Articles and updates from Prime7 ERP on garment manufacturing, buying house operations, and industry trends.",
   },
   "/resources": {
-    title: "Resources & Industry Insights – Prime7 ERP",
+    title: "Garment ERP Guides and Resources – Prime7 ERP",
     description:
-      "Expert guides on garment manufacturing ERP, inventory management, production tracking and more. Free resources for garment industry professionals.",
+      "Practical guides for garment factories and buying houses: choosing ERP software, back-to-back LC management, costing and consumption, and production planning.",
   },
   "/support": {
     title: "Support – Prime7 ERP",
@@ -186,7 +182,16 @@ export const SEO_BY_PATH: Record<string, SeoMeta> = {
     title: "Verify Proforma – Prime7 ERP",
     description: "Verify proforma invoice with Prime7 ERP.",
   },
+  // Solution pages keep their title and description next to their route (src/config/solutionPages.ts).
+  ...Object.fromEntries(SOLUTION_PAGES.map((p) => [p.path, { title: p.title, description: p.description }])),
 };
+
+/** Search results show about 160 characters; longer excerpts are cut at a word boundary. */
+function shortenDescription(text: string, max = 160): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max - 1);
+  return `${cut.slice(0, cut.lastIndexOf(" ")).replace(/[\s,;:—–-]+$/, "")}…`;
+}
 
 /** Resolve SEO meta for the current path. App routes use a generic title. */
 export function getSeoForPath(pathname: string): SeoMeta {
@@ -195,9 +200,10 @@ export function getSeoForPath(pathname: string): SeoMeta {
     const articleSlug = articleMatch[1];
     const article = getArticleBySlug(articleSlug);
     if (article) {
+      const withBrand = `${article.title} – Prime7 ERP`;
       return {
-        title: `${article.title} – Prime7 ERP`,
-        description: article.excerpt,
+        title: withBrand.length <= 65 ? withBrand : article.title,
+        description: shortenDescription(article.excerpt),
       };
     }
     return NOT_FOUND_SEO;

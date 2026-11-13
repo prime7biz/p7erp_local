@@ -1,7 +1,14 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { PUBLIC_MARKETING_PATHS } from "@/config/publicMarketingPaths";
+import { getSeoForPath } from "@/config/seo";
+import { SOLUTION_PAGES, SOLUTION_PAGE_PATHS } from "@/config/solutionPages";
 import { resourceArticles } from "@/data/resourcesArticles";
+
+/** Link text from the page title, without the " – Prime7 ERP" suffix. */
+function pageLabel(path: string): string {
+  return getSeoForPath(path).title.replace(/\s+[–-]\s+Prime7( ERP)?$/, "");
+}
 
 const linkClass =
   "text-sm text-brand-primary hover:text-brand-primary/80 underline-offset-2 hover:underline";
@@ -23,7 +30,8 @@ export function SitemapPage() {
       p !== "/" &&
       !p.startsWith("/legal/") &&
       p !== "/resources" &&
-      !p.startsWith("/resources/"),
+      !p.startsWith("/resources/") &&
+      !SOLUTION_PAGE_PATHS.includes(p),
   ).sort((a, b) => a.localeCompare(b));
 
   const legal = PUBLIC_MARKETING_PATHS.filter((p) => p.startsWith("/legal/")).sort((a, b) =>
@@ -53,12 +61,24 @@ export function SitemapPage() {
         </ul>
       </Section>
 
+      <Section title="Solutions">
+        <ul className="space-y-2 columns-1 sm:columns-2 gap-x-8">
+          {SOLUTION_PAGES.map((page) => (
+            <li key={page.path} className="break-inside-avoid mb-2">
+              <Link to={page.path} className={linkClass}>
+                {page.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </Section>
+
       <Section title="Product & company">
         <ul className="space-y-2 columns-1 sm:columns-2 gap-x-8">
           {core.map((path) => (
             <li key={path} className="break-inside-avoid mb-2">
               <Link to={path} className={linkClass}>
-                {path}
+                {pageLabel(path)}
               </Link>
             </li>
           ))}
@@ -69,7 +89,7 @@ export function SitemapPage() {
         <ul className="space-y-2">
           <li>
             <Link to="/resources" className={linkClass}>
-              /resources — Industry insights
+              Garment ERP guides and resources
             </Link>
           </li>
         </ul>
@@ -92,7 +112,7 @@ export function SitemapPage() {
           {legal.map((path) => (
             <li key={path}>
               <Link to={path} className={linkClass}>
-                {path}
+                {pageLabel(path)}
               </Link>
             </li>
           ))}

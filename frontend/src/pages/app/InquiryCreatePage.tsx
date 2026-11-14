@@ -10,6 +10,13 @@ import {
   type StyleResponse,
 } from "@/api/client";
 import { AutofillReviewPanel } from "@/components/ai-extract/AutofillReviewPanel";
+import { ExtraDetailsPanel } from "@/components/ai-extract/ExtraDetailsPanel";
+import {
+  NOTES_TARGET,
+  appendNoteLine,
+  buildTargetOptions,
+  decodeExtractedText,
+} from "@/components/ai-extract/extraDetailsLogic";
 import { ExtractionStatusBanner } from "@/components/ai-extract/ExtractionStatusBanner";
 import { FileImportCard } from "@/components/ai-extract/FileImportCard";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
@@ -36,6 +43,7 @@ import {
   buildInquiryFieldApplyStates,
   deriveConfidenceLevel,
   formatExtractedValue,
+  INQUIRY_FIELD_LABELS,
   inquiryFormSnapshot,
 } from "@/utils/extractionHelpers";
 import { useSecureImage } from "@/hooks/useSecureImage";
@@ -67,6 +75,30 @@ const emptyForm = (): InquiryCreate => ({
 
 const INQ_INPUT =
   "w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-0";
+
+/** "More details" panel target that opens Quick Add Style with the name filled in. */
+const QUICK_STYLE_NAME_TARGET = "quick_style_name";
+const INQUIRY_EXTRA_TARGETS = buildTargetOptions(
+  { ...INQUIRY_FIELD_LABELS, [QUICK_STYLE_NAME_TARGET]: "New style name (quick add)" },
+  [
+    "style_ref",
+    QUICK_STYLE_NAME_TARGET,
+    "season",
+    "department",
+    "quantity",
+    "target_price",
+    "target_price_currency",
+    "currency",
+    "exchange_rate",
+    "expected_delivery_date",
+    "shipping_term",
+    "commission_mode",
+    "commission_type",
+    "commission_value",
+    NOTES_TARGET,
+  ],
+);
+const INQUIRY_EXTRA_ALIASES: Record<string, string> = { style_name_candidate: QUICK_STYLE_NAME_TARGET };
 
 /** Labels and shells for fields that must be set before save (customer + style). */
 const REQUIRED_LABEL =
@@ -711,6 +743,36 @@ export function InquiryCreatePage() {
     setForm((prev) => ({ ...prev, items: lines }));
   };
 
+  const extractedText = (key: string): string => {
+    const v = inquiryAi.extraction?.fields[key]?.value;
+    return decodeExtractedText(formatExtractedValue(v)).trim();
+  };
+  const extractedStyleName = extractedText("style_name_candidate");
+
+  const openQuickStyleWith = (name: string) => {
+    setQuickStyleName(name);
+    setQuickStyleSeason((s) => s || form.season || extractedText("season"));
+    setQuickStyleDepartment((d) => d || form.department || extractedText("department"));
+    setShowQuickStyleCreate(true);
+  };
+
+  const handleApplyExtraDetail = (
+    target: string,
+    value: string | number,
+    detail: { label: string; value: string },
+  ) => {
+    if (target === NOTES_TARGET) {
+      setForm((prev) => ({ ...prev, notes: appendNoteLine(prev.notes, detail.label, detail.value) }));
+      setAutofilled((prev) => ({ ...prev, notes: "medium" }));
+      return;
+    }
+    if (target === QUICK_STYLE_NAME_TARGET) {
+      openQuickStyleWith(String(value));
+      return;
+    }
+    applyExtractedPatch({ [target]: value } as Partial<InquiryCreate>, { [target]: "medium" });
+  };
+
   const handleExtractFile = async (file: File) => {
     await inquiryAi.runExtract(file, isEdit && id ? Number(id) : undefined);
   };
@@ -959,10 +1021,7 @@ export function InquiryCreatePage() {
                 (f) => f.value !== null && f.value !== undefined && String(f.value).trim() !== "",
               ).length + (inquiryAi.extraction?.items?.length ?? 0)
             }
-            warnings={[
-              ...(inquiryAi.extraction?.warnings ?? []),
-              ...(inquiryAi.extraction?.unmapped_text?.map((t) => `Unmapped: ${t}`) ?? []),
-            ]}
+            warnings={inquiryAi.extraction?.warnings ?? []}
             error={inquiryAi.error}
           />
           {inquiryAi.extraction?.candidate_matches?.customer &&
@@ -1009,6 +1068,22 @@ export function InquiryCreatePage() {
               </div>
             </div>
           ) : null}
+          {extractedStyleName &&
+          !form.style_id &&
+          !(inquiryAi.extraction?.candidate_matches?.style?.length) ? (
+            <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface-raised p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-text-primary">
+                No existing style matches <strong>{extractedStyleName}</strong> from the document.
+              </p>
+              <button
+                type="button"
+                onClick={() => openQuickStyleWith(extractedStyleName)}
+                className="shrink-0 rounded-lg border border-brand-primary/40 bg-surface-base px-3 py-1.5 text-xs font-semibold text-brand-primary hover:bg-brand-primary/10"
+              >
+                Create style "{extractedStyleName}"
+              </button>
+            </div>
+          ) : null}
           {inquiryAi.extraction && inquiryAi.extraction.items.length > 0 ? (
             <div className="flex justify-end">
               <button
@@ -1027,6 +1102,14 @@ export function InquiryCreatePage() {
               onApplyAllHigh={handleApplyAllHighInquiry}
               onSkip={handleSkipInquiryField}
               onResolveConflict={handleResolveInquiryConflict}
+            />
+          ) : null}
+          {inquiryAi.extraction?.extra_fields?.length ? (
+            <ExtraDetailsPanel
+              extras={inquiryAi.extraction.extra_fields}
+              options={INQUIRY_EXTRA_TARGETS}
+              aliases={INQUIRY_EXTRA_ALIASES}
+              onApply={handleApplyExtraDetail}
             />
           ) : null}
           {enrichReviewRows.length > 0 && inquiryAi.enrich ? (

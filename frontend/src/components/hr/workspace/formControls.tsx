@@ -9,6 +9,19 @@ import { cn } from "@/lib/utils";
 
 const inputClass = "w-full rounded border border-border-strong bg-surface-raised px-3 py-2 text-sm disabled:bg-surface-subtle disabled:text-text-muted";
 
+/** Light amber fill for fields the server requires; an error border still wins. */
+export const requiredFieldClass = "border-amber-400 bg-amber-50";
+
+/** "Coloured fields are required" key, shown once per form. */
+export function RequiredLegend({ className }: { className?: string }) {
+  return (
+    <p className={cn("flex items-center gap-2 text-xs text-text-muted", className)} data-testid="required-legend">
+      <span className={cn("inline-block h-3 w-5 rounded border", requiredFieldClass)} aria-hidden="true" />
+      Coloured fields marked <span className="font-semibold text-status-danger">*</span> are required.
+    </p>
+  );
+}
+
 export function Section({
   title,
   description,
@@ -61,11 +74,12 @@ type FieldShellProps = {
   hint?: string;
   error?: string;
   masked?: boolean;
+  required?: boolean;
   className?: string;
   children: (id: string, describedBy: string | undefined) => ReactNode;
 };
 
-export function FieldShell({ label, hint, error, masked, className, children }: FieldShellProps) {
+export function FieldShell({ label, hint, error, masked, required, className, children }: FieldShellProps) {
   const id = useId();
   const helpId = `${id}-help`;
   const help = error || (masked ? "Hidden for your role" : hint);
@@ -73,6 +87,12 @@ export function FieldShell({ label, hint, error, masked, className, children }: 
     <div className={className}>
       <label htmlFor={id} className="mb-1 block text-xs font-medium text-text-muted">
         {label}
+        {required && (
+          <>
+            {" "}
+            <span className="font-semibold text-status-danger">*</span>
+          </>
+        )}
       </label>
       {children(id, help ? helpId : undefined)}
       {help && (
@@ -107,7 +127,7 @@ export function TextField({
 }: TextFieldProps) {
   const mobileV2 = useMobileUiV2();
   return (
-    <FieldShell label={required ? `${label} *` : label} hint={hint} error={error} masked={masked} className={className}>
+    <FieldShell label={label} hint={hint} error={error} masked={masked} required={required && !masked} className={className}>
       {(id, describedBy) => (
         <input
           id={id}
@@ -117,6 +137,8 @@ export function TextField({
             erpControlFocusClass,
             "transition-shadow duration-700",
             mobileV2 && mobileFieldClass,
+            required && !masked && !disabled && requiredFieldClass,
+            error && "border-status-danger",
             highlight && "ring-2 ring-brand-primary/50",
           )}
           value={masked ? "" : value}
@@ -144,6 +166,7 @@ type SelectFieldProps = {
   /** False hides the empty choice (the value cannot be cleared). */
   allowEmpty?: boolean;
   hint?: string;
+  required?: boolean;
   disabled?: boolean;
   masked?: boolean;
   highlight?: boolean;
@@ -151,15 +174,22 @@ type SelectFieldProps = {
 };
 
 export function SelectField({
-  label, value, onChange, options, emptyLabel = "Select…", allowEmpty = true, hint, disabled, masked, highlight, className,
+  label, value, onChange, options, emptyLabel = "Select…", allowEmpty = true, hint, required, disabled, masked, highlight, className,
 }: SelectFieldProps) {
   const mobileV2 = useMobileUiV2();
   return (
-    <FieldShell label={label} hint={hint} masked={masked} className={className}>
+    <FieldShell label={label} hint={hint} masked={masked} required={required && !masked} className={className}>
       {(id, describedBy) => (
         <select
           id={id}
-          className={cn(inputClass, erpControlFocusClass, mobileV2 && mobileFieldClass, highlight && "ring-2 ring-brand-primary/50")}
+          className={cn(
+            inputClass,
+            erpControlFocusClass,
+            mobileV2 && mobileFieldClass,
+            required && !masked && !disabled && requiredFieldClass,
+            highlight && "ring-2 ring-brand-primary/50",
+          )}
+          required={required}
           value={masked ? "" : value}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled || masked}

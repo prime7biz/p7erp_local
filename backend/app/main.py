@@ -56,6 +56,7 @@ from app.modules.production.router import router as production_router
 from app.modules.hr.router import router as hr_router
 from app.modules.hr.compensation_router import router as hr_compensation_router
 from app.modules.hr.onboarding_router import router as hr_onboarding_router
+from app.modules.hr_change_requests.router import router as hr_change_requests_router
 from app.modules.hr_attendance.router import router as hr_attendance_router
 from app.modules.hr_attendance.device_router import push_router as hr_attendance_device_push_router
 from app.modules.hr_attendance.device_router import router as hr_attendance_device_router
@@ -393,6 +394,11 @@ app.include_router(
 )
 app.include_router(
     hr_onboarding_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("hr.access"))],
+)
+app.include_router(
+    hr_change_requests_router,
     prefix=settings.api_v1_prefix,
     dependencies=[Depends(require_internal_permission("hr.access"))],
 )

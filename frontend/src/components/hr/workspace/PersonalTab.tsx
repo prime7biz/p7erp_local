@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CheckboxField, Section, SelectField, TextField } from "./formControls";
+import { CheckboxField, RequiredLegend, Section, SelectField, TextField } from "./formControls";
 import {
   checkBirthRegistration,
   checkMobile,
@@ -7,6 +7,7 @@ import {
   GENDER_OPTIONS,
   RELIGION_OPTIONS,
   type EmployeeFormState,
+  type RequiredFieldKey,
 } from "./employeeWorkspaceLogic";
 
 export type FieldAccess = {
@@ -24,13 +25,19 @@ type Props = {
   sameAsPresent: boolean;
   onSameAsPresentChange: (value: boolean) => void;
   aiPanel?: ReactNode;
+  /** Fields shown in the "required" colour. First name is always required. */
+  required?: ReadonlySet<RequiredFieldKey>;
 };
+
+const ALWAYS_REQUIRED: ReadonlySet<RequiredFieldKey> = new Set<RequiredFieldKey>(["first_name"]);
 
 const opts = (values: readonly string[]) => values.map((v) => ({ value: v, label: v }));
 const MARITAL = opts(["Single", "Married", "Widowed", "Divorced"]);
 const BLOOD = opts(["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]);
 
-export function PersonalTab({ form, setField, access, highlight, sameAsPresent, onSameAsPresentChange, aiPanel }: Props) {
+export function PersonalTab({
+  form, setField, access, highlight, sameAsPresent, onSameAsPresentChange, aiPanel, required = ALWAYS_REQUIRED,
+}: Props) {
   const m = (k: keyof EmployeeFormState) => access.masked.has(k);
   const hl = (k: keyof EmployeeFormState) => highlight.has(k);
   const identityLocked = !access.canManageIdentity;
@@ -42,6 +49,7 @@ export function PersonalTab({ form, setField, access, highlight, sameAsPresent, 
       onChange={(v) => setField(key, v as never)}
       masked={m(key)}
       highlight={hl(key)}
+      required={required.has(key as RequiredFieldKey)}
       {...extra}
     />
   );
@@ -52,6 +60,7 @@ export function PersonalTab({ form, setField, access, highlight, sameAsPresent, 
   return (
     <div className="space-y-4">
       {aiPanel}
+      <RequiredLegend />
       <Section title="Basic details">
         {text("first_name", "First name", { required: true, maxLength: 128 })}
         {text("last_name", "Last name", { maxLength: 128 })}

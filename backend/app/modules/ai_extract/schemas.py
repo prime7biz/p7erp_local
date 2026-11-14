@@ -34,11 +34,24 @@ class CandidateMatch(BaseModel):
     score: float = Field(ge=0.0, le=1.0)
 
 
+class ExtraExtractedField(BaseModel):
+    """A labelled detail from the document that has no automatic form field.
+
+    ``suggested_field`` is always one of the form's allowed target keys, or null.
+    """
+
+    label: str
+    value: str
+    suggested_field: str | None = None
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
 class CustomerExtractionResponse(BaseModel):
     success: bool
     document_type: str = "customer_info"
     fields: dict[str, ExtractedField] = Field(default_factory=dict)
     unmapped_text: list[str] = Field(default_factory=list)
+    extra_fields: list[ExtraExtractedField] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     duplicate_warnings: list[DuplicateWarning] = Field(default_factory=list)
 
@@ -50,6 +63,7 @@ class InquiryExtractionResponse(BaseModel):
     items: list[InquiryItemExtracted] = Field(default_factory=list)
     candidate_matches: dict[str, list[CandidateMatch]] = Field(default_factory=dict)
     unmapped_text: list[str] = Field(default_factory=list)
+    extra_fields: list[ExtraExtractedField] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
 
 

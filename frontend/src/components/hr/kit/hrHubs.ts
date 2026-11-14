@@ -82,6 +82,8 @@ const pages = {
   payrollApprovals: () =>
     import("@/pages/app/hr/payroll/HrPayrollApprovalsPage").then((m) => ({ default: m.HrPayrollApprovalsPage })),
   payslips: () => import("@/pages/app/hr/payroll/HrPayslipsPage").then((m) => ({ default: m.HrPayslipsPage })),
+  employeeChanges: () =>
+    import("@/pages/app/hr/changes/HrChangeApprovalsPage").then((m) => ({ default: m.HrChangeApprovalsPage })),
   registers: () =>
     import("@/pages/app/hr/payroll/HrPayrollRegistersPage").then((m) => ({ default: m.HrPayrollRegistersPage })),
   advances: () => import("@/pages/app/hr/payroll/HrPayrollAdvancesPage").then((m) => ({ default: m.HrPayrollAdvancesPage })),
@@ -216,6 +218,13 @@ export const HR_HUBS = [
       { id: "periods", label: "Periods", legacyPath: "hr/payroll/periods", load: pages.payrollPeriods },
       { id: "runs", label: "Runs", legacyPath: "hr/payroll/runs", load: pages.payrollRuns },
       { id: "approvals", label: "Approvals", legacyPath: "hr/payroll/approvals", load: pages.payrollApprovals },
+      {
+        id: "employee-changes",
+        label: "Employee changes",
+        legacyPath: "hr/change-approvals",
+        load: pages.employeeChanges,
+        requiresFeatureFlag: "hr_employee_change_approval",
+      },
       { id: "payslips", label: "Payslips", legacyPath: "hr/payroll/payslips", load: pages.payslips },
       { id: "registers", label: "Salary sheets & registers", legacyPath: "hr/payroll/registers", load: pages.registers },
     ],

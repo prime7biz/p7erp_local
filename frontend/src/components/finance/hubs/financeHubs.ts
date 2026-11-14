@@ -148,6 +148,10 @@ const pages = {
     import("@/pages/app/finance/mis/CashFlowScenarioPage").then((m) => ({ default: m.CashFlowScenarioPage })),
   budgetAnalytics: () =>
     import("@/pages/app/finance/budget/BudgetAnalyticsPage").then((m) => ({ default: m.BudgetAnalyticsPage })),
+  managementPerformance: () =>
+    import("@/pages/app/finance/management-performance/ManagementPerformancePage").then((m) => ({
+      default: m.ManagementPerformancePage,
+    })),
   expenseAnalysis: () =>
     import("@/pages/app/finance/budget/ExpenseAnalysisPage").then((m) => ({ default: m.ExpenseAnalysisPage })),
   expenseControls: () =>
@@ -443,6 +447,14 @@ export const FINANCE_HUBS = [
     icon: TrendingUp,
     permissionKey: "finance.access",
     tabs: [
+      // Management Performance (tenant flag mgmt_performance_v1): income vs expense, budget forecast, break-even.
+      {
+        id: "management-performance",
+        label: "Management Performance",
+        legacyPath: "finance/management-performance",
+        load: pages.managementPerformance,
+        requiresFeatureFlag: "mgmt_performance_v1",
+      },
       // Budget analytics (tenant flag finance_budget_analytics_v2): read-only, listed first while the flag is on.
       {
         id: "budget-analytics",

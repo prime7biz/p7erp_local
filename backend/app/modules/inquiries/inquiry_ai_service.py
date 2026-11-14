@@ -196,7 +196,7 @@ async def ai_extract_document(
         "failed"
         if not resp.success
         else "partial"
-        if (resp.warnings or resp.unmapped_text or not resp.fields)
+        if (resp.warnings or not resp.fields)
         else "success"
     )
     suggestion_batch_id = await iq_batches.create_batch_from_extraction(

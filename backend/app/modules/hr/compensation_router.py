@@ -33,6 +33,7 @@ from app.models.hr_allowance import HrAllowanceRule
 from app.models.hr_bd import HrBdEmployeeWageAssignment, HrBdWageScheduleRate
 from app.models.hr_payroll import PayrollComponent, PayrollEmployeeStructureAssignment, PayrollStructure, PayrollStructureLine
 from app.modules.audit.service import log_action
+from app.modules.hr.change_approval_guard import assert_direct_edit_allowed
 from app.modules.hr.employee_service import get_employee_or_404
 from app.modules.hr import tax_profile as tax
 from app.modules.hr_localization import bd_salary_tds_service as tds_service
@@ -386,6 +387,8 @@ async def replace_employee_compensation(
     db: AsyncSession = Depends(get_db),
 ):
     await _require_payroll(db, user, tenant)
+    await get_employee_or_404(db, tenant.id, employee_id)
+    assert_direct_edit_allowed(tenant)
     tenant_id, user_id = tenant.id, user.id
     try:
         result = await comp.replace_employee_compensation(
@@ -413,8 +416,11 @@ async def replace_employee_compensation(
     except IntegrityError:
         await safe_async_session_rollback(db)
         raise HTTPException(status_code=409, detail="Salary assignment changed at the same time; reload and try again")
+    stale_runs = result.stale_runs
     employee = await get_employee_or_404(db, tenant_id, employee_id)
-    return await _compensation_view(db, tenant, employee)
+    view = await _compensation_view(db, tenant, employee)
+    view["stale_runs"] = stale_runs
+    return view
 
 
 async def _pay_benefits_view(db: AsyncSession, tenant_id: int, employee_id: int) -> dict:
@@ -443,6 +449,8 @@ async def replace_employee_pay_benefits(
     db: AsyncSession = Depends(get_db),
 ):
     await _require_payroll(db, user, tenant)
+    await get_employee_or_404(db, tenant.id, employee_id)
+    assert_direct_edit_allowed(tenant)
     tenant_id, user_id = tenant.id, user.id
     try:
         await comp.lock_employee(db, tenant_id, employee_id)
@@ -490,6 +498,8 @@ async def replace_employee_tax_profile(
     db: AsyncSession = Depends(get_db),
 ):
     await _require_payroll(db, user, tenant)
+    await get_employee_or_404(db, tenant.id, employee_id)
+    assert_direct_edit_allowed(tenant)
     tenant_id, user_id = tenant.id, user.id
     try:
         await comp.lock_employee(db, tenant_id, employee_id)

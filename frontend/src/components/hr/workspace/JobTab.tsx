@@ -6,6 +6,7 @@ import { CheckboxField, Section, SelectField, TextField } from "./formControls";
 import {
   calculateConfirmationDate,
   EMPLOYMENT_TYPE_SUGGESTIONS,
+  shouldAutoIssueGatePass,
   type EmployeeFormState,
   type WorkspaceMode,
 } from "./employeeWorkspaceLogic";
@@ -27,12 +28,15 @@ type Props = {
   issueTempGatePass: boolean;
   onIssueTempGatePassChange: (value: boolean) => void;
   canManageGatePass: boolean;
+  /** Joining date is required when the salary is set now (the salary starts from it). */
+  joiningDateRequired?: boolean;
 };
 
 export function JobTab({
   mode, form, setField, employeeCode, nextCode, departments, designations, sections, managers, onMasterCreated,
-  highlight, issueTempGatePass, onIssueTempGatePassChange, canManageGatePass,
+  highlight, issueTempGatePass, onIssueTempGatePassChange, canManageGatePass, joiningDateRequired = false,
 }: Props) {
+  const autoGatePass = shouldAutoIssueGatePass(form.employment_type);
   const departmentOptions = useMemo(() => departments.map((d) => ({ id: d.id, label: `${d.code} - ${d.name}` })), [departments]);
   const designationOptions = useMemo(
     () =>
@@ -72,7 +76,14 @@ export function JobTab({
           ))}
         </datalist>
         <SelectField label="Category" value={form.employee_category} onChange={(v) => setField("employee_category", v)} options={CATEGORIES} />
-        <TextField label="Joining date" type="date" value={form.joining_date} onChange={(v) => setField("joining_date", v)} highlight={highlight.has("joining_date")} />
+        <TextField
+          label="Joining date"
+          type="date"
+          value={form.joining_date}
+          onChange={(v) => setField("joining_date", v)}
+          highlight={highlight.has("joining_date")}
+          required={joiningDateRequired}
+        />
         <TextField
           label="Probation (months)"
           type="number"
@@ -106,7 +117,7 @@ export function JobTab({
         <QuickAddSelect
           kind="department"
           label="Department"
-          emptyLabel="No department"
+          emptyLabel="Undefined (no department)"
           value={form.department_id}
           options={departmentOptions}
           onChange={(id) => {
@@ -129,7 +140,7 @@ export function JobTab({
         <QuickAddSelect
           kind="section"
           label="Section / line"
-          emptyLabel="No section / line"
+          emptyLabel="Undefined (no section / line)"
           value={form.section_id}
           options={sectionOptions}
           onChange={(id) => setField("section_id", id)}
@@ -156,10 +167,19 @@ export function JobTab({
         <section className="rounded-xl border border-border bg-surface-raised p-4">
           <CheckboxField
             label="Issue a 7-day temporary gate pass"
-            hint="Lets the new employee enter on day one, before the ID card is printed. Needs a mobile number."
+            hint={
+              autoGatePass
+                ? "Ticked automatically for temporary staff (you can untick it). Lets them enter for 7 days before the ID card is printed."
+                : "Lets the new employee enter on day one, before the ID card is printed. Needs a mobile number."
+            }
             checked={issueTempGatePass}
             onChange={onIssueTempGatePassChange}
           />
+          {issueTempGatePass && !form.phone.trim() && (
+            <p className="mt-2 text-xs text-status-warning-foreground" role="status">
+              The gate pass needs a mobile number. Add it on the Personal tab.
+            </p>
+          )}
         </section>
       )}
     </div>

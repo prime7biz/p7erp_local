@@ -269,6 +269,14 @@ from app.models.mfg_planning import (
     ProductionMachineLineAssignment,
 )
 from app.models.mfg_predictive import MfgPredictionSnapshot, MfgPredictiveFinding
+from app.models.mgmt_performance import (
+    BudgetException,
+    BudgetExceptionAction,
+    BudgetLineRevision,
+    MgmtCategoryThreshold,
+    MgmtExpenseCategoryMap,
+    MgmtMonthlyTarget,
+)
 from app.models.hr_leave import (
     LeaveType,
     LeavePolicy,
@@ -320,6 +328,7 @@ from app.models.hr_onboarding import (
     HrEmployeeOnboardingTask,
     HrGeneratedEmployeeDocument,
 )
+from app.models.hr_change_request import HrEmployeeChangeRequest
 from app.models.hr_allowance import (
     HrAllowanceEntry,
     HrAllowanceRule,

@@ -79,6 +79,8 @@ from app.modules.hr_payroll.schemas import (
     PayrollStructureUpdate,
 )
 from app.modules.audit.service import log_action
+from app.modules.hr.change_approval_guard import assert_direct_edit_allowed
+from app.modules.hr_payroll import compensation_service
 from app.modules.hr_payroll import service as payroll_service
 from app.modules.hr_payroll.formula_engine import quantize_money
 
@@ -1081,6 +1083,8 @@ async def upsert_run_line(
         existing.net_pay = net_pay
         existing.remarks = body.remarks.strip() if body.remarks else None
         existing.calculation_source = "MANUAL"
+        # Re-saving the same amounts still counts as "checked against the current salary".
+        existing.updated_at = datetime.utcnow()
         await db.commit()
         await db.refresh(existing)
         return _run_line_out(existing)
@@ -1132,6 +1136,7 @@ async def finalize_run(
                 "HR > Attendance > Missing OUT (or approve a regularization) before finalizing payroll."
             ),
         )
+    await compensation_service.assert_run_salaries_current(db, tenant.id, run, period)
     zero = Decimal("0")
     run.gross_total = quantize_money(sum((api_money_to_decimal(x.gross_pay) for x in lines), zero))
     run.deduction_total = quantize_money(sum((api_money_to_decimal(x.deductions) for x in lines), zero))
@@ -1158,6 +1163,10 @@ async def approve_run(
     if run.status not in {"FINALIZED", "CHECKED"}:
         raise HTTPException(status_code=400, detail="Only finalized run can be approved")
     _assert_not_maker(tenant, run, user)
+    if run.status == "CHECKED":
+        # A checked run skips finalize, so the stale-salary check runs here instead.
+        period = await _period_or_404(db, tenant.id, run.period_id)
+        await compensation_service.assert_run_salaries_current(db, tenant.id, run, period)
     run.status = "APPROVED"
     db.add(
         PayrollApproval(
@@ -1548,6 +1557,9 @@ async def decide_approval(
         )
     if decision == "APPROVED":
         _assert_not_maker(tenant, run, user)
+        if (run.status or "").upper() == "CHECKED":
+            period = await _period_or_404(db, tenant.id, run.period_id)
+            await compensation_service.assert_run_salaries_current(db, tenant.id, run, period)
     if decision == "REJECTED":
         from app.modules.hr_payroll.register_service import invalidate_snapshots
 
@@ -1886,6 +1898,7 @@ async def create_assignment(
 ):
     _ensure_tenant(user, tenant)
     await _require_payroll_manage(db, user, tenant.id)
+    assert_direct_edit_allowed(tenant)
     row = await payroll_service.create_structure_assignment(
         db,
         tenant_id=tenant.id,
@@ -1910,6 +1923,7 @@ async def end_assignment(
 ):
     _ensure_tenant(user, tenant)
     await _require_payroll_manage(db, user, tenant.id)
+    assert_direct_edit_allowed(tenant)
     row = await payroll_service.end_structure_assignment(
         db,
         tenant_id=tenant.id,

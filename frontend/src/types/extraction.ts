@@ -16,11 +16,22 @@ export interface DuplicateWarning {
   existing_id: number;
 }
 
+/** A labelled detail from the document with no automatic form field; the user chooses where it goes. */
+export interface ExtraExtractedField {
+  label: string;
+  value: string;
+  /** Allowlisted form field key, or null (default "Don't use"). */
+  suggested_field: string | null;
+  confidence: number;
+}
+
 export interface CustomerExtractionResponse {
   success: boolean;
   document_type: string;
   fields: Record<string, ExtractedFieldValue>;
   unmapped_text: string[];
+  /** Customer and inquiry imports only. */
+  extra_fields?: ExtraExtractedField[];
   warnings: string[];
   duplicate_warnings: DuplicateWarning[];
 }
@@ -51,6 +62,7 @@ export interface InquiryExtractionResponse {
     style?: CandidateMatch[];
   };
   unmapped_text: string[];
+  extra_fields?: ExtraExtractedField[];
   warnings: string[];
 }
 

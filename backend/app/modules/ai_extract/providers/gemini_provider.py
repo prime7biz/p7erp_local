@@ -63,15 +63,33 @@ def _parse_json_object(text: str) -> dict[str, Any] | None:
     return None
 
 
-_CUSTOMER_PROMPT = """You extract data for a garment ERP (P7) customer registration form from the attached image or PDF.
+_CUSTOMER_PROMPT = """You extract data for a garment ERP (P7) customer (buyer) registration form from the attached image or PDF.
+The document may be a business card, letterhead, company profile, registration form, email signature,
+buyer PO header, invoice or tech pack header. The customer is the BUYER / brand / importer, never the
+garment factory, supplier or agent that issued the document to the buyer.
+
 Return ONLY a single JSON object (no markdown fences) with these string keys where applicable (use null if unknown):
 legalEntityName, tradeName, taxIdVatNumber, website, primaryContactName, designation,
 contactEmail, countryCode (e.g. "+880"), contactPhone (local number digits only),
 billingAddressLine1, billingCity, billingPostalCode, billingCountry,
 shippingAddressLine1, shippingCity, shippingPostalCode, shippingCountry,
 _confidences: object mapping each filled field name to a number 0.0-1.0,
-_unmapped_text: array of short text snippets you could not map,
-_warnings: array of short notes (e.g. illegible areas).
+_extra_fields: array of {"label": "...", "value": "...", "suggested_field": "<one key above or null>"}
+  for every other useful labelled detail (e.g. registration number, DUNS, fax, second contact, bank, notes),
+_unmapped_text: array of text you could not label at all (keep it short; prefer _extra_fields),
+_warnings: array of short notes about real problems only (e.g. illegible areas, cut-off pages).
+
+How to read common labels:
+- "Company", "Buyer", "Bill to", "Sold to", "Importer", "Consignee", "Customer" -> legalEntityName
+  (the full name with Ltd / GmbH / Inc / AB / S.L.); a shorter brand or trading name -> tradeName.
+- "VAT", "VAT No", "TIN", "BIN", "EORI", "Tax ID", "GST", "CVR", "Org. no" -> taxIdVatNumber.
+- "Tel", "Phone", "Mobile", "Cell", "WhatsApp" -> contactPhone; put the international prefix in countryCode.
+- "Contact", "Attn", "Attention" -> primaryContactName; job titles ("Merchandiser", "Buyer", "Manager") -> designation.
+- "Ship to", "Delivery address", "Warehouse" -> shipping* fields; "Address", "Head office", "Invoice address" -> billing* fields.
+- Split an address into line 1, city, postal code and country. Use the full English country name.
+- If only the country is known and the phone has no prefix, set countryCode from the country (e.g. Bangladesh +880, Sweden +46).
+
+Rules: keep each label together with its value (never return a label alone or a value alone).
 Do not invent data; leave fields null if not visible."""
 
 _VENDOR_PROMPT = """You extract supplier/vendor master data for a garment ERP (P7) from the attached image or PDF.
@@ -88,16 +106,39 @@ _unmapped_text: array of short snippets you could not map,
 _warnings: array of short notes.
 Do not invent data; leave fields null if not visible. Never output vendor_code or internal identifiers."""
 
-_INQUIRY_PROMPT = """You extract data for a garment ERP sales inquiry from the attached image or PDF.
+_INQUIRY_PROMPT = """You extract data for a garment ERP (P7) sales inquiry from the attached image or PDF.
+The document may be a buyer inquiry email, request for quotation, tech pack, article / product sheet,
+buyer PO, costing sheet or line sheet.
+
 Return ONLY a single JSON object (no markdown fences) with:
 customer_name_candidate, customer_code_candidate, style_name_candidate, style_ref, season, department,
 quantity (number), target_price (string), target_price_currency, currency, exchange_rate (string),
 expected_delivery_date (YYYY-MM-DD), shipping_term, intermediary_name,
-commission_mode, commission_type, commission_value (string), notes,
+commission_mode (INCLUDE or EXCLUDE), commission_type (PERCENTAGE or FIXED), commission_value (string), notes,
 _confidences: object field->0.0-1.0,
-_items: array of {item_name, description, quantity, confidence},
-_unmapped_text: array of strings,
-_warnings: array of strings.
+_items: array of {item_name, description, quantity, confidence} for each product / garment line,
+_extra_fields: array of {"label": "...", "value": "...", "suggested_field": "<one key above, or notes, or null>"}
+  for every other useful labelled detail (e.g. material / fabric, composition, GSM, colours, sizes,
+  size ratio, certifications, country of origin, brand, product group, lifecycle stage, version, wash, trims),
+_unmapped_text: array of text you could not label at all (keep it short; prefer _extra_fields),
+_warnings: array of short notes about real problems only (e.g. illegible areas, cut-off pages).
+
+How to read common labels:
+- "Article Code", "Article No", "Style No", "Style #", "Item No", "Model", "Reference" -> style_ref.
+- "Article Name", "Style Name", "Product Name", "Item Description" -> style_name_candidate.
+- "Buyer", "Brand", "Customer", "Retailer" -> customer_name_candidate; a buyer / vendor code -> customer_code_candidate.
+- "Season" (SS26, AW25, Spring 2026, ...) -> season.
+- "Department", "Gender", "Division", "Product Group", "Category" -> department (prefer Department, then Gender + Product Group).
+- "Qty", "Order Qty", "Total Pcs", "Quantity" -> quantity (whole number only).
+- "Target Price", "FOB Price", "Unit Price" -> target_price, with its currency in target_price_currency.
+- "Ex-factory", "Ship Date", "Delivery", "ETD", "In-store date minus transit" -> expected_delivery_date.
+- "Incoterm", "FOB", "CIF", "CFR", "DDP", "EXW" -> shipping_term.
+- "Agent", "Buying House", "Intermediary" -> intermediary_name.
+- Material, composition, colours, sizes, certifications, packing and quality notes -> _extra_fields with suggested_field "notes".
+
+Rules: keep each label together with its value (never return a label alone or a value alone).
+Keep a table or list (for example all colours with their Pantone / CMYK, or all sizes) together as ONE
+_extra_fields entry whose value has one line per row.
 Do not invent data; use null where unknown."""
 
 _ORDER_PROMPT = """You extract sales order / buyer purchase order data for a garment ERP (P7) from the attached image or PDF.

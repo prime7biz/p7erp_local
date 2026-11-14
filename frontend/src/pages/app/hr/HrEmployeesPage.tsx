@@ -58,6 +58,8 @@ import {
   formatTenure,
   fullName,
   sortEmployees,
+  UNDEFINED_FILTER_ID,
+  UNDEFINED_LABEL,
   type EmployeeFilters,
   type QuickChip,
   type SortDir,
@@ -517,7 +519,7 @@ export function HrEmployeesPage() {
       fn();
     };
     return [
-      { label: "View", onClick: done(() => navigate(`/app/hr/employees/${row.id}`)) },
+      { label: "View", onClick: done(() => navigate(`/app/hr/employees/${row.id}/profile`)) },
       { label: "Edit", onClick: done(() => (workspaceV2 ? navigate(`/app/hr/employees/${row.id}`) : openEdit(row))) },
       { label: "Print ID card", onClick: done(() => void printIdCards([row])) },
       row.is_active
@@ -650,6 +652,7 @@ export function HrEmployeesPage() {
           aria-label="Department"
         >
           <option value="">All departments</option>
+          <option value={UNDEFINED_FILTER_ID}>{UNDEFINED_LABEL}</option>
           {departments.map((d) => (
             <option key={d.id} value={d.id}>{d.name}</option>
           ))}
@@ -673,6 +676,7 @@ export function HrEmployeesPage() {
             aria-label="Section or line"
           >
             <option value="">All sections / lines</option>
+            <option value={UNDEFINED_FILTER_ID}>{UNDEFINED_LABEL}</option>
             {sections.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
@@ -889,8 +893,8 @@ export function HrEmployeesPage() {
                         {row.mobile_is_bkash && <p className="text-[11px] text-text-muted">bKash</p>}
                       </td>
                       <td className={listTableTdClass}>
-                        <p>{departmentName(row.department_id) || <span className="text-text-muted">Unassigned</span>}</p>
-                        {row.section_id != null && <p className="text-xs text-text-muted">{sectionName(row.section_id)}</p>}
+                        <p>{departmentName(row.department_id) || <span className="text-text-muted">{UNDEFINED_LABEL}</span>}</p>
+                        <p className="text-xs text-text-muted">{sectionName(row.section_id) || `Section: ${UNDEFINED_LABEL}`}</p>
                       </td>
                       <td className={listTableTdClass}>
                         <p>{designationName(row.designation_id) || <span className="text-text-muted">Unassigned</span>}</p>
@@ -937,9 +941,9 @@ export function HrEmployeesPage() {
               <EmployeeCard
                 key={row.id}
                 employee={row}
-                departmentName={departmentName(row.department_id) || "Unassigned"}
+                departmentName={departmentName(row.department_id) || UNDEFINED_LABEL}
                 designationName={designationName(row.designation_id) || "No designation"}
-                sectionName={sectionName(row.section_id) || "-"}
+                sectionName={sectionName(row.section_id) || UNDEFINED_LABEL}
                 selected={selected.has(row.id)}
                 onToggleSelect={() => toggleOne(row.id)}
                 actions={renderActions(row)}

@@ -68,6 +68,13 @@ PERMISSION_HR_PAYROLL_STATUTORY_EDIT = "hr.payroll.statutory.edit"
 PERMISSION_MIS_REPORT_VIEW = "finance.mis_report.view"
 PERMISSION_MIS_REPORT_EXPORT = "finance.mis_report.export"
 PERMISSION_SCENARIO_ANALYSIS_VIEW = "finance.scenario_analysis.view"
+# Finance > Management Performance (docs/management-performance/). Fail closed: admin / manager or an explicit true.
+PERMISSION_MGMT_PERFORMANCE_VIEW = "finance.mgmt_performance.view"
+PERMISSION_MGMT_PERFORMANCE_SETUP = "finance.mgmt_performance.setup"
+PERMISSION_BUDGET_REVISION_APPROVE = "finance.budget.revision.approve"
+PERMISSION_BUDGET_EXCEPTION_RESPOND = "finance.budget.exception.respond"
+PERMISSION_BUDGET_EXCEPTION_REVIEW = "finance.budget.exception.review"
+PERMISSION_BUDGET_EXCEPTION_APPROVE = "finance.budget.exception.approve"
 PERMISSION_INVENTORY_STOCK_GROUP_VIEW = "inventory.stock_group.view"
 PERMISSION_INVENTORY_STOCK_GROUP_CREATE = "inventory.stock_group.create"
 PERMISSION_INVENTORY_STOCK_GROUP_EDIT = "inventory.stock_group.edit"
@@ -143,6 +150,10 @@ PERMISSION_HR_FINAL_SETTLEMENT_MANAGE = "hr.final_settlement.manage"
 PERMISSION_HR_ALLOWANCE_MANAGE = "hr.allowance.manage"
 PERMISSION_HR_PRODUCTION_BONUS_MANAGE = "hr.production_bonus.manage"
 PERMISSION_HR_BONUS_MANAGE = "hr.bonus.manage"
+# Employee change approval (tenant flag hr_employee_change_approval). Strict: only an explicit True on the
+# role grants them; no admin / manager / wildcard bypass (see explicit_permission_granted).
+PERMISSION_HR_EMPLOYEE_CHANGE_TIER1 = "hr.employee.change.tier1"
+PERMISSION_HR_EMPLOYEE_CHANGE_TIER2 = "hr.employee.change.tier2"
 PERMISSION_AI_HR_EXTRACT = "ai.hr_extract"
 PERMISSION_AI_LC_EXTRACT = "ai.lc_extract"
 PERMISSION_AI_SHIPPING_EXTRACT = "ai.shipping_extract"
@@ -178,6 +189,16 @@ MATERIAL_CONTROL_GOVERNANCE_KEYS: list[dict[str, str]] = [
     {"key": PERMISSION_HR_ALLOWANCE_MANAGE, "label": "Manage tiffin / dinner / night bills", "group": "HR & payroll"},
     {"key": PERMISSION_HR_PRODUCTION_BONUS_MANAGE, "label": "Manage production bonus schemes and entries", "group": "HR & payroll"},
     {"key": PERMISSION_HR_BONUS_MANAGE, "label": "Manage festival bonus allocations", "group": "HR & payroll"},
+    {
+        "key": PERMISSION_HR_EMPLOYEE_CHANGE_TIER1,
+        "label": "Tier 1 approval of employee changes (info, salary, increment)",
+        "group": "HR & payroll",
+    },
+    {
+        "key": PERMISSION_HR_EMPLOYEE_CHANGE_TIER2,
+        "label": "Tier 2 (final) approval of employee changes",
+        "group": "HR & payroll",
+    },
     {
         "key": PERMISSION_BOM_PRICE_OVERRIDE,
         "label": "Override BOM expected unit price after BOM is approved/frozen",
@@ -743,6 +764,36 @@ MATERIAL_CONTROL_GOVERNANCE_KEYS: list[dict[str, str]] = [
         "label": "View AI line-balancing suggestions",
         "group": "AI",
     },
+    {
+        "key": PERMISSION_MGMT_PERFORMANCE_VIEW,
+        "label": "View company profit, contribution, targets and cash (Management Performance)",
+        "group": "Management performance",
+    },
+    {
+        "key": PERMISSION_MGMT_PERFORMANCE_SETUP,
+        "label": "Set up expense categories, warning %, monthly targets and cost-centre owners",
+        "group": "Management performance",
+    },
+    {
+        "key": PERMISSION_BUDGET_REVISION_APPROVE,
+        "label": "Approve budget revisions (not your own request)",
+        "group": "Management performance",
+    },
+    {
+        "key": PERMISSION_BUDGET_EXCEPTION_RESPOND,
+        "label": "Answer budget exceptions of cost centres without an owner",
+        "group": "Management performance",
+    },
+    {
+        "key": PERMISSION_BUDGET_EXCEPTION_REVIEW,
+        "label": "Review budget exceptions (finance) and run the budget scan",
+        "group": "Management performance",
+    },
+    {
+        "key": PERMISSION_BUDGET_EXCEPTION_APPROVE,
+        "label": "Approve or reject budget exceptions (manager / director)",
+        "group": "Management performance",
+    },
 ]
 
 # Module id -> { label, access_key, submodules: { sub_id -> { label, levels } } }
@@ -1003,6 +1054,14 @@ async def get_user_role_for_tenant(db: AsyncSession, user: User, tenant_id: int)
     if user.tenant_id != tenant_id:
         return None
     return await get_user_role_scoped_to_tenant(db, user, tenant_id)
+
+
+def explicit_permission_granted(*, role: Role | None, permission_key: str) -> bool:
+    """True only when the role sets exactly this key to True (no admin role, ``*`` or prefix wildcard)."""
+    if role is None:
+        return False
+    perms = role.permissions if isinstance(role.permissions, dict) else {}
+    return perms.get(permission_key) is True
 
 
 def internal_permission_granted(*, role: Role | None, permission_key: str) -> bool:

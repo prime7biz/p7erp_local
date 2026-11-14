@@ -127,10 +127,9 @@ export function useCustomerAi() {
           const wrap = await api.customerAiExtract(file, customerId);
           setExtraction(wrap.extraction);
           setExtractionBatchId(wrap.suggestion_batch_id ?? null);
+          // Leftover details are shown in the "More details" panel, so they do not make an import partial.
           const partial =
-            wrap.extraction.warnings.length > 0 ||
-            Object.keys(wrap.extraction.fields).length === 0 ||
-            wrap.extraction.unmapped_text.length > 0;
+            wrap.extraction.warnings.length > 0 || Object.keys(wrap.extraction.fields).length === 0;
           setStatus(wrap.extraction.success ? (partial ? "partial" : "success") : "failed");
           if (!wrap.extraction.success) setError("No data could be extracted from this file.");
         } catch (e) {

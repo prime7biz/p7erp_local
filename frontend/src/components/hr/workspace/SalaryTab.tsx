@@ -4,7 +4,9 @@ import type {
   HrCompensationComponent,
   HrCompensationOptions,
   HrEmployeeCompensationView,
+  HrEmployeeTaxProfile,
   HrSalaryChangeType,
+  HrStalePayrollRun,
 } from "@/api/client";
 import { CheckboxField, Section, SelectField, TextField } from "./formControls";
 import {
@@ -29,7 +31,12 @@ import {
 import { PayBenefitsSection } from "./PayBenefitsSection";
 import { SalaryTdsCard, TdsEstimateBox } from "./SalaryTdsCard";
 
-export type SalaryStatus = { kind: "success" | "error"; text: string } | null;
+export type SalaryStatus = {
+  kind: "success" | "error";
+  text: string;
+  /** Draft payroll runs that still hold the old salary for this employee. */
+  staleRuns?: HrStalePayrollRun[];
+} | null;
 
 type Props = {
   mode: WorkspaceMode;
@@ -47,6 +54,11 @@ type Props = {
   /** Edit mode: current pay + history, the change form and its own save. */
   current?: HrEmployeeCompensationView | null;
   onStartChange?: () => void;
+  /** "Edit current salary": correct the pay in force on its own start date. */
+  onStartCorrection?: () => void;
+  /** Recalculate this employee in a draft payroll run after a salary change. */
+  onRecalculateRun?: (runId: number) => void;
+  recalculatingRunId?: number | null;
   onCancelChange?: () => void;
   onSaveSalary?: () => void;
   savingSalary?: boolean;
@@ -62,6 +74,9 @@ type Props = {
   /** Edit mode: saved employee id, and a reload of the current salary after the tax profile changed. */
   employeeId?: number;
   onTaxProfileSaved?: () => void;
+  /** Edit mode with Tier 1 / Tier 2 approval on: saves become "Submit for approval". */
+  approvalMode?: boolean;
+  onSubmitTaxProfile?: (body: Omit<HrEmployeeTaxProfile, "exists">) => Promise<string>;
 };
 
 const CHANGE_TYPES: { value: HrSalaryChangeType; label: string }[] = [
@@ -73,7 +88,8 @@ const CHANGE_TYPES: { value: HrSalaryChangeType; label: string }[] = [
 const CHANGE_HINTS: Record<HrSalaryChangeType, string> = {
   INCREMENT: "A raise from a later date. The new basic is calculated below and you can still change it.",
   PROMOTION: "New grade or structure from a later date.",
-  CORRECTION: "Fixes a wrong salary. Use the current start date to correct it in place (only before payroll is run for it).",
+  CORRECTION:
+    "Fixes a wrong salary. Keep the current start date to correct it in place (allowed while payroll for it is still a draft; recalculate the draft afterwards).",
 };
 
 function ComponentTable({
@@ -266,9 +282,9 @@ function PreviewBox({ preview }: { preview: SalaryPreviewState }) {
 
 export function SalaryTab({
   mode, canManagePayroll, options, salary, onSalaryChange, preview, effective, blocker, form, setField, masked,
-  current, onStartChange, onCancelChange, onSaveSalary, savingSalary, salaryStatus,
+  current, onStartChange, onStartCorrection, onRecalculateRun, recalculatingRunId = null, onCancelChange, onSaveSalary, savingSalary, salaryStatus,
   payBenefits, onPayBenefitsChange, payBenefitsBlocker, onSavePayBenefits, savingPayBenefits, payBenefitsStatus,
-  payBenefitsDirty, employeeId, onTaxProfileSaved,
+  payBenefitsDirty, employeeId, onTaxProfileSaved, approvalMode = false, onSubmitTaxProfile,
 }: Props) {
   const [customFacility, setCustomFacility] = useState("");
   const grades = options?.wage_grades ?? [];
@@ -319,6 +335,34 @@ export function SalaryTab({
       role={salaryStatus.kind === "error" ? "alert" : "status"}
     >
       {salaryStatus.text}
+      {(salaryStatus.staleRuns ?? []).length > 0 && (
+        <div className="mt-2 space-y-1 text-text-secondary" data-testid="stale-runs">
+          <p className="font-medium text-status-warning-foreground">
+            Payroll already calculated with the old salary. Recalculate this employee before the run is finalized:
+          </p>
+          {(salaryStatus.staleRuns ?? []).map((r) => (
+            <div key={r.run_id} className="flex flex-wrap items-center gap-2 text-xs">
+              <span>
+                Run #{r.run_id} ({r.period_start} to {r.period_end}, {r.status})
+              </span>
+              {onRecalculateRun ? (
+                <button
+                  type="button"
+                  onClick={() => onRecalculateRun(r.run_id)}
+                  disabled={recalculatingRunId !== null}
+                  className="rounded border border-border-strong px-2 py-0.5 font-medium text-text-secondary hover:bg-surface-subtle disabled:opacity-60"
+                >
+                  {recalculatingRunId === r.run_id ? "Recalculating..." : "Recalculate"}
+                </button>
+              ) : (
+                <Link to="/app/hr/payroll?tab=runs" className="text-brand-primary hover:underline">
+                  Open payroll runs
+                </Link>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 
@@ -351,7 +395,13 @@ export function SalaryTab({
               )}
               {employeeId != null && (current?.tds_estimate || canManagePayroll) && (
                 <div className="sm:col-span-2 lg:col-span-3">
-                  <SalaryTdsCard employeeId={employeeId} estimate={current?.tds_estimate} canManage={canManagePayroll} onSaved={() => onTaxProfileSaved?.()} />
+                  <SalaryTdsCard
+                    employeeId={employeeId}
+                    estimate={current?.tds_estimate}
+                    canManage={canManagePayroll}
+                    onSaved={() => onTaxProfileSaved?.()}
+                    onSubmitForApproval={approvalMode ? onSubmitTaxProfile : undefined}
+                  />
                 </div>
               )}
               {current && current.structure_assignments.length > 0 && (
@@ -379,7 +429,18 @@ export function SalaryTab({
                 </div>
               )}
               {!showForm && onStartChange && (
-                <div className="sm:col-span-2 lg:col-span-3 flex justify-end">
+                <div className="sm:col-span-2 lg:col-span-3 flex flex-wrap justify-end gap-2">
+                  {onStartCorrection && snapshot?.structure_id != null && (
+                    <button
+                      type="button"
+                      onClick={onStartCorrection}
+                      disabled={!current || !options}
+                      title="Fix a mistake in the salary in force (allowed while payroll for it is still a draft)"
+                      className="rounded border border-border-strong px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle disabled:opacity-60"
+                    >
+                      Edit current salary
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={onStartChange}
@@ -419,7 +480,8 @@ export function SalaryTab({
                   {mode === "edit" && (
                     <div className="sm:col-span-2 lg:col-span-3 grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface-subtle p-3 sm:grid-cols-2 lg:grid-cols-3">
                       <SelectField
-                        label="Type of change *"
+                        label="Type of change"
+                        required
                         value={salary.change_type ?? "INCREMENT"}
                         onChange={(v) => onSalaryChange({ change_type: (v || "INCREMENT") as HrSalaryChangeType })}
                         options={CHANGE_TYPES}
@@ -473,7 +535,8 @@ export function SalaryTab({
                     </div>
                   )}
                   <SelectField
-                    label="Salary structure *"
+                    label="Salary structure"
+                    required
                     value={salary.structure_id ? String(salary.structure_id) : ""}
                     onChange={(v) => onSalaryChange({ structure_id: v ? Number(v) : null })}
                     options={structureOptions}
@@ -593,7 +656,13 @@ export function SalaryTab({
                         disabled={savingSalary || blocker !== null}
                         className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
                       >
-                        {savingSalary ? "Saving..." : "Save new salary"}
+                        {savingSalary
+                          ? "Saving..."
+                          : approvalMode
+                            ? "Submit salary for approval"
+                            : salary.change_type === "CORRECTION"
+                              ? "Save correction"
+                              : "Save new salary"}
                       </button>
                     </div>
                   )}
@@ -611,6 +680,7 @@ export function SalaryTab({
               blocker={payBenefitsBlocker ?? null}
               dirty={payBenefitsDirty ?? false}
               onSave={onSavePayBenefits}
+              approvalMode={approvalMode}
               saving={savingPayBenefits}
               status={payBenefitsStatus}
             />

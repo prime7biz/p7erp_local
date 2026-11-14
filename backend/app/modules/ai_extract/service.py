@@ -26,6 +26,12 @@ from app.modules.ai_extract.commercial_doc_analysis import (
     analyze_packing_list_fields,
     infer_shipping_document_type,
 )
+from app.modules.ai_extract.extra_fields import (
+    collect_extra_candidates,
+    fill_customer_country_code,
+    finalize_extras,
+    promote_extras_into_raw,
+)
 from app.modules.ai_extract.hr_doc_analysis import (
     analyze_hr_birth_fields,
     analyze_hr_cv_fields,
@@ -202,11 +208,13 @@ def _normalize_customer_map(raw: dict[str, Any]) -> dict[str, ExtractedField]:
             # may be full string — also fill countryCode if missing in raw
             cc, num = split_phone_for_form(str(val) if val else None)
             fields_out[key] = _to_extracted_field(num, base_conf * 0.95, src)
-            if cc and "countryCode" not in raw:
+            if cc and not raw.get("countryCode"):
                 fields_out["countryCode"] = _to_extracted_field(cc, base_conf * 0.9, src)
             continue
         if key == "countryCode":
             s = sanitize_text(str(val) if val else None, 16)
+            if not s and key in fields_out and fields_out[key].value:
+                continue  # keep the code already taken from a "+44 ..." phone number
             if s and not s.startswith("+"):
                 s = "+" + s.lstrip("+")
             fields_out[key] = _to_extracted_field(s, base_conf, src)
@@ -423,9 +431,12 @@ async def extract_customer_form(
 ) -> CustomerExtractionResponse:
     provider = _get_provider()
     raw = await provider.extract_customer_fields(file_bytes, content_type)
-    unmapped = [html.escape(x, quote=False) for x in (raw.get("_unmapped_text") or [])]
     warnings = list(raw.get("_warnings") or [])
+    extras, loose = collect_extra_candidates(raw, "customer")
+    extras = promote_extras_into_raw(raw, extras, "customer")
+    fill_customer_country_code(raw)
     fields = _normalize_customer_map(raw)
+    extra_fields, unmapped = finalize_extras(extras, loose, fields, "customer")
     dups = await _duplicate_warnings_for_customer(db, tenant_id, fields)
     success = bool(fields)
     return CustomerExtractionResponse(
@@ -433,6 +444,7 @@ async def extract_customer_form(
         document_type="customer_info",
         fields=fields,
         unmapped_text=unmapped,
+        extra_fields=extra_fields,
         warnings=warnings,
         duplicate_warnings=dups,
     )
@@ -469,10 +481,12 @@ async def extract_inquiry_form(
 ) -> InquiryExtractionResponse:
     provider = _get_provider()
     raw = await provider.extract_inquiry_fields(file_bytes, content_type)
-    unmapped = [html.escape(x, quote=False) for x in (raw.get("_unmapped_text") or [])]
     warnings = list(raw.get("_warnings") or [])
     items_raw = raw.get("_items") or []
+    extras, loose = collect_extra_candidates(raw, "inquiry")
+    extras = promote_extras_into_raw(raw, extras, "inquiry")
     fields = _normalize_inquiry_map(raw)
+    extra_fields, unmapped = finalize_extras(extras, loose, fields, "inquiry")
 
     items: list[InquiryItemExtracted] = []
     for it in items_raw:
@@ -519,6 +533,7 @@ async def extract_inquiry_form(
         items=items,
         candidate_matches=cand,
         unmapped_text=unmapped,
+        extra_fields=extra_fields,
         warnings=warnings,
     )
 

@@ -166,11 +166,84 @@ async def test_same_date_correction_fixes_in_place_until_payroll_runs(db_session
         rows = fixed.json()["structure_assignments"]
         assert len(rows) == 1 and Decimal(rows[0]["base_salary"]) == 8000 and rows[0]["change_type"] == "CORRECTION"
         assert rows[0]["component_overrides"] == {"BD-HRENT": "4500.00"}
-        # Once payroll covers that date, the correction must be dated later.
+        assert fixed.json()["stale_runs"] == []
+
+        # A DRAFT run still allows the correction, but reports the run and blocks finalize until recalculated.
         payroll = await _payroll_preview(c)
-        assert (await c.post(f"{PAY}/runs/{payroll['run']['id']}/auto-calculate/apply", json={})).status_code == 200
-        blocked = await c.put(url, json=_salary_body(structure.id, base_salary="8100", change_type="CORRECTION"))
+        run_id = payroll["run"]["id"]
+        assert (await c.post(f"{PAY}/runs/{run_id}/auto-calculate/apply", json={})).status_code == 200
+
+        async def line_gross() -> Decimal:
+            lines = (await c.get(f"{PAY}/runs/{run_id}/lines")).json()
+            return Decimal(next(x for x in lines if x["employee_id"] == emp.id)["gross_pay"])
+
+        gross_before = await line_gross()
+        corrected = await c.put(url, json=_salary_body(structure.id, base_salary="8100", change_type="CORRECTION"))
+        assert corrected.status_code == 200, corrected.text
+        stale = corrected.json()["stale_runs"]
+        assert [r["run_id"] for r in stale] == [run_id] and stale[0]["status"] == "DRAFT"
+        assert len(corrected.json()["structure_assignments"]) == 1  # fixed in place, no new window
+
+        blocked_finalize = await c.post(f"{PAY}/runs/{run_id}/finalize")
+        assert blocked_finalize.status_code == 409
+        assert "SALARY_CHANGED_AFTER_CALCULATION" in blocked_finalize.json()["detail"]
+
+        recalc = await c.post(
+            f"{PAY}/runs/{run_id}/auto-calculate/apply",
+            json={"employee_ids": [emp.id], "force": True, "overwrite_confirm": True},
+        )
+        assert recalc.status_code == 200, recalc.text
+        assert await line_gross() != gross_before  # the line now uses the corrected salary
+        finalized = await c.post(f"{PAY}/runs/{run_id}/finalize")
+        assert finalized.status_code == 200, finalized.text
+
+        # Once the run is finalized the correction must be dated later.
+        blocked = await c.put(url, json=_salary_body(structure.id, base_salary="8200", change_type="CORRECTION"))
         assert blocked.status_code == 409 and "Payroll has already been calculated" in blocked.json()["detail"]
+
+    audit = (
+        await db.execute(
+            select(AuditLog.details).where(AuditLog.tenant_id == tenant.id, AuditLog.action == "HR_EMPLOYEE_COMPENSATION_REPLACED")
+        )
+    ).scalars().all()
+    assert any(f"stale_runs=[{run_id}]" in d for d in audit)
+
+
+@pytest.mark.asyncio
+async def test_checked_run_approve_blocked_until_stale_salary_recalculated(db_session_integration):
+    """CHECKED runs skip finalize, so approve_run must refuse a salary changed after calculation."""
+    from app.models.hr_payroll import PayrollRun
+
+    db = db_session_integration
+    tenant, user, _role, emp, structure = await _setup(db)
+    async with api_client(db, tenant, user) as c:
+        url = f"{HR}/employees/{emp.id}/compensation"
+        assert (await c.put(url, json=_salary_body(structure.id))).status_code == 200
+        payroll = await _payroll_preview(c, "2026-11")
+        run_id = payroll["run"]["id"]
+        assert (await c.post(f"{PAY}/runs/{run_id}/auto-calculate/apply", json={})).status_code == 200
+
+        run = await db.get(PayrollRun, run_id)
+        assert run is not None and run.tenant_id == tenant.id
+        run.status = "CHECKED"
+        await db.commit()
+
+        corrected = await c.put(url, json=_salary_body(structure.id, base_salary="8100", change_type="CORRECTION"))
+        assert corrected.status_code == 200, corrected.text
+        assert [r["run_id"] for r in corrected.json()["stale_runs"]] == [run_id]
+
+        blocked = await c.post(f"{PAY}/runs/{run_id}/approve", json={})
+        assert blocked.status_code == 409
+        assert "SALARY_CHANGED_AFTER_CALCULATION" in blocked.json()["detail"]
+
+        recalc = await c.post(
+            f"{PAY}/runs/{run_id}/auto-calculate/apply",
+            json={"employee_ids": [emp.id], "force": True, "overwrite_confirm": True},
+        )
+        assert recalc.status_code == 200, recalc.text
+        approved = await c.post(f"{PAY}/runs/{run_id}/approve", json={})
+        assert approved.status_code == 200, approved.text
+        assert approved.json()["status"] == "APPROVED"
 
 
 @pytest.mark.asyncio

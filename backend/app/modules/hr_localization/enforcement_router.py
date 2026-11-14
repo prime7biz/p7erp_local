@@ -45,6 +45,7 @@ from app.models.hr_bd import (
 )
 from app.models.hr_leave import LeaveBalance, LeaveType
 from app.modules.audit.service import log_action
+from app.modules.hr.change_approval_guard import assert_direct_edit_allowed
 from app.modules.hr_localization import bd_calculations as calc
 from app.modules.hr_localization.employee_pay import employee_or_404, pay_snapshot
 from app.modules.hr_localization.enforcement_flags import (
@@ -170,6 +171,7 @@ async def create_wage_assignment(
     _ensure_tenant(user, tenant)
     tenant_id, user_id = tenant.id, user.id
     await _perm(db, user, tenant_id, PERMISSION_HR_PAYROLL_MANAGE)
+    assert_direct_edit_allowed(tenant)
     await comp.lock_employee(db, tenant_id, body.employee_id)
     rate = await comp.approved_wage_rate(db, tenant_id, body.wage_rate_id, body.effective_from)
     row = await comp.insert_wage_assignment(
@@ -192,6 +194,7 @@ async def end_wage_assignment(
 ):
     _ensure_tenant(user, tenant)
     await _perm(db, user, tenant.id, PERMISSION_HR_PAYROLL_MANAGE)
+    assert_direct_edit_allowed(tenant)
     row = await comp.close_wage_assignment(
         db, tenant_id=tenant.id, assignment_id=assignment_id, effective_to=body.effective_to, ended_by=user.id
     )

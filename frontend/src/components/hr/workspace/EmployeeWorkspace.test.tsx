@@ -49,6 +49,9 @@ const api = vi.hoisted(() => ({
   replaceHrEmployeeCompensation: vi.fn(),
   getHrEmployeePayBenefits: vi.fn(),
   replaceHrEmployeePayBenefits: vi.fn(),
+  applyHrPayrollAutoCalculate: vi.fn(),
+  listHrChangeRequests: vi.fn(() => Promise.resolve([])),
+  submitHrChangeRequest: vi.fn(),
 }));
 vi.mock("@/api/client", () => ({ api }));
 
@@ -145,6 +148,32 @@ describe("EmployeeWorkspace (create mode)", () => {
     expect(second.employee).not.toHaveProperty("present_country");
     expect(second.compensation).toBeNull();
     expect(second.issue_temp_gate_pass).toBe(false);
+  });
+
+  it("ticks the 7-day gate pass for temporary staff, but a manual untick sticks", async () => {
+    const user = userEvent.setup();
+    api.getHrEmployeeAccess.mockResolvedValue({ ...CLERK, can_manage_gate_pass: true });
+    renderCreate();
+    await user.click(await screen.findByRole("tab", { name: "Employment & Salary" }));
+    const box = screen.getByLabelText(/Issue a 7-day temporary gate pass/) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    await user.type(screen.getByLabelText("Employment type"), "temporary");
+    expect(box.checked).toBe(true);
+    expect(screen.getByText(/needs a mobile number/)).toBeTruthy();
+    await user.click(box);
+    expect(box.checked).toBe(false);
+    await user.clear(screen.getByLabelText("Employment type"));
+    await user.type(screen.getByLabelText("Employment type"), "temporary");
+    expect(box.checked).toBe(false);
+  });
+
+  it("colours required fields and shows the legend", async () => {
+    flags = { hr_bd_identity_required: true };
+    renderCreate();
+    expect(await screen.findByTestId("required-legend")).toBeTruthy();
+    expect(screen.getByLabelText("First name *").className).toContain("bg-amber-50");
+    expect(screen.getByLabelText("Mobile *").className).toContain("bg-amber-50");
+    expect(screen.getByLabelText("Email").className).not.toContain("bg-amber-50");
   });
 
   it("AI autofill fills empty fields but never overwrites what the user typed", async () => {
@@ -483,6 +512,59 @@ describe("EmployeeWorkspace (edit mode): separate employment and salary saves", 
     expect(await screen.findByText("Employment & payment saved.")).toBeTruthy();
     expect(api.updateHrEmployee).toHaveBeenCalledWith(7, { attendance_device_pin: "55" });
     expect((screen.getByLabelText("New salary starts on *") as HTMLInputElement).value).toBe("2026-11-15");
+  });
+
+  it("with change approval on, saves become change requests and nothing is written directly", async () => {
+    const user = userEvent.setup();
+    flags = { hr_employee_change_approval: true };
+    api.listHrChangeRequests.mockResolvedValue([]);
+    api.submitHrChangeRequest.mockResolvedValue({ id: 44, status: "PENDING_TIER1", kind: "INFO" });
+    await openEdit(user);
+    expect(screen.getByTestId("approval-banner")).toBeTruthy();
+    await user.type(screen.getByLabelText("Device PIN"), "55");
+    const submit = screen.getByRole("button", { name: "Submit employment for approval" });
+    await user.click(submit);
+    expect(await screen.findByText(/Write the reason for this change/)).toBeTruthy();
+    expect(api.submitHrChangeRequest).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText("Reason for change *"), "New machine number");
+    await user.click(submit);
+    expect(await screen.findByText(/Sent for approval as change #44/)).toBeTruthy();
+    const [empId, body] = api.submitHrChangeRequest.mock.calls[0]!;
+    expect(empId).toBe(7);
+    expect(body).toMatchObject({ kind: "INFO", payload: { attendance_device_pin: "55" }, reason: "New machine number" });
+    expect(body.request_id).toMatch(/^chg-/);
+    expect(api.updateHrEmployee).not.toHaveBeenCalled();
+    expect((screen.getByLabelText("Device PIN") as HTMLInputElement).value).toBe(""); // shows saved value until approved
+  });
+
+  it("Edit current salary corrects on the current start date and offers to recalculate a draft run", async () => {
+    const user = userEvent.setup();
+    api.replaceHrEmployeeCompensation.mockResolvedValue({
+      ...view({ basic: "7500.0000", gross: "13000.0000" }),
+      stale_runs: [{ run_id: 31, status: "DRAFT", period_start: "2026-11-01", period_end: "2026-11-30" }],
+    });
+    api.applyHrPayrollAutoCalculate.mockResolvedValue({});
+    await openEdit(user);
+    await user.click(await screen.findByRole("button", { name: "Edit current salary" }));
+    expect((screen.getByLabelText("Type of change *") as HTMLSelectElement).value).toBe("CORRECTION");
+    expect((screen.getByLabelText("New salary starts on *") as HTMLInputElement).value).toBe("2026-01-01");
+    await user.click(screen.getByLabelText("Override standard basic salary"));
+    await user.type(screen.getByLabelText("Employee basic salary *"), "7500");
+    await user.click(screen.getByLabelText(/I confirm this employee's basic salary/));
+    const save = screen.getByRole("button", { name: "Save correction" }) as HTMLButtonElement;
+    await waitFor(() => expect(save.disabled).toBe(false), { timeout: 2000 });
+    await user.click(save);
+
+    expect(await screen.findByText(/Salary corrected from 2026-01-01/)).toBeTruthy();
+    expect(api.replaceHrEmployeeCompensation).toHaveBeenCalledWith(7, expect.objectContaining({ change_type: "CORRECTION", effective_from: "2026-01-01" }));
+    expect(screen.getByTestId("stale-runs").textContent).toContain("Run #31");
+    await user.click(screen.getByRole("button", { name: "Recalculate" }));
+    await waitFor(() =>
+      expect(api.applyHrPayrollAutoCalculate).toHaveBeenCalledWith(31, { employee_ids: [7], force: true, overwrite_confirm: true }),
+    );
+    expect(await screen.findByText(/Run #31 recalculated/)).toBeTruthy();
+    expect(screen.queryByTestId("stale-runs")).toBeNull();
   });
 });
 

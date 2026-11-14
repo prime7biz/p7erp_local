@@ -11,10 +11,22 @@ export type QuickChip = "probation" | "new30" | "noDepartment" | "noUser" | "has
 export const QUICK_CHIPS: { id: QuickChip; label: string }[] = [
   { id: "probation", label: "On probation" },
   { id: "new30", label: "Joined last 30 days" },
-  { id: "noDepartment", label: "No department" },
+  { id: "noDepartment", label: "Undefined department" },
   { id: "noUser", label: "No linked app user" },
   { id: "hasPhoto", label: "Has photo" },
 ];
+
+/** Label for an empty department / section link (never set, or its master was deleted). */
+export const UNDEFINED_LABEL = "Undefined";
+
+/** Filter value meaning "no department / section" (real ids are always positive). */
+export const UNDEFINED_FILTER_ID = 0;
+
+function matchesLink(value: number | null, filter: number | null): boolean {
+  if (filter == null) return true;
+  if (filter === UNDEFINED_FILTER_ID) return value == null;
+  return value === filter;
+}
 
 export interface EmployeeFilters {
   search: string;
@@ -169,9 +181,9 @@ export function filterEmployees(rows: HrEmployeeResponse[], f: EmployeeFilters, 
   return rows.filter((e) => {
     if (f.status === "active" && !e.is_active) return false;
     if (f.status === "inactive" && e.is_active) return false;
-    if (f.departmentId != null && e.department_id !== f.departmentId) return false;
+    if (!matchesLink(e.department_id, f.departmentId)) return false;
     if (f.designationId != null && e.designation_id !== f.designationId) return false;
-    if (f.sectionId != null && e.section_id !== f.sectionId) return false;
+    if (!matchesLink(e.section_id, f.sectionId)) return false;
     if (f.employmentType && !sameText(e.employment_type, f.employmentType)) return false;
     if (f.category && !sameText(e.employee_category, f.category)) return false;
     if (f.gender && !sameText(e.gender, f.gender)) return false;

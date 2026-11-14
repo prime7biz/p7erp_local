@@ -1473,6 +1473,21 @@ MANIFEST: dict[str, dict[str, str]] = {
         'inventory_clearing_account_id': 'handler-calls-ensure_owned',
         'inventory_stock_account_id': 'handler-calls-ensure_owned',
     },
+    'POST /api/v1/finance/mgmt-performance/revisions': {
+        'account_id': 'reviewed: ensure_owned in revision_service.request_revision; test_mgmt_performance_api.py',
+        'budget_id': 'reviewed: tenant-filtered _final_budget (404) in revision_service; test_mgmt_performance_api.py',
+        'budget_line_id': 'reviewed: tenant check in revision_service.request_revision (404); test_mgmt_performance_api.py',
+        'cost_center_id': 'reviewed: ensure_owned in revision_service.request_revision; test_mgmt_performance_api.py',
+        'exception_id': 'reviewed: ensure_owned in revision_service.request_revision; test_mgmt_performance_api.py',
+    },
+    'PUT /api/v1/finance/mgmt-performance/setup/category-map': {
+        'items[].account_group_id': 'reviewed: ensure_owned in setup_service.save_category_map; test_mgmt_performance_api.py',
+        'items[].account_id': 'reviewed: ensure_owned in setup_service.save_category_map; test_mgmt_performance_api.py',
+    },
+    'PUT /api/v1/finance/mgmt-performance/setup/cost-center-owners': {
+        'cost_center_id': 'reviewed: tenant-filtered row lock in setup_service.save_owner (404); test_mgmt_performance_api.py',
+        'owner_user_id': 'reviewed: active same-tenant user in setup_service.save_owner (404); test_mgmt_performance_api.py',
+    },
     'PUT /api/v1/finance/party-ledgers/{ledger_id}/tds-section': {
         'tds_section_id': 'unreviewed',
     },

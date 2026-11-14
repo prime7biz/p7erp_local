@@ -3,6 +3,8 @@ import { api, type HrSectionResponse } from "@/api/client";
 import { HrEmptyState } from "@/components/hr/HrEmptyState";
 import { HrFilterBar } from "@/components/hr/HrFilterBar";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { MasterDeleteDialog } from "@/components/hr/MasterDeleteDialog";
+import { HrRowActions } from "@/components/hr/kit/HrRowActions";
 
 const PREFIX = "/app/hr";
 
@@ -10,10 +12,12 @@ export function HrSectionsPage() {
   const [rows, setRows] = useState<HrSectionResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState(false);
   const [name, setName] = useState("");
   const [sectionType, setSectionType] = useState("SECTION");
+  const [deleting, setDeleting] = useState<HrSectionResponse | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,6 +55,25 @@ export function HrSectionsPage() {
     }
   };
 
+  const toggleActive = async (row: HrSectionResponse) => {
+    setError("");
+    setInfo("");
+    try {
+      await api.updateHrSection(row.id, { is_active: !row.is_active });
+      setInfo(`Section ${row.code} ${row.is_active ? "deactivated" : "activated"}.`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Update failed");
+    }
+  };
+
+  const confirmDelete = async (row: HrSectionResponse) => {
+    await api.deleteHrSection(row.id);
+    setDeleting(null);
+    setInfo(`Section ${row.code} deleted. Its employees now show as Undefined.`);
+    await load();
+  };
+
   return (
     <div className="space-y-6">
       <HrPageHeader
@@ -76,6 +99,11 @@ export function HrSectionsPage() {
           {error}
         </div>
       )}
+      {info && (
+        <div role="status" className="rounded-lg border border-status-success/30 bg-status-success-subtle px-4 py-2 text-sm text-status-success-foreground">
+          {info}
+        </div>
+      )}
       <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
         {loading ? (
           <div className="p-10 text-center text-sm text-text-muted">Loading...</div>
@@ -90,6 +118,7 @@ export function HrSectionsPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Name</th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Type</th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Status</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-text-muted">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -99,6 +128,24 @@ export function HrSectionsPage() {
                     <td className="px-4 py-3 text-sm text-text-secondary">{r.name}</td>
                     <td className="px-4 py-3 text-sm text-text-secondary">{r.section_type}</td>
                     <td className="px-4 py-3 text-sm text-text-secondary">{r.is_active ? "Active" : "Inactive"}</td>
+                    <td className="px-4 py-3 text-right">
+                      <HrRowActions
+                        rowId={r.id}
+                        actions={[
+                          { key: "toggle", label: r.is_active ? "Deactivate" : "Activate", onClick: () => void toggleActive(r) },
+                          {
+                            key: "delete",
+                            label: "Delete",
+                            danger: true,
+                            onClick: () => {
+                              setError("");
+                              setInfo("");
+                              setDeleting(r);
+                            },
+                          },
+                        ]}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -145,6 +192,22 @@ export function HrSectionsPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {deleting && (
+        <MasterDeleteDialog
+          title="Delete section / line"
+          recordLabel={`${deleting.code} - ${deleting.name}`}
+          loadImpact={async () => {
+            const r = await api.getHrSectionDeleteImpact(deleting.id);
+            return [
+              { label: "employee(s)", count: r.employees },
+              { label: "sub-section(s)", count: r.child_sections },
+            ];
+          }}
+          onConfirm={() => confirmDelete(deleting)}
+          onClose={() => setDeleting(null)}
+        />
       )}
     </div>
   );

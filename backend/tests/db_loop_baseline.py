@@ -41,6 +41,8 @@ BASELINE: dict[str, int] = {
     'app/modules/finance/advanced_voucher_service.py::create_note_voucher': 1,
     'app/modules/finance/control/profitability_service.py::list_order_profit': 1,
     'app/modules/finance/gst_tax_router.py::list_voucher_tax_lines': 1,
+    'app/modules/finance/mgmt_performance/setup_service.py::save_category_map': 1,
+    'app/modules/finance/mgmt_performance/setup_service.py::save_thresholds': 1,
     'app/modules/finance/party_ledger_bill_service.py::cancel_bills_for_voucher': 1,
     'app/modules/finance/router.py::_account_group_parent_would_cycle': 1,
     'app/modules/finance/router.py::auto_create_bill_refs_from_voucher': 2,
@@ -178,5 +180,6 @@ BASELINE: dict[str, int] = {
     'app/workers/advanced_voucher_worker.py::_run_all_tenants': 1,
     'app/workers/inventory_analytics_worker.py::_weekly_cycle_count': 1,
     'app/workers/medical_certificate_expiry_worker.py::_run_all_tenants': 1,
+    'app/workers/mgmt_performance_worker.py::run_scan_all_tenants': 1,
     'app/workers/platform_worker.py::_run_bulk_create': 1,
 }

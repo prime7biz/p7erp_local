@@ -25,6 +25,8 @@ type Props = {
   onSave?: () => void;
   saving?: boolean;
   status?: SalaryStatus;
+  /** Changes go to Tier 1 / Tier 2 approval instead of saving directly. */
+  approvalMode?: boolean;
 };
 
 const HINTS: Record<string, string> = {
@@ -42,7 +44,7 @@ function companyRate(rules: readonly HrBillRule[], billType: HrBillType): string
   return Array.from(new Set(amounts)).join(" / ");
 }
 
-export function PayBenefitsSection({ mode, value, onChange, billRules, blocker, dirty, onSave, saving, status }: Props) {
+export function PayBenefitsSection({ mode, value, onChange, billRules, blocker, dirty, onSave, saving, status, approvalMode = false }: Props) {
   const set = (code: keyof PayBenefitsState, patch: Partial<PayBenefitsState[keyof PayBenefitsState]>) =>
     onChange({ ...value, [code]: { ...value[code], ...patch } });
 
@@ -109,7 +111,7 @@ export function PayBenefitsSection({ mode, value, onChange, billRules, blocker, 
             disabled={saving || !dirty || blocker !== null}
             className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
           >
-            {saving ? "Saving..." : "Save overtime & allowances"}
+            {saving ? "Saving..." : approvalMode ? "Submit overtime & allowances for approval" : "Save overtime & allowances"}
           </button>
         </div>
       )}

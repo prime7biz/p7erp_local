@@ -22,8 +22,16 @@ import {
   type HrOnboardingRequest,
   type HrOnboardingRun,
   type HrSectionResponse,
+  type HrChangeKind,
+  type HrChangeRequest,
 } from "@/api/client";
 import { hrBangladeshApi } from "@/api/hrBangladesh";
+import {
+  KIND_LABELS as CHANGE_KIND_LABELS,
+  STATUS_LABELS as CHANGE_STATUS_LABELS,
+  isOpen as isOpenChange,
+  newChangeRequestId,
+} from "@/components/hr/changeRequests/changeRequestLogic";
 import type { HrQuickAddRecord } from "@/components/hr/HrMasterQuickAddModal";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
 import { useRecordBreadcrumb } from "@/components/shell/recordBreadcrumb";
@@ -32,6 +40,7 @@ import { cn } from "@/lib/utils";
 import { logApiError } from "@/utils/logApiError";
 import { AiAutofillPanel, type AiConflict } from "./AiAutofillPanel";
 import { ChecklistTab } from "./ChecklistTab";
+import { TextField } from "./formControls";
 import {
   addressesMatch,
   aiAutofillEnabled,
@@ -41,6 +50,7 @@ import {
   buildCompensation,
   buildPayBenefitsPayload,
   CORE_TABS,
+  correctionFormFromSnapshot,
   EMPLOYMENT_KEYS,
   emptyEmployeeForm,
   emptyPayBenefits,
@@ -56,9 +66,11 @@ import {
   PERSONAL_KEYS,
   PRESENT_KEYS,
   previewableCompensation,
+  requiredEmployeeFields,
   resolveSalaryEffectiveDate,
   salaryBlocker,
   salaryFormFromSnapshot,
+  shouldAutoIssueGatePass,
   syncPermanentAddress,
   updateSalary,
   type EmployeeFormState,
@@ -132,6 +144,7 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
   const creating = useRef(false);
   const [sameAsPresent, setSameAsPresent] = useState(false);
   const [issueTempGatePass, setIssueTempGatePass] = useState(false);
+  const gatePassTouched = useRef(false);
   const touched = useRef(new Set<string>());
   const [highlight, setHighlight] = useState<ReadonlySet<string>>(new Set());
   const [conflicts, setConflicts] = useState<AiConflict[]>([]);
@@ -258,6 +271,35 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
     [sameAsPresent],
   );
 
+  const autoGatePass = mode === "create" && shouldAutoIssueGatePass(form.employment_type);
+  useEffect(() => {
+    if (!gatePassTouched.current && autoGatePass) setIssueTempGatePass(true);
+  }, [autoGatePass]);
+  const onIssueTempGatePassChange = (value: boolean) => {
+    gatePassTouched.current = true;
+    setIssueTempGatePass(value);
+  };
+  const requiredFields = useMemo(
+    () =>
+      requiredEmployeeFields({
+        identityRequired: flags?.hr_bd_identity_required === true,
+        ageRequired: flags?.age_verification_required === true,
+        salaryEnabled: mode === "create" && salary.enabled,
+        salaryStartDate: salary.effective_from,
+        nationalId: form.national_id,
+        birthRegistrationNo: form.birth_registration_no,
+      }),
+    [
+      flags?.hr_bd_identity_required,
+      flags?.age_verification_required,
+      mode,
+      salary.enabled,
+      salary.effective_from,
+      form.national_id,
+      form.birth_registration_no,
+    ],
+  );
+
   const onSameAsPresentChange = (value: boolean) => {
     setSameAsPresent(value);
     if (value) setForm((prev) => syncPermanentAddress(prev));
@@ -348,11 +390,56 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
 
   // --- edit -------------------------------------------------------------------------------------------
 
+  // --- Tier 1 / Tier 2 approval (tenant flag hr_employee_change_approval) -------------------------------
+
+  const approvalMode = mode === "edit" && flags?.hr_employee_change_approval === true;
+  const [changeReason, setChangeReason] = useState("");
+  const [pendingChanges, setPendingChanges] = useState<HrChangeRequest[]>([]);
+
+  const loadPendingChanges = useCallback(async () => {
+    if (!approvalMode || !Number.isFinite(employeeIdNum) || employeeIdNum <= 0) return;
+    try {
+      const rows = await api.listHrChangeRequests({ employee_id: employeeIdNum, limit: 50 });
+      setPendingChanges(rows.filter(isOpenChange));
+    } catch (e) {
+      logApiError("EmployeeWorkspace.pendingChanges", e);
+    }
+  }, [approvalMode, employeeIdNum]);
+
+  useEffect(() => {
+    void loadPendingChanges();
+  }, [loadPendingChanges]);
+
+  /** Sends the same body the direct save would send; returns the message to show. */
+  const submitChange = async (kind: HrChangeKind, payload: object): Promise<string> => {
+    if (!employee) throw new Error("Employee not loaded");
+    const reason = changeReason.trim();
+    if (!reason) throw new Error("Write the reason for this change (top of the page) first.");
+    const r = await api.submitHrChangeRequest(employee.id, { kind, payload, reason, request_id: newChangeRequestId() });
+    void loadPendingChanges();
+    return `Sent for approval as change #${r.id}. It applies only after Tier 1 and Tier 2 approve.`;
+  };
+
   const saveTab = async (keys: readonly (keyof EmployeeFormState)[], label: string) => {
     if (!employee) return;
     const body = buildTabUpdate(form, keys, employee.masked_fields ?? [], initialForm);
     if (Object.keys(body).length === 0) {
       showSuccess("No changes to save.");
+      return;
+    }
+    if (approvalMode) {
+      setSaving(true);
+      setError("");
+      try {
+        const text = await submitChange("INFO", body);
+        // Nothing changed yet: show the saved values again until the change is approved.
+        setForm((prev) => ({ ...prev, ...Object.fromEntries(keys.map((k) => [k, initialForm[k]])) }));
+        showSuccess(`${label}: ${text}`);
+      } catch (e) {
+        showError(`${label} not sent: ${e instanceof Error ? e.message : "Submit failed"}`);
+      } finally {
+        setSaving(false);
+      }
       return;
     }
     setSaving(true);
@@ -387,11 +474,30 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
     if (!body || !body.effective_from) return;
     setSalarySaving(true);
     setSalaryStatus(null);
+    if (approvalMode) {
+      try {
+        const text = await submitChange("COMPENSATION", { ...body, effective_from: body.effective_from });
+        setSalary(emptySalaryForm());
+        setSalaryStatus({ kind: "success", text });
+      } catch (e) {
+        setSalaryStatus({ kind: "error", text: `Salary not sent: ${e instanceof Error ? e.message : "Submit failed"}` });
+      } finally {
+        setSalarySaving(false);
+      }
+      return;
+    }
     try {
       const view = await api.replaceHrEmployeeCompensation(employee.id, { ...body, effective_from: body.effective_from });
       setCompensation(view);
       setSalary(emptySalaryForm());
-      setSalaryStatus({ kind: "success", text: `New salary saved from ${body.effective_from}.` });
+      setSalaryStatus({
+        kind: "success",
+        text:
+          body.change_type === "CORRECTION"
+            ? `Salary corrected from ${body.effective_from}.`
+            : `New salary saved from ${body.effective_from}.`,
+        staleRuns: view.stale_runs ?? [],
+      });
     } catch (e) {
       setSalaryStatus({ kind: "error", text: `Salary not saved: ${e instanceof Error ? e.message : "Salary change failed"}` });
     } finally {
@@ -408,6 +514,18 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
     if (!employee || benefitsSaving || benefitsBlock) return;
     setBenefitsSaving(true);
     setBenefitsStatus(null);
+    if (approvalMode) {
+      try {
+        const text = await submitChange("PAY_BENEFITS", { benefits: buildPayBenefitsPayload(payBenefits) });
+        setPayBenefits(initialPayBenefits);
+        setBenefitsStatus({ kind: "success", text });
+      } catch (e) {
+        setBenefitsStatus({ kind: "error", text: `Not sent: ${e instanceof Error ? e.message : "Submit failed"}` });
+      } finally {
+        setBenefitsSaving(false);
+      }
+      return;
+    }
     try {
       const view = await api.replaceHrEmployeePayBenefits(employee.id, buildPayBenefitsPayload(payBenefits));
       const state = payBenefitsFromApi(view.benefits);
@@ -424,6 +542,36 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
   const startSalaryChange = () => {
     setSalaryStatus(null);
     setSalary(salaryFormFromSnapshot(compensation?.snapshot));
+  };
+  const startSalaryCorrection = () => {
+    setSalaryStatus(null);
+    setSalary(correctionFormFromSnapshot(compensation?.snapshot));
+  };
+
+  const [recalculatingRunId, setRecalculatingRunId] = useState<number | null>(null);
+  const recalculateRun = async (runId: number) => {
+    if (!employee || recalculatingRunId !== null) return;
+    setRecalculatingRunId(runId);
+    try {
+      await api.applyHrPayrollAutoCalculate(runId, { employee_ids: [employee.id], force: true, overwrite_confirm: true });
+      setSalaryStatus((prev) =>
+        prev
+          ? {
+              ...prev,
+              text: `${prev.text} Run #${runId} recalculated.`,
+              staleRuns: (prev.staleRuns ?? []).filter((r) => r.run_id !== runId),
+            }
+          : prev,
+      );
+    } catch (e) {
+      setSalaryStatus((prev) => ({
+        kind: "error",
+        text: `Run #${runId} not recalculated: ${e instanceof Error ? e.message : "failed"}. Open Payroll → Runs to recalculate it.`,
+        staleRuns: prev?.staleRuns ?? [],
+      }));
+    } finally {
+      setRecalculatingRunId(null);
+    }
   };
   const cancelSalaryChange = () => {
     setSalaryStatus(null);
@@ -524,6 +672,12 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
         />
         {mode === "edit" && employee && (
           <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to={`${PREFIX}/employees/${employee.id}/profile`}
+              className="rounded-lg border border-border-strong px-2.5 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle"
+            >
+              View / Print
+            </Link>
             {canDocs && (
               <div className="relative">
                 <button
@@ -604,6 +758,35 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
         </p>
       )}
 
+      {approvalMode && (
+        <section
+          className="space-y-2 rounded-xl border border-status-warning/40 bg-status-warning-subtle p-4"
+          aria-label="Change approval"
+          data-testid="approval-banner"
+        >
+          <p className="text-sm font-medium text-text-primary">
+            Changes to this employee need Tier 1 and Tier 2 approval. Saving sends them for approval; nothing changes until
+            Tier 2 approves.
+          </p>
+          <TextField
+            label="Reason for change"
+            required
+            value={changeReason}
+            onChange={setChangeReason}
+            maxLength={2000}
+            placeholder="e.g. Annual increment approved by management"
+          />
+          {pendingChanges.length > 0 && (
+            <ul className="space-y-0.5 text-xs text-text-secondary">
+              {pendingChanges.map((c) => (
+                <li key={c.id}>
+                  Change #{c.id} ({CHANGE_KIND_LABELS[c.kind]}): {CHANGE_STATUS_LABELS[c.status]}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
       {error && <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-2 text-sm text-status-danger-foreground" role="alert">{error}</div>}
       {success && <div className="rounded-lg border border-status-success/30 bg-status-success-subtle px-4 py-2 text-sm text-status-success-foreground" role="status">{success}</div>}
 
@@ -615,6 +798,7 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
           highlight={highlight}
           sameAsPresent={sameAsPresent}
           onSameAsPresentChange={onSameAsPresentChange}
+          required={requiredFields}
           aiPanel={
             mode === "create" && aiAutofillEnabled(flags) ? (
               <AiAutofillPanel
@@ -647,8 +831,9 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
             onMasterCreated={onMasterCreated}
             highlight={highlight}
             issueTempGatePass={issueTempGatePass}
-            onIssueTempGatePassChange={setIssueTempGatePass}
+            onIssueTempGatePassChange={onIssueTempGatePassChange}
             canManageGatePass={access.can_manage_gate_pass}
+            joiningDateRequired={requiredFields.has("joining_date")}
           />
           <SalaryTab
             mode={mode}
@@ -664,6 +849,9 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
             masked={masked}
             current={compensation}
             onStartChange={mode === "edit" ? startSalaryChange : undefined}
+            onStartCorrection={mode === "edit" ? startSalaryCorrection : undefined}
+            onRecalculateRun={mode === "edit" ? (runId) => void recalculateRun(runId) : undefined}
+            recalculatingRunId={recalculatingRunId}
             onCancelChange={mode === "edit" ? cancelSalaryChange : undefined}
             onSaveSalary={mode === "edit" ? () => void saveSalary() : undefined}
             savingSalary={salarySaving}
@@ -676,6 +864,8 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
             payBenefitsStatus={benefitsStatus}
             payBenefitsDirty={isDirty(initialPayBenefits, payBenefits)}
             employeeId={mode === "edit" && Number.isFinite(employeeIdNum) && employeeIdNum > 0 ? employeeIdNum : undefined}
+            approvalMode={approvalMode}
+            onSubmitTaxProfile={(body) => submitChange("TAX_PROFILE", body)}
             onTaxProfileSaved={() => {
               api
                 .getHrEmployeeCompensation(employeeIdNum)
@@ -743,12 +933,12 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
               <>
                 {tab === "personal" && (
                   <button type="button" disabled={saving} onClick={() => void saveTab(PERSONAL_KEYS, "Personal details")} className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-                    {saving ? "Saving..." : "Save personal"}
+                    {saving ? "Saving..." : approvalMode ? "Submit personal for approval" : "Save personal"}
                   </button>
                 )}
                 {tab === "employment" && (
                   <button type="button" disabled={saving} onClick={() => void saveTab(EMPLOYMENT_KEYS, "Employment & payment")} className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-                    {saving ? "Saving..." : "Save employment & payment"}
+                    {saving ? "Saving..." : approvalMode ? "Submit employment for approval" : "Save employment & payment"}
                   </button>
                 )}
               </>

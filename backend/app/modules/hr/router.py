@@ -55,7 +55,9 @@ from app.models import (
 )
 from app.modules.audit.service import log_action
 from app.models.hr_onboarding import HrGeneratedEmployeeDocument
-from app.modules.hr import employee_service, generated_documents
+from app.modules.hr import employee_overview_service, employee_service, employee_update_service, generated_documents
+from app.modules.hr.change_approval_guard import assert_direct_edit_allowed
+from app.modules.hr import master_delete_service as master_delete
 from app.modules.hr import service as hr_domain
 from app.modules.hr.compensation_router import employee_pay_snapshot
 from app.modules.hr.employee_identity import (
@@ -252,9 +254,24 @@ async def update_department(
     return _department_to_response(row)
 
 
+@router.get("/departments/{department_id}/delete-impact")
+async def department_delete_impact(
+    department_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """How many records would become "Undefined" if this department were deleted."""
+    _ensure_user_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    await _get_department_or_404(db, tenant.id, department_id)
+    return await master_delete.department_impact(db, tenant.id, department_id)
+
+
 @router.delete("/departments/{department_id}")
 async def delete_department(
     department_id: int,
+    move_to_undefined: bool = Query(default=False),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -262,6 +279,25 @@ async def delete_department(
     _ensure_user_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
     row = await _get_department_or_404(db, tenant.id, department_id)
+    if move_to_undefined:
+        impact = await master_delete.department_impact(db, tenant.id, department_id)
+        label = f"{row.code} - {row.name}"
+        try:
+            await master_delete.clear_department_links(db, tenant.id, department_id)
+            await db.delete(row)
+            await log_action(
+                db,
+                tenant_id=tenant.id,
+                user_id=user.id,
+                action="HR_DEPARTMENT_DELETED",
+                resource=f"hr.department:{department_id}",
+                details=f"{label}; moved to Undefined: {impact}",
+            )
+            await db.commit()
+        except Exception:
+            await safe_async_session_rollback(db)
+            raise
+        return {"ok": True, "moved_to_undefined": impact}
     designation_exists = (
         await db.execute(
             select(Designation.id).where(
@@ -556,6 +592,20 @@ async def get_employee(
     return employee_service.employee_to_response(row, access, pay_snapshot=snapshot)
 
 
+@router.get("/employees/{employee_id}/overview")
+async def get_employee_overview(
+    employee_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Read-only information center: leave, late, discipline, salary history, bonuses and more.
+    Blocks the caller may not see come back as ``{"allowed": false}``."""
+    _ensure_user_tenant(user, tenant)
+    row = await _get_employee_or_404(db, tenant.id, employee_id)
+    return await employee_overview_service.employee_overview(db, tenant=tenant, user=user, employee=row)
+
+
 @router.post("/employees", response_model=EmployeeResponse, status_code=status.HTTP_201_CREATED)
 async def create_employee(
     body: EmployeeCreate,
@@ -589,117 +639,10 @@ async def update_employee(
 ):
     _ensure_user_tenant(user, tenant)
     row = await _get_employee_or_404(db, tenant.id, employee_id)
+    assert_direct_edit_allowed(tenant)
     payload = body.model_dump(exclude_unset=True)
-    # The linked login decides whose payslips and ESS data a user sees.
-    if "user_id" in payload and payload["user_id"] != row.user_id:
-        await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_MANAGE)
-    # Activation has its own manager-only endpoints, so a plain edit must not flip it.
-    if "is_active" in payload and bool(payload["is_active"]) != bool(row.is_active):
-        await _require_manager_or_admin(db, user, tenant.id)
-    access = await employee_service.employee_field_access(db, user, tenant.id)
-    # Masked fields come back as null in a resubmitted form and must not overwrite real data.
-    employee_service.drop_masked_resubmits(access, payload)
-    employee_service.assert_protected_writes_allowed(access, payload, row)
-    sensitive_before = {
-        f: getattr(row, f)
-        for f in (*employee_service.IDENTITY_PROFILE_FIELDS, *employee_service.PAYMENT_FIELDS, *EMPLOYEE_SENSITIVE_FIELDS)
-    }
-    if "date_of_birth" in payload:
-        assert_dob_allowed(
-            payload.get("date_of_birth"),
-            required=is_age_verification_required(tenant.feature_flags),
-        )
-    await _validate_fk_values(
-        db,
-        tenant.id,
-        payload.get("department_id"),
-        payload.get("designation_id"),
-        payload.get("reporting_manager_id"),
-        user_id=payload.get("user_id"),
-        employee_id=employee_id,
-        section_id=payload.get("section_id"),
-    )
-    if "employee_code" in payload and payload["employee_code"] is not None:
-        if payload["employee_code"].strip() != row.employee_code:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="The employee number is permanent and cannot be changed",
-            )
-    new_nid = payload["national_id"] if "national_id" in payload else row.national_id
-    new_brn = payload["birth_registration_no"] if "birth_registration_no" in payload else row.birth_registration_no
-    new_phone = payload["phone"] if "phone" in payload else row.phone
-    if any(k in payload for k in ("national_id", "birth_registration_no", "phone")):
-        new_nid, new_brn, new_phone = _identity_inputs(tenant, new_nid, new_brn, new_phone)
-        if identity_required(tenant.feature_flags):
-            assert_identity_complete(national_id=new_nid, birth_registration_no=new_brn, phone=new_phone)
-            await assert_identity_unique(
-                db, tenant.id, national_id=new_nid, birth_registration_no=new_brn, exclude_id=row.id
-            )
-        payload["national_id"], payload["birth_registration_no"], payload["phone"] = new_nid, new_brn, new_phone
-    if "birth_registration_no" in payload:
-        row.birth_registration_no = payload["birth_registration_no"] or None
-    if "first_name" in payload and payload["first_name"] is not None:
-        row.first_name = payload["first_name"].strip()
-    if "last_name" in payload:
-        row.last_name = payload["last_name"].strip() if payload["last_name"] else None
-    if "email" in payload:
-        row.email = payload["email"].strip() if payload["email"] else None
-    if "phone" in payload:
-        row.phone = payload["phone"].strip() if payload["phone"] else None
-    if "joining_date" in payload:
-        row.joining_date = payload["joining_date"]
-    if "date_of_birth" in payload:
-        row.date_of_birth = payload["date_of_birth"]
-    if "gender" in payload:
-        row.gender = payload["gender"].strip() if payload["gender"] else None
-    if "marital_status" in payload:
-        row.marital_status = payload["marital_status"].strip() if payload["marital_status"] else None
-    if "blood_group" in payload:
-        row.blood_group = payload["blood_group"].strip() if payload["blood_group"] else None
-    if "emergency_contact_name" in payload:
-        row.emergency_contact_name = payload["emergency_contact_name"].strip() if payload["emergency_contact_name"] else None
-    if "emergency_contact_phone" in payload:
-        row.emergency_contact_phone = payload["emergency_contact_phone"].strip() if payload["emergency_contact_phone"] else None
-    if "address_line" in payload:
-        row.address_line = payload["address_line"].strip() if payload["address_line"] else None
-    if "city" in payload:
-        row.city = payload["city"].strip() if payload["city"] else None
-    if "country" in payload:
-        row.country = payload["country"].strip() if payload["country"] else None
-    if "national_id" in payload:
-        row.national_id = payload["national_id"].strip() if payload["national_id"] else None
-    if "employment_type" in payload:
-        row.employment_type = payload["employment_type"].strip() if payload["employment_type"] else None
-    if "confirmation_date" in payload:
-        row.confirmation_date = payload["confirmation_date"]
-    if "exit_date" in payload:
-        row.exit_date = payload["exit_date"]
-    if "department_id" in payload:
-        row.department_id = payload["department_id"]
-    if "designation_id" in payload:
-        row.designation_id = payload["designation_id"]
-    if "section_id" in payload:
-        row.section_id = payload["section_id"]
-    if "employee_category" in payload:
-        row.employee_category = (
-            payload["employee_category"].strip() if payload["employee_category"] else None
-        )
-    if "reporting_manager_id" in payload:
-        row.reporting_manager_id = payload["reporting_manager_id"]
-    if "user_id" in payload:
-        row.user_id = payload["user_id"]
-    if "is_active" in payload:
-        row.is_active = bool(payload["is_active"])
-    if "attendance_device_pin" in payload:
-        row.attendance_device_pin = _clean_device_pin(payload["attendance_device_pin"])
-    employee_service.apply_onboarding_fields(row, payload)
-    sensitive_changed = sorted(f for f, before in sensitive_before.items() if getattr(row, f) != before)
+    access = await employee_update_service.apply_employee_update(db, tenant=tenant, actor=user, row=row, payload=payload)
     try:
-        if sensitive_changed:
-            await log_action(
-                db, tenant_id=tenant.id, user_id=user.id, action="HR_EMPLOYEE_SENSITIVE_UPDATED",
-                resource=f"hr.employee:{row.id}", details=",".join(sensitive_changed)[:500],
-            )
         await db.commit()
     except IntegrityError:
         await safe_async_session_rollback(db)
@@ -717,6 +660,7 @@ async def activate_employee(
 ):
     _ensure_user_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
+    assert_direct_edit_allowed(tenant)
     row = await _get_employee_or_404(db, tenant.id, employee_id)
     row.is_active = True
     await db.commit()
@@ -733,6 +677,7 @@ async def deactivate_employee(
 ):
     _ensure_user_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
+    assert_direct_edit_allowed(tenant)
     row = await _get_employee_or_404(db, tenant.id, employee_id)
     row.is_active = False
     await db.commit()
@@ -907,6 +852,51 @@ async def update_section(
         raise HTTPException(status_code=400, detail="Section code already exists")
     await db.refresh(row)
     return SectionResponse(**hr_domain.section_to_dict(row))
+
+
+@router.get("/sections/{section_id}/delete-impact")
+async def section_delete_impact(
+    section_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """How many records would become "Undefined" if this section / line were deleted."""
+    _ensure_user_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    await hr_domain.get_section_or_404(db, tenant.id, section_id)
+    return await master_delete.section_impact(db, tenant.id, section_id)
+
+
+@router.delete("/sections/{section_id}")
+async def delete_section(
+    section_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a section / line. Its employees and child sections become "Undefined" (empty link)."""
+    _ensure_user_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    row = await hr_domain.get_section_or_404(db, tenant.id, section_id)
+    impact = await master_delete.section_impact(db, tenant.id, section_id)
+    label = f"{row.code} - {row.name}"
+    try:
+        await master_delete.clear_section_links(db, tenant.id, section_id)
+        await db.delete(row)
+        await log_action(
+            db,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            action="HR_SECTION_DELETED",
+            resource=f"hr.section:{section_id}",
+            details=f"{label}; moved to Undefined: {impact}",
+        )
+        await db.commit()
+    except Exception:
+        await safe_async_session_rollback(db)
+        raise
+    return {"ok": True, "moved_to_undefined": impact}
 
 
 @router.get("/employees/{employee_id}/documents", response_model=list[EmployeeDocumentResponse])

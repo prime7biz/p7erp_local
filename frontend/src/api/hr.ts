@@ -35,15 +35,22 @@ import type {
   HrComplianceScore,
   HrDashboardData,
   HrDepartmentCreate,
+  HrDepartmentDeleteImpact,
   HrDepartmentResponse,
   HrDepartmentUpdate,
+  HrSectionDeleteImpact,
   HrDesignationCreate,
   HrDesignationResponse,
   HrDesignationUpdate,
   HrEmployeeComplianceRecord,
   HrEmployeeCreate,
   HrEmployeeDocumentCreate,
+  HrChangeKind,
+  HrChangeRequest,
+  HrChangeRequestRights,
+  HrChangeStatus,
   HrEmployeeDocumentResponse,
+  HrEmployeeOverview,
   HrEmployeeResponse,
   HrEmployeeStatusHistoryCreate,
   HrEmployeeStatusHistoryResponse,
@@ -166,8 +173,13 @@ export const hrApi = {
       body: JSON.stringify(data),
     });
   },
-  async deleteHrDepartment(id: number): Promise<void> {
-    return request<void>(`/api/v1/hr/departments/${id}`, { method: "DELETE" });
+  /** Without `moveToUndefined` the server refuses a department that is still in use. */
+  async deleteHrDepartment(id: number, opts?: { moveToUndefined?: boolean }): Promise<void> {
+    const suffix = opts?.moveToUndefined ? "?move_to_undefined=true" : "";
+    return request<void>(`/api/v1/hr/departments/${id}${suffix}`, { method: "DELETE" });
+  },
+  async getHrDepartmentDeleteImpact(id: number): Promise<HrDepartmentDeleteImpact> {
+    return request<HrDepartmentDeleteImpact>(`/api/v1/hr/departments/${id}/delete-impact`);
   },
   async listHrDesignations(params?: {
     active_only?: boolean;
@@ -223,6 +235,51 @@ export const hrApi = {
   async getHrEmployee(id: number): Promise<HrEmployeeResponse> {
     return request<HrEmployeeResponse>(`/api/v1/hr/employees/${id}`);
   },
+  /** Tier 1 / Tier 2 approval: what the caller may do, and whether the tenant switch is on. */
+  async getHrChangeRequestRights(): Promise<HrChangeRequestRights> {
+    return request<HrChangeRequestRights>("/api/v1/hr/change-requests/me");
+  },
+  async listHrChangeRequests(params?: {
+    view?: "tier1" | "tier2" | "mine" | "all";
+    status?: HrChangeStatus;
+    employee_id?: number;
+    limit?: number;
+  }): Promise<HrChangeRequest[]> {
+    const q = new URLSearchParams();
+    if (params?.view) q.set("view", params.view);
+    if (params?.status) q.set("status", params.status);
+    if (params?.employee_id != null) q.set("employee_id", String(params.employee_id));
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<HrChangeRequest[]>(`/api/v1/hr/change-requests${suffix}`);
+  },
+  /** Same body as the direct save; `requestId` is made once per attempt so a retry never doubles it. */
+  async submitHrChangeRequest(
+    employeeId: number,
+    data: { kind: HrChangeKind; payload: object; reason: string; request_id: string },
+  ): Promise<HrChangeRequest> {
+    return request<HrChangeRequest>(`/api/v1/hr/employees/${employeeId}/change-requests`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async decideHrChangeRequest(
+    id: number,
+    tier: 1 | 2,
+    data: { decision: "APPROVE" | "REJECT"; note?: string | null },
+  ): Promise<HrChangeRequest> {
+    return request<HrChangeRequest>(`/api/v1/hr/change-requests/${id}/tier${tier}-decision`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async cancelHrChangeRequest(id: number): Promise<HrChangeRequest> {
+    return request<HrChangeRequest>(`/api/v1/hr/change-requests/${id}/cancel`, { method: "POST" });
+  },
+  /** Read-only information center; blocks the caller may not see come back as `{ allowed: false }`. */
+  async getHrEmployeeOverview(id: number): Promise<HrEmployeeOverview> {
+    return request<HrEmployeeOverview>(`/api/v1/hr/employees/${id}/overview`);
+  },
   async createHrEmployee(data: HrEmployeeCreate): Promise<HrEmployeeResponse> {
     return request<HrEmployeeResponse>("/api/v1/hr/employees", {
       method: "POST",
@@ -276,6 +333,13 @@ export const hrApi = {
   },
   async updateHrSection(id: number, data: Record<string, unknown>): Promise<HrSectionResponse> {
     return request<HrSectionResponse>(`/api/v1/hr/sections/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+  },
+  async getHrSectionDeleteImpact(id: number): Promise<HrSectionDeleteImpact> {
+    return request<HrSectionDeleteImpact>(`/api/v1/hr/sections/${id}/delete-impact`);
+  },
+  /** Employees and child sections of the deleted section become "Undefined". */
+  async deleteHrSection(id: number): Promise<void> {
+    return request<void>(`/api/v1/hr/sections/${id}`, { method: "DELETE" });
   },
   async exportHrEmployees(): Promise<Blob> {
     return requestBlob("/api/v1/hr/employees/export", { method: "GET" });

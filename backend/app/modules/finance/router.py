@@ -4693,6 +4693,20 @@ async def create_budget(
     return await _budget_out(db, row)
 
 
+def _block_final_budget_change(tenant: Tenant, budget: Budget) -> None:
+    """With Management Performance on, a FINAL budget changes only through an approved budget revision."""
+    from app.common.tenant_feature_keys import is_mgmt_performance_v1_enabled
+
+    if is_mgmt_performance_v1_enabled(tenant.feature_flags) and (budget.status or "").upper() == "FINAL":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This budget is FINAL. Change it with a budget revision in Finance > Management Performance "
+                "(the revision is approved by a second person)."
+            ),
+        )
+
+
 @router.put("/budgets/{budget_id}", response_model=BudgetOut)
 async def update_budget(
     budget_id: int,
@@ -4705,6 +4719,7 @@ async def update_budget(
     budget = await db.get(Budget, budget_id)
     if not budget or budget.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Budget not found")
+    _block_final_budget_change(tenant, budget)
     await ensure_all_owned(db, ChartOfAccount, [ln.account_id for ln in body.lines], tenant.id, "Ledger account")
     await ensure_all_owned(db, CostCenter, [ln.cost_center_id for ln in body.lines], tenant.id, "Cost center")
     budget.budget_name = body.budget_name
@@ -4742,6 +4757,7 @@ async def delete_budget(
     budget = await db.get(Budget, budget_id)
     if not budget or budget.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Budget not found")
+    _block_final_budget_change(tenant, budget)
     for line in list((await db.execute(select(BudgetLine).where(BudgetLine.budget_id == budget.id))).scalars().all()):
         await db.delete(line)
     await db.delete(budget)
@@ -8041,3 +8057,8 @@ router.include_router(_budget_analytics_router)
 from app.modules.finance.ai_insights.router import router as _ai_insights_router  # noqa: E402
 
 router.include_router(_ai_insights_router)
+
+# Management Performance: income vs expense, budget forecast / exceptions, break-even (mgmt_performance_v1).
+from app.modules.finance.mgmt_performance.router import router as _mgmt_performance_router  # noqa: E402
+
+router.include_router(_mgmt_performance_router)

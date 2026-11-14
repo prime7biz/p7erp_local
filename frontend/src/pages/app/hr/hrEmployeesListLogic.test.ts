@@ -14,6 +14,7 @@ import {
   isOnProbation,
   joinedWithinDays,
   sortEmployees,
+  UNDEFINED_FILTER_ID,
 } from "./hrEmployeesListLogic";
 
 const TODAY = new Date(2026, 10, 9); // 9 Nov 2026
@@ -113,6 +114,11 @@ describe("filterEmployees", () => {
     expect(filterEmployees(rows, { ...emptyFilters, departmentId: 20 }, TODAY).map((e) => e.id)).toEqual([2]);
     expect(filterEmployees(rows, { ...emptyFilters, gender: "Male" }, TODAY).map((e) => e.id)).toEqual([1]);
     expect(filterEmployees(rows, { ...emptyFilters, search: "0171" }, TODAY).map((e) => e.id)).toEqual([2]);
+  });
+  it("the Undefined choice finds employees without a department or section", () => {
+    const all = { ...emptyFilters, status: "all" as const };
+    expect(filterEmployees(rows, { ...all, departmentId: UNDEFINED_FILTER_ID }, TODAY).map((e) => e.id)).toEqual([3]);
+    expect(filterEmployees(rows, { ...all, sectionId: UNDEFINED_FILTER_ID }, TODAY).map((e) => e.id)).toEqual([1, 2, 3]);
   });
   it("combines quick chips", () => {
     expect(filterEmployees(rows, { ...emptyFilters, chips: ["new30"] }, TODAY).map((e) => e.id)).toEqual([1]);

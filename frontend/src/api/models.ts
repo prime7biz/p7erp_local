@@ -448,6 +448,20 @@ export interface HrDepartmentUpdate {
   is_active?: boolean;
 }
 
+/** Records that become "Undefined" (empty link) when the department is deleted. */
+export interface HrDepartmentDeleteImpact {
+  employees: number;
+  designations: number;
+  sections: number;
+  requisitions: number;
+}
+
+/** Records that become "Undefined" (empty link) when the section / line is deleted. */
+export interface HrSectionDeleteImpact {
+  employees: number;
+  child_sections: number;
+}
+
 export interface HrDesignationResponse {
   id: number;
   tenant_id: number;
@@ -728,6 +742,117 @@ export interface HrEmployeeCompensationView {
     effective_from: string;
     effective_to: string | null;
   }[];
+  /** Only after a salary save: draft / checked payroll runs that must be recalculated for this employee. */
+  stale_runs?: HrStalePayrollRun[];
+}
+
+/** A block the caller may not see: no data is sent. */
+export type HrOverviewHidden = { allowed: false };
+type Shown<T> = { allowed: true } & T;
+type Block<T> = Shown<T> | HrOverviewHidden;
+
+export interface HrAttendancePeriodSummary {
+  from_date: string;
+  days_recorded: number;
+  present: number;
+  absent: number;
+  late_days: number;
+  late_minutes: number;
+  overtime_minutes: number;
+}
+
+/** GET /hr/employees/{id}/overview — read-only employee information center (newest `recent_limit` rows per list). */
+export interface HrEmployeeOverview {
+  employee_id: number;
+  as_of: string;
+  recent_limit: number;
+  leave: Block<{
+    year: number;
+    balances: { leave_type: string; leave_type_name: string; allocated_days: string; used_days: string; pending_days: string; remaining_days: string }[];
+    requests_total: number;
+    requests: { id: number; leave_type: string; leave_type_name: string; from_date: string; to_date: string; days: string; status: string; reason: string | null }[];
+  }>;
+  attendance: Block<{
+    this_month: HrAttendancePeriodSummary;
+    this_year: HrAttendancePeriodSummary;
+    approved_overtime_hours_this_year: string;
+    recent_late: { date: string; in_time: string | null; late_minutes: number; status: string }[];
+  }>;
+  discipline: Block<{
+    total: number;
+    open: number;
+    cases: { id: number; case_no: string; case_type: string; subject: string; status: string; issue_date: string | null; decision: string | null }[];
+  }>;
+  salary: Block<{
+    history: { id: number; structure_code: string; change_type: string | null; effective_from: string; effective_to: string | null; basic: string | null }[];
+  }>;
+  bonuses: Block<{
+    festival: { title: string; period_code: string; amount: string | null; status: string; eligible: boolean }[];
+    production: { period_code: string; amount: string | null; status: string }[];
+    allowances_by_month: { month: string | null; rule_code: string; days: number; amount: string | null }[];
+  }>;
+  payslips: Block<{
+    lines: { run_id: number; period_code: string; run_status: string; gross_pay: string | null; deductions: string | null; net_pay: string | null; slip_number: string | null }[];
+  }>;
+  gate_passes: Block<{
+    passes: { id: number; pass_code: string; status: string; valid_from: string | null; valid_to: string | null; purpose: string }[];
+  }>;
+  documents: Block<{
+    documents: { id: number; document_type: string; document_number: string | null; issue_date: string | null; expiry_date: string | null }[];
+  }>;
+  status_history: Block<{ entries: { status: string; effective_date: string | null; remarks: string | null }[] }>;
+  separations: Block<{
+    separations: { id: number; separation_type: string; status: string; request_date: string | null; last_working_date: string | null }[];
+  }>;
+  reviews: Block<{
+    reviews: { id: number; review_type: string; status: string; final_rating: string | null; submitted_at: string | null }[];
+  }>;
+}
+
+export type HrChangeKind = "INFO" | "COMPENSATION" | "PAY_BENEFITS" | "TAX_PROFILE";
+export type HrChangeStatus = "PENDING_TIER1" | "PENDING_TIER2" | "APPLIED" | "REJECTED" | "CANCELLED" | "FAILED";
+
+/** An amendment to an existing employee waiting for / past Tier 1 and Tier 2 approval. */
+export interface HrChangeRequest {
+  id: number;
+  employee_id: number;
+  employee_code: string | null;
+  employee_name: string | null;
+  kind: HrChangeKind;
+  status: HrChangeStatus;
+  reason: string;
+  /** The requested body; null when hidden (pay change without the payroll permission). */
+  payload: Record<string, unknown> | null;
+  /** Values the request replaces (same keys for INFO). */
+  before: Record<string, unknown> | null;
+  details_hidden: boolean;
+  masked_fields: string[];
+  request_id: string;
+  requested_by: number | null;
+  requested_at: string | null;
+  tier1_by: number | null;
+  tier1_at: string | null;
+  tier1_note: string | null;
+  tier2_by: number | null;
+  tier2_at: string | null;
+  tier2_note: string | null;
+  applied_at: string | null;
+  failure_reason: string | null;
+}
+
+export interface HrChangeRequestRights {
+  enabled: boolean;
+  user_id: number;
+  can_tier1: boolean;
+  can_tier2: boolean;
+  can_view_pay: boolean;
+}
+
+export interface HrStalePayrollRun {
+  run_id: number;
+  status: string;
+  period_start: string;
+  period_end: string;
 }
 
 export type HrOnboardingStepStatus = "PENDING" | "COMPLETED" | "FAILED" | "SKIPPED";
@@ -11470,6 +11595,30 @@ export interface HrTdsEstimate {
   taxable_income?: string;
   category?: string;
   warnings?: string[];
+  /** Calculation steps (all decimal strings, informational). */
+  category_label?: string;
+  assessment_year?: string;
+  exempt_income?: string;
+  base_threshold?: string;
+  disabled_child_allowance?: string;
+  threshold?: string;
+  slab_tax?: string;
+  rebate_mode?: string;
+  investment_rebate?: string;
+  minimum_tax?: string;
+  minimum_tax_applied?: boolean;
+  slab_schedule?: HrTdsSlabRow[];
+}
+
+/** One band of the yearly tax schedule on taxable income; `to` null = the remaining amount. */
+export interface HrTdsSlabRow {
+  from: string;
+  to: string | null;
+  /** Fraction, e.g. "0.10" = 10%. */
+  rate: string;
+  taxed_amount: string;
+  tax: string;
+  tax_free: boolean;
 }
 
 export type HrTaxCategoryOverride = "AUTO" | "GENERAL" | "FEMALE" | "SENIOR_65" | "DISABLED" | "FREEDOM_FIGHTER" | "THIRD_GENDER";

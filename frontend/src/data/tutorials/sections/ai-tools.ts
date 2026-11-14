@@ -528,12 +528,13 @@ Where you find it:
 
 1. Open the form, for example **New customer**.
 2. On **Import Customer Info**, drag a file onto **Drag and drop a file here**, or click **Upload file**.
-3. Click **Extract data**. A banner shows **Extracted successfully**, **Partial extraction** or **Extraction failed**.
+3. Click **Extract data**. A banner shows **Extracted successfully**, **Partial extraction** (only when part of the document could not be read) or **Extraction failed**.
 4. In **Review extracted fields**, each row shows the **Field**, the **Extracted** value, a **Confidence** badge, the **Current** form value and a **Status**.
 5. Click **Apply** to copy a value into the form, or **Skip** to ignore it. **Apply all high-confidence** applies every high-confidence row at once.
 6. If a row says **Conflict** (the form already has a different value), choose **Keep existing** or **Use extracted**.
-7. On **New inquiry**, suggested customer and style buttons set the link without creating new records.
-8. Check the whole form, then click the form's normal **Save** button (**Save inquiry** on New inquiry).
+7. **More details found in the document** lists everything else the AI read, as a label with its value (for example *Article Code: 12345*, *Material: 100% Cotton*). For each row, check the field already chosen in **Put into** (marked *suggested*), pick another field or **Don't use**, then click **Apply**. **Dismiss** hides a row (**Restore** brings it back). **Apply all suggested** applies every row that has a field. Details put into **Notes** are added below what is already there, never replacing it. If a value does not fit the field (for example text in **Quantity**), the row tells you why.
+8. On **New inquiry**, suggested customer and style buttons set the link without creating new records. If no existing style matches the style name in the document, **Create style "…"** opens **Quick Add Style** with the name, season and department filled in. You still click **Create style** yourself.
+9. Check the whole form, then click the form's normal **Save** button (**Save inquiry** on New inquiry).
 
 On **New customer** there is also an **AI assistant** box on the right (*Suggestions only — review and apply manually. Nothing is auto-saved.*) with **Extract from document**, **Enrich from website / hints**, **Validate profile** and **Find possible duplicates**.
 
@@ -544,6 +545,7 @@ The record is created exactly as if you had typed it. Applied fields have a colo
 ## Tips
 
 - Clear, straight photos give higher confidence. Crop to the card or the table.
+- The AI understands common buyer wording: *Article Code* or *Style No* goes to **Style ref**, *Bill to* or *Consignee* to the customer name, *VAT / TIN / BIN / EORI* to **Tax ID / VAT**. When such a field is still empty it is filled for you with a medium-confidence badge, so check it before applying.
 - Watch the **duplicate warning** on New customer — it lists existing customers with the same email or name.
 
 ## Common problems
@@ -562,8 +564,8 @@ The record is created exactly as if you had typed it. Applied fields have a colo
         "tech pack",
         "buyer inquiry",
       ],
-      estimatedMinutes: 4,
-      lastUpdated: "2026-11-06",
+      estimatedMinutes: 5,
+      lastUpdated: "2026-11-14",
       coverImage: "/tutorials/screens/ai-extract-customer-card.jpg",
       infographics: [
         {
@@ -573,6 +575,7 @@ The record is created exactly as if you had typed it. Applied fields have a colo
             { label: "Upload file" },
             { label: "Extract data" },
             { label: "Review: Apply / Skip" },
+            { label: "More details: Put into" },
             { label: "Save the form", href: "/app/customers/new" },
           ],
         },

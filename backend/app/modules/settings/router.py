@@ -40,6 +40,7 @@ from app.common.tenant_feature_keys import (
     is_mfg_plan_four_eyes_enabled,
     is_mfg_predictive_ai_text_v1_enabled,
     is_mfg_predictive_intelligence_v1_enabled,
+    is_hr_employee_change_approval_enabled,
     is_payroll_four_eyes_enabled,
     is_single_session_enforced,
     normalize_feature_flags,
@@ -128,6 +129,30 @@ async def _count_payroll_approvers(db: AsyncSession, tenant_id: int) -> int:
         ).scalar_one()
         or 0
     )
+
+
+async def _employee_change_tier_holders(db: AsyncSession, tenant_id: int) -> tuple[set[int], set[int]]:
+    """Active users whose role explicitly grants the Tier 1 / Tier 2 employee-change keys."""
+    from app.common.permissions import (
+        PERMISSION_HR_EMPLOYEE_CHANGE_TIER1,
+        PERMISSION_HR_EMPLOYEE_CHANGE_TIER2,
+        explicit_permission_granted,
+    )
+
+    rows = (
+        await db.execute(
+            select(User.id, Role)
+            .join(Role, Role.id == User.role_id)
+            .where(
+                User.tenant_id == tenant_id,
+                or_(Role.tenant_id == tenant_id, Role.tenant_id.is_(None)),
+                User.is_active.is_(True),
+            )
+        )
+    ).all()
+    tier1 = {uid for uid, role in rows if explicit_permission_granted(role=role, permission_key=PERMISSION_HR_EMPLOYEE_CHANGE_TIER1)}
+    tier2 = {uid for uid, role in rows if explicit_permission_granted(role=role, permission_key=PERMISSION_HR_EMPLOYEE_CHANGE_TIER2)}
+    return tier1, tier2
 
 
 PLAN_APPROVER_ROLE_NAMES = ("admin", "manager")
@@ -301,6 +326,18 @@ async def update_settings_config(
                         "otherwise nobody could approve a payroll run."
                     ),
                 )
+        change_approval_was = is_hr_employee_change_approval_enabled(current)
+        change_approval_now = is_hr_employee_change_approval_enabled(new_flags)
+        if change_approval_now and not change_approval_was:
+            tier1, tier2 = await _employee_change_tier_holders(db, tenant.id)
+            if not tier1 or not tier2 or len(tier1 | tier2) < 2:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Employee change approval needs at least one active user with the Tier 1 permission and one "
+                        "with the Tier 2 permission (two different people). Set them in Settings → Roles first."
+                    ),
+                )
         mfg_changes = await _check_mfg_planning_flags(db, tenant.id, current, new_flags)
         predictive_turned_off = _predictive_effective(current) and not _predictive_effective(new_flags)
         tenant.feature_flags = new_flags
@@ -325,6 +362,15 @@ async def update_settings_config(
                 action="SETTINGS_UPDATE",
                 resource="settings.mfg_planning_flags",
                 details=f"Manufacturing predictive alerts resolved after switching off: {resolved}",
+            )
+        if change_approval_now != change_approval_was:
+            await log_action(
+                db,
+                tenant_id=tenant.id,
+                user_id=user.id,
+                action="SETTINGS_UPDATE",
+                resource="settings.hr_employee_change_approval",
+                details=f"Employee change approval (Tier 1 / Tier 2) {'enabled' if change_approval_now else 'disabled'}",
             )
         if four_eyes_now != four_eyes_was:
             await log_action(

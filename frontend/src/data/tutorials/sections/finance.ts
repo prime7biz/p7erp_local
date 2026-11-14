@@ -1866,5 +1866,80 @@ Nothing here changes a budget or a voucher, and nothing is blocked. The existing
       ],
       relatedArticleIds: ["fin-tally-statements", "fin-control-tower-profitability", "fin-budget-analytics-expense-control"],
     },
+    {
+      id: "fin-management-performance",
+      title: "Management Performance: income vs expense, budget forecast and break-even",
+      summary:
+        "See what the company is earning against what it is spending this month, quarter or year: posted profit, the expected contribution of finished goods, the expense forecast against the budget, budget warnings with an answer flow, break-even targets and weekly cash.",
+      content: `## Overview
+
+**Management Performance** puts five figures side by side. They are **never added together**:
+
+1. **Accounting profit** - from **posted** vouchers only. The same number as **Profit & Loss** for the same dates.
+2. **Finished-goods contribution** (*estimate - not posted*) - goods received into a finished-goods store this period × the order selling price, minus material, processing and buying commission, minus landed / export cost posted in the period.
+3. **Operating expenses** - per cost centre and category (payroll, finance cost, utilities, transport, admin, factory overhead, sales & marketing, tax): **budget**, **posted**, **committed** and **forecast**.
+4. **Targets** - break-even sales, production value and pieces still needed, new confirmed orders needed (marketing target) and the sales value for your profit target.
+5. **Cash** - weekly collections, payments and the first week the cash balance goes below zero.
+
+Nothing here writes a voucher. **Who uses it:** management, the finance team and department (cost-centre) owners.
+
+## Before you start
+
+1. An admin switches on **Management performance** in **Settings → Configuration → Finance** (More features). It is off by default.
+2. Open **Finance → Planning → Management Performance** (with the Finance hubs menu: **Budgets & Cash → Management Performance**).
+3. Company figures need the **admin** or **manager** role, or the permission **View company profit, contribution, targets and cash**. A **cost-centre owner** without it sees only the budget forecast and exceptions of their own cost centres.
+4. In **Setup**:
+   - give every expense **account group** a category (direct material, processing, landed and export cost are product cost, not operating expense; map commission accounts to **Not counted** because commission comes from the order terms);
+   - set the **early warning %** per category (default 90%);
+   - enter the **monthly profit target** and **contingency %**;
+   - choose an **owner** for each cost centre.
+5. Mark finished-goods stock groups as **Finished goods** in **Inventory → Stock groups**, otherwise the finished-goods view stays empty.
+
+## Steps - budget forecast and warnings
+
+1. Open **Budget forecast** and choose the **Period** (this month by default; also quarter or financial year).
+2. Each row shows **Budget**, **Posted**, **Committed** (open purchase orders without an order, loan interest due), **Forecast** and **Used %**. Forecast = posted + the larger of committed cost and the budget for the rest of the month (or the 3-month average when there is no budget). Payroll uses employees, salary structures and attendance so far.
+3. The **Status** chip: **On track**, **Warning** (forecast reaches the warning %), **At risk** (forecast above the budget), **Over budget** (posted spend already above it), **No budget**, **No category**.
+4. Use the row **Actions** menu: **Month by month**, **Request budget change** (owner or finance; a second person approves), **Show exceptions**.
+
+## Steps - answering budget exceptions
+
+1. Every night (and when finance presses **Check budgets now**) problem rows become **exceptions**; the owner and managers get a notification.
+2. The **cost-centre owner** opens **Exceptions → Actions → Answer** and writes the reason, the corrective action and, if they like, a revised forecast.
+3. **Finance** reviews (**Mark reviewed**), then a **manager / director** approves or rejects. The same person cannot answer, review and approve. A rejected item goes back to the owner.
+
+## Steps - targets and finished goods
+
+1. **Finished goods** lists each order with pieces counted, unit price, cost per piece, contribution and how complete the cost data is (**complete**, **estimated** or **unknown**). Pieces are never counted twice: an order is counted only up to its order quantity.
+2. **Targets** shows how the target is worked out line by line: operating expenses + contingency + profit target + landed / export cost − contribution so far = contribution still needed, then ÷ the contribution margin.
+
+## Common problems
+
+- **"Management performance is switched off"** → ask an admin to turn on the setting.
+- **Forecast is empty or "No category" everywhere** → set the expense categories in **Setup**.
+- **Finished goods are empty** → no stock group is marked **Finished goods**, or the receipts have no order.
+- **Budget edit says the budget is FINAL** → while this feature is on, a FINAL budget changes only through **Request budget change**.
+- **Targets show —** → there are no finished goods or confirmed orders with a known cost yet, so the margin is unknown.`,
+      tags: ["management performance", "income vs expense", "break-even", "budget forecast", "budget failure", "contribution", "cash gap"],
+      keywords: ["mgmt_performance_v1", "break even", "production target", "marketing target", "budget exception", "budget revision", "finished goods contribution"],
+      estimatedMinutes: 8,
+      lastUpdated: "2026-11-14",
+      audience: "finance",
+      infographics: [
+        {
+          type: "steps",
+          title: "Earn more than you spend",
+          steps: [
+            { title: "Switch on", body: "Settings → Configuration → Finance → **Management performance**.", href: "/app/settings/config" },
+            { title: "Set up", body: "Expense categories, warning %, monthly profit target and cost-centre owners in **Setup**.", href: "/app/finance/management-performance?view=setup" },
+            { title: "Watch the forecast", body: "**Budget forecast** shows posted, committed and forecast against the budget.", href: "/app/finance/management-performance?view=budget" },
+            { title: "Answer warnings", body: "Owner answers, finance reviews, a manager approves in **Exceptions**.", href: "/app/finance/management-performance?view=exceptions" },
+            { title: "Hit the target", body: "**Targets** shows break-even and the sales / production still needed.", href: "/app/finance/management-performance?view=targets" },
+          ],
+        },
+      ],
+      relatedAppRoutes: ["/app/finance/management-performance", "/app/finance/planning", "/app/accounts/budgets"],
+      relatedArticleIds: ["fin-budget-analytics-expense-control", "fin-tally-statements", "fin-overview"],
+    },
   ],
 };

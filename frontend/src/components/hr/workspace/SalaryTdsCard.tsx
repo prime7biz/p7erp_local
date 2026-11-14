@@ -47,7 +47,110 @@ export function TdsEstimateBox({ estimate, title = "Income tax (TDS) estimate" }
       {(estimate.warnings ?? []).map((w) => (
         <p key={w} className="text-xs text-status-warning-foreground">{w}</p>
       ))}
+      {estimate.supported && <TdsCalculationDetails estimate={estimate} />}
     </div>
+  );
+}
+
+/** Display-only amount with thousand separators (the server value stays the source). */
+function taka(value: string | null | undefined): string {
+  const n = Number(value ?? "0");
+  if (!Number.isFinite(n)) return value ?? "";
+  return n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function percent(rate: string): string {
+  const n = Number(rate) * 100;
+  return `${Number.isFinite(n) ? Number(n.toFixed(2)) : rate}%`;
+}
+
+/** Step-by-step yearly calculation with every slab of the schedule (slabs not reached show 0). */
+export function TdsCalculationDetails({ estimate }: { estimate: HrTdsEstimate }) {
+  const slabs = estimate.slab_schedule ?? [];
+  if (!estimate.annual_gross || slabs.length === 0) return null;
+  const childAdd = Number(estimate.disabled_child_allowance ?? "0") > 0;
+  const rebate = Number(estimate.investment_rebate ?? "0") > 0;
+  const steps: { label: string; value: string; strong?: boolean }[] = [
+    { label: "Yearly gross (monthly gross x 12)", value: taka(estimate.annual_gross) },
+    { label: "Less: exempt income (one third, at most 5,00,000)", value: `- ${taka(estimate.exempt_income)}` },
+    { label: "Taxable income", value: taka(estimate.taxable_income), strong: true },
+    {
+      label: `Tax-free limit (${estimate.category_label ?? estimate.category ?? "category"})${childAdd ? " + disabled-child addition" : ""}`,
+      value: taka(estimate.threshold),
+    },
+  ];
+  return (
+    <details className="mt-2 rounded border border-border bg-surface-raised p-2" data-testid="tds-details">
+      <summary className="cursor-pointer text-xs font-semibold text-brand-primary">Show calculation</summary>
+      <div className="mt-2 space-y-3 text-xs">
+        {estimate.assessment_year && <p className="text-text-muted">Assessment year {estimate.assessment_year}</p>}
+        <table className="w-full">
+          <tbody>
+            {steps.map((s) => (
+              <tr key={s.label} className="border-t border-border-subtle">
+                <td className="py-1 pr-2 text-text-secondary">{s.label}</td>
+                <td className={`py-1 text-right tabular-nums ${s.strong ? "font-semibold text-text-primary" : "text-text-primary"}`}>{s.value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="overflow-x-auto">
+          <table className="min-w-full" aria-label="Tax slabs">
+            <thead className="bg-surface-subtle text-text-muted">
+              <tr>
+                <th className="px-2 py-1 text-left font-medium">Taxable income band</th>
+                <th className="px-2 py-1 text-right font-medium">Rate</th>
+                <th className="px-2 py-1 text-right font-medium">Amount taxed</th>
+                <th className="px-2 py-1 text-right font-medium">Tax</th>
+              </tr>
+            </thead>
+            <tbody>
+              {slabs.map((row) => {
+                const reached = Number(row.taxed_amount) > 0;
+                return (
+                  <tr key={row.from} className={`border-t border-border-subtle ${reached ? "text-text-primary" : "text-text-muted"}`}>
+                    <td className="px-2 py-1">
+                      {row.tax_free ? `First ${taka(row.to)} (tax free)` : row.to ? `${taka(row.from)} – ${taka(row.to)}` : `Above ${taka(row.from)}`}
+                    </td>
+                    <td className="px-2 py-1 text-right tabular-nums">{percent(row.rate)}</td>
+                    <td className="px-2 py-1 text-right tabular-nums">{taka(row.taxed_amount)}</td>
+                    <td className="px-2 py-1 text-right tabular-nums">{taka(row.tax)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <table className="w-full">
+          <tbody>
+            <tr className="border-t border-border-subtle">
+              <td className="py-1 text-text-secondary">Tax on slabs</td>
+              <td className="py-1 text-right tabular-nums text-text-primary">{taka(estimate.slab_tax)}</td>
+            </tr>
+            {rebate && (
+              <tr className="border-t border-border-subtle">
+                <td className="py-1 text-text-secondary">Less: investment rebate</td>
+                <td className="py-1 text-right tabular-nums text-text-primary">- {taka(estimate.investment_rebate)}</td>
+              </tr>
+            )}
+            {estimate.minimum_tax_applied && (
+              <tr className="border-t border-border-subtle">
+                <td className="py-1 text-text-secondary">Minimum tax applies</td>
+                <td className="py-1 text-right tabular-nums text-text-primary">{taka(estimate.minimum_tax)}</td>
+              </tr>
+            )}
+            <tr className="border-t border-border-subtle">
+              <td className="py-1 font-semibold text-text-primary">Yearly tax</td>
+              <td className="py-1 text-right font-semibold tabular-nums text-text-primary">{taka(estimate.net_annual_tax)}</td>
+            </tr>
+            <tr className="border-t border-border-subtle">
+              <td className="py-1 font-semibold text-text-primary">Monthly TDS (yearly tax / 12)</td>
+              <td className="py-1 text-right font-semibold tabular-nums text-text-primary">{taka(estimate.monthly_tds)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
   );
 }
 
@@ -57,9 +160,11 @@ type Props = {
   canManage: boolean;
   /** Called after the profile was saved so the estimate can be reloaded. */
   onSaved: () => void;
+  /** Approval mode: send the profile for Tier 1 / Tier 2 approval; returns the message to show. */
+  onSubmitForApproval?: (body: Omit<HrEmployeeTaxProfile, "exists">) => Promise<string>;
 };
 
-export function SalaryTdsCard({ employeeId, estimate, canManage, onSaved }: Props) {
+export function SalaryTdsCard({ employeeId, estimate, canManage, onSaved, onSubmitForApproval }: Props) {
   const [profile, setProfile] = useState<HrEmployeeTaxProfile | null>(null);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<{ kind: "success" | "error"; text: string } | null>(null);
@@ -95,6 +200,10 @@ export function SalaryTdsCard({ employeeId, estimate, canManage, onSaved }: Prop
     try {
       const { exists: _exists, ...body } = profile;
       void _exists;
+      if (onSubmitForApproval) {
+        setStatus({ kind: "success", text: await onSubmitForApproval(body) });
+        return;
+      }
       const saved = await api.saveHrEmployeeTaxProfile(employeeId, body);
       setProfile(saved.profile);
       setStatus({ kind: "success", text: "Tax profile saved." });
@@ -165,7 +274,7 @@ export function SalaryTdsCard({ employeeId, estimate, canManage, onSaved }: Prop
           )}
           <div className="sm:col-span-2 lg:col-span-3 flex justify-end">
             <button type="button" onClick={() => void save()} disabled={saving || invalid} className="rounded bg-brand-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60">
-              {saving ? "Saving…" : "Save tax profile"}
+              {saving ? "Saving…" : onSubmitForApproval ? "Submit tax profile for approval" : "Save tax profile"}
             </button>
           </div>
         </Section>

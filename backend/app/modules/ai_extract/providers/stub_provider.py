@@ -46,6 +46,10 @@ class StubExtractionProvider(BaseExtractionProvider):
                 "billingPostalCode": 0.71,
                 "billingCountry": 0.85,
             },
+            "_extra_fields": [
+                {"label": "Fax", "value": "+880 2 9876543", "suggested_field": None},
+                {"label": "Delivery address", "value": "Plot 7, BSCIC, Narayanganj", "suggested_field": None},
+            ],
             "_unmapped_text": [
                 "Registered under Companies Act 1994" if is_pdf else "Scanned business card — footer text",
             ],
@@ -98,6 +102,10 @@ class StubExtractionProvider(BaseExtractionProvider):
                     "quantity": None,
                     "confidence": 0.41,
                 },
+            ],
+            "_extra_fields": [
+                {"label": "Composition", "value": "100% Cotton, 180 GSM", "suggested_field": "notes"},
+                {"label": "Colours", "value": "Navy\nWhite\nHeather Grey", "suggested_field": "notes"},
             ],
             "_unmapped_text": ["Payment: LC at sight"],
             "_warnings": ["Could not confirm buyer reference number."],

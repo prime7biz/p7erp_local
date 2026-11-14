@@ -155,7 +155,7 @@ A **customer** is a buyer you sell to (for example a brand or retailer). Every i
 
 1. Open **Merchandising → Customers** (\`/app/customers\`).
 2. Search by name, code or contact. If the buyer is not there, click **New customer**.
-3. Optional: in **Import Customer Info**, upload a business card, letterhead or company profile. The AI fills the fields it can read. Check each value in **Review extracted fields** and click apply only for correct ones.
+3. Optional: in **Import Customer Info**, upload a business card, letterhead or company profile. The AI fills the fields it can read. Check each value in **Review extracted fields** and click apply only for correct ones. Other details the AI read are listed under **More details found in the document**; pick a field in **Put into** or leave **Don't use**.
 4. Fill the required fields (marked **\\*\\***): **Legal Entity Name**, **Primary Contact Name**, **Email Address**, and the **Billing Address** (**Street Address**, **City**, **Country**).
 5. Choose **Customer Type**, **Status** (Active / Inactive) and **Preferred quotation currency**.
 6. Fill the **Shipping Address**, or turn on **Same as billing**.
@@ -179,7 +179,7 @@ A **customer** is a buyer you sell to (for example a brand or retailer). Every i
       tags: ["customer", "buyer", "merchandising", "master data"],
       keywords: ["buyer", "party", "client", "add customer", "new buyer", "customer profile", "brand"],
       estimatedMinutes: 4,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-14",
       audience: "merchandiser",
       coverImage: `${S}/customers.jpg`,
       infographics: [
@@ -229,7 +229,7 @@ An **inquiry** is the buyer's first request: "Can you make this style, this many
 ## Steps
 
 1. Open **Merchandising → Inquiries** (\`/app/inquiries\`) and click **New Inquiry**.
-2. Optional: in **Import Inquiry Info**, upload the buyer's inquiry sheet, email screenshot or tech-pack PDF. Check every suggested value before you accept it.
+2. Optional: in **Import Inquiry Info**, upload the buyer's inquiry sheet, email screenshot or tech-pack PDF. Check every suggested value before you accept it. Extra details such as material, colours or certifications appear under **More details found in the document**, where you choose the field in **Put into** (usually **Notes**) and click **Apply**.
 3. In **Inquiry Header**, type in **Customer \\*\\*** to search and pick the buyer, then choose the **Style \\*\\***. If the style is new, click **Quick add new style** → enter **Style name** → **Create style**.
 4. Fill **Season**, **Department** and, if there is no style yet, **Style ref fallback**.
 5. In **Intermediary and Commercial Terms**, set **Shipping term**, **Commission mode / type / value** (if an agent is involved), **Expected quantity**, **Target price**, **Document currency**, **Exchange rate** and **Expected delivery date**.
@@ -255,7 +255,7 @@ An **inquiry** is the buyer's first request: "Can you make this style, this many
       tags: ["inquiry", "create", "merchandising", "draft", "buyer request"],
       keywords: ["enquiry", "RFQ", "request for quotation", "new inquiry", "buyer request", "tech pack", "target price"],
       estimatedMinutes: 5,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-14",
       featured: true,
       audience: "merchandiser",
       coverImage: `${S}/merch-inquiry-new-form.jpg`,

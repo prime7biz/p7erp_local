@@ -1126,6 +1126,7 @@ export const tutorialHelpIndex: TutorialHelpEntry[] = [
     "relatedAppRoutes": [
       "/app/hr/employees/new",
       "/app/hr/employees",
+      "/app/hr/change-approvals",
       "/app/settings/config"
     ]
   },
@@ -1617,6 +1618,16 @@ export const tutorialHelpIndex: TutorialHelpEntry[] = [
       "/app/finance/home",
       "/app/finance/budget-analytics",
       "/app/finance/expense-analysis"
+    ]
+  },
+  {
+    "id": "fin-management-performance",
+    "title": "Management Performance: income vs expense, budget forecast and break-even",
+    "summary": "See what the company is earning against what it is spending this month, quarter or year: posted profit, the expected contribution of finished goods, the expense forecast against the budget, budget warnings with an answer flow, break-even targets and weekly cash.",
+    "relatedAppRoutes": [
+      "/app/finance/management-performance",
+      "/app/finance/planning",
+      "/app/accounts/budgets"
     ]
   },
   {

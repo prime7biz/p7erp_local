@@ -858,6 +858,12 @@ export const menuSections: MenuSection[] = [
           { icon: Globe, label: "LC Profitability", href: `${PREFIX}/finance/lc-profitability` },
           { icon: BarChart3, label: "Costing Variance", href: `${PREFIX}/finance/costing-variance` },
           {
+            icon: Gauge,
+            label: "Management Performance",
+            href: `${PREFIX}/finance/management-performance`,
+            requiresFeatureFlag: "mgmt_performance_v1",
+          },
+          {
             icon: PieChart,
             label: "Budget analytics",
             href: `${PREFIX}/finance/budget-analytics`,

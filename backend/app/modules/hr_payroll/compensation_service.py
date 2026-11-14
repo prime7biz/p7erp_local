@@ -10,7 +10,7 @@ Nothing here commits; the caller owns the transaction. Effective ranges are incl
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -41,6 +41,9 @@ MAX_MONEY = Decimal("1e12")
 CHANGE_TYPES = ("JOINING", "INCREMENT", "PROMOTION", "CORRECTION")
 MAX_OVERRIDES = 100
 DEAD_RUN_STATUSES = ("REJECTED", "CANCELLED")
+# Runs whose lines can still be recalculated; a salary correction may go under them.
+EDITABLE_RUN_STATUSES = ("DRAFT", "CHECKED")
+SALARY_CHANGED_AFTER_CALCULATION = "SALARY_CHANGED_AFTER_CALCULATION"
 
 
 async def lock_employee(db: AsyncSession, tenant_id: int, employee_id: int) -> Employee:
@@ -327,6 +330,9 @@ class CompensationResult:
     closed_structure_assignment_ids: list[int]
     closed_wage_assignment_ids: list[int]
     corrected_in_place: bool = False
+    # Draft / checked runs that already hold a line for this employee on or after the change date:
+    # they must be recalculated before they can be finalized or approved.
+    stale_runs: list[dict] = field(default_factory=list)
 
 
 def audit_details(result: "CompensationResult", effective_from: date) -> str:
@@ -338,7 +344,8 @@ def audit_details(result: "CompensationResult", effective_from: date) -> str:
         f"from={effective_from.isoformat()} grade={result.wage_rate.rate_code if result.wage_rate else '-'} "
         f"change={asgn.change_type or '-'} overridden={override_codes(asgn.component_overrides)} "
         f"corrected_in_place={result.corrected_in_place} "
-        f"closed_structures={result.closed_structure_assignment_ids} closed_grades={result.closed_wage_assignment_ids}"
+        f"closed_structures={result.closed_structure_assignment_ids} closed_grades={result.closed_wage_assignment_ids} "
+        f"stale_runs={[r['run_id'] for r in result.stale_runs]}"
     )
 
 
@@ -447,29 +454,39 @@ async def replace_employee_compensation(
                     f"Choose an effective date after it.{hint}"
                 ),
             )
-    if in_place:
-        used = (
-            await db.execute(
-                select(PayrollRunLine.id)
-                .join(PayrollRun, PayrollRun.id == PayrollRunLine.run_id)
-                .join(PayrollPeriod, PayrollPeriod.id == PayrollRun.period_id)
-                .where(
-                    PayrollRunLine.tenant_id == tenant_id,
-                    PayrollRunLine.employee_id == employee_id,
-                    PayrollRun.status.not_in(DEAD_RUN_STATUSES),
-                    PayrollPeriod.end_date >= effective_from,
-                )
-                .limit(1)
+    covering_runs = (
+        await db.execute(
+            select(PayrollRun.id, PayrollRun.status, PayrollPeriod.start_date, PayrollPeriod.end_date)
+            .join(PayrollRunLine, PayrollRunLine.run_id == PayrollRun.id)
+            .join(PayrollPeriod, PayrollPeriod.id == PayrollRun.period_id)
+            .where(
+                PayrollRunLine.tenant_id == tenant_id,
+                PayrollRun.tenant_id == tenant_id,
+                PayrollRunLine.employee_id == employee_id,
+                PayrollRun.status.not_in(DEAD_RUN_STATUSES),
+                PayrollPeriod.end_date >= effective_from,
             )
-        ).first()
-        if used:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"Payroll has already been calculated for this employee on or after {effective_from.isoformat()}. "
-                    "Record the change from a later date instead."
-                ),
-            )
+            .order_by(PayrollPeriod.start_date, PayrollRun.id)
+        )
+    ).all()
+    if in_place and any(r.status not in EDITABLE_RUN_STATUSES for r in covering_runs):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Payroll has already been calculated for this employee on or after {effective_from.isoformat()}. "
+                "Record the change from a later date instead."
+            ),
+        )
+    stale_runs = [
+        {
+            "run_id": r.id,
+            "status": r.status,
+            "period_start": r.start_date.isoformat(),
+            "period_end": r.end_date.isoformat(),
+        }
+        for r in covering_runs
+        if r.status in EDITABLE_RUN_STATUSES
+    ]
 
     covering_wage = next(
         (r for r in wage_rows if r.effective_from <= effective_from and (r.effective_to is None or r.effective_to >= effective_from)),
@@ -551,6 +568,7 @@ async def replace_employee_compensation(
             closed_structure_assignment_ids=[],
             closed_wage_assignment_ids=closed_wages_in_place,
             corrected_in_place=True,
+            stale_runs=stale_runs,
         )
 
     day_before = effective_from - timedelta(days=1)
@@ -601,7 +619,52 @@ async def replace_employee_compensation(
         gross=gross,
         closed_structure_assignment_ids=closed_structures,
         closed_wage_assignment_ids=closed_wages,
+        stale_runs=stale_runs,
     )
+
+
+async def stale_salary_employee_ids(db: AsyncSession, tenant_id: int, run: PayrollRun, period: PayrollPeriod) -> list[int]:
+    """Employees in ``run`` whose salary or wage grade for the run's period changed after their line was
+    last calculated or saved. Such a run must be recalculated before it is finalized or approved."""
+    asg = PayrollEmployeeStructureAssignment
+    wage = HrBdEmployeeWageAssignment
+    line = PayrollRunLine
+    structure_changed = (
+        select(line.employee_id)
+        .join(asg, (asg.employee_id == line.employee_id) & (asg.tenant_id == tenant_id))
+        .where(
+            line.tenant_id == tenant_id,
+            line.run_id == run.id,
+            asg.effective_from <= period.end_date,
+            or_(asg.effective_to.is_(None), asg.effective_to >= period.start_date),
+            asg.updated_at > line.updated_at,
+        )
+    )
+    grade_changed = (
+        select(line.employee_id)
+        .join(wage, (wage.employee_id == line.employee_id) & (wage.tenant_id == tenant_id))
+        .where(
+            line.tenant_id == tenant_id,
+            line.run_id == run.id,
+            wage.effective_from <= period.end_date,
+            or_(wage.effective_to.is_(None), wage.effective_to >= period.start_date),
+            wage.updated_at > line.updated_at,
+        )
+    )
+    rows = (await db.execute(structure_changed.union(grade_changed))).scalars().all()
+    return sorted(set(rows))
+
+
+async def assert_run_salaries_current(db: AsyncSession, tenant_id: int, run: PayrollRun, period: PayrollPeriod) -> None:
+    stale = await stale_salary_employee_ids(db, tenant_id, run, period)
+    if stale:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{SALARY_CHANGED_AFTER_CALCULATION}: the salary of {len(stale)} employee(s) changed after this run "
+                "was calculated. Recalculate those employees (or re-save their lines) first."
+            ),
+        )
 
 
 async def wage_rate_in_force(

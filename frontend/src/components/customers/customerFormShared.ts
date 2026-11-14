@@ -1,6 +1,18 @@
 /** Shared customer form shape for Create / Edit pages (no React components — safe for fast refresh). */
 
 import type { CustomerCreate, CustomerResponse, CustomerUpdate } from "@/api/client";
+import { buildTargetOptions } from "@/components/ai-extract/extraDetailsLogic";
+import { CUSTOMER_FIELD_LABELS } from "@/utils/extractionHelpers";
+
+/** Fields a "More details" item from an imported document can be put into. */
+export const CUSTOMER_EXTRA_TARGETS = buildTargetOptions(CUSTOMER_FIELD_LABELS, Object.keys(CUSTOMER_FIELD_LABELS));
+
+/** Form patch for a detail the user placed from the "More details" panel. */
+export function customerExtraDetailPatch(target: string, value: string | number): Partial<CustomerFormState> {
+  const patch = { [target]: String(value) } as Partial<CustomerFormState>;
+  if (target.startsWith("shipping")) patch.sameAsBilling = false;
+  return patch;
+}
 
 export type CustomerFormState = {
   legalEntityName: string;

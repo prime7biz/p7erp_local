@@ -3,12 +3,15 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, Save } from "lucide-react";
 import { api, type CustomerUpdate } from "@/api/client";
 import { AutofillReviewPanel } from "@/components/ai-extract/AutofillReviewPanel";
+import { ExtraDetailsPanel } from "@/components/ai-extract/ExtraDetailsPanel";
 import { ExtractionStatusBanner } from "@/components/ai-extract/ExtractionStatusBanner";
 import { FileImportCard } from "@/components/ai-extract/FileImportCard";
 import { CustomerAiPanel } from "@/components/customers/CustomerAiPanel";
 import { CustomerFormFields } from "@/components/customers/CustomerFormFields";
 import {
   buildCustomerUpdatePayload,
+  CUSTOMER_EXTRA_TARGETS,
+  customerExtraDetailPatch,
   customerFromApiToFormState,
   shippingValuesFromForm,
   type CustomerFormState,
@@ -681,10 +684,7 @@ export function CustomerEditPage() {
             extractedCount={Object.values(customerAi.extraction?.fields ?? {}).filter(
               (f) => f.value !== null && f.value !== undefined && String(f.value).trim() !== "",
             ).length}
-            warnings={[
-              ...(customerAi.extraction?.warnings ?? []),
-              ...(customerAi.extraction?.unmapped_text?.map((t) => "Unmapped: " + t) ?? []),
-            ]}
+            warnings={customerAi.extraction?.warnings ?? []}
             error={customerAi.error}
           />
 
@@ -697,6 +697,18 @@ export function CustomerEditPage() {
               onSkip={handleSkipExtractField}
               onResolveConflict={(k, c) => void handleResolveExtractConflict(k, c)}
               persistNote="On edit, each Apply updates the saved customer immediately (server-side, audited)."
+            />
+          ) : null}
+          {customerAi.extraction?.extra_fields?.length ? (
+            <ExtraDetailsPanel
+              extras={customerAi.extraction.extra_fields}
+              options={CUSTOMER_EXTRA_TARGETS}
+              onApply={(target, value) => {
+                // Form-only change: not added to the AI undo stack, whose Undo saves to the server.
+                const patch = customerExtraDetailPatch(target, value);
+                setForm((prev) => (prev ? { ...prev, ...patch } : prev));
+                setAutofilled((prev) => ({ ...prev, [target]: "medium" }));
+              }}
             />
           ) : null}
           {enrichReviewRows.length > 0 && customerAi.enrich ? (

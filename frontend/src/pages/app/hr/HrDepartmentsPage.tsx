@@ -30,6 +30,7 @@ import {
 } from "@/components/app/listPageLayout";
 import { ActiveBadge, KpiCard, RowActionsMenu, SortableTh, type RowAction } from "@/components/hr/HrListParts";
 import { prepareHrMasterPayload } from "@/components/hr/hrQuickAddPayload";
+import { MasterDeleteDialog } from "@/components/hr/MasterDeleteDialog";
 import { useAuth } from "@/context/AuthContext";
 import { downloadXlsx } from "@/lib/reportExport";
 import { canExportHrData } from "@/lib/roles";
@@ -64,6 +65,7 @@ export function HrDepartmentsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<HrDepartmentResponse | null>(null);
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<HrDepartmentResponse | null>(null);
   const [form, setForm] = useState<HrDepartmentCreate>({ code: "", name: "", is_active: true });
 
   /** `keepMessages`: refresh after an action without wiping its success / failure message. */
@@ -169,20 +171,17 @@ export function HrDepartmentsPage() {
     }
   };
 
-  const onDelete = async (row: HrDepartmentResponse) => {
-    const ok = window.confirm(
-      `Delete department "${row.code} - ${row.name}"?\n\nIf this department has linked records, deletion will be blocked.`
-    );
-    if (!ok) return;
+  const onDelete = (row: HrDepartmentResponse) => {
     setError("");
     setInfo("");
-    try {
-      await api.deleteHrDepartment(row.id);
-      setInfo(`Department ${row.code} deleted.`);
-      await load(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Delete failed");
-    }
+    setDeleting(row);
+  };
+
+  const confirmDelete = async (row: HrDepartmentResponse) => {
+    await api.deleteHrDepartment(row.id, { moveToUndefined: true });
+    setDeleting(null);
+    setInfo(`Department ${row.code} deleted. Its employees now show as Undefined.`);
+    await load(true);
   };
 
   const onToggleActive = async (row: HrDepartmentResponse) => {
@@ -223,7 +222,7 @@ export function HrDepartmentsPage() {
       { label: "Edit", onClick: done(() => openEdit(row)) },
       { label: "View designations", onClick: done(() => navigate(`/app/hr/designations?department=${row.id}`)) },
       { label: row.is_active ? "Deactivate" : "Activate", onClick: done(() => void onToggleActive(row)) },
-      { label: "Delete", danger: true, onClick: done(() => void onDelete(row)) },
+      { label: "Delete", danger: true, onClick: done(() => onDelete(row)) },
     ];
   };
 
@@ -446,6 +445,24 @@ export function HrDepartmentsPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {deleting && (
+        <MasterDeleteDialog
+          title="Delete department"
+          recordLabel={`${deleting.code} - ${deleting.name}`}
+          loadImpact={async () => {
+            const r = await api.getHrDepartmentDeleteImpact(deleting.id);
+            return [
+              { label: "employee(s)", count: r.employees },
+              { label: "designation(s)", count: r.designations },
+              { label: "section(s) / line(s)", count: r.sections },
+              { label: "job requisition(s)", count: r.requisitions },
+            ];
+          }}
+          onConfirm={() => confirmDelete(deleting)}
+          onClose={() => setDeleting(null)}
+        />
       )}
     </div>
   );

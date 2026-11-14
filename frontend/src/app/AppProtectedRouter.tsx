@@ -496,6 +496,11 @@ const EntityProfitabilityGlPage = lazy(() =>
 const BudgetAnalyticsPage = lazy(() =>
   import("@/pages/app/finance/budget/BudgetAnalyticsPage").then((m) => ({ default: m.BudgetAnalyticsPage })),
 );
+const ManagementPerformancePage = lazy(() =>
+  import("@/pages/app/finance/management-performance/ManagementPerformancePage").then((m) => ({
+    default: m.ManagementPerformancePage,
+  })),
+);
 const ExpenseAnalysisPage = lazy(() =>
   import("@/pages/app/finance/budget/ExpenseAnalysisPage").then((m) => ({ default: m.ExpenseAnalysisPage })),
 );
@@ -634,6 +639,9 @@ const VoucherAnalyticsPage = lazy(() =>
 const HrEmployeesPage = lazy(() => import("@/pages/app/hr/HrEmployeesPage").then((m) => ({ default: m.HrEmployeesPage })));
 const HrEmployeeDetailPage = lazy(() =>
   import("@/pages/app/hr/HrEmployeeDetailPage").then((m) => ({ default: m.HrEmployeeDetailPage })),
+);
+const HrEmployeeProfilePage = lazy(() =>
+  import("@/pages/app/hr/HrEmployeeProfilePage").then((m) => ({ default: m.HrEmployeeProfilePage })),
 );
 const HrEmployeeNewPage = lazy(() =>
   import("@/pages/app/hr/HrEmployeeNewPage").then((m) => ({ default: m.HrEmployeeNewPage })),
@@ -1011,6 +1019,7 @@ export function AppProtectedRouter() {
           <Route path="finance/reports" element={<FinanceHubPage hubId="reports" />} />
           <Route path="finance/planning" element={<FinanceHubPage hubId="planning" />} />
           <Route path="finance/budget-analytics" element={<FinanceLegacyRoute from="finance/budget-analytics" Page={BudgetAnalyticsPage} />} />
+          <Route path="finance/management-performance" element={<FinanceLegacyRoute from="finance/management-performance" Page={ManagementPerformancePage} />} />
           <Route path="finance/expense-analysis" element={<FinanceLegacyRoute from="finance/expense-analysis" Page={ExpenseAnalysisPage} />} />
           <Route path="finance/expense-controls" element={<FinanceLegacyRoute from="finance/expense-controls" Page={ExpenseControlsPage} />} />
           <Route path="finance/profitability" element={<FinanceHubPage hubId="profitability" />} />
@@ -1093,6 +1102,7 @@ export function AppProtectedRouter() {
           <Route path="hr/employees/new" element={<HrEmployeeNewPage />} />
           <Route path="hr/employees/ai-onboard" element={<AiEmployeeOnboardingPage />} />
           <Route path="hr/employees/:employeeId" element={<HrEmployeeDetailPage />} />
+          <Route path="hr/employees/:employeeId/profile" element={<HrEmployeeProfilePage />} />
           <Route path="hr/bangladesh-rules" element={<HrBangladeshRulesPage />} />
           {/* HR hubs: one page per area, existing pages shown as ?tab= (see components/hr/kit/hrHubs.ts). */}
           <Route path="hr/my" element={<HrHubPage hubId="my" />} />
@@ -1144,6 +1154,7 @@ export function AppProtectedRouter() {
           <Route path="hr/payroll/accounting-config" element={<HrLegacyRedirect from="hr/payroll/accounting-config" />} />
           <Route path="hr/payroll/statutory" element={<HrLegacyRedirect from="hr/payroll/statutory" />} />
           <Route path="hr/payroll/approvals" element={<HrLegacyRedirect from="hr/payroll/approvals" />} />
+          <Route path="hr/change-approvals" element={<HrLegacyRedirect from="hr/change-approvals" />} />
           <Route path="hr/payroll/payslips" element={<HrLegacyRedirect from="hr/payroll/payslips" />} />
           <Route path="hr/payroll/registers" element={<HrLegacyRedirect from="hr/payroll/registers" />} />
           <Route path="hr/payroll/allowances" element={<HrLegacyRedirect from="hr/payroll/allowances" />} />

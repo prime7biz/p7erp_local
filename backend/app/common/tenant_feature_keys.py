@@ -40,6 +40,9 @@ PAYROLL_AUTO_CALCULATE_ENABLED = "payroll_auto_calculate_enabled"
 # When true, the user who finalized a payroll run cannot approve it (default off — strict True check).
 PAYROLL_FOUR_EYES_APPROVAL = "payroll_four_eyes_approval"
 
+# When true, every change to an existing employee needs Tier 1 then Tier 2 approval (default off — strict True).
+HR_EMPLOYEE_CHANGE_APPROVAL = "hr_employee_change_approval"
+
 # Phase 1.5 demo mode banner + seed marker (seed writes marker object; banner uses bool).
 DEMO_MODE_ENABLED = "demo_mode_enabled"
 DEMO_SEED_PHASE1_V1 = "demo_seed_phase1_v1"
@@ -207,6 +210,10 @@ MFG_PREDICTIVE_AI_TEXT_V1 = "mfg_predictive_ai_text_v1"
 # Manufacturing Intelligence Phase 5 (docs/manufacturing-intelligence/16-phase5-implementation-plan.md): forward plan,
 # scenarios. Strict, default OFF, needs manufacturing_intelligence_v1; never add to DEFAULT_ON_FEATURE_FLAGS.
 MFG_ADVANCED_PLANNING_V1 = "mfg_advanced_planning_v1"
+# Finance > Management Performance (docs/management-performance/): income vs expense, budget forecast and failure,
+# break-even targets. Strict, default OFF; never add to DEFAULT_ON_FEATURE_FLAGS. While ON, FINAL budgets change only
+# through an approved budget revision.
+MGMT_PERFORMANCE_V1 = "mgmt_performance_v1"
 
 # Flags that are on for every tenant (existing and new) unless explicitly set to False.
 # API payloads read by the frontend (`/auth/me`, `/settings/config`) fill these in as True when missing.
@@ -359,6 +366,10 @@ def is_mfg_advanced_planning_v1_enabled(feature_flags: Any) -> bool:
     return _flag_true(feature_flags, MFG_ADVANCED_PLANNING_V1)
 
 
+def is_mgmt_performance_v1_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, MGMT_PERFORMANCE_V1)
+
+
 def is_packing_list_cartons_enabled(feature_flags: Any) -> bool:
     return _flag_default_true(feature_flags, PACKING_LIST_CARTONS_ENABLED)
 
@@ -399,6 +410,11 @@ def is_payroll_auto_calculate_enabled(feature_flags: Any) -> bool:
 def is_payroll_four_eyes_enabled(feature_flags: Any) -> bool:
     """Strict: only explicit True turns on the payroll maker-checker rule."""
     return _flag_true(feature_flags, PAYROLL_FOUR_EYES_APPROVAL)
+
+
+def is_hr_employee_change_approval_enabled(feature_flags: Any) -> bool:
+    """Strict: only explicit True routes employee amendments through Tier 1 / Tier 2 approval."""
+    return _flag_true(feature_flags, HR_EMPLOYEE_CHANGE_APPROVAL)
 
 
 def is_strict_sensitive_permissions(feature_flags: Any) -> bool:

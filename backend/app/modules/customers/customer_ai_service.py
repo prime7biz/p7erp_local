@@ -110,6 +110,7 @@ async def ai_extract_document(
         document_type=base.document_type,
         fields=fields,
         unmapped_text=base.unmapped_text,
+        extra_fields=base.extra_fields,
         warnings=base.warnings,
         duplicate_warnings=base.duplicate_warnings,
     )
@@ -118,7 +119,7 @@ async def ai_extract_document(
         "failed"
         if not resp.success
         else "partial"
-        if (resp.warnings or resp.unmapped_text or not resp.fields)
+        if (resp.warnings or not resp.fields)
         else "success"
     )
     suggestion_batch_id = await ai_batches.create_batch_from_extraction(

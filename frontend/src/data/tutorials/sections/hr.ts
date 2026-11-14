@@ -291,17 +291,26 @@ HR officers usually do this once, then add new items when the factory grows.
 - To change a department or designation, use **Actions → Edit** on its row. Use **Actions → Deactivate** (or untick **Active**) instead of deleting when a name is no longer used. Only an edit shows the code box; leave it as it is unless you must rename the code.
 - The designation **description** is printed as the employee's **Job description** (see **Unified employee workspace**), so write the duties there, one per line.
 - Every drop-down with a **+** button (department, designation, section / line) lets you add a missing entry on the spot.
-- **Actions → Delete** is blocked when employees are still linked — this protects old records.
 - Type part of a code or name in **Search code or name** on Sections & Lines to find a line quickly.
+
+### D. Delete a department or section (set to Undefined)
+
+Managers and admins can remove a department or section that is no longer used:
+
+1. On the row click **Actions → Delete**.
+2. The dialog lists how many employees (and, for a section, child sections) still point to it.
+3. Tick **Move linked records to Undefined** and confirm. Those employees show **Undefined** in the department or section filter (they are not assigned to another named department — the link is cleared). Child sections of a deleted section are also cleared.
+4. Without that tick, delete is still refused while anyone is linked — use **Deactivate** instead if you only want to hide the name.
 
 ## Common problems
 
 - **"Save failed" with a duplicate message** → the code already exists. Use a different code.
 - **The designation I want is missing on the employee Job tab** → it belongs to another department. Change the department first, or edit the designation and set **No department**.
-- **Delete does nothing / shows an error** → employees are linked. Move them to another department first, or just untick **Active**.`,
+- **Delete is refused** → tick **Move linked records to Undefined**, or move people first, or just untick **Active**.
+- **Employee shows Undefined** → their department or section was deleted; pick a new one on the Employment & Salary tab.`,
       tags: ["HR", "departments", "designations", "sections", "lines", "setup"],
-      keywords: ["department", "designation", "job title", "position", "post", "padobi", "line", "floor", "unit", "section", "org chart", "quick add", "auto code", "job description"],
-      lastUpdated: "2026-11-10",
+      keywords: ["department", "designation", "job title", "position", "post", "padobi", "line", "floor", "unit", "section", "org chart", "quick add", "auto code", "job description", "undefined", "delete department"],
+      lastUpdated: "2026-11-15",
       coverImage: "/tutorials/screens/hr-designations.jpg",
       infographics: [
         {
@@ -370,11 +379,11 @@ The **Employees** list is the master record of every worker and staff member. At
 7. Pick the joining date in the date box at the bottom.
 8. Click **Save**. The new row appears in the list with its new number and status **Active**.
 
-### B. Complete the profile
+### B. View, then complete the profile
 
-1. On the employee's row click **Actions → View**.
+1. On the employee's row click **Actions → View** to open the read-only **information center** (photo, job, salary summary, documents). Use **Print** for a paper copy, or **Edit** to change details. With the unified workspace switched on, **Edit** opens the tabbed screen in **Unified employee workspace**; otherwise use the tabs below.
 2. **Personal** tab — date of birth, **Gender**, **Marital status**, **Blood group**, **Emergency contact name / phone**, **Address**, **City**, **Country**, **NID** and **Birth registration no.** Click **Save personal**.
-3. **Job** tab — the employee number is shown but cannot be changed. Fill **Employment type** (for example Permanent, Probation, Contract), department, designation, **No section / line**, **Category** (**WORKER**, **STAFF**, **MANAGEMENT**) and **Reporting manager**. The three date boxes are, in order: **joining date**, **confirmation date** and (full width) **exit date**. Click **Save job**.
+3. **Job** tab — the employee number is shown but cannot be changed. Fill **Employment type** (for example Permanent, Probation, Contract), department, designation, **No section / line** (or **Undefined** when none is set), **Category** (**WORKER**, **STAFF**, **MANAGEMENT**) and **Reporting manager**. The three date boxes are, in order: **joining date**, **confirmation date** and (full width) **exit date**. Click **Save job**.
 4. **Photo & biometrics** tab — take the photo with **Open webcam** (choose the external USB camera under **Camera** if you have one), **Take photo with phone**, or **Upload file**. Tick the privacy-notice box and click **Save photo**. Then record fingerprint / face consent with **Record consent**, enroll the person on the attendance terminal using the **Device user no.** shown, and click **Actions → Confirm test punch**.
 5. **Documents** tab — **Upload CV or scanned document**: choose the type (CV, NID scan, birth registration scan, certificate…), then **Choose file** or **Scan with camera** on a phone, and **Upload**. Uploaded files have **Actions → Download** in the list. You can still add a paper record without a file with **Add document record**.
 6. Click **Generate document** (top right) → **ID card (PDF)** (with photo and a secure QR), **Appointment letter** or **Age verification cert**. Every ID card print is recorded in the ID card issue register.
@@ -440,7 +449,7 @@ The **Employees** list is the master record of every worker and staff member. At
         "link user",
         "karmi",
       ],
-      lastUpdated: "2026-11-10",
+      lastUpdated: "2026-11-15",
       coverImage: "/tutorials/screens/hr-employees.jpg",
       videos: [
         {
@@ -594,8 +603,8 @@ The **unified employee workspace** replaces the small **Add employee** dialog an
 1. Open **HR → Employees** and click **Add employee** (\`/app/hr/employees/new\`).
 2. **Personal** tab — at the top, **AI autofill** (coloured box): upload the National ID, CV or birth certificate. Matching fields fill in by themselves and glow for a moment. Anything you already typed is kept; the box lists "AI read …" with **Use AI value** / **Keep mine**.
 3. Fill **Basic details**, **Family** (father's, mother's, spouse's name), **Contact & emergency** (tick **This mobile is a bKash number** when it is), **Present address** and **Permanent address**. Tick **Same as present address** to copy it.
-4. **Employment & Salary** tab — one page for the job and the pay. First the employment type (permanent, temporary, contractual or probation), category, joining date and **Probation (months)**; the confirmation date is calculated for you (**Use …**). Pick department, designation and section / line; if one is missing click **+** next to it to add it without leaving the form.
-5. Tick **Issue a 7-day temporary gate pass** if the person starts before the ID card is printed (needs a mobile number).
+4. **Employment & Salary** tab — one page for the job and the pay. First the employment type (permanent, temporary, contractual or probation), category, joining date and **Probation (months)**; the confirmation date is calculated for you (**Use …**). Pick department, designation and section / line; if one is missing click **+** next to it to add it without leaving the form. Required fields have a light red border until filled.
+5. When **Employment type** is **Temporary**, **Issue a 7-day temporary gate pass** is ticked for you (you can untick it). For other types, tick it yourself if the person starts before the ID card is printed. A mobile number is required for the pass.
 6. **Salary set-up** (same tab, needs payroll permission) — tick **Set salary now**, or leave it off and set the salary later from the profile. Then:
    - Choose the **Salary structure** (how the pay is split into basic, house rent and allowances).
    - For workers choose the **Bangladesh wage grade**. The **Standard basic salary** is the grade minimum, so you do not type anything. The **Legal minimum** box next to it shows the grade's basic and gross.
@@ -611,21 +620,39 @@ The **unified employee workspace** replaces the small **Add employee** dialog an
 
 > **Tip:** You no longer need **Payroll → Structure assignments** for a new employee: choosing the structure here creates the assignment.
 
-### B. Complete and edit the profile
+### B. View the information center (read-only)
 
-1. Open the employee (**Actions → View** or **Edit**). Each tab has its own **Save** button in the bottom bar.
+1. On the Employees list click **Actions → View**. This opens the **employee information center** (\`/app/hr/employees/:id/profile\`) — photo, personal, job, salary, attendance, leave, documents and (when switched on) pending change requests. It does not edit anything.
+2. Blocks you are not allowed to see show **Hidden for your role** (no numbers or names leak through).
+3. Use **Print** for a paper copy, or **Edit** to open the editable workspace below.
+
+### C. Complete and edit the profile
+
+1. Open the employee with **Actions → Edit** (or **Edit** from the information center). Each tab has its own **Save** button in the bottom bar.
 2. **Employment & Salary** tab — job, payment and facility changes are saved with **Save employment & payment** in the bottom bar. The salary has its own save:
    - **Current salary** shows basic, gross, structure and grade, then every component of the salary (basic, house rent, medical, transport, food…) with its rule and monthly amount — amounts set only for this person are marked **Own amount** with the standard underneath — and the history.
-   - Click **Change salary**. The form starts from today's pay (an above-standard basic and any component amounts are kept). Choose the **Type of change**:
+   - Click **Edit current salary** to fix today's pay in place: the form opens as a **Correction** with the **same start date**. This is allowed while any open payroll run that covers the person is still **Draft** or **Checked**. After you save, open those runs and recalculate the person before you finalize or approve — otherwise finalize / approve is refused.
+   - Click **Change salary** for a raise or a later start date. The form starts from today's pay (an above-standard basic and any component amounts are kept). Choose the **Type of change**:
      - **Increment** — choose **% of basic** or **Taka** and type the raise, or click **Use the annual increment (5%)**. The new basic is typed in for you and you can still change it.
      - **Promotion** — pick the new grade or structure.
-     - **Correction (fix a mistake)** — fixes a wrong salary. With the **same start date** as the current salary it corrects that salary in place, but only while no payroll has been calculated for it; otherwise use a later date.
+     - **Correction (fix a mistake)** — fixes a wrong salary. With the **same start date** as the current salary it corrects that salary in place under the same draft-run rules as **Edit current salary**; otherwise use a later date. A finalized, approved or posted payroll, or a locked period, still blocks a same-date correction.
    - Add an optional **Note**, choose **New salary starts on**, then **Save new salary**: the old period ends the day before and the new one starts that day. Earlier periods are never changed.
    - If you changed the **Joining date**, click **Save employment & payment** first; until then **Save new salary** stays off.
    - **Overtime & allowances** has its own **Save overtime & allowances** button.
+   - When Bangladesh salary TDS is on, the **Salary tax (TDS)** card shows the estimate. Open **Show calculation** for the slab table (each band's from–to, rate and tax) in plain figures.
 3. **Checklist** tab — photo, photo consent, NID / birth registration scan and (when medical tracking is on) the medical exam. Each task shows **Pending** until the real record is saved on the matching tab (click **Open**); it reopens if the record is withdrawn. The medical task needs a medical record with result **Fit** or **Restricted** — a record still marked **Pending** keeps it pending. A compliance manager can **Waive…** a task with a reason.
 
-### C. Signed letters
+### D. Change approvals (optional)
+
+When an admin switches on **Employee change approval** under **Settings → Configuration**, edits no longer save at once:
+
+1. On the workspace the save buttons become **Submit for approval**. Type a short **Reason** (required).
+2. A yellow banner shows the pending request and which tier is waiting (Tier 1 then Tier 2).
+3. Approvers open **HR → Approvals → Change approvals** (\`/app/hr/change-approvals\`): **Waiting for me (Tier 1)**, **Waiting for me (Tier 2)**, **My requests** and **History**. Open a row to see before / after in plain words, then **Approve** or **Reject** (Reject is in the Actions menu).
+4. The same person cannot approve both tiers, and the person who submitted cannot approve their own request. Roles need **Tier 1 approval of employee changes** and **Tier 2 (final) approval of employee changes** — an admin role alone is not enough.
+5. While a request of that kind is pending, a second one for the same employee and kind is blocked. Direct salary or profile saves return an error until the flag is switched off.
+
+### E. Signed letters
 
 - **Generate document → Appointment letter** or **Job description** downloads the latest signed version. The job description is the designation's description.
 - After changing the employee's details use **Reissue appointment letter** / **Reissue job description**: a new version with a new QR code is made and older versions stay valid.
@@ -635,13 +662,15 @@ The **unified employee workspace** replaces the small **Add employee** dialog an
 
 - **"Requires … permission 'hr.identity.manage'"** or **'hr.payroll.manage'** → your role cannot set that field; leave it for a manager.
 - **"Basic … is below the … minimum"** / **"Gross … is below …"** → raise the basic salary or pick the right structure for the grade.
-- **"A salary assignment already starts on …"** → choose an effective date after the latest salary period, or choose **Correction** with the same date to fix it.
-- **"Payroll has already been calculated … on or after …"** → that salary is already in a payroll run; record the change from a later date.
+- **"A salary assignment already starts on …"** → choose an effective date after the latest salary period, or choose **Correction** / **Edit current salary** with the same date to fix it.
+- **"Payroll has already been calculated … on or after …"** → that salary is already in a finalized / approved / posted run (or a locked period); record the change from a later date, or use **Edit current salary** only while the run is still Draft or Checked.
+- **"Recalculate … before finalize / approve"** (or similar) → you corrected a salary while a draft run existed; open the run and recalculate that employee first.
 - **"… is the basic salary; change the basic salary instead"** → the basic row in the component table follows the basic salary field.
 - **"Overtime is not activated for this employee"** → tick **Overtime** under **Overtime & allowances** on the employee's Employment & Salary tab.
 - **"Tick the confirmation box …"** → you overrode the standard basic; tick the box under the amount to confirm it.
 - **"Save employment first …"** → the joining date has an unsaved change; save employment & payment, then the new salary.
 - **"A mobile number is needed for the temporary gate pass"** → fill **Mobile** on the Personal tab.
+- **"Submit for approval" / change blocked** → employee change approval is on; use **Change approvals**, or ask an admin to switch the flag off.
 - **Generate document is missing** → document generation is off, or your role lacks the documents permission.`,
       tags: ["HR", "employees", "onboarding", "AI", "salary", "documents", "checklist"],
       keywords: [
@@ -665,12 +694,21 @@ The **unified employee workspace** replaces the small **Add employee** dialog an
         "salary components",
         "increment",
         "promotion",
+        "edit current salary",
+        "correction",
+        "information center",
+        "print employee",
+        "TDS",
+        "show calculation",
+        "change approvals",
+        "tier 1",
+        "tier 2",
         "overtime",
         "friday allowance",
         "tiffin bill",
         "lunch bill",
       ],
-      lastUpdated: "2026-11-11",
+      lastUpdated: "2026-11-15",
       coverImage: "/tutorials/screens/hr-emp-ws-personal.jpg",
       images: [
         {
@@ -706,7 +744,12 @@ The **unified employee workspace** replaces the small **Add employee** dialog an
           ],
         },
       ],
-      relatedAppRoutes: ["/app/hr/employees/new", "/app/hr/employees", "/app/settings/config"],
+      relatedAppRoutes: [
+        "/app/hr/employees/new",
+        "/app/hr/employees",
+        "/app/hr/change-approvals",
+        "/app/settings/config",
+      ],
       relatedArticleIds: ["hr-add-employee", "hr-ai-onboarding", "hr-org-setup", "hr-pay-setup", "hr-bd-setup"],
     },
     {
@@ -1891,11 +1934,13 @@ It only **adds** what is missing. Records you already have, or have edited, are 
 6. **Checks & calculators** tab: run the **Minimum wage check** (who is below their grade, who has no grade), the **Festival holidays** check (13 paid festival holidays per year), and the **Service benefit** and **Maternity benefit** calculators. Nothing on this tab changes data.
 7. **Wage grades** tab: give each employee their Gazette grade from a date.
 8. When the checks are clean, open **Enforcement** and switch on one area at a time: **Minimum wage**, **Earned leave accrual**, **Maternity benefit**, **Festival-day work**, **Service benefits**. All are **off** by default.
+9. Optional **salary income tax (TDS)** is a separate switch (needs a signed approval record and a tax payable account). On the employee **Employment & Salary** tab, the **Salary tax (TDS)** card shows the estimate; open **Show calculation** for each slab (from–to, rate and tax).
 
 ## What happens next
 
 - With **Minimum wage** on, a salary assignment or payroll line below the employee's grade is refused.
 - **Maternity**, **Earned leave & festival work** and **Service benefits** tabs become usable for their workflows; each approval is manager / admin only and written to the audit log.
+- With salary TDS on, payroll adds the **BD-TDS** deduction; the employee card's **Show calculation** explains the monthly estimate.
 
 > **Warning:** Amounts are copied from the official Gazette and were independently checked against the Gazette pages, but your compliance officer or labour counsel should sign off before you switch enforcement on in production.
 
@@ -1922,8 +1967,11 @@ It only **adds** what is missing. Records you already have, or have edited, are 
         "gratuity",
         "shromo ain",
         "nimno mojuri",
+        "TDS",
+        "salary tax",
+        "show calculation",
       ],
-      lastUpdated: "2026-11-10",
+      lastUpdated: "2026-11-15",
       infographics: [
         {
           type: "flow",
@@ -1938,7 +1986,7 @@ It only **adds** what is missing. Records you already have, or have edited, are 
         },
       ],
       relatedAppRoutes: ["/app/hr/bangladesh-setup", "/app/hr/bangladesh-rules"],
-      relatedArticleIds: ["hr-add-employee", "hr-pay-setup", "hr-leave-setup", "hr-pay-final-settlement", "hr-overview"],
+      relatedArticleIds: ["hr-add-employee", "hr-pay-setup", "hr-leave-setup", "hr-pay-final-settlement", "hr-overview", "hr-employee-workspace"],
     },
     {
       id: "hr-manual-attendance",

@@ -46,6 +46,7 @@ from app.workers import medical_certificate_expiry_worker as _medical_certificat
 from app.workers import mis_report_worker as _mis_report_worker  # noqa: E402, F401
 from app.workers import mfg_planning_worker as _mfg_planning_worker  # noqa: E402, F401
 from app.workers import mfg_predictive_worker as _mfg_predictive_worker  # noqa: E402, F401
+from app.workers import mgmt_performance_worker as _mgmt_performance_worker  # noqa: E402, F401
 from celery.schedules import crontab as _crontab  # noqa: E402
 
 # Optional beat schedule (enabled when a beat worker is running).
@@ -95,6 +96,11 @@ celery_app.conf.beat_schedule = {
     "mfg-predictive-daily": {
         "task": "mfg.predictive_daily",
         "schedule": _crontab(minute=30, hour=19),
+    },
+    # Finance > Management Performance: 20:00 UTC = 02:00 Asia/Dhaka (tenants with mgmt_performance_v1 off are skipped).
+    "mgmt-budget-exception-scan": {
+        "task": "mgmt.budget_exception_scan",
+        "schedule": _crontab(minute=0, hour=20),
     },
 }
 

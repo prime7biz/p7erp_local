@@ -166,10 +166,11 @@ def _parse_excel_date(raw: Any) -> date | None:
 
 
 async def import_employees_excel(db: AsyncSession, tenant: Tenant, user: User, file: UploadFile) -> dict[str, Any]:
-    from app.common.tenant_feature_keys import is_age_verification_required
+    from app.common.tenant_feature_keys import is_age_verification_required, is_hr_employee_change_approval_enabled
     from app.modules.hr_compliance.service import assert_dob_allowed
 
     age_required = is_age_verification_required(tenant.feature_flags)
+    change_approval_on = is_hr_employee_change_approval_enabled(tenant.feature_flags)
     raw = await file.read(EMPLOYEE_IMPORT_MAX_BYTES + 1)
     if len(raw) > EMPLOYEE_IMPORT_MAX_BYTES:
         raise HTTPException(
@@ -227,6 +228,12 @@ async def import_employees_excel(db: AsyncSession, tenant: Tenant, user: User, f
             dob = _parse_excel_date(dob_raw)
 
             if existing:
+                if change_approval_on:
+                    errors.append(
+                        f"Row {idx}: {code} already exists; changes to an existing employee need Tier 1 / Tier 2 "
+                        "approval (submit a change request from the employee page)"
+                    )
+                    continue
                 dob_for_gate = dob if dob is not None else existing.date_of_birth
                 try:
                     assert_dob_allowed(dob_for_gate, required=age_required)

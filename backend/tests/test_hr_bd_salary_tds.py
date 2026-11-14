@@ -444,6 +444,27 @@ def test_estimate_helper_reacts_to_gender_and_profile_and_never_raises():
     assert off["employee_tds_enabled"] is False and D(off["monthly_tds"]) == D("3750.00")  # informational
     later = tax.tds_estimate(tenant=T(), monthly_gross=D("100000"), gender="male", date_of_birth=None, as_of=date(2031, 1, 1))
     assert later["supported"] is False and later["message"]
+    assert "slab_schedule" not in later
+
+
+def test_estimate_slab_schedule_lists_every_band_with_zero_slabs():
+    class T:
+        feature_flags = ON
+        timezone = "Asia/Dhaka"
+
+    # 100,000 x 12 = 1,200,000; exempt 400,000; taxable 800,000; GENERAL limit 400,000.
+    est = tax.tds_estimate(tenant=T(), monthly_gross=D("100000"), gender="male", date_of_birth=None, as_of=date(2026, 11, 12))
+    rows = est["slab_schedule"]
+    assert len(rows) == 1 + len(eng.SCHEDULES[2026].slabs)
+    assert rows[0] == {"from": "0.00", "to": "400000.00", "rate": "0", "taxed_amount": "400000.00", "tax": "0.00", "tax_free": True}
+    assert rows[1] == {"from": "400000.00", "to": "700000.00", "rate": "0.10", "taxed_amount": "300000.00", "tax": "30000.00", "tax_free": False}
+    assert rows[2] == {"from": "700000.00", "to": "1100000.00", "rate": "0.15", "taxed_amount": "100000.00", "tax": "15000.00", "tax_free": False}
+    assert rows[3]["taxed_amount"] == "0.00" and rows[3]["tax"] == "0.00"
+    assert rows[-1]["to"] is None and rows[-1]["rate"] == "0.30"
+    # Every amount is a decimal string and the slab taxes add up to the engine's slab tax.
+    assert all(isinstance(r["tax"], str) for r in rows)
+    assert sum(D(r["tax"]) for r in rows) == D(est["slab_tax"]) == D("45000.00")
+    assert D(est["monthly_tds"]) == D("3750.00")
 
 
 @pytest.mark.asyncio

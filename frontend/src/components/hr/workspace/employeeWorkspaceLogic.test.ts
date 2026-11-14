@@ -29,9 +29,11 @@ import {
   PAYMENT_KEYS,
   previewableCompensation,
   previewKey,
+  requiredEmployeeFields,
   resolveSalaryEffectiveDate,
   salaryBlocker,
   salaryFormFromSnapshot,
+  shouldAutoIssueGatePass,
   syncPermanentAddress,
   toggleFacility,
   updateSalary,
@@ -46,6 +48,39 @@ import {
   type SalaryFormState,
   type SalaryPreviewState,
 } from "./employeeWorkspaceLogic";
+
+describe("employee workspace: gate pass and required fields", () => {
+  it("auto-issues the gate pass only for temporary staff", () => {
+    expect(shouldAutoIssueGatePass("temporary")).toBe(true);
+    expect(shouldAutoIssueGatePass("  Temporary ")).toBe(true);
+    expect(shouldAutoIssueGatePass("permanent")).toBe(false);
+    expect(shouldAutoIssueGatePass("")).toBe(false);
+  });
+
+  it("marks only first name when no rules are on", () => {
+    expect([...requiredEmployeeFields({ identityRequired: false, ageRequired: false, salaryEnabled: false })]).toEqual(["first_name"]);
+  });
+
+  it("marks mobile and both identity numbers until one is filled", () => {
+    const empty = requiredEmployeeFields({ identityRequired: true, ageRequired: false, salaryEnabled: false });
+    expect(empty.has("phone")).toBe(true);
+    expect(empty.has("national_id")).toBe(true);
+    expect(empty.has("birth_registration_no")).toBe(true);
+    const withNid = requiredEmployeeFields({ identityRequired: true, ageRequired: false, salaryEnabled: false, nationalId: "1234567890" });
+    expect(withNid.has("phone")).toBe(true);
+    expect(withNid.has("national_id")).toBe(false);
+    expect(withNid.has("birth_registration_no")).toBe(false);
+  });
+
+  it("marks date of birth with age verification and joining date only without a salary start", () => {
+    const req = requiredEmployeeFields({ identityRequired: false, ageRequired: true, salaryEnabled: true });
+    expect(req.has("date_of_birth")).toBe(true);
+    expect(req.has("joining_date")).toBe(true);
+    expect(req.has("structure_id")).toBe(true);
+    const withStart = requiredEmployeeFields({ identityRequired: false, ageRequired: false, salaryEnabled: true, salaryStartDate: "2026-12-01" });
+    expect(withStart.has("joining_date")).toBe(false);
+  });
+});
 
 describe("employee workspace: create flow", () => {
   it("locks record tabs only in create mode", () => {

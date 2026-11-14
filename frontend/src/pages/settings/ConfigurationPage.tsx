@@ -985,6 +985,28 @@ export function ConfigurationPage() {
             <input
               type="checkbox"
               className="mt-1 rounded border-border-strong"
+              checked={featureFlags.mgmt_performance_v1 === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  mgmt_performance_v1: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Management performance (income vs expense, break-even)</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Finance gets a Management Performance page: posted profit, the expected contribution of finished goods,
+                the month&apos;s expense forecast against the budget with warnings and an owner → finance → manager
+                answer flow, break-even and production / sales targets, and the weekly cash forecast. While on, a FINAL
+                budget changes only through an approved budget revision. Writes no vouchers. Off by default.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
               checked={featureFlags.finance_ai_insights_v2 === true}
               onChange={(e) =>
                 setFeatureFlags((prev) => ({
@@ -1056,6 +1078,28 @@ export function ConfigurationPage() {
               <span className="mt-0.5 block text-xs text-text-muted">
                 The person who finalized a payroll run cannot approve it; a second admin or manager must. Needs at
                 least 2 active admin or manager users. Applies to admins too. Off by default.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.hr_employee_change_approval === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  hr_employee_change_approval: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Employee change approval (Tier 1 / Tier 2)</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Any change to an existing employee (information, salary, increment, overtime and allowances, tax
+                profile) waits for Tier 1 and then Tier 2 approval before it applies. Give the &quot;Tier 1&quot; and
+                &quot;Tier 2&quot; permissions to roles in Settings → Roles first (two different people). New employees
+                are not affected. Off by default.
               </span>
             </span>
           </label>

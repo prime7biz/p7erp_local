@@ -56,6 +56,7 @@ const LEGACY_HR_ROUTES = [
   "hr/payroll/accounting-config",
   "hr/payroll/statutory",
   "hr/payroll/approvals",
+  "hr/change-approvals",
   "hr/payroll/payslips",
   "hr/payroll/registers",
   "hr/payroll/allowances",

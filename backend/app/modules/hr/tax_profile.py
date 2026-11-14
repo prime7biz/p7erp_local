@@ -203,8 +203,47 @@ def tds_estimate(
     except engine.UnsupportedTaxYear as exc:
         return {**base, "supported": False, "message": str(exc)}
     out = engine.jsonable(result)
+    out["slab_schedule"] = slab_schedule(engine.get_schedule(as_of), result)
     net = max(monthly_gross - result["monthly_tds"], Decimal("0"))
     return {**base, **out, "estimated_net_monthly": format(engine.money(net), "f")}
+
+
+def slab_schedule(schedule: engine.Schedule, result: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every band of the year's schedule on taxable income, with the part of this income taxed in it.
+
+    The first row is the tax-free limit; slabs this income does not reach show 0. ``to`` is null for
+    the last ("remaining") slab. Display only: the engine result above stays the source of the tax.
+    """
+    threshold: Decimal = result["threshold"]
+    taxable: Decimal = result["taxable_income"]
+    taxed = result["slab_breakdown"]
+    rows: list[dict[str, Any]] = [
+        {
+            "from": "0.00",
+            "to": format(engine.money(threshold), "f"),
+            "rate": "0",
+            "taxed_amount": format(engine.money(min(taxable, threshold)), "f"),
+            "tax": "0.00",
+            "tax_free": True,
+        }
+    ]
+    start = threshold
+    for index, (width, rate) in enumerate(schedule.slabs):
+        end = None if width is None else start + width
+        part = taxed[index] if index < len(taxed) else None
+        rows.append(
+            {
+                "from": format(engine.money(start), "f"),
+                "to": None if end is None else format(engine.money(end), "f"),
+                "rate": format(rate, "f"),
+                "taxed_amount": format(engine.money(part["amount"] if part else Decimal("0")), "f"),
+                "tax": format(engine.money(part["tax"] if part else Decimal("0")), "f"),
+                "tax_free": False,
+            }
+        )
+        if end is not None:
+            start = end
+    return rows
 
 
 async def estimate_for_employee(

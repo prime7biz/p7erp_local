@@ -45,6 +45,52 @@ export function isTabLocked(mode: WorkspaceMode, tab: WorkspaceTab): boolean {
 }
 
 export const EMPLOYMENT_TYPE_SUGGESTIONS = ["permanent", "temporary", "contractual", "probation"] as const;
+
+/** Temporary staff get the 7-day gate pass ticked by default (the user can still untick it). */
+export function shouldAutoIssueGatePass(employmentType: string): boolean {
+  return employmentType.trim().toLowerCase() === "temporary";
+}
+
+export type RequiredFieldKey =
+  | "first_name"
+  | "phone"
+  | "national_id"
+  | "birth_registration_no"
+  | "date_of_birth"
+  | "joining_date"
+  | "structure_id"
+  | "base_salary";
+
+/**
+ * Fields the server will refuse without. NID and birth registration are "one of the two", so both
+ * are marked while both are empty and neither once one is filled.
+ */
+export function requiredEmployeeFields(opts: {
+  identityRequired: boolean;
+  ageRequired: boolean;
+  salaryEnabled: boolean;
+  /** A typed salary start date replaces the joining date as the salary's start. */
+  salaryStartDate?: string;
+  nationalId?: string;
+  birthRegistrationNo?: string;
+}): ReadonlySet<RequiredFieldKey> {
+  const out = new Set<RequiredFieldKey>(["first_name"]);
+  if (opts.identityRequired) {
+    out.add("phone");
+    const hasOne = Boolean(opts.nationalId?.trim() || opts.birthRegistrationNo?.trim());
+    if (!hasOne) {
+      out.add("national_id");
+      out.add("birth_registration_no");
+    }
+  }
+  if (opts.ageRequired) out.add("date_of_birth");
+  if (opts.salaryEnabled) {
+    if (!opts.salaryStartDate?.trim()) out.add("joining_date");
+    out.add("structure_id");
+    out.add("base_salary");
+  }
+  return out;
+}
 export const RELIGION_OPTIONS = ["Islam", "Hinduism", "Buddhism", "Christianity", "Other"] as const;
 export const GENDER_OPTIONS = ["Male", "Female", "Other"] as const;
 export const FACILITY_SUGGESTIONS = [
@@ -463,6 +509,18 @@ export function salaryFormFromSnapshot(snapshot: HrEmployeePaySnapshot | null | 
     };
   }
   return { ...base, structure_id: snapshot.structure_id, base_salary: storedBasic, component_overrides: overrides };
+}
+
+/**
+ * "Edit current salary": the pay in force as a CORRECTION dated on its own start date, so saving
+ * fixes that salary in place instead of opening a new period.
+ */
+export function correctionFormFromSnapshot(snapshot: HrEmployeePaySnapshot | null | undefined): SalaryFormState {
+  return {
+    ...salaryFormFromSnapshot(snapshot),
+    change_type: "CORRECTION",
+    effective_from: snapshot?.structure_effective_from ?? "",
+  };
 }
 
 /** Basic after an increment of `value` percent or taka on `currentBasic`; null while the input is incomplete. */

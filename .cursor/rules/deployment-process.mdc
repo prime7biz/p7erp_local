@@ -68,13 +68,18 @@ docker compose exec -T backend python -c "import json,urllib.request; d=json.loa
 
 ## Phase 4 — Pre-tag gates
 
-1. **DB backup:** If the release includes new Alembic revisions, remind the user to confirm a **production PostgreSQL backup** before tagging. Hard stop until acknowledged.
+1. **DB backup (agent-run, not user-ack alone):** Follow `.cursor/rules/deploy-production-backup.mdc`.
+   When the release adds Alembic revisions **or** otherwise risks data/schema loss, **take the production
+   PostgreSQL backup yourself** over SSH (reuse known live host/path from that rule / prior deploys).
+   Do **not** stop only to ask the user unless SSH/backup fails or host facts are missing.
+   Hard stop if backup fails. Report dump path + size before tagging.
 2. **Semver tag:** `git tag -l "v*" --sort=-v:refname` → pick next version:
    - **patch** (v1.5.0 → v1.5.1): bug fixes, small single-module tweaks
    - **minor** (v1.5.0 → v1.6.0): features, API additions, migrations, multi-module work
    - **major:** ask user first
    State chosen tag and **rollback pin** (previous tag) before creating the tag.
 3. **Migrations:** Warn that **manual** live deploy runs `alembic upgrade head` on the server (not via GitHub).
+   Prefer the SSH live-deploy command in `deploy-production-backup.mdc` (same host used in prior Cursor deploys).
 
 ---
 
@@ -91,19 +96,12 @@ git push origin vX.Y.Z
 
 Poll workflows where `head_branch` is the new tag until **Deploy** (build-and-push) completes successfully (~15–20 min including the test gate).
 
-Then update production **manually** (SSH). Example:
+Then update production over SSH using the **known live-server command** in
+`deploy-production-backup.mdc` (do not wait for the user to paste host details if those facts are already known).
 
 ```bash
-ssh root@<DEPLOY_HOST>
-sudo -u primeadmin -H bash -lc 'cd /home/primeadmin/p7erp_local && git pull --ff-only origin main && DEPLOY_PATH=/home/primeadmin/p7erp_local bash scripts/deploy_production_remote.sh vX.Y.Z'
-```
-
-Or step-by-step:
-
-```bash
-cd /home/primeadmin/p7erp_local
-git pull origin main
-DEPLOY_PATH=/home/primeadmin/p7erp_local bash scripts/deploy_production_remote.sh vX.Y.Z
+ssh -o BatchMode=yes -o ConnectTimeout=20 root@188.245.156.127 \
+  "sudo -u primeadmin -H bash -lc 'cd /home/primeadmin/p7erp_local && git pull --ff-only origin main && DEPLOY_PATH=/home/primeadmin/p7erp_local bash scripts/deploy_production_remote.sh vX.Y.Z'"
 ```
 
 ---
@@ -142,5 +140,5 @@ Migration rollback: `alembic downgrade -1` (repeat as needed) **or** restore DB 
 
 - Pre-flight local checks fail
 - CI on `main` fails
-- New migrations included but user has not acknowledged production DB backup
+- New migrations / data-risk release but production DB backup was not taken successfully
 - Staged files include `.env` or credentials

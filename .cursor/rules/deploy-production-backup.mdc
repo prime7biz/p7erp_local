@@ -1,0 +1,63 @@
+---
+description: On deploy/release, auto-take production DB backup when migrations or data risk exist; reuse known live-server SSH facts
+alwaysApply: false
+---
+
+# Production backup on deploy (mandatory when DB risk)
+
+**Trigger with:** `deploy`, `release`, `push to live` (same as `deployment-process.mdc`).
+
+## When backup is required (agent must take it — do not only ask the user)
+
+Take a **fresh production PostgreSQL backup yourself** before tagging if **any** of these are true:
+
+- New Alembic revisions since the live `alembic current` (migrations will run on deploy)
+- Schema drops/renames, data backfills, irreversible migrations, or restore-risk changes
+- User says backup / data-loss risk is a concern
+- Live Alembic / image tag is **behind** the release and the gap includes migrations
+
+If backup **fails**, hard-stop. Do not tag or SSH-deploy until a successful dump exists.
+
+If the release has **no** new migrations vs live and no data-risk, backup is optional; still preferred before major releases.
+
+## Reuse known live-server facts (do not rediscover every time)
+
+Verified in prior Cursor live deploys (BatchMode SSH from this workstation):
+
+| Fact | Value |
+|------|--------|
+| SSH | `ssh -o BatchMode=yes -o ConnectTimeout=20 root@188.245.156.127` |
+| App path | `/home/primeadmin/p7erp_local` |
+| Operator | run deploy/backup as `primeadmin` via `sudo -u primeadmin -H bash -lc '...'` |
+| Compose | `docker-compose.prod.yml` |
+| Site | https://prime7erp.com |
+| Images | `prime7biz/p7erp-backend` / `prime7biz/p7erp-frontend` |
+
+Never put passwords, `.env` secrets, or private keys in rules or chat commits. Prefer existing SSH key + BatchMode.
+
+## Backup command (run before tag when required)
+
+```bash
+ssh -o BatchMode=yes -o ConnectTimeout=20 root@188.245.156.127 \
+  "sudo -u primeadmin -H bash -lc 'cd /home/primeadmin/p7erp_local && COMPOSE_FILE=docker-compose.prod.yml bash scripts/db_backup.sh'"
+```
+
+Confirm success: new `backups/db/p7erp_*.dump` + matching `.sha256`, script exit 0. Report path/size in the deploy report.
+
+Optional (runbook): `BACKUP_DIR=/var/backups/p7erp` if that host path is configured; otherwise default `./backups/db` under the app path is fine (used successfully on prior releases).
+
+Docs: `docs/erp-modernization/BACKUP_RESTORE_RUNBOOK.md`, `scripts/db_backup.sh`.
+
+## Live deploy command (after tag images are built)
+
+```bash
+ssh -o BatchMode=yes -o ConnectTimeout=20 root@188.245.156.127 \
+  "sudo -u primeadmin -H bash -lc 'cd /home/primeadmin/p7erp_local && git pull --ff-only origin main && DEPLOY_PATH=/home/primeadmin/p7erp_local bash scripts/deploy_production_remote.sh vX.Y.Z'"
+```
+
+## Read-only pre-check (optional but useful)
+
+```bash
+ssh -o BatchMode=yes -o ConnectTimeout=20 root@188.245.156.127 \
+  "cd /home/primeadmin/p7erp_local; grep -E '^(BACKEND_IMAGE|FRONTEND_IMAGE)=' .env; docker compose -f docker-compose.prod.yml exec -T backend alembic current 2>/dev/null | tail -1"
+```

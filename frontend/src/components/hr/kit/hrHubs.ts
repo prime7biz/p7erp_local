@@ -20,6 +20,7 @@ import {
   TreePalm,
   UserCircle,
   UserPlus,
+  UsersRound,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -136,6 +137,38 @@ const pages = {
   reports: () => import("@/pages/app/hr/HrReportsDashboardPage").then((m) => ({ default: m.HrReportsDashboardPage })),
   compliance: () => import("@/pages/app/hr/HrCompliancePage").then((m) => ({ default: m.HrCompliancePage })),
   aiInsights: () => import("@/pages/app/hr/HrAiInsightsPage").then((m) => ({ default: m.HrAiInsightsPage })),
+  manpowerSanctioned: () =>
+    import("@/pages/app/hr/manpower/HrManpowerSanctionedPage").then((m) => ({
+      default: m.HrManpowerSanctionedPage,
+    })),
+  manpowerSettings: () =>
+    import("@/pages/app/hr/manpower/HrManpowerSettingsPage").then((m) => ({
+      default: m.HrManpowerSettingsPage,
+    })),
+  manpowerExceptions: () =>
+    import("@/pages/app/hr/manpower/HrManpowerExceptionsPage").then((m) => ({
+      default: m.HrManpowerExceptionsPage,
+    })),
+  manpowerFloor: () =>
+    import("@/pages/app/hr/manpower/HrManpowerFloorPage").then((m) => ({
+      default: m.HrManpowerFloorPage,
+    })),
+  manpowerOrganogram: () =>
+    import("@/pages/app/hr/manpower/HrManpowerOrganogramPage").then((m) => ({
+      default: m.HrManpowerOrganogramPage,
+    })),
+  manpowerDailyAttendance: () =>
+    import("@/pages/app/hr/manpower/HrManpowerDailyAttendancePage").then((m) => ({
+      default: m.HrManpowerDailyAttendancePage,
+    })),
+  manpowerSmv: () =>
+    import("@/pages/app/hr/manpower/HrManpowerSmvPage").then((m) => ({
+      default: m.HrManpowerSmvPage,
+    })),
+  manpowerRatios: () =>
+    import("@/pages/app/hr/manpower/HrManpowerRatiosPage").then((m) => ({
+      default: m.HrManpowerRatiosPage,
+    })),
 } satisfies Record<string, () => PageModule>;
 
 export const HR_HUBS = [
@@ -356,6 +389,67 @@ export const HR_HUBS = [
           "ai_payroll_anomaly_detection_enabled",
           "ai_compliance_risk_prediction_enabled",
         ],
+      },
+    ],
+  },
+  {
+    id: "manpower",
+    path: "hr/manpower",
+    label: "Manpower",
+    description: "Sanctioned strength, quota exceptions, floor suggested headcount, organogram and SMV.",
+    icon: UsersRound,
+    audience: "staff",
+    tabs: [
+      {
+        id: "sanctioned",
+        label: "Sanctioned strength",
+        legacyPath: "hr/manpower/sanctioned",
+        load: pages.manpowerSanctioned,
+      },
+      {
+        id: "settings",
+        label: "Settings",
+        legacyPath: "hr/manpower/settings",
+        load: pages.manpowerSettings,
+      },
+      {
+        id: "exceptions",
+        label: "Quota exceptions",
+        legacyPath: "hr/manpower/exceptions",
+        load: pages.manpowerExceptions,
+      },
+      {
+        id: "floor",
+        label: "Floor plan",
+        legacyPath: "hr/manpower/floor",
+        load: pages.manpowerFloor,
+        requiresFeatureFlag: "manpower_floor_suggested_v1",
+      },
+      {
+        id: "organogram",
+        label: "Organogram",
+        legacyPath: "hr/manpower/organogram",
+        load: pages.manpowerOrganogram,
+      },
+      {
+        id: "daily-attendance",
+        label: "Daily attendance",
+        legacyPath: "hr/manpower/daily-attendance",
+        load: pages.manpowerDailyAttendance,
+      },
+      {
+        id: "smv",
+        label: "SMV",
+        legacyPath: "hr/manpower/smv",
+        load: pages.manpowerSmv,
+        requiresFeatureFlag: "manpower_smv_panel_v1",
+      },
+      {
+        id: "ratios",
+        label: "Ratios",
+        legacyPath: "hr/manpower/ratios",
+        load: pages.manpowerRatios,
+        requiresFeatureFlag: "manpower_smv_panel_v1",
       },
     ],
   },

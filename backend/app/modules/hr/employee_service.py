@@ -363,6 +363,17 @@ async def build_employee(
         user_id=body.user_id,
         section_id=body.section_id,
     )
+    # Manpower quota (Phase 2): block active create into a full cell unless an approved exception slot remains.
+    from app.modules.hr_manpower.quota_guard import consume_exception_slot, guard_and_prepare
+
+    exception_id = None
+    if body.is_active is not False:
+        exception_id = await guard_and_prepare(
+            db,
+            tenant,
+            department_id=body.department_id,
+            designation_id=body.designation_id,
+        )
     row = Employee(
         tenant_id=tenant.id,
         employee_code=employee_code,
@@ -402,4 +413,12 @@ async def build_employee(
     apply_onboarding_fields(row, onboarding)
     db.add(row)
     await db.flush()
+    if exception_id is not None and row.is_active:
+        await consume_exception_slot(
+            db,
+            tenant_id=tenant.id,
+            exception_id=exception_id,
+            employee_id=row.id,
+            user_id=user.id,
+        )
     return row

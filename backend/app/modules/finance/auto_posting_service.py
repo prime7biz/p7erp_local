@@ -294,10 +294,12 @@ async def create_system_voucher(
         await apply_voucher_to_books(db, tenant_id, voucher, line_rows)
         voucher.status = "POSTED"
         from app.modules.facility.posting_hooks import process_facility_voucher_posted
+        from app.modules.finance.coa_interest.lifecycle import on_coa_interest_voucher_posted
         from app.modules.finance.party_ledger_hooks import on_voucher_posted
 
         await process_facility_voucher_posted(db, tenant_id, voucher, user_id)
         await on_voucher_posted(db, tenant_id, voucher, created_by=user_id)
+        await on_coa_interest_voucher_posted(db, tenant_id, voucher)
         _apply_internal_signature(voucher, line_rows)
 
     await db.flush()

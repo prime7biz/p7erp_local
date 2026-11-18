@@ -69,6 +69,9 @@ PARTY_LEDGER_AUTO_ALLOCATE = "party_ledger_auto_allocate"
 # Interest accrual on overdue bills (default off).
 PARTY_LEDGER_INTEREST_CALC = "party_ledger_interest_calc"
 
+# Optional interest on Asset / Liability chart-of-accounts ledgers (default OFF, strict true).
+COA_LEDGER_INTEREST_V1 = "coa_ledger_interest_v1"
+
 # Sprint 2 stock hierarchy / batch / godown (default off).
 STOCK_HIERARCHY_ENABLED = "stock_hierarchy_enabled"
 BATCH_TRACKING_ENABLED = "batch_tracking_enabled"
@@ -214,6 +217,13 @@ MFG_ADVANCED_PLANNING_V1 = "mfg_advanced_planning_v1"
 # break-even targets. Strict, default OFF; never add to DEFAULT_ON_FEATURE_FLAGS. While ON, FINAL budgets change only
 # through an approved budget revision.
 MGMT_PERFORMANCE_V1 = "mgmt_performance_v1"
+
+# Factory Manpower & SMV Control (HR sanctioned strength + floor suggested + SMV/ratios).
+# Strict, default OFF; never add to DEFAULT_ON_FEATURE_FLAGS. Nested flags need manpower_control_v1.
+MANPOWER_CONTROL_V1 = "manpower_control_v1"
+MANPOWER_QUOTA_ENFORCEMENT_V1 = "manpower_quota_enforcement_v1"
+MANPOWER_FLOOR_SUGGESTED_V1 = "manpower_floor_suggested_v1"
+MANPOWER_SMV_PANEL_V1 = "manpower_smv_panel_v1"
 
 # Flags that are on for every tenant (existing and new) unless explicitly set to False.
 # API payloads read by the frontend (`/auth/me`, `/settings/config`) fill these in as True when missing.
@@ -368,6 +378,29 @@ def is_mfg_advanced_planning_v1_enabled(feature_flags: Any) -> bool:
 
 def is_mgmt_performance_v1_enabled(feature_flags: Any) -> bool:
     return _flag_true(feature_flags, MGMT_PERFORMANCE_V1)
+
+
+def is_manpower_control_v1_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, MANPOWER_CONTROL_V1)
+
+
+def is_manpower_quota_enforcement_v1_enabled(feature_flags: Any) -> bool:
+    """Nested: only on when master manpower_control_v1 is also strict-true."""
+    return is_manpower_control_v1_enabled(feature_flags) and _flag_true(
+        feature_flags, MANPOWER_QUOTA_ENFORCEMENT_V1
+    )
+
+
+def is_manpower_floor_suggested_v1_enabled(feature_flags: Any) -> bool:
+    return is_manpower_control_v1_enabled(feature_flags) and _flag_true(
+        feature_flags, MANPOWER_FLOOR_SUGGESTED_V1
+    )
+
+
+def is_manpower_smv_panel_v1_enabled(feature_flags: Any) -> bool:
+    return is_manpower_control_v1_enabled(feature_flags) and _flag_true(
+        feature_flags, MANPOWER_SMV_PANEL_V1
+    )
 
 
 def is_packing_list_cartons_enabled(feature_flags: Any) -> bool:
@@ -541,6 +574,11 @@ def is_party_ledger_auto_allocate(feature_flags: Any) -> bool:
 def is_party_ledger_interest_calc(feature_flags: Any) -> bool:
     """Interest calc only when both master flag and interest flag are True."""
     return is_party_ledger_enabled(feature_flags) and _flag_true(feature_flags, PARTY_LEDGER_INTEREST_CALC)
+
+
+def is_coa_ledger_interest_v1_enabled(feature_flags: Any) -> bool:
+    """COA Asset/Liability interest only when the flag is exactly True."""
+    return _flag_true(feature_flags, COA_LEDGER_INTEREST_V1)
 
 
 def is_stock_hierarchy_enabled(feature_flags: Any) -> bool:

@@ -1118,6 +1118,7 @@ export function AppProtectedRouter() {
           <Route path="hr/attendance-setup" element={<HrHubPage hubId="attendance-setup" />} />
           <Route path="hr/leave-payroll-setup" element={<HrHubPage hubId="leave-payroll-setup" />} />
           <Route path="hr/insights" element={<HrHubPage hubId="insights" />} />
+          <Route path="hr/manpower" element={<HrHubPage hubId="manpower" />} />
           {/* Old standalone HR pages stay reachable (bookmarks, tutorials, approval inbox) and open their hub tab. */}
           <Route path="hr/departments" element={<HrLegacyRedirect from="hr/departments" />} />
           <Route path="hr/designations" element={<HrLegacyRedirect from="hr/designations" />} />
@@ -1174,6 +1175,17 @@ export function AppProtectedRouter() {
           <Route path="hr/compliance" element={<HrLegacyRedirect from="hr/compliance" />} />
           <Route path="hr/ai-insights" element={<HrLegacyRedirect from="hr/ai-insights" />} />
           <Route path="hr/reports" element={<HrLegacyRedirect from="hr/reports" />} />
+          <Route path="hr/manpower/sanctioned" element={<HrLegacyRedirect from="hr/manpower/sanctioned" />} />
+          <Route path="hr/manpower/settings" element={<HrLegacyRedirect from="hr/manpower/settings" />} />
+          <Route path="hr/manpower/exceptions" element={<HrLegacyRedirect from="hr/manpower/exceptions" />} />
+          <Route path="hr/manpower/floor" element={<HrLegacyRedirect from="hr/manpower/floor" />} />
+          <Route path="hr/manpower/organogram" element={<HrLegacyRedirect from="hr/manpower/organogram" />} />
+          <Route
+            path="hr/manpower/daily-attendance"
+            element={<HrLegacyRedirect from="hr/manpower/daily-attendance" />}
+          />
+          <Route path="hr/manpower/smv" element={<HrLegacyRedirect from="hr/manpower/smv" />} />
+          <Route path="hr/manpower/ratios" element={<HrLegacyRedirect from="hr/manpower/ratios" />} />
         </Route>
         <Route path="approvals" element={<AllApprovalsPage />} />
         <Route path="my-signature" element={<MySignaturePage />} />

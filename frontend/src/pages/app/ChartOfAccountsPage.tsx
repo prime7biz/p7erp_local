@@ -6,6 +6,9 @@ import {
   type ChartOfAccountResponse,
   type AccountGroupResponse,
   type CoAConfigResponse,
+  type CoaInterestBasis,
+  type CoaInterestFrequency,
+  type CoaInterestMethod,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { listPageRootClass } from "@/components/app/listPageLayout";
@@ -14,6 +17,7 @@ import { logApiError } from "@/utils/logApiError";
 import { downloadCsv } from "@/lib/reportExport";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { useConfirm } from "@/components/app/useConfirm";
+import { useAuth } from "@/context/AuthContext";
 
 const defaultForm: ChartOfAccountCreate = {
   account_number: "",
@@ -32,10 +36,20 @@ const defaultForm: ChartOfAccountCreate = {
   last_reviewed_at: "",
   enable_bill_wise: false,
   cost_nature: null,
+  interest_enabled: false,
+  interest_basis: null,
+  interest_method: null,
+  interest_frequency: null,
+  interest_rate_yearly: null,
+  interest_amount: null,
+  interest_counterpart_account_id: null,
+  interest_activation_date: null,
 };
 
 export function ChartOfAccountsPage() {
   const confirm = useConfirm();
+  const { me } = useAuth();
+  const interestFlagOn = me?.feature_flags?.coa_ledger_interest_v1 === true;
   const [groups, setGroups] = useState<AccountGroupResponse[]>([]);
   const [rows, setRows] = useState<ChartOfAccountResponse[]>([]);
   const [showInactive, setShowInactive] = useState(false);
@@ -51,6 +65,8 @@ export function ChartOfAccountsPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [openActionsId, setOpenActionsId] = useState<number | string | null>(null);
   const [form, setForm] = useState<ChartOfAccountCreate>({ ...defaultForm });
+  const [interestPreview, setInterestPreview] = useState<string | null>(null);
+  const [interestRunMsg, setInterestRunMsg] = useState<string | null>(null);
 
   const latest = useLatestRequest();
   const load = useCallback(async () => {
@@ -90,6 +106,18 @@ export function ChartOfAccountsPage() {
   }, [showCoaConfig]);
 
   const groupMap = useMemo(() => new Map(groups.map((g) => [g.id, g.name])), [groups]);
+  const selectedGroup = useMemo(() => groups.find((g) => g.id === form.group_id), [groups, form.group_id]);
+  const selectedNature = (selectedGroup?.nature || "").toLowerCase();
+  const canActivateInterest =
+    interestFlagOn && (selectedNature === "asset" || selectedNature === "liability") && !form.enable_bill_wise && !form.maintain_fc_balance;
+  const counterpartOptions = useMemo(() => {
+    const want = selectedNature === "liability" ? "expense" : selectedNature === "asset" ? "income" : "";
+    if (!want) return [];
+    return rows.filter((a) => {
+      const g = groups.find((x) => x.id === a.group_id);
+      return (g?.nature || "").toLowerCase() === want && a.id !== editingId;
+    });
+  }, [rows, groups, selectedNature, editingId]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -103,6 +131,22 @@ export function ChartOfAccountsPage() {
         reporting_code: form.reporting_code?.trim() || undefined,
         statistical_unit: form.statistical_unit?.trim() || undefined,
         cost_nature: form.cost_nature ?? null,
+        interest_enabled: canActivateInterest ? !!form.interest_enabled : false,
+        interest_basis: canActivateInterest && form.interest_enabled ? form.interest_basis : null,
+        interest_method: canActivateInterest && form.interest_enabled ? form.interest_method : null,
+        interest_frequency: canActivateInterest && form.interest_enabled ? form.interest_frequency : null,
+        interest_rate_yearly:
+          canActivateInterest && form.interest_enabled && form.interest_method === "yearly_rate"
+            ? form.interest_rate_yearly || null
+            : null,
+        interest_amount:
+          canActivateInterest && form.interest_enabled && form.interest_method !== "yearly_rate"
+            ? form.interest_amount || null
+            : null,
+        interest_counterpart_account_id:
+          canActivateInterest && form.interest_enabled ? form.interest_counterpart_account_id ?? null : null,
+        interest_activation_date:
+          canActivateInterest && form.interest_enabled ? form.interest_activation_date || null : null,
       };
       if (editingId) {
         await api.updateChartOfAccount(editingId, payload);
@@ -139,7 +183,51 @@ export function ChartOfAccountsPage() {
       cost_nature: row.cost_nature ?? null,
       account_currency: row.account_currency ?? undefined,
       maintain_fc_balance: row.maintain_fc_balance ?? false,
+      interest_enabled: row.interest_enabled ?? false,
+      interest_basis: row.interest_basis ?? null,
+      interest_method: row.interest_method ?? null,
+      interest_frequency: row.interest_frequency ?? null,
+      interest_rate_yearly: row.interest_rate_yearly ?? null,
+      interest_amount: row.interest_amount ?? null,
+      interest_counterpart_account_id: row.interest_counterpart_account_id ?? null,
+      interest_activation_date: row.interest_activation_date ?? null,
     });
+    setInterestPreview(null);
+    setInterestRunMsg(null);
+  }
+
+  async function previewInterest() {
+    if (!editingId) {
+      setError("Save the ledger first, then preview interest.");
+      return;
+    }
+    setError(null);
+    setInterestPreview(null);
+    try {
+      const res = await api.previewCoaInterest({ account_id: editingId });
+      const lines = (res.periods || []).map((p) => {
+        const amount = String(p.interest_amount ?? "0");
+        const key = String(p.period_key ?? "");
+        const skip = p.skip_reason ? ` (skip: ${String(p.skip_reason)})` : "";
+        const existing = p.existing_status ? ` existing=${String(p.existing_status)}` : "";
+        return `${key}: ${amount}${skip}${existing}`;
+      });
+      setInterestPreview(lines.length ? lines.join("\n") : "No completed periods due yet.");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function runInterest() {
+    if (!(await confirm({ title: "Create draft interest journals for completed periods?" }))) return;
+    setError(null);
+    setInterestRunMsg(null);
+    try {
+      const res = await api.runCoaInterest(editingId ? { account_id: editingId } : undefined);
+      setInterestRunMsg(`Created ${res.created} draft voucher(s), skipped ${res.skipped}.`);
+    } catch (e) {
+      setError((e as Error).message);
+    }
   }
 
   async function remove(id: number) {
@@ -580,6 +668,124 @@ export function ChartOfAccountsPage() {
               </select>
             </div>
           </>
+        ) : null}
+        {canActivateInterest ? (
+          <div className="sm:col-span-2 lg:col-span-4 space-y-3 rounded-lg border border-border bg-surface-subtle/60 p-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-text-primary">
+              <input
+                type="checkbox"
+                checked={!!form.interest_enabled}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    interest_enabled: e.target.checked,
+                    interest_basis: e.target.checked ? p.interest_basis || "simple" : null,
+                    interest_method: e.target.checked ? p.interest_method || "yearly_rate" : null,
+                    interest_frequency: e.target.checked ? p.interest_frequency || "monthly" : null,
+                  }))
+                }
+              />
+              Activate interest on this ledger
+            </label>
+            <p className="text-xs text-text-muted">
+              Optional. Draft journals are created automatically; you post them. Compound adds unpaid interest to the
+              balance (bank loans). Simple charges principal only (hand loans). First period is prorated by days.
+            </p>
+            {form.interest_enabled ? (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <select
+                  className="rounded border px-3 py-2 text-sm"
+                  value={form.interest_basis ?? "simple"}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, interest_basis: e.target.value as CoaInterestBasis }))
+                  }
+                >
+                  <option value="simple">Simple (principal only)</option>
+                  <option value="compound">Compound (interest on unpaid interest)</option>
+                </select>
+                <select
+                  className="rounded border px-3 py-2 text-sm"
+                  value={form.interest_method ?? "yearly_rate"}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, interest_method: e.target.value as CoaInterestMethod }))
+                  }
+                >
+                  <option value="yearly_rate">Yearly interest rate %</option>
+                  <option value="monthly_fixed">Monthly fixed amount</option>
+                  <option value="yearly_fixed">Yearly fixed amount</option>
+                </select>
+                <select
+                  className="rounded border px-3 py-2 text-sm"
+                  value={form.interest_frequency ?? "monthly"}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, interest_frequency: e.target.value as CoaInterestFrequency }))
+                  }
+                >
+                  <option value="monthly">Monthly accrual</option>
+                  <option value="quarterly">Quarterly accrual</option>
+                </select>
+                <input
+                  className="rounded border px-3 py-2 text-sm"
+                  type="date"
+                  value={form.interest_activation_date ?? ""}
+                  onChange={(e) => setForm((p) => ({ ...p, interest_activation_date: e.target.value || null }))}
+                  title="Interest activation date"
+                />
+                {form.interest_method === "yearly_rate" ? (
+                  <input
+                    className="rounded border px-3 py-2 text-sm"
+                    placeholder="Yearly rate %"
+                    value={form.interest_rate_yearly ?? ""}
+                    onChange={(e) => setForm((p) => ({ ...p, interest_rate_yearly: e.target.value || null }))}
+                  />
+                ) : (
+                  <input
+                    className="rounded border px-3 py-2 text-sm"
+                    placeholder={form.interest_method === "monthly_fixed" ? "Monthly amount" : "Yearly amount"}
+                    value={form.interest_amount ?? ""}
+                    onChange={(e) => setForm((p) => ({ ...p, interest_amount: e.target.value || null }))}
+                  />
+                )}
+                <select
+                  className="rounded border px-3 py-2 text-sm sm:col-span-2"
+                  value={form.interest_counterpart_account_id ?? ""}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      interest_counterpart_account_id: e.target.value ? Number(e.target.value) : null,
+                    }))
+                  }
+                >
+                  <option value="">
+                    {selectedNature === "liability" ? "Interest Expense ledger…" : "Interest Income ledger…"}
+                  </option>
+                  {counterpartOptions.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.account_number} – {a.name}
+                    </option>
+                  ))}
+                </select>
+                {editingId ? (
+                  <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-4">
+                    <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => void previewInterest()}>
+                      Preview interest
+                    </button>
+                    <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => void runInterest()}>
+                      Run interest accruals
+                    </button>
+                  </div>
+                ) : null}
+                {interestPreview ? (
+                  <pre className="sm:col-span-2 lg:col-span-4 whitespace-pre-wrap rounded border bg-surface-raised px-3 py-2 text-xs text-text-secondary">
+                    {interestPreview}
+                  </pre>
+                ) : null}
+                {interestRunMsg ? (
+                  <div className="sm:col-span-2 lg:col-span-4 text-xs text-text-secondary">{interestRunMsg}</div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         ) : null}
         <div className="flex flex-wrap justify-end gap-2 sm:col-span-2 lg:col-span-1">
           {editingId ? (

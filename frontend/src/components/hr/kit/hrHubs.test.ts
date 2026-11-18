@@ -76,6 +76,14 @@ const LEGACY_HR_ROUTES = [
   "hr/compliance",
   "hr/ai-insights",
   "hr/reports",
+  "hr/manpower/sanctioned",
+  "hr/manpower/settings",
+  "hr/manpower/exceptions",
+  "hr/manpower/floor",
+  "hr/manpower/organogram",
+  "hr/manpower/daily-attendance",
+  "hr/manpower/smv",
+  "hr/manpower/ratios",
 ];
 
 /** Routes that keep their own page (not moved into a hub). */
@@ -144,9 +152,9 @@ describe("HR sidebar", () => {
   const hr = menuSections.find((s) => s.section === "HR");
   const hrefs = (hr?.subsections ?? []).flatMap((sub) => sub.items.map((i) => i.href));
 
-  it("shows 16 links: dashboard, employees, Bangladesh rules and one per hub", () => {
-    expect(hrefs).toHaveLength(16);
-    expect(new Set(hrefs).size).toBe(16);
+  it("shows 17 links: dashboard, employees, Bangladesh rules and one per hub", () => {
+    expect(hrefs).toHaveLength(17);
+    expect(new Set(hrefs).size).toBe(17);
     for (const hub of hubs) expect(hrefs).toContain(`/app/${hub.path}`);
     expect(hrefs).toEqual(expect.arrayContaining(["/app/hr", "/app/hr/employees", "/app/hr/bangladesh-rules"]));
   });

@@ -1,0 +1,52 @@
+{
+    "servers":  [
+                    {
+                        "url":  "https://prime7erp.com",
+                        "description":  "Production"
+                    }
+                ],
+    "paths":  {
+                  "/health":  {
+                                  "get":  {
+                                              "summary":  "Platform health",
+                                              "tags":  [
+                                                           "status"
+                                                       ],
+                                              "responses":  {
+                                                                "200":  {
+                                                                            "description":  "Current platform health and component status"
+                                                                        }
+                                                            },
+                                              "operationId":  "getHealth"
+                                          }
+                              },
+                  "/api/v1/auth/login":  {
+                                             "post":  {
+                                                          "summary":  "Staff login",
+                                                          "tags":  [
+                                                                       "auth"
+                                                                   ],
+                                                          "description":  "Exchange company code + username/email + password for a staff JWT.",
+                                                          "responses":  {
+                                                                            "200":  {
+                                                                                        "description":  "Access token issued"
+                                                                                    },
+                                                                            "401":  {
+                                                                                        "description":  "Invalid credentials"
+                                                                                    }
+                                                                        },
+                                                          "operationId":  "staffLogin"
+                                                      }
+                                         }
+              },
+    "openapi":  "3.1.0",
+    "info":  {
+                 "title":  "Prime7 ERP API",
+                 "description":  "Public discovery document for the Prime7 ERP HTTP API. Staff routes under /api/v1 require a JWT from company-code login. Full interactive OpenAPI is available in local/dev environments only.",
+                 "version":  "1.0.0",
+                 "contact":  {
+                                 "name":  "Prime7 Support",
+                                 "url":  "https://prime7erp.com/support"
+                             }
+             }
+}

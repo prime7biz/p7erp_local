@@ -1289,6 +1289,17 @@ export const tutorialHelpIndex: TutorialHelpEntry[] = [
     ]
   },
   {
+    "id": "hr-manpower-control",
+    "title": "Factory manpower control (sanctioned strength, floor plan, SMV)",
+    "summary": "Set approved headcount by department and designation, block over-quota hires until a four-eyes exception is approved, then review floor suggested counts, organogram, daily attendance, SMV and ratios.",
+    "relatedAppRoutes": [
+      "/app/hr/manpower",
+      "/app/hr/manpower/sanctioned",
+      "/app/production/crew-daily",
+      "/app/production/ie/line-balance"
+    ]
+  },
+  {
     "id": "hr-pay-overview",
     "title": "Payroll module map — how monthly salary works",
     "summary": "One-page map of every Payroll screen in the HR menu, the order to use them in, and who does each step.",

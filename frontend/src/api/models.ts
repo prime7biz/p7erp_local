@@ -9067,6 +9067,10 @@ export interface AccountGroupHierarchyNode {
 export const FINANCE_COST_NATURE_CODES = ["MATERIAL", "CM", "OTHER", "NON_OPERATING"] as const;
 export type FinanceCostNature = (typeof FINANCE_COST_NATURE_CODES)[number];
 
+export type CoaInterestBasis = "simple" | "compound";
+export type CoaInterestMethod = "monthly_fixed" | "yearly_fixed" | "yearly_rate";
+export type CoaInterestFrequency = "monthly" | "quarterly";
+
 export interface ChartOfAccountCreate {
   account_number?: string;
   name: string;
@@ -9088,6 +9092,15 @@ export interface ChartOfAccountCreate {
   enable_bill_wise?: boolean;
   /** Default cost bucket for reporting; null = inherit none / unknown. */
   cost_nature?: FinanceCostNature | null;
+  /** Optional Asset/Liability interest (tenant flag coa_ledger_interest_v1). */
+  interest_enabled?: boolean;
+  interest_basis?: CoaInterestBasis | null;
+  interest_method?: CoaInterestMethod | null;
+  interest_frequency?: CoaInterestFrequency | null;
+  interest_rate_yearly?: string | null;
+  interest_amount?: string | null;
+  interest_counterpart_account_id?: number | null;
+  interest_activation_date?: string | null;
 }
 
 export interface ChartOfAccountResponse extends ChartOfAccountCreate {

@@ -142,6 +142,12 @@ async def create_facility(
         if not ep or ep.tenant_id != tenant.id or ep.principal_type != PRINCIPAL_FINANCIER:
             raise HTTPException(status_code=400, detail="Invalid financier principal")
     await _validate_facility_links(db, tenant.id, body.model_dump())
+    from app.modules.finance.coa_interest.facility_conflict import (
+        assert_facility_liability_not_coa_interest,
+        any_coa_interest_on_system_fallback,
+    )
+
+    await assert_facility_liability_not_coa_interest(db, tenant.id, body.gl_liability_account_id)
     code = await next_tenant_code(db, model=Facility, tenant_id=tenant.id, prefix="FC-", width=5)
     fac = Facility(
         tenant_id=tenant.id,
@@ -175,6 +181,8 @@ async def create_facility(
         notes=body.notes,
         created_by=user.id,
     )
+    if body.gl_liability_account_id is None:
+        await any_coa_interest_on_system_fallback(db, tenant.id, fac)
     db.add(fac)
     await db.commit()
     await db.refresh(fac)
@@ -222,8 +230,17 @@ async def patch_facility(
                 raise HTTPException(status_code=400, detail="Cannot change key fields on active facility")
     data = body.model_dump(exclude_unset=True)
     await _validate_facility_links(db, tenant.id, data)
+    from app.modules.finance.coa_interest.facility_conflict import (
+        assert_facility_liability_not_coa_interest,
+        any_coa_interest_on_system_fallback,
+    )
+
+    if "gl_liability_account_id" in data:
+        await assert_facility_liability_not_coa_interest(db, tenant.id, data.get("gl_liability_account_id"))
     for k, v in data.items():
         setattr(fac, k, v)
+    if fac.gl_liability_account_id is None:
+        await any_coa_interest_on_system_fallback(db, tenant.id, fac)
     await db.commit()
     await db.refresh(fac)
     return fac

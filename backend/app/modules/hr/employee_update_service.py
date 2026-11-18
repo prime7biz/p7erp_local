@@ -72,6 +72,25 @@ async def apply_employee_update(
         employee_id=row.id,
         section_id=payload.get("section_id"),
     )
+    # Manpower quota: reassign into a full cell, or activate into a full cell, needs a free slot.
+    from app.modules.hr_manpower.quota_guard import consume_exception_slot, guard_and_prepare
+
+    new_dept = payload["department_id"] if "department_id" in payload else row.department_id
+    new_desig = payload["designation_id"] if "designation_id" in payload else row.designation_id
+    new_active = bool(payload["is_active"]) if "is_active" in payload else bool(row.is_active)
+    cell_changing = ("department_id" in payload and payload["department_id"] != row.department_id) or (
+        "designation_id" in payload and payload["designation_id"] != row.designation_id
+    )
+    activating = (not row.is_active) and new_active
+    exception_id = None
+    if new_active and (activating or cell_changing):
+        exception_id = await guard_and_prepare(
+            db,
+            tenant,
+            department_id=new_dept,
+            designation_id=new_desig,
+            exclude_employee_id=row.id,
+        )
     if "employee_code" in payload and payload["employee_code"] is not None:
         if payload["employee_code"].strip() != row.employee_code:
             raise HTTPException(
@@ -109,6 +128,14 @@ async def apply_employee_update(
     if "attendance_device_pin" in payload:
         row.attendance_device_pin = employee_service.clean_device_pin(payload["attendance_device_pin"])
     employee_service.apply_onboarding_fields(row, payload)
+    if exception_id is not None and row.is_active:
+        await consume_exception_slot(
+            db,
+            tenant_id=tenant.id,
+            exception_id=exception_id,
+            employee_id=row.id,
+            user_id=audit_user_id if audit_user_id is not None else actor.id,
+        )
     sensitive_changed = sorted(f for f, before in sensitive_before.items() if getattr(row, f) != before)
     if sensitive_changed:
         await log_action(

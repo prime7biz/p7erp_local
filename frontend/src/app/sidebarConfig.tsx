@@ -665,7 +665,10 @@ export const menuSections: MenuSection[] = [
       },
       {
         label: "Reports",
-        items: [hrHubNavItem("insights")],
+        items: [
+          hrHubNavItem("insights"),
+          { ...hrHubNavItem("manpower"), requiresFeatureFlag: "manpower_control_v1" },
+        ],
       },
     ],
   },

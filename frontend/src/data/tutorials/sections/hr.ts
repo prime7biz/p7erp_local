@@ -2095,5 +2095,52 @@ A **temporary gate pass** lets someone without an ID card enter for a set time. 
       relatedAppRoutes: ["/app/hr/cases"],
       relatedArticleIds: ["hr-pay-final-settlement", "hr-employee-exit", "hr-overview"],
     },
+    {
+      id: "hr-manpower-control",
+      title: "Factory manpower control (sanctioned strength, floor plan, SMV)",
+      summary:
+        "Set approved headcount by department and designation, block over-quota hires until a four-eyes exception is approved, then review floor suggested counts, organogram, daily attendance, SMV and ratios.",
+      estimatedMinutes: 7,
+      content: `## Overview
+
+**HR → Manpower** (\`/app/hr/manpower\`) is behind tenant flags (all default **OFF**). Turn on **Manpower control** in **Settings → Configuration**, then enable nested flags as needed: quota enforcement, floor suggested, SMV panel.
+
+**Who uses it:** HR managers (\`hr.manpower.manage\` / \`hr.manpower.read\`); exception approvers need the explicit key \`hr.manpower.exception.approve\` (admin wildcards do **not** bypass).
+
+## Steps
+
+1. Open **Sanctioned strength** and set **Approved quota** per department + designation, or use **Seed from current** so today’s active headcount becomes the starting quota.
+2. In **Settings**, set advisory ratio targets and map departments to Sewing / Cutting / Finishing groups.
+3. To block over-quota hiring, enable **Quota enforcement**. New create / import / activate / reassign into a full cell returns **409** until someone requests a **Quota exception** and a *different* user with the approve key approves it.
+4. Enable **Floor suggested** to see **Floor plan** (crew template → line defaults → IE line-balance advisory) and machine:operator ratio.
+5. Use **Organogram** and **Daily attendance** for Suggested | Approved | Present and a one-day attendance roll-up.
+6. Enable **SMV panel** for **SMV** (industry vs factory) and **Ratios** tabs.
+
+## Common problems
+
+- **Every hire is blocked after turning enforcement on** → seed sanctioned rows first, or request an exception.
+- **Cannot approve my own exception** → four-eyes: another user with \`hr.manpower.exception.approve\` must decide.
+- **Floor / SMV tabs missing** → nested flags are still off (master alone is not enough).`,
+      tags: ["HR", "manpower", "quota", "SMV", "organogram"],
+      keywords: [
+        "sanctioned strength",
+        "manpower quota",
+        "exception",
+        "floor plan",
+        "organogram",
+        "daily attendance",
+        "industry SMV",
+        "factory SMV",
+        "operator helper ratio",
+      ],
+      lastUpdated: "2026-11-18",
+      relatedAppRoutes: [
+        "/app/hr/manpower",
+        "/app/hr/manpower/sanctioned",
+        "/app/production/crew-daily",
+        "/app/production/ie/line-balance",
+      ],
+      relatedArticleIds: ["hr-add-employee", "hr-overview"],
+    },
   ],
 };

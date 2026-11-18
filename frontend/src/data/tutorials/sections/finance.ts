@@ -311,6 +311,14 @@ The **chart of accounts** is the list of all your ledgers (cash, bank, suppliers
 6. Optional: click **Show advanced** for **Posting / Statistical / Header** type, **Reporting code**, **Display order**, parent ledger and **Cost nature**.
 7. Click **Create**. To change a ledger later, use **Actions → Edit** on its row.
 
+### B2. Optional: activate interest (Asset / Liability)
+
+When Settings → Configuration has **Ledger interest on Asset / Liability accounts** on (\`coa_ledger_interest_v1\`):
+
+1. Edit an Asset (e.g. bank FD) or Liability (e.g. hand loan) ledger that is **not** bill-wise.
+2. Tick **Activate interest**, choose **Simple** (principal only) or **Compound** (unpaid interest joins the balance), method, monthly/quarterly, rate or fixed amount, activation date, and the Interest Expense or Interest Income ledger.
+3. Save, then use **Preview interest** / **Run interest accruals**. Draft journals appear in Vouchers for finance to post. Ledgers linked to a Facility loan cannot use this (use Facility accrual instead).
+
 ### C. Import many ledgers at once
 
 1. Click **Export CoA** to download the current list as a sample.
@@ -354,8 +362,8 @@ The **chart of accounts** is the list of all your ledgers (cash, bank, suppliers
         "opening balance",
         "import excel",
       ],
-      estimatedMinutes: 6,
-      lastUpdated: "2026-11-06",
+      estimatedMinutes: 7,
+      lastUpdated: "2026-11-18",
       audience: "finance",
       coverImage: "/tutorials/screens/accounts.jpg",
       infographics: [
@@ -372,7 +380,7 @@ The **chart of accounts** is the list of all your ledgers (cash, bank, suppliers
             },
             {
               title: "Fill the ledger form",
-              body: "**Chart of Accounts** → **Ledger Name**, group, **Opening Balance**, **Debit/Credit**. Click **Show advanced** for type and cost nature.",
+              body: "**Chart of Accounts** → **Ledger Name**, group, **Opening Balance**, **Debit/Credit**. Click **Show advanced** for type and cost nature. With the interest flag on, Asset/Liability ledgers can activate interest (draft journals only).",
               imageSrc: "/tutorials/screens/fin-coa-new-ledger.jpg",
               imageAlt: "Chart of Accounts form with ledger name Generator Fuel and the advanced fields open",
               href: "/app/accounts",

@@ -186,6 +186,7 @@ from app.models.finance import (
     AccountingSystemMapping,
     CoAConfig,
     ChartOfAccount,
+    CoaInterestAccrual,
     VoucherType,
     Voucher,
     VoucherLine,
@@ -329,6 +330,13 @@ from app.models.hr_onboarding import (
     HrGeneratedEmployeeDocument,
 )
 from app.models.hr_change_request import HrEmployeeChangeRequest
+from app.models.hr_manpower import (
+    HrManpowerDepartmentGroup,
+    HrManpowerQuotaException,
+    HrManpowerQuotaExceptionConsumption,
+    HrManpowerSanctionedStrength,
+    HrManpowerSettings,
+)
 from app.models.hr_allowance import (
     HrAllowanceEntry,
     HrAllowanceRule,
@@ -592,6 +600,7 @@ __all__ = [
     "AccountingSystemMapping",
     "CoAConfig",
     "ChartOfAccount",
+    "CoaInterestAccrual",
     "VoucherType",
     "Voucher",
     "VoucherLine",

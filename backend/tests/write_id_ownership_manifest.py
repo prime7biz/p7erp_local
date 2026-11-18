@@ -47,6 +47,7 @@ MANIFEST: dict[str, dict[str, str]] = {
     },
     'PATCH /api/v1/finance/chart-of-accounts/{account_id}': {
         'group_id': 'handler-calls-ensure_owned',
+        'interest_counterpart_account_id': 'reviewed: ensure_owned via validate_interest_policy',
         'parent_account_id': 'handler-calls-ensure_owned',
     },
     'PATCH /api/v1/finance/tax-ledgers/{ledger_id}': {
@@ -446,7 +447,14 @@ MANIFEST: dict[str, dict[str, str]] = {
     },
     'POST /api/v1/finance/chart-of-accounts': {
         'group_id': 'handler-calls-ensure_owned',
+        'interest_counterpart_account_id': 'reviewed: ensure_owned via validate_interest_policy',
         'parent_account_id': 'handler-calls-ensure_owned',
+    },
+    'POST /api/v1/finance/coa-interest/preview': {
+        'account_id': 'reviewed: ensure_owned ChartOfAccount when provided',
+    },
+    'POST /api/v1/finance/coa-interest/run': {
+        'account_id': 'reviewed: ensure_owned ChartOfAccount when provided',
     },
     'POST /api/v1/finance/credit-notes': {
         'original_bill_id': 'unreviewed',
@@ -461,6 +469,13 @@ MANIFEST: dict[str, dict[str, str]] = {
         'party_ledger_id': 'unreviewed',
         'revenue_or_purchase_account_id': 'unreviewed',
         'tax_account_id': 'unreviewed',
+    },
+    'POST /api/v1/finance/mgmt-performance/revisions': {
+        'account_id': 'reviewed: ensure_owned in revision_service.request_revision; test_mgmt_performance_api.py',
+        'budget_id': 'reviewed: tenant-filtered _final_budget (404) in revision_service; test_mgmt_performance_api.py',
+        'budget_line_id': 'reviewed: tenant check in revision_service.request_revision (404); test_mgmt_performance_api.py',
+        'cost_center_id': 'reviewed: ensure_owned in revision_service.request_revision; test_mgmt_performance_api.py',
+        'exception_id': 'reviewed: ensure_owned in revision_service.request_revision; test_mgmt_performance_api.py',
     },
     'POST /api/v1/finance/party-ledgers': {
         'customer_id': 'unreviewed',
@@ -617,6 +632,10 @@ MANIFEST: dict[str, dict[str, str]] = {
     'POST /api/v1/hr/localization/bd-rmg/wage-assignments': {
         'employee_id': 'unreviewed',
         'wage_rate_id': 'unreviewed',
+    },
+    'POST /api/v1/hr/manpower/exceptions': {
+        'department_id': 'reviewed: ensure_owned Department',
+        'designation_id': 'reviewed: ensure_owned Designation',
     },
     'POST /api/v1/hr/onboarding': {
         'compensation[].bd_wage_rate_id': 'unreviewed',
@@ -1130,7 +1149,7 @@ MANIFEST: dict[str, dict[str, str]] = {
         'record_id': 'reviewed: tenant-filtered order / finding loader in mfg_planning.predictive_router (404 for another tenant); test_mfg_predictive_explain.py',
     },
     'POST /api/v1/mfg-intelligence/scheduler/convert': {
-        'params[].exclude_job_ids': 'reviewed: job keys (row:/order:) are matched only against the server re-run of this tenant\'s own jobs (unknown keys pin nothing); every converted row / order / line id comes from that re-run and passes ensure_owned in plan_revision_service.validate_items; test_mfg_scheduler_convert.py',
+        'params[].exclude_job_ids': "reviewed: job keys (row:/order:) are matched only against the server re-run of this tenant's own jobs (unknown keys pin nothing); every converted row / order / line id comes from that re-run and passes ensure_owned in plan_revision_service.validate_items; test_mfg_scheduler_convert.py",
     },
     'POST /api/v1/mfg-intelligence/tentative-bookings': {
         'inquiry_id': 'reviewed: ensure_owned in tentative_booking_service._owned_demand; test_mfg_tentative_demand.py',
@@ -1473,13 +1492,6 @@ MANIFEST: dict[str, dict[str, str]] = {
         'inventory_clearing_account_id': 'handler-calls-ensure_owned',
         'inventory_stock_account_id': 'handler-calls-ensure_owned',
     },
-    'POST /api/v1/finance/mgmt-performance/revisions': {
-        'account_id': 'reviewed: ensure_owned in revision_service.request_revision; test_mgmt_performance_api.py',
-        'budget_id': 'reviewed: tenant-filtered _final_budget (404) in revision_service; test_mgmt_performance_api.py',
-        'budget_line_id': 'reviewed: tenant check in revision_service.request_revision (404); test_mgmt_performance_api.py',
-        'cost_center_id': 'reviewed: ensure_owned in revision_service.request_revision; test_mgmt_performance_api.py',
-        'exception_id': 'reviewed: ensure_owned in revision_service.request_revision; test_mgmt_performance_api.py',
-    },
     'PUT /api/v1/finance/mgmt-performance/setup/category-map': {
         'items[].account_group_id': 'reviewed: ensure_owned in setup_service.save_category_map; test_mgmt_performance_api.py',
         'items[].account_id': 'reviewed: ensure_owned in setup_service.save_category_map; test_mgmt_performance_api.py',
@@ -1504,6 +1516,13 @@ MANIFEST: dict[str, dict[str, str]] = {
     'PUT /api/v1/hr/employees/{employee_id}/compensation': {
         'bd_wage_rate_id': 'unreviewed',
         'structure_id': 'unreviewed',
+    },
+    'PUT /api/v1/hr/manpower/department-groups': {
+        'department_id': 'reviewed: ensure_owned Department',
+    },
+    'PUT /api/v1/hr/manpower/sanctioned': {
+        'department_id': 'reviewed: ensure_owned Department',
+        'designation_id': 'reviewed: ensure_owned Designation',
     },
     'PUT /api/v1/hr/payroll/accounting-config': {
         'advance_receivable_account_id': 'handler-calls-ensure_owned',

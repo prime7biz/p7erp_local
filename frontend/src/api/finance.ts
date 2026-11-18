@@ -209,6 +209,53 @@ export const financeApi = {
   async deleteChartOfAccount(id: number): Promise<{ ok: boolean }> {
     return request<{ ok: boolean }>(`/api/v1/finance/chart-of-accounts/${id}`, { method: "DELETE" });
   },
+  async previewCoaInterest(data?: { as_of?: string; account_id?: number }): Promise<{
+    as_of: string | null;
+    periods: Array<Record<string, unknown>>;
+  }> {
+    return request("/api/v1/finance/coa-interest/preview", {
+      method: "POST",
+      body: JSON.stringify(data ?? {}),
+    });
+  },
+  async runCoaInterest(data?: { as_of?: string; account_id?: number }): Promise<{
+    created: number;
+    skipped: number;
+    as_of: string;
+    details: Array<Record<string, unknown>>;
+  }> {
+    return request("/api/v1/finance/coa-interest/run", {
+      method: "POST",
+      body: JSON.stringify(data ?? {}),
+    });
+  },
+  async listCoaInterestAccruals(params?: {
+    account_id?: number;
+    period_key?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<
+    Array<{
+      id: number;
+      tenant_id: number;
+      account_id: number;
+      period_key: string;
+      accrual_date: string;
+      base_balance: string;
+      proration_factor: string;
+      interest_amount: string;
+      journal_voucher_id: number | null;
+      status: string;
+    }>
+  > {
+    const q = new URLSearchParams();
+    if (params?.account_id != null) q.set("account_id", String(params.account_id));
+    if (params?.period_key) q.set("period_key", params.period_key);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request(`/api/v1/finance/coa-interest/accruals${suffix}`);
+  },
   async getCoaConfig(): Promise<CoAConfigResponse> {
     return request<CoAConfigResponse>("/api/v1/finance/coa-config");
   },

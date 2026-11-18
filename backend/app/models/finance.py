@@ -126,6 +126,17 @@ class ChartOfAccount(Base):
     linked_module: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # MATERIAL | CM | OTHER | NON_OPERATING — drives financier CM vs material ledger rollups (nullable = unknown).
     cost_nature: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    # Optional COA interest (tenant flag coa_ledger_interest_v1). Asset / Liability only.
+    interest_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    interest_basis: Mapped[str | None] = mapped_column(String(16), nullable=True)  # simple | compound
+    interest_method: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    interest_frequency: Mapped[str | None] = mapped_column(String(16), nullable=True)  # monthly | quarterly
+    interest_rate_yearly: Mapped[Decimal | None] = mapped_column(Numeric(8, 4), nullable=True)
+    interest_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    interest_counterpart_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    interest_activation_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -135,6 +146,41 @@ class ChartOfAccount(Base):
     # Optimistic locking: UPDATE ... WHERE version = :v; must use Column ref, not str "version"
     # (str breaks INSERT return_defaults in SQLAlchemy 2.x).
     __mapper_args__ = {"version_id_col": version}
+
+
+class CoaInterestAccrual(Base):
+    """One interest draft/post per COA ledger per accrual period (idempotent)."""
+
+    __tablename__ = "coa_interest_accruals"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "account_id",
+            "period_key",
+            name="uq_coa_interest_accruals_tenant_acct_period",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("chart_of_accounts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    period_key: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    accrual_date: Mapped[date] = mapped_column(Date, nullable=False)
+    base_balance: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
+    proration_factor: Mapped[Decimal] = mapped_column(
+        Numeric(18, 8), nullable=False, default=Decimal("1"), server_default="1"
+    )
+    interest_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
+    journal_voucher_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="draft", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class AccountingSystemMapping(Base):

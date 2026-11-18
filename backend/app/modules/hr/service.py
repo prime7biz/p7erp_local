@@ -240,6 +240,26 @@ async def import_employees_excel(db: AsyncSession, tenant: Tenant, user: User, f
                 except HTTPException as he:
                     errors.append(f"Row {idx}: {he.detail}")
                     continue
+                from app.modules.hr_manpower.quota_guard import consume_exception_slot, guard_and_prepare
+
+                cell_changing = dept_id != existing.department_id or desig_id != existing.designation_id
+                activating = (not existing.is_active) and active
+                exception_id = None
+                if active and (activating or cell_changing):
+                    try:
+                        exception_id = await guard_and_prepare(
+                            db,
+                            tenant,
+                            department_id=dept_id,
+                            designation_id=desig_id,
+                            exclude_employee_id=existing.id,
+                        )
+                    except HTTPException as he:
+                        await safe_async_session_rollback(db)
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail=f"Row {idx}: import stopped — {he.detail}",
+                        ) from he
                 existing.first_name = first_name
                 existing.last_name = str(row[2] or "").strip() or None
                 existing.email = str(row[3] or "").strip() or None
@@ -253,6 +273,14 @@ async def import_employees_excel(db: AsyncSession, tenant: Tenant, user: User, f
                 existing.is_active = active
                 if dob is not None:
                     existing.date_of_birth = dob
+                if exception_id is not None and active:
+                    await consume_exception_slot(
+                        db,
+                        tenant_id=tenant.id,
+                        exception_id=exception_id,
+                        employee_id=existing.id,
+                        user_id=user.id,
+                    )
                 updated += 1
             else:
                 from app.modules.hr.employee_identity import identity_required
@@ -268,24 +296,46 @@ async def import_employees_excel(db: AsyncSession, tenant: Tenant, user: User, f
                 except HTTPException as he:
                     errors.append(f"Row {idx}: {he.detail}")
                     continue
-                db.add(
-                    Employee(
-                        tenant_id=tenant.id,
-                        employee_code=code,
-                        first_name=first_name,
-                        last_name=str(row[2] or "").strip() or None,
-                        email=str(row[3] or "").strip() or None,
-                        phone=str(row[4] or "").strip() or None,
-                        department_id=dept_id,
-                        designation_id=desig_id,
-                        section_id=sec_id,
-                        employee_category=cat,
-                        joining_date=join_date,
-                        employment_type=emp_type,
-                        is_active=active,
-                        date_of_birth=dob,
-                    )
+                from app.modules.hr_manpower.quota_guard import consume_exception_slot, guard_and_prepare
+
+                exception_id = None
+                if active:
+                    try:
+                        exception_id = await guard_and_prepare(
+                            db, tenant, department_id=dept_id, designation_id=desig_id
+                        )
+                    except HTTPException as he:
+                        await safe_async_session_rollback(db)
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail=f"Row {idx}: import stopped — {he.detail}",
+                        ) from he
+                emp = Employee(
+                    tenant_id=tenant.id,
+                    employee_code=code,
+                    first_name=first_name,
+                    last_name=str(row[2] or "").strip() or None,
+                    email=str(row[3] or "").strip() or None,
+                    phone=str(row[4] or "").strip() or None,
+                    department_id=dept_id,
+                    designation_id=desig_id,
+                    section_id=sec_id,
+                    employee_category=cat,
+                    joining_date=join_date,
+                    employment_type=emp_type,
+                    is_active=active,
+                    date_of_birth=dob,
                 )
+                db.add(emp)
+                await db.flush()
+                if exception_id is not None and active:
+                    await consume_exception_slot(
+                        db,
+                        tenant_id=tenant.id,
+                        exception_id=exception_id,
+                        employee_id=emp.id,
+                        user_id=user.id,
+                    )
                 created += 1
         except (ValueError, TypeError) as e:
             errors.append(f"Row {idx}: {e!s}")

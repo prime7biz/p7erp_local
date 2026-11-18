@@ -47,6 +47,7 @@ from app.workers import mis_report_worker as _mis_report_worker  # noqa: E402, F
 from app.workers import mfg_planning_worker as _mfg_planning_worker  # noqa: E402, F401
 from app.workers import mfg_predictive_worker as _mfg_predictive_worker  # noqa: E402, F401
 from app.workers import mgmt_performance_worker as _mgmt_performance_worker  # noqa: E402, F401
+from app.workers import coa_interest_worker as _coa_interest_worker  # noqa: E402, F401
 from celery.schedules import crontab as _crontab  # noqa: E402
 
 # Optional beat schedule (enabled when a beat worker is running).
@@ -54,6 +55,11 @@ celery_app.conf.beat_schedule = {
     **(getattr(celery_app.conf, "beat_schedule", None) or {}),
     "party-ledger-daily-maintenance": {
         "task": "party_ledger.daily_maintenance",
+        "schedule": 60 * 60 * 24,
+    },
+    # COA Asset/Liability interest: creates DRAFT journals only (tenants with flag off are skipped).
+    "finance-coa-interest-accrual": {
+        "task": "finance.coa_interest_accrual",
         "schedule": 60 * 60 * 24,
     },
     "inventory-daily-stock-maintenance": {

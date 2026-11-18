@@ -1007,6 +1007,29 @@ export function ConfigurationPage() {
             <input
               type="checkbox"
               className="mt-1 rounded border-border-strong"
+              checked={featureFlags.coa_ledger_interest_v1 === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  coa_ledger_interest_v1: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Ledger interest on Asset / Liability accounts</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Chart of Accounts can activate interest on a loan liability or bank FD ledger (simple or compound,
+                fixed amount or yearly rate, monthly or quarterly). A nightly job creates <strong>draft</strong>{" "}
+                journals to Interest Expense or Interest Income; finance posts them manually. Ledgers already used by
+                Facilities are blocked. Off by default (
+                <code className="text-[11px]">coa_ledger_interest_v1</code>).
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
               checked={featureFlags.finance_ai_insights_v2 === true}
               onChange={(e) =>
                 setFeatureFlags((prev) => ({
@@ -1100,6 +1123,95 @@ export function ConfigurationPage() {
                 profile) waits for Tier 1 and then Tier 2 approval before it applies. Give the &quot;Tier 1&quot; and
                 &quot;Tier 2&quot; permissions to roles in Settings → Roles first (two different people). New employees
                 are not affected. Off by default.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.manpower_control_v1 === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  manpower_control_v1: e.target.checked,
+                  ...(e.target.checked
+                    ? {}
+                    : {
+                        manpower_quota_enforcement_v1: false,
+                        manpower_floor_suggested_v1: false,
+                        manpower_smv_panel_v1: false,
+                      }),
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Manpower &amp; SMV control</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Adds the HR Manpower hub: sanctioned strength by department and designation, ratio targets, and later
+                organogram, floor suggested headcount and industry vs factory SMV. Off by default.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 text-sm text-text-secondary pl-6">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.manpower_quota_enforcement_v1 === true}
+              disabled={featureFlags.manpower_control_v1 !== true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  manpower_quota_enforcement_v1: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Block hiring over sanctioned quota</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Needs Manpower &amp; SMV control on. Over-quota create / reassign / activate is blocked until a
+                management exception is approved (Phase 2). Off by default.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 text-sm text-text-secondary pl-6">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.manpower_floor_suggested_v1 === true}
+              disabled={featureFlags.manpower_control_v1 !== true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  manpower_floor_suggested_v1: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Floor suggested manpower</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Needs Manpower &amp; SMV control on. Shows suggested headcount from crew templates and IE line balance
+                (Phase 3). Off by default.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 text-sm text-text-secondary pl-6">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.manpower_smv_panel_v1 === true}
+              disabled={featureFlags.manpower_control_v1 !== true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  manpower_smv_panel_v1: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">SMV &amp; ratio panels</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Needs Manpower &amp; SMV control on. Industry vs factory SMV and ratio KPIs (Phase 5). Off by default.
               </span>
             </span>
           </label>

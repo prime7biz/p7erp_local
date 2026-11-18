@@ -766,12 +766,14 @@ async def post_held_voucher_to_books(
     from app.modules.commercial.commercial_invoice_service import sync_ci_allocation_status_for_voucher
     from app.modules.commercial.proforma_receipt_service import sync_allocation_status_for_voucher
     from app.modules.facility.posting_hooks import process_facility_voucher_posted
+    from app.modules.finance.coa_interest.lifecycle import on_coa_interest_voucher_posted
     from app.modules.finance.party_ledger_hooks import on_voucher_posted
 
     await process_facility_voucher_posted(db, tenant_id, voucher, user_id)
     await sync_allocation_status_for_voucher(db, tenant_id=tenant_id, voucher=voucher)
     await sync_ci_allocation_status_for_voucher(db, tenant_id=tenant_id, voucher=voucher)
     await on_voucher_posted(db, tenant_id, voucher, feature_flags=feature_flags, created_by=user_id)
+    await on_coa_interest_voucher_posted(db, tenant_id, voucher)
     await db.flush()
     return list(warnings)
 

@@ -662,8 +662,28 @@ async def activate_employee(
     await _require_manager_or_admin(db, user, tenant.id)
     assert_direct_edit_allowed(tenant)
     row = await _get_employee_or_404(db, tenant.id, employee_id)
-    row.is_active = True
-    await db.commit()
+    if not row.is_active:
+        from app.modules.hr_manpower.quota_guard import consume_exception_slot, guard_and_prepare
+
+        exception_id = await guard_and_prepare(
+            db,
+            tenant,
+            department_id=row.department_id,
+            designation_id=row.designation_id,
+            exclude_employee_id=row.id,
+        )
+        row.is_active = True
+        if exception_id is not None:
+            await consume_exception_slot(
+                db,
+                tenant_id=tenant.id,
+                exception_id=exception_id,
+                employee_id=row.id,
+                user_id=user.id,
+            )
+        await db.commit()
+    else:
+        await db.commit()
     await db.refresh(row)
     return _employee_to_response(row)
 

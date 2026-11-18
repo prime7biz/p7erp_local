@@ -21,6 +21,9 @@ from app.common.authz import ensure_user_is_tenant_admin
 from app.common.tenant import require_tenant
 from app.common.tenant_feature_keys import (
     HR_BD_SALARY_TDS_ENABLED,
+    MANPOWER_FLOOR_SUGGESTED_V1,
+    MANPOWER_QUOTA_ENFORCEMENT_V1,
+    MANPOWER_SMV_PANEL_V1,
     MFG_ADVANCED_PLANNING_V1,
     MFG_COST_INTELLIGENCE_V1,
     MFG_FINANCIAL_READINESS_V1,
@@ -32,6 +35,10 @@ from app.common.tenant_feature_keys import (
     RBAC_MODE_ENFORCE,
     get_tenant_rbac_mode,
     is_manufacturing_intelligence_v1_enabled,
+    is_manpower_control_v1_enabled,
+    is_manpower_floor_suggested_v1_enabled,
+    is_manpower_quota_enforcement_v1_enabled,
+    is_manpower_smv_panel_v1_enabled,
     is_mfg_advanced_planning_v1_enabled,
     is_mfg_cost_intelligence_v1_enabled,
     is_mfg_financial_readiness_v1_enabled,
@@ -247,6 +254,98 @@ async def _check_mfg_planning_flags(db: AsyncSession, tenant_id: int, current: d
     return changes
 
 
+_MANPOWER_NESTED_KEYS = (
+    MANPOWER_QUOTA_ENFORCEMENT_V1,
+    MANPOWER_FLOOR_SUGGESTED_V1,
+    MANPOWER_SMV_PANEL_V1,
+)
+
+
+def _check_manpower_flags(current: dict, new_flags: dict) -> list[str]:
+    """Nested manpower flags need manpower_control_v1. Switching off is always allowed."""
+    changes: list[str] = []
+    master_on = is_manpower_control_v1_enabled(new_flags)
+    master_was = is_manpower_control_v1_enabled(current)
+    master_now = is_manpower_control_v1_enabled(new_flags)
+    if master_now != master_was:
+        changes.append(f"manpower_control_v1 {'enabled' if master_now else 'disabled'}")
+    for key in _MANPOWER_NESTED_KEYS:
+        was = current.get(key) is True
+        now = new_flags.get(key) is True
+        if now and not was and not master_on:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{key} can be switched on only while manpower_control_v1 is on.",
+            )
+        # Effective on/off (nested helpers already require master) for the audit line.
+        eff_was = (
+            is_manpower_quota_enforcement_v1_enabled(current)
+            if key == MANPOWER_QUOTA_ENFORCEMENT_V1
+            else is_manpower_floor_suggested_v1_enabled(current)
+            if key == MANPOWER_FLOOR_SUGGESTED_V1
+            else is_manpower_smv_panel_v1_enabled(current)
+        )
+        eff_now = (
+            is_manpower_quota_enforcement_v1_enabled(new_flags)
+            if key == MANPOWER_QUOTA_ENFORCEMENT_V1
+            else is_manpower_floor_suggested_v1_enabled(new_flags)
+            if key == MANPOWER_FLOOR_SUGGESTED_V1
+            else is_manpower_smv_panel_v1_enabled(new_flags)
+        )
+        if eff_now != eff_was:
+            changes.append(f"{key} {'enabled' if eff_now else 'disabled'}")
+    return changes
+
+
+async def _assert_manpower_enforcement_ready(db: AsyncSession, tenant_id: int) -> None:
+    """Before switching enforcement on: need at least one sanctioned cell and one explicit approver."""
+    from app.common.permissions import PERMISSION_HR_MANPOWER_EXCEPTION_APPROVE, explicit_permission_granted
+    from app.models.hr_manpower import HrManpowerSanctionedStrength
+
+    sanctioned = int(
+        (
+            await db.execute(
+                select(func.count())
+                .select_from(HrManpowerSanctionedStrength)
+                .where(HrManpowerSanctionedStrength.tenant_id == tenant_id)
+            )
+        ).scalar_one()
+        or 0
+    )
+    if sanctioned < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Turn on quota enforcement only after you have at least one sanctioned strength row "
+                "(HR → Manpower → Sanctioned strength, or Seed from current headcount)."
+            ),
+        )
+    rows = (
+        await db.execute(
+            select(User.id, Role)
+            .join(Role, Role.id == User.role_id)
+            .where(
+                User.tenant_id == tenant_id,
+                or_(Role.tenant_id == tenant_id, Role.tenant_id.is_(None)),
+                User.is_active.is_(True),
+            )
+        )
+    ).all()
+    approvers = {
+        uid
+        for uid, role in rows
+        if explicit_permission_granted(role=role, permission_key=PERMISSION_HR_MANPOWER_EXCEPTION_APPROVE)
+    }
+    if len(approvers) < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Quota enforcement needs at least one active user with the explicit permission "
+                "'hr.manpower.exception.approve' (Settings → Roles). Admin / wildcard cannot approve exceptions."
+            ),
+        )
+
+
 async def _get_tenant_user(db: AsyncSession, tenant_id: int, user_id: int) -> User:
     result = await db.execute(select(User).where(User.id == user_id, User.tenant_id == tenant_id))
     target = result.scalar_one_or_none()
@@ -339,9 +438,14 @@ async def update_settings_config(
                     ),
                 )
         mfg_changes = await _check_mfg_planning_flags(db, tenant.id, current, new_flags)
+        manpower_changes = _check_manpower_flags(current, new_flags)
+        enforcement_was = is_manpower_quota_enforcement_v1_enabled(current)
+        enforcement_now = is_manpower_quota_enforcement_v1_enabled(new_flags)
+        if enforcement_now and not enforcement_was:
+            await _assert_manpower_enforcement_ready(db, tenant.id)
         predictive_turned_off = _predictive_effective(current) and not _predictive_effective(new_flags)
         tenant.feature_flags = new_flags
-        for change in mfg_changes:
+        for change in [*mfg_changes, *manpower_changes]:
             await log_action(
                 db,
                 tenant_id=tenant.id,

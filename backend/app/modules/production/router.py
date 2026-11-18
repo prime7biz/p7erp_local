@@ -12,6 +12,7 @@ from app.modules.production.hourly_router import router as hourly_router
 from app.modules.production.ie_router import router as ie_router
 from app.modules.production.knitting_router import router as knitting_router
 from app.modules.production.lines_router import router as lines_router
+from app.modules.production.manpower_floor_router import router as manpower_floor_router
 from app.modules.production.planning_router import router as planning_router
 from app.modules.production.quality_router import router as quality_router
 from app.modules.production.roster_router import router as roster_router
@@ -41,3 +42,5 @@ router.include_router(costing_router, dependencies=_production_access_dependency
 router.include_router(knitting_router, dependencies=_production_access_dependency)
 router.include_router(dyeing_router, dependencies=_production_access_dependency)
 router.include_router(dept_router, dependencies=_production_access_dependency)
+# Floor suggested: own soft OR gate (planning.read | hr.manpower.read); no production.access.
+router.include_router(manpower_floor_router)

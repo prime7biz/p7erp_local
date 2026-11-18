@@ -39,6 +39,7 @@ PERMISSION_PARTY_LEDGER_ALLOCATE = "finance.party_ledger.allocate"
 PERMISSION_PARTY_LEDGER_STATEMENT = "finance.party_ledger.statement"
 PERMISSION_PARTY_LEDGER_AGING = "finance.party_ledger.aging"
 PERMISSION_PARTY_LEDGER_INTEREST = "finance.party_ledger.interest"
+PERMISSION_COA_INTEREST_RUN = "finance.coa_interest.run"
 PERMISSION_TAX_LEDGER_VIEW = "finance.tax_ledger.view"
 PERMISSION_TAX_LEDGER_CREATE = "finance.tax_ledger.create"
 PERMISSION_TAX_LEDGER_EDIT = "finance.tax_ledger.edit"
@@ -154,6 +155,12 @@ PERMISSION_HR_BONUS_MANAGE = "hr.bonus.manage"
 # role grants them; no admin / manager / wildcard bypass (see explicit_permission_granted).
 PERMISSION_HR_EMPLOYEE_CHANGE_TIER1 = "hr.employee.change.tier1"
 PERMISSION_HR_EMPLOYEE_CHANGE_TIER2 = "hr.employee.change.tier2"
+# Factory Manpower & SMV Control (tenant flag manpower_control_v1). Approve is fail-closed
+# (explicit_permission_granted; no admin/wildcard bypass). Read/manage follow normal HR helpers.
+PERMISSION_HR_MANPOWER_READ = "hr.manpower.read"
+PERMISSION_HR_MANPOWER_MANAGE = "hr.manpower.manage"
+PERMISSION_HR_MANPOWER_EXCEPTION_REQUEST = "hr.manpower.exception.request"
+PERMISSION_HR_MANPOWER_EXCEPTION_APPROVE = "hr.manpower.exception.approve"
 PERMISSION_AI_HR_EXTRACT = "ai.hr_extract"
 PERMISSION_AI_LC_EXTRACT = "ai.lc_extract"
 PERMISSION_AI_SHIPPING_EXTRACT = "ai.shipping_extract"
@@ -197,6 +204,26 @@ MATERIAL_CONTROL_GOVERNANCE_KEYS: list[dict[str, str]] = [
     {
         "key": PERMISSION_HR_EMPLOYEE_CHANGE_TIER2,
         "label": "Tier 2 (final) approval of employee changes",
+        "group": "HR & payroll",
+    },
+    {
+        "key": PERMISSION_HR_MANPOWER_READ,
+        "label": "View manpower quotas, organogram and SMV / ratio panels",
+        "group": "HR & payroll",
+    },
+    {
+        "key": PERMISSION_HR_MANPOWER_MANAGE,
+        "label": "Edit sanctioned manpower strength and ratio targets",
+        "group": "HR & payroll",
+    },
+    {
+        "key": PERMISSION_HR_MANPOWER_EXCEPTION_REQUEST,
+        "label": "Request an over-quota hiring exception",
+        "group": "HR & payroll",
+    },
+    {
+        "key": PERMISSION_HR_MANPOWER_EXCEPTION_APPROVE,
+        "label": "Approve or reject over-quota hiring exceptions (no admin bypass)",
         "group": "HR & payroll",
     },
     {
@@ -277,6 +304,11 @@ MATERIAL_CONTROL_GOVERNANCE_KEYS: list[dict[str, str]] = [
     {
         "key": PERMISSION_PARTY_LEDGER_INTEREST,
         "label": "Calculate interest on overdue party bills",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_COA_INTEREST_RUN,
+        "label": "Run chart-of-accounts ledger interest accruals",
         "group": "Finance",
     },
     {

@@ -1,7 +1,12 @@
 # https://www.robotstxt.org/robotstxt.html
 # robots.txt is a crawling hint, not access control: private pages are protected by login.
 # /app and /portal stay crawlable on purpose so search engines can read their "noindex" tag.
+#
+# Content Signals (https://contentsignals.org/): preferences for how automated systems
+# may use this site's content. search = search index / short excerpts only.
+# ai-input = RAG / generative answers. ai-train = model training or fine-tuning.
 User-agent: *
+Content-Signal: ai-train=no, search=yes, ai-input=no
 Allow: /
 Disallow: /api/
 Disallow: /media/

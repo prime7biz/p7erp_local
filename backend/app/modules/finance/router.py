@@ -430,6 +430,15 @@ class ChartAccountBody(BaseModel):
     last_reviewed_at: date | None = None
     enable_bill_wise: bool = False
     cost_nature: CostNatureLiteral | None = None
+    # Optional COA interest (tenant flag coa_ledger_interest_v1)
+    interest_enabled: bool = False
+    interest_basis: Literal["simple", "compound"] | None = None
+    interest_method: Literal["monthly_fixed", "yearly_fixed", "yearly_rate"] | None = None
+    interest_frequency: Literal["monthly", "quarterly"] | None = None
+    interest_rate_yearly: MoneyStrNonNegOpt = None
+    interest_amount: MoneyStrNonNegOpt = None
+    interest_counterpart_account_id: int | None = None
+    interest_activation_date: date | None = None
 
     @field_validator("cost_nature", mode="before")
     @classmethod
@@ -454,8 +463,10 @@ class ChartAccountOut(ChartAccountBody):
     usage_purpose: str | None = None
     linked_module: str | None = None
 
-    @field_serializer("opening_balance", "balance")
-    def _serialize_money(self, value: object) -> str:
+    @field_serializer("opening_balance", "balance", "interest_rate_yearly", "interest_amount")
+    def _serialize_money(self, value: object) -> str | None:
+        if value is None:
+            return None
         return decimal_to_money_response(value)
 
     class Config:
@@ -1876,11 +1887,46 @@ async def create_chart_account(
             width=coa_cfg["account_number_width"],
         )
     await ensure_owned(db, ChartOfAccount, body.parent_account_id, tenant.id, "Parent ledger account")
-    payload = body.model_dump(exclude={"account_number"})
+    from app.common.tenant_feature_keys import is_coa_ledger_interest_v1_enabled
+    from app.modules.finance.coa_interest.validation import validate_interest_policy
+
+    interest_fields = await validate_interest_policy(
+        db,
+        tenant_id=tenant.id,
+        account=None,
+        group=group,
+        interest_enabled=bool(body.interest_enabled) and is_coa_ledger_interest_v1_enabled(tenant.feature_flags),
+        interest_basis=body.interest_basis,
+        interest_method=body.interest_method,
+        interest_frequency=body.interest_frequency,
+        interest_rate_yearly=body.interest_rate_yearly,
+        interest_amount=body.interest_amount,
+        interest_counterpart_account_id=body.interest_counterpart_account_id,
+        interest_activation_date=body.interest_activation_date,
+    )
+    payload = body.model_dump(
+        exclude={
+            "account_number",
+            "interest_enabled",
+            "interest_basis",
+            "interest_method",
+            "interest_frequency",
+            "interest_rate_yearly",
+            "interest_amount",
+            "interest_counterpart_account_id",
+            "interest_activation_date",
+        }
+    )
     payload["account_number"] = account_number
     payload["balance"] = body.opening_balance
+    payload.update(interest_fields)
     row = ChartOfAccount(tenant_id=tenant.id, **payload)
     db.add(row)
+    await db.flush()
+    if row.interest_enabled:
+        from app.modules.finance.coa_interest.facility_conflict import assert_coa_interest_allowed_for_account
+
+        await assert_coa_interest_allowed_for_account(db, tenant.id, row.id)
     await db.commit()
     await _invalidate_account_group_hierarchy_cache(tenant.id)
     await db.refresh(row)
@@ -1896,8 +1942,14 @@ async def update_chart_account(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = await db.get(ChartOfAccount, account_id)
-    if not row or row.tenant_id != tenant.id:
+    row = (
+        await db.execute(
+            select(ChartOfAccount)
+            .where(ChartOfAccount.id == account_id, ChartOfAccount.tenant_id == tenant.id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if not row:
         raise HTTPException(status_code=404, detail="Ledger account not found")
     if row.is_protected:
         allowed = {
@@ -1929,7 +1981,38 @@ async def update_chart_account(
             detail=f"Normal balance must be '{group.default_normal_balance}' for this account group.",
         )
     await ensure_owned(db, ChartOfAccount, body.parent_account_id, tenant.id, "Parent ledger account")
-    for key, value in body.model_dump(exclude={"account_number"}).items():
+    from app.common.tenant_feature_keys import is_coa_ledger_interest_v1_enabled
+    from app.modules.finance.coa_interest.validation import validate_interest_policy
+
+    interest_fields = await validate_interest_policy(
+        db,
+        tenant_id=tenant.id,
+        account=row,
+        group=group,
+        interest_enabled=bool(body.interest_enabled) and is_coa_ledger_interest_v1_enabled(tenant.feature_flags),
+        interest_basis=body.interest_basis,
+        interest_method=body.interest_method,
+        interest_frequency=body.interest_frequency,
+        interest_rate_yearly=body.interest_rate_yearly,
+        interest_amount=body.interest_amount,
+        interest_counterpart_account_id=body.interest_counterpart_account_id,
+        interest_activation_date=body.interest_activation_date,
+    )
+    for key, value in body.model_dump(
+        exclude={
+            "account_number",
+            "interest_enabled",
+            "interest_basis",
+            "interest_method",
+            "interest_frequency",
+            "interest_rate_yearly",
+            "interest_amount",
+            "interest_counterpart_account_id",
+            "interest_activation_date",
+        }
+    ).items():
+        setattr(row, key, value)
+    for key, value in interest_fields.items():
         setattr(row, key, value)
     await db.commit()
     await _invalidate_account_group_hierarchy_cache(tenant.id)
@@ -2873,6 +2956,9 @@ async def delete_voucher(
         from_status=row.status,
         changes={"header": header_snapshot(row), "lines": lines_snapshot(lines)},
     )
+    from app.modules.finance.coa_interest.lifecycle import on_coa_interest_voucher_deleted
+
+    await on_coa_interest_voucher_deleted(db, tenant.id, row)
     for line in lines:
         await db.delete(line)
     await db.delete(row)
@@ -3068,6 +3154,7 @@ async def update_voucher_status(
         from app.modules.commercial.proforma_receipt_service import sync_allocation_status_for_voucher
         from app.modules.commercial.commercial_invoice_service import sync_ci_allocation_status_for_voucher
         from app.modules.finance.party_ledger_hooks import on_voucher_posted
+        from app.modules.finance.coa_interest.lifecycle import on_coa_interest_voucher_posted
 
         await process_facility_voucher_posted(db, tenant.id, row, user.id)
         await sync_allocation_status_for_voucher(db, tenant_id=tenant.id, voucher=row)
@@ -3079,6 +3166,7 @@ async def update_voucher_status(
             feature_flags=tenant.feature_flags,
             created_by=user.id,
         )
+        await on_coa_interest_voucher_posted(db, tenant.id, row)
         try:
             from app.modules.finance.tds_service import maybe_auto_tds_on_payment_voucher
 
@@ -3099,11 +3187,19 @@ async def update_voucher_status(
         from app.modules.commercial.commercial_invoice_service import sync_ci_allocation_status_for_voucher
         from app.modules.finance.party_ledger_hooks import on_voucher_cancelled
         from app.modules.finance.tds_service import on_payment_voucher_cancelled
+        from app.modules.finance.coa_interest.lifecycle import (
+            on_coa_interest_voucher_cancelled,
+            on_coa_interest_voucher_reversed,
+        )
 
         await on_payment_voucher_cancelled(db, tenant.id, row)
         await sync_allocation_status_for_voucher(db, tenant_id=tenant.id, voucher=row)
         await sync_ci_allocation_status_for_voucher(db, tenant_id=tenant.id, voucher=row)
         await on_voucher_cancelled(db, tenant.id, row, feature_flags=tenant.feature_flags)
+        if next_status == "CANCELLED":
+            await on_coa_interest_voucher_cancelled(db, tenant.id, row)
+        else:
+            await on_coa_interest_voucher_reversed(db, tenant.id, row)
     if previous_status != next_status and next_status in {"APPROVED", "REJECTED", "POSTED", "CANCELLED"}:
         from app.modules.notifications.service import notify_user
 
@@ -8062,3 +8158,8 @@ router.include_router(_ai_insights_router)
 from app.modules.finance.mgmt_performance.router import router as _mgmt_performance_router  # noqa: E402
 
 router.include_router(_mgmt_performance_router)
+
+# COA Asset/Liability interest accruals (coa_ledger_interest_v1). Draft journals only.
+from app.modules.finance.coa_interest.router import router as _coa_interest_router  # noqa: E402
+
+router.include_router(_coa_interest_router)

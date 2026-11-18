@@ -152,6 +152,9 @@ else {
 
 const robotsTxt = read("robots.txt") ?? "";
 if (!robotsTxt.includes(`Sitemap: ${SITE}/sitemap.xml`)) fail("robots.txt does not name the sitemap");
+if (!/Content-Signal:\s*ai-train=no,\s*search=yes,\s*ai-input=no/.test(robotsTxt)) {
+  fail("robots.txt missing Content-Signal: ai-train=no, search=yes, ai-input=no");
+}
 
 for (const w of warnings) console.warn(`WARN ${w}`);
 if (failures.length) {

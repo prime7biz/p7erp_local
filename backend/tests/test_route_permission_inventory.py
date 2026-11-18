@@ -88,6 +88,7 @@ def test_newly_gated_routers_use_expected_keys():
         f"{API}/hr/employee-access": "hr.access",
         f"{API}/hr/generated-documents": "hr.access",
         f"{API}/hr/change-requests": "hr.access",
+        f"{API}/hr/manpower": "hr.access",
         f"{API}/mfg-intelligence": "production.planning.read",
         f"{API}/mfg-intelligence/predictive": "production.planning.read",
         f"{API}/mfg-intelligence/recommendations": "production.planning.read",

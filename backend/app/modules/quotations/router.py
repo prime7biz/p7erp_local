@@ -931,6 +931,47 @@ async def get_quotation(
   )
 
 
+@router.get("/{quotation_id}/pdf")
+async def quotation_pdf(
+  quotation_id: int,
+  tenant: Tenant = Depends(require_tenant),
+  user: User = Depends(get_current_user),
+  db: AsyncSession = Depends(get_db),
+):
+  """Server PDF for phone Save PDF / Share (tenant-scoped)."""
+  from fastapi.responses import Response
+  from app.modules.merch.doc_pdf import render_simple_doc_pdf
+
+  if user.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+  quotation = await db.get(Quotation, quotation_id)
+  if not quotation or quotation.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
+  content = render_simple_doc_pdf(
+    tenant=tenant,
+    title="Quotation",
+    lines=[
+      ("Code", quotation.quotation_code),
+      ("Status", quotation.status),
+      ("Version", quotation.version_no),
+      ("Style ref", quotation.style_ref),
+      ("Quoted price", quotation.quoted_price),
+      ("Total amount", quotation.total_amount),
+      ("Currency", quotation.currency),
+      ("Quantity", quotation.projected_quantity),
+      ("Delivery", quotation.projected_delivery_date),
+      ("Valid until", quotation.valid_until),
+      ("Notes", (quotation.notes or "")[:90]),
+    ],
+  )
+  filename = f"{quotation.quotation_code or f'quotation-{quotation.id}'}.pdf".replace("/", "-")
+  return Response(
+    content=content,
+    media_type="application/pdf",
+    headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+  )
+
+
 @router.patch("/{quotation_id}", response_model=QuotationResponse)
 async def update_quotation(
   quotation_id: int,

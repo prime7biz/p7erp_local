@@ -666,5 +666,37 @@ Finance reports follow the **financial year** set in **Settings → Configuratio
       ],
       relatedArticleIds: ["reports-overview", "fin-overview", "settings-configuration"],
     },
+    {
+      id: "kpi-engine-cockpit",
+      title: "KPI cockpit: governed factory and buying-office measures",
+      summary:
+        "Turn on kpi_engine_v1, open Operations → KPI cockpit, seed definitions, then read cards with status, freshness and evidence drill-down.",
+      content: `## Overview
+
+The **KPI cockpit** (\`/app/kpi\`) shows governed measures (order book, T&A, capacity, sewing efficiency, OTIF, margins, attendance, commission and more). Each card has a definition, value, status and data freshness. It does **not** post vouchers or change stock.
+
+## Before you start
+
+- An admin switches on **KPI engine** in Settings → Configuration (More features). Optional: **KPI predictive scores**.
+- Your role should allow KPI read (soft permission \`kpi.read\`; confidential finance cards need finance rights or Class 1 when authority classes are on).
+
+## Steps
+
+1. Open **Operations → KPI cockpit**.
+2. Click **Seed definitions** once (admin) so Tier-1 KPIs appear.
+3. Pick a dashboard tab (Executive, Merchandising, Production, Finance, Agent, …).
+4. Click a card to open **evidence** rows that explain the number.
+5. DHU and RFT stay **NO_DATA** until QC data is structured (known gap QA-04). OTIF may show \`LATEST_DATE_BASIS\` until commitment history is backfilled.
+
+## Tips
+
+- Targets are never hard-coded industry benchmarks; set typed targets later in the registry.
+- Predictive order-delay scores need \`kpi_predictive_v1\` and do not overwrite factual KPIs.`,
+      tags: ["kpi", "analytics", "otif", "efficiency", "executive"],
+      keywords: ["kpi_engine_v1", "KPI cockpit", "OTIF", "DHU", "sewing efficiency", "commitment revisions"],
+      relatedAppRoutes: ["/app/kpi", "/app/settings/configuration"],
+      relatedArticleIds: ["reports-overview", "settings-configuration"],
+      lastUpdated: "2026-11-19",
+    },
   ],
 };

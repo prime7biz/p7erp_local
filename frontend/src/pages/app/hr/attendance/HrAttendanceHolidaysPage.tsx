@@ -123,7 +123,7 @@ export function HrAttendanceHolidaysPage() {
         searchPlaceholder="Search date, name or note…"
         initialSort={{ key: "date", dir: "asc" }}
         exportFileName="hr-holidays"
-        canExport={canExportHrData(me?.role_name)}
+        canExport={canExportHrData(me)}
         rowActions={(r) => [{ key: "edit", label: "Edit", primary: true, onClick: () => openEdit(r) }]}
       />
 

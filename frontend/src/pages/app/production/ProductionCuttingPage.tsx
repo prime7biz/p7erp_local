@@ -2,12 +2,18 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "@/api/client";
 import { CutTicketFabricLots } from "@/components/production/CutTicketFabricLots";
 import { useAuth } from "@/context/AuthContext";
+import { useMediaQuery } from "@/hooks/useInventoryListView";
+import { useMobileUiV2Phone } from "@/hooks/useMobileUiV2";
 import { logApiError } from "@/utils/logApiError";
-import { saveBlob } from "@/lib/fileSave";
+import { preferShareOverPrint, saveBlob, shareOrSaveBlob } from "@/lib/fileSave";
+import { PHONE_MEDIA_QUERY } from "@/lib/mobileUi";
 
 export function ProductionCuttingPage() {
   const { me } = useAuth();
   const traceabilityOn = me?.feature_flags?.traceability_enabled === true;
+  const mobileV2Phone = useMobileUiV2Phone();
+  const narrow = useMediaQuery(PHONE_MEDIA_QUERY);
+  const phoneActions = preferShareOverPrint(mobileV2Phone || narrow);
   const [markers, setMarkers] = useState<Array<{ id: number; marker_code: string; status: string }>>([]);
   const [markerCode, setMarkerCode] = useState("");
   const [orderId, setOrderId] = useState("");
@@ -86,7 +92,12 @@ export function ProductionCuttingPage() {
     if (!cutTicketId) return;
     try {
       const blob = await api.downloadCuttingBundlePdf(Number(cutTicketId));
-      void saveBlob(blob, `bundles-${cutTicketId}.pdf`);
+      const filename = `bundles-${cutTicketId}.pdf`;
+      if (phoneActions) {
+        await shareOrSaveBlob(blob, filename);
+      } else {
+        await saveBlob(blob, filename);
+      }
     } catch (e) {
       logApiError(e, "ProductionCuttingPage.downloadPdf");
     }
@@ -154,9 +165,20 @@ export function ProductionCuttingPage() {
           <button type="button" className="rounded-lg border px-3 py-1.5 text-sm" onClick={() => void genBundles()}>
             Generate bundles
           </button>
-          <button type="button" className="rounded-lg border px-3 py-1.5 text-sm" onClick={() => void downloadPdf()}>
-            Download barcode PDF
-          </button>
+          {phoneActions ? (
+            <>
+              <button type="button" className="rounded-lg border px-3 py-1.5 text-sm" onClick={() => void downloadPdf()}>
+                Save PDF
+              </button>
+              <button type="button" className="rounded-lg border px-3 py-1.5 text-sm" onClick={() => void downloadPdf()}>
+                Share
+              </button>
+            </>
+          ) : (
+            <button type="button" className="rounded-lg border px-3 py-1.5 text-sm" onClick={() => void downloadPdf()}>
+              Download barcode PDF
+            </button>
+          )}
         </div>
         {traceabilityOn && Number(cutTicketId) > 0 ? <CutTicketFabricLots cutTicketId={Number(cutTicketId)} /> : null}
       </section>

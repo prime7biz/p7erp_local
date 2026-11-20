@@ -73,9 +73,16 @@ def _ensure(user: User, tenant: Tenant) -> None:
 
 
 async def _require_manager(db: AsyncSession, user: User, tenant_id: int) -> None:
-    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
-    if (role.name if role else "").strip().lower() not in {"admin", "manager"}:
-        raise HTTPException(status_code=403, detail="Only an admin or manager can do this")
+    from app.common.authority.policy import is_manager_equivalent_for_module
+    from app.models import Tenant
+
+    tenant = await db.get(Tenant, tenant_id)
+    flags = tenant.feature_flags if tenant is not None else None
+    if await is_manager_equivalent_for_module(db, user, tenant_id, "inventory", feature_flags=flags):
+        return
+    if await is_manager_equivalent_for_module(db, user, tenant_id, "merch", feature_flags=flags):
+        return
+    raise HTTPException(status_code=403, detail="Only an admin or manager can do this")
 
 
 async def _get_pr(db: AsyncSession, tenant_id: int, pr_id: int, *, lock: bool = False) -> PurchaseRequisition:

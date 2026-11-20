@@ -112,6 +112,9 @@ async def comparative_bs(
 ):
     _ensure_tenant(user, tenant)
     _require_mis(tenant)
+    from app.common.authority.policy import assert_pnl_balance_sheet_allowed
+
+    await assert_pnl_balance_sheet_allowed(db, user, feature_flags=tenant.feature_flags)
     await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_MIS_REPORT_VIEW)
     return await generate_comparative_balance_sheet(db, tenant.id, year1=year1, year2=year2)
 
@@ -127,6 +130,9 @@ async def comparative_pl(
     """Comparative P&L (path uses comparative-pl; alias also registered)."""
     _ensure_tenant(user, tenant)
     _require_mis(tenant)
+    from app.common.authority.policy import assert_pnl_balance_sheet_allowed
+
+    await assert_pnl_balance_sheet_allowed(db, user, feature_flags=tenant.feature_flags)
     await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_MIS_REPORT_VIEW)
     return await generate_comparative_pl(db, tenant.id, year1=year1, year2=year2)
 

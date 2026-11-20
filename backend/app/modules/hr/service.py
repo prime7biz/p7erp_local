@@ -255,11 +255,9 @@ async def import_employees_excel(db: AsyncSession, tenant: Tenant, user: User, f
                             exclude_employee_id=existing.id,
                         )
                     except HTTPException as he:
-                        await safe_async_session_rollback(db)
-                        raise HTTPException(
-                            status_code=status.HTTP_409_CONFLICT,
-                            detail=f"Row {idx}: import stopped — {he.detail}",
-                        ) from he
+                        # Business guard (not a DB abort). Do not rollback — prior rows stay pending for commit.
+                        errors.append(f"Row {idx}: import stopped — {he.detail}")
+                        break
                 existing.first_name = first_name
                 existing.last_name = str(row[2] or "").strip() or None
                 existing.email = str(row[3] or "").strip() or None
@@ -305,11 +303,9 @@ async def import_employees_excel(db: AsyncSession, tenant: Tenant, user: User, f
                             db, tenant, department_id=dept_id, designation_id=desig_id
                         )
                     except HTTPException as he:
-                        await safe_async_session_rollback(db)
-                        raise HTTPException(
-                            status_code=status.HTTP_409_CONFLICT,
-                            detail=f"Row {idx}: import stopped — {he.detail}",
-                        ) from he
+                        # Business guard (not a DB abort). Do not rollback — prior rows stay pending for commit.
+                        errors.append(f"Row {idx}: import stopped — {he.detail}")
+                        break
                 emp = Employee(
                     tenant_id=tenant.id,
                     employee_code=code,

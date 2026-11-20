@@ -2,13 +2,40 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api, type FxReceiptCreate, type FxReceiptResponse, type FxUnsettledSummaryResponse } from "@/api/client";
 import { todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
-import { useEmbeddedPage } from "@/components/app/embeddedPage";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import {
+  listPageEmptyClass,
+  listPageErrorClass,
+  listPageLoadingClass,
+  listPageRootClass,
+  listPageToolbarSelectClass,
+  listTableBaseClass,
+  listTableTdClass,
+  listTableTdPrimaryClass,
+  listTableThClass,
+  listTableTheadClass,
+  listTableTrClass,
+} from "@/components/app/listPageLayout";
+import {
+  FinanceFormDrawer,
+  FinanceListToolbar,
+  FormSection,
+  ScrollTableCard,
+  SummaryStrip,
+  showingCountLabel,
+} from "@/components/finance/kit";
+
+const fieldClass =
+  "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary focus:border-brand-primary focus:outline-none focus:ring-0";
+const labelClass = "mb-1 block text-xs font-medium text-text-muted";
 
 export function FxReceiptsPage() {
-  const embedded = useEmbeddedPage();
   const [rows, setRows] = useState<FxReceiptResponse[]>([]);
   const [summary, setSummary] = useState<FxUnsettledSummaryResponse | null>(null);
   const [error, setError] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("");
   const [settleMap, setSettleMap] = useState<Record<number, string>>({});
@@ -44,14 +71,29 @@ export function FxReceiptsPage() {
     void load();
   }, [load]);
 
+  function openAdd() {
+    setFormError(null);
+    setDrawerOpen(true);
+  }
+
+  function closeDrawer() {
+    setDrawerOpen(false);
+    setFormError(null);
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
+    setFormError(null);
+    setSaving(true);
     try {
       await api.createFxReceipt(form);
       setForm((p) => ({ ...p, receipt_no: "", source_ref: "", fc_amount: "0", notes: "" }));
+      closeDrawer();
       await load();
-    } catch (e) {
-      setError((e as Error).message);
+    } catch (err) {
+      setFormError((err as Error).message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -65,111 +107,138 @@ export function FxReceiptsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {!embedded && (
-        <>
-      <div>
-        <h1 className="text-2xl font-semibold text-text-primary">FX Receipts & Settlement</h1>
-        <p className="mt-1 text-sm text-text-muted">Track foreign currency receipts and settlement workflow.</p>
-      </div>
-        </>
-      )}
+    <div className={listPageRootClass}>
+      <AppPageHeader title="FX Receipts & Settlement" description="Track foreign currency receipts and settlement workflow." />
+
       {summary ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-xl border bg-surface-raised p-3">
-            <div className="text-xs text-text-muted">Total Base</div>
-            <div className="text-xl font-semibold">{summary.total_base_amount.toLocaleString()}</div>
-          </div>
-          <div className="rounded-xl border bg-surface-raised p-3">
-            <div className="text-xs text-text-muted">Total Settled</div>
-            <div className="text-xl font-semibold text-status-success-foreground">{summary.total_settled_amount.toLocaleString()}</div>
-          </div>
-          <div className="rounded-xl border bg-surface-raised p-3">
-            <div className="text-xs text-text-muted">Unsettled</div>
-            <div className="text-xl font-semibold text-status-warning-foreground">{summary.total_unsettled_amount.toLocaleString()}</div>
-          </div>
-        </div>
+        <SummaryStrip
+          items={[
+            { key: "total", label: "Total Base", value: summary.total_base_amount.toLocaleString() },
+            { key: "settled", label: "Total Settled", value: summary.total_settled_amount.toLocaleString(), tone: "success" },
+            { key: "unsettled", label: "Unsettled", value: summary.total_unsettled_amount.toLocaleString(), tone: "warning" },
+          ]}
+        />
       ) : null}
 
-      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-border bg-surface-raised p-4 sm:grid-cols-2 lg:grid-cols-4">
-        <input className="rounded border px-3 py-2 text-sm" placeholder="Receipt No (optional)" value={form.receipt_no} onChange={(e) => setForm((p) => ({ ...p, receipt_no: e.target.value }))} />
-        <input type="date" className="rounded border px-3 py-2 text-sm" value={form.receipt_date} onChange={(e) => setForm((p) => ({ ...p, receipt_date: e.target.value }))} />
-        <input className="rounded border px-3 py-2 text-sm" placeholder="Source Ref" value={form.source_ref} onChange={(e) => setForm((p) => ({ ...p, source_ref: e.target.value }))} />
-        <input className="rounded border px-3 py-2 text-sm" placeholder="Currency" value={form.currency} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value.toUpperCase() }))} />
-        <input className="rounded border px-3 py-2 text-sm" placeholder="FC Amount" value={form.fc_amount} onChange={(e) => setForm((p) => ({ ...p, fc_amount: e.target.value }))} />
-        <input className="rounded border px-3 py-2 text-sm" placeholder="Rate to Base" value={form.rate_to_base} onChange={(e) => setForm((p) => ({ ...p, rate_to_base: e.target.value }))} />
-        <input className="rounded border px-3 py-2 text-sm sm:col-span-2 lg:col-span-2" placeholder="Notes" value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} />
-        <button className="rounded bg-brand-primary px-3 py-2 text-sm text-brand-primary-foreground sm:col-span-2 lg:col-span-1">Create Receipt</button>
-      </form>
-
-      <div className="rounded-xl border border-border bg-surface-raised p-4">
-        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-lg font-semibold">Receipt List</h2>
-          <select className="rounded border px-2 py-1 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+      <FinanceListToolbar
+        filters={
+          <select
+            aria-label="Receipt status filter"
+            className={listPageToolbarSelectClass}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
             <option value="">All</option>
             <option value="OPEN">OPEN</option>
             <option value="PARTIAL">PARTIAL</option>
             <option value="SETTLED">SETTLED</option>
           </select>
-        </div>
-        {error ? <div className="mb-2 rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-surface-subtle text-left">
+        }
+        primaryAction={{ label: "Create receipt", onClick: openAdd }}
+      />
+
+      {error ? <div className={listPageErrorClass}>{error}</div> : null}
+
+      <ScrollTableCard maxHeight="main" footer={showingCountLabel(rows.length, rows.length, "receipt")}>
+        <table className={`${listTableBaseClass} min-w-[44rem]`}>
+          <thead className={listTableTheadClass}>
+            <tr>
+              <th className={listTableThClass}>Receipt</th>
+              <th className={listTableThClass}>Date</th>
+              <th className={listTableThClass}>FC Amount</th>
+              <th className={listTableThClass}>Base Amount</th>
+              <th className={listTableThClass}>Settled</th>
+              <th className={listTableThClass}>Status</th>
+              <th className={listTableThClass}>Settle</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
               <tr>
-                <th className="px-3 py-2">Receipt</th>
-                <th className="px-3 py-2">Date</th>
-                <th className="px-3 py-2">FC Amount</th>
-                <th className="px-3 py-2">Base Amount</th>
-                <th className="px-3 py-2">Settled</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Settle</th>
+                <td className={listPageLoadingClass} colSpan={7}>
+                  Loading FX receipts...
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td className="px-3 py-5 text-text-muted" colSpan={7}>
-                    Loading FX receipts...
+            ) : rows.length === 0 ? (
+              <tr>
+                <td className={listPageEmptyClass} colSpan={7}>
+                  No FX receipts found.
+                </td>
+              </tr>
+            ) : (
+              rows.map((r) => (
+                <tr key={r.id} className={listTableTrClass}>
+                  <td className={listTableTdPrimaryClass}>{r.receipt_no}</td>
+                  <td className={listTableTdClass}>{r.receipt_date}</td>
+                  <td className={listTableTdClass}>
+                    {Number(r.fc_amount).toLocaleString()} {r.currency}
+                  </td>
+                  <td className={listTableTdClass}>{Number(r.base_amount).toLocaleString()}</td>
+                  <td className={listTableTdClass}>{Number(r.settled_amount).toLocaleString()}</td>
+                  <td className={listTableTdClass}>{r.status}</td>
+                  <td className={listTableTdClass}>
+                    <div className="flex gap-2">
+                      <input
+                        className="w-24 rounded-lg border border-border-strong bg-surface-raised px-2 py-1 text-xs"
+                        placeholder="Amount"
+                        aria-label={`Settle amount for ${r.receipt_no}`}
+                        value={settleMap[r.id] ?? ""}
+                        onChange={(e) => setSettleMap((p) => ({ ...p, [r.id]: e.target.value }))}
+                      />
+                      <button type="button" className="rounded-lg border border-border-strong px-2 py-1 text-xs" onClick={() => void settle(r.id)}>
+                        Settle
+                      </button>
+                    </div>
                   </td>
                 </tr>
-              ) : rows.length === 0 ? (
-                <tr>
-                  <td className="px-3 py-5 text-text-muted" colSpan={7}>
-                    No FX receipts found.
-                  </td>
-                </tr>
-              ) : (
-                rows.map((r) => (
-                  <tr key={r.id} className="border-t">
-                    <td className="px-3 py-2">{r.receipt_no}</td>
-                    <td className="px-3 py-2">{r.receipt_date}</td>
-                    <td className="px-3 py-2">
-                      {Number(r.fc_amount).toLocaleString()} {r.currency}
-                    </td>
-                    <td className="px-3 py-2">{Number(r.base_amount).toLocaleString()}</td>
-                    <td className="px-3 py-2">{Number(r.settled_amount).toLocaleString()}</td>
-                    <td className="px-3 py-2">{r.status}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex gap-2">
-                        <input
-                          className="w-24 rounded border px-2 py-1 text-xs"
-                          placeholder="Amount"
-                          value={settleMap[r.id] ?? ""}
-                          onChange={(e) => setSettleMap((p) => ({ ...p, [r.id]: e.target.value }))}
-                        />
-                        <button className="rounded border px-2 py-1 text-xs" onClick={() => void settle(r.id)}>
-                          Settle
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+              ))
+            )}
+          </tbody>
+        </table>
+      </ScrollTableCard>
+
+      <FinanceFormDrawer
+        open={drawerOpen}
+        title="Create FX receipt"
+        onClose={closeDrawer}
+        onSubmit={(e) => void submit(e)}
+        submitLabel="Create Receipt"
+        submitting={saving}
+        error={formError ?? undefined}
+      >
+        <FormSection title="Receipt">
+          <div>
+            <label className={labelClass} htmlFor="fx-no">Receipt No (optional)</label>
+            <input id="fx-no" className={fieldClass} value={form.receipt_no} onChange={(e) => setForm((p) => ({ ...p, receipt_no: e.target.value }))} />
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="fx-date">Receipt date</label>
+            <input id="fx-date" type="date" className={fieldClass} value={form.receipt_date} onChange={(e) => setForm((p) => ({ ...p, receipt_date: e.target.value }))} />
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="fx-src">Source Ref</label>
+            <input id="fx-src" className={fieldClass} value={form.source_ref} onChange={(e) => setForm((p) => ({ ...p, source_ref: e.target.value }))} />
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="fx-notes">Notes</label>
+            <input id="fx-notes" className={fieldClass} value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} />
+          </div>
+        </FormSection>
+        <FormSection title="Amount and rate">
+          <div>
+            <label className={labelClass} htmlFor="fx-cur">Currency</label>
+            <input id="fx-cur" className={fieldClass} value={form.currency} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value.toUpperCase() }))} />
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="fx-fc">FC Amount</label>
+            <input id="fx-fc" className={fieldClass} value={form.fc_amount} onChange={(e) => setForm((p) => ({ ...p, fc_amount: e.target.value }))} />
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="fx-rate">Rate to Base</label>
+            <input id="fx-rate" className={fieldClass} value={form.rate_to_base} onChange={(e) => setForm((p) => ({ ...p, rate_to_base: e.target.value }))} />
+          </div>
+        </FormSection>
+      </FinanceFormDrawer>
     </div>
   );
 }

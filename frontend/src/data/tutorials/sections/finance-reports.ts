@@ -32,7 +32,7 @@ export const financeReportsSection: TutorialSection = {
         "finance reports",
         "Tally reports",
       ],
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-19",
       relatedAppRoutes: [
         "/app/accounts/reports/day-book",
         "/app/accounts/reports/trial-balance",
@@ -44,6 +44,8 @@ export const financeReportsSection: TutorialSection = {
         "/app/accounts/reports/group-summary",
         "/app/accounts/reports/ratio-analysis",
         "/app/accounts/reports/voucher-analytics",
+        "/app/finance/statements/profit-loss",
+        "/app/finance/statements/balance-sheet",
       ],
       relatedArticleIds: [
         "fin-rpt-read-statements",
@@ -93,15 +95,16 @@ This guide is for **accountants, finance managers and owners** who need to check
 - You need the **Finance** menu in the sidebar (your role must include finance access).
 - Reports show **posted** vouchers only. Drafts and vouchers still waiting for approval do **not** appear in the Trial Balance or statements. See [Voucher approvals](/app/accounts/vouchers/approval-queue).
 - Your **financial year** comes from **Settings → Configuration → Finance & costing → Financial year starts in** (for example **July (Bangladesh July–June)**).
+- When **User authority classes** are ON, **Profit & Loss**, **Balance Sheet**, classic **Financial Statements**, **Comparative** and **Management Performance** (posted profit) are limited to **Class 1** (with the Finance module) and **Super Admin**. Trial Balance and Day Book stay open to other classes with Finance.
 
 ## Steps
 
-Open **Finance** in the sidebar, then the **Reports** group. Pick the report that answers your question:
+Open **Finance** in the sidebar, then the **Reports** group (or a Finance hub → **Statements**). Pick the report that answers your question:
 
 1. **"What was entered today / this week?"** → **Day Book** (\`/app/accounts/reports/day-book\`). A list of vouchers by date, with type and status.
 2. **"What happened in one account?"** → **Ledger Activity** (\`/app/accounts/reports/ledger-activity\`). One account, every posted voucher, running balance. Bill-wise customer / supplier balances are in **Party Ledgers** when your company has that feature switched on.
 3. **"Do the books balance?"** → **Trial Balance** (\`/app/accounts/reports/trial-balance\`). Every account with its debit or credit balance. Total Debit must equal Total Credit.
-4. **"Did we make a profit? What do we own and owe?"** → **Financial Statements** (\`/app/accounts/reports/financial-statements\`). **Profit & Loss** and **Balance Sheet** on one page.
+4. **"Did we make a profit? What do we own and owe?"** → **Financial Statements** (\`/app/accounts/reports/financial-statements\`) or the Tally-style **Profit & Loss** / **Balance Sheet** tabs. **Profit & Loss** and **Balance Sheet** on one page (or as separate statements).
 5. **"Where did the cash go?"** → **Cash Flow** (\`/app/accounts/reports/cash-flow\`). Operating, investing and financing cash in and out.
 6. **"Who owes us, and whom do we owe?"** → **AR/AP Aging** (\`/app/accounts/reports/ar-ap-aging\`). Bills grouped by days overdue.
 7. **"What is stuck or wrong?"** → **Exception Reports** (\`/app/accounts/reports/exceptions\`). Goods received but not billed, negative cash, overdue bills and more.
@@ -117,7 +120,8 @@ Planning screens sit in the **Planning** group: **Budgets** (\`/app/accounts/bud
 ## Tips
 
 - Most reports have the same toolbar: a **date** box, filters (**All Groups**, **All Accounts**), **Compact View**, **Print**, **Export CSV** and (on Day Book, Trial Balance, Financial Statements and Ledger Activity) **Export Excel**. Excel keeps numbers as numbers, so you can add them up.
-- **Print** prints only the report (not the sidebar), with the report title and date at the top.
+- On a **phone**, Tally-style statements use **Save PDF** and **Share** instead of **Print** (desktop still has Print).
+- **Print** (desktop) prints only the report (not the sidebar), with the report title and date at the top.
 - Reports update as soon as you change a date or filter — there is no separate **Run** button.
 
 > **Tip:** New to accounting words like debit, credit, asset and liability? Read [How to read a Trial Balance, P&L and Balance Sheet](/app/tutorials/fin-rpt-read-statements) first — it uses a small worked example.
@@ -126,7 +130,8 @@ Planning screens sit in the **Planning** group: **Budgets** (\`/app/accounts/bud
 
 - **A voucher I entered is missing from the Trial Balance** → it is probably not **POSTED** yet. Find it in **Day Book** and look at the **Status** column, then finish the approval.
 - **A report shows only zeros** → check the date. Many reports start at the first day of the current month; move the date back to when your vouchers were entered.
-- **I don't see Financial MIS Dashboard / Fund Flow** → an admin has switched off **Enable MIS reports** in **Settings → Configuration**.`,
+- **I don't see Financial MIS Dashboard / Fund Flow** → an admin has switched off **Enable MIS reports** in **Settings → Configuration**.
+- **I don't see Profit & Loss / Balance Sheet** → with **User authority classes** ON, only Class 1 (Finance module) and Super Admin can open those reports. Ask your Super Admin if you need access.`,
     },
     {
       id: "fin-rpt-read-statements",

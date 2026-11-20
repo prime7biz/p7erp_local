@@ -154,7 +154,7 @@ export function HrLeavePoliciesPage() {
         searchPlaceholder="Search leave type or employment type…"
         initialSort={{ key: "type", dir: "asc" }}
         exportFileName="hr-leave-policies"
-        canExport={canExportHrData(me?.role_name)}
+        canExport={canExportHrData(me)}
         rowActions={(r) => [{ key: "edit", label: "Edit", primary: true, onClick: () => openEdit(r) }]}
       />
 

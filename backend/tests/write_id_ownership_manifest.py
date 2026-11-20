@@ -238,6 +238,7 @@ MANIFEST: dict[str, dict[str, str]] = {
         'vendor_ids': 'unreviewed',
     },
     'PATCH /api/v1/settings/users/{target_user_id}': {
+        'employee_id': 'reviewed: link_employee_to_user filters Employee.tenant_id (test_authority_user_admin)',
         'role_id': 'unreviewed',
     },
     'PATCH /api/v1/trade-cases/{trade_case_id}': {
@@ -278,6 +279,9 @@ MANIFEST: dict[str, dict[str, str]] = {
     },
     'POST /api/v1/ai-tool/sessions/{session_id}/messages': {
         'context[].record_id': 'unreviewed',
+    },
+    'POST /api/v1/authority/change-requests': {
+        'resource_id': 'reviewed: load_before rejects other-tenant resource (test_authority_inbox)',
     },
     'POST /api/v1/billing/lemonsqueezy/checkout': {
         'variant_id': 'unreviewed',
@@ -1437,6 +1441,9 @@ MANIFEST: dict[str, dict[str, str]] = {
     'POST /api/v1/quotations/ai/validate': {
         'quotation_id': 'unreviewed',
     },
+    'POST /api/v1/settings/authority-cutover/apply': {
+        'confirm_user_ids': 'reviewed: apply_cutover loads User by id+tenant_id from snapshot rows (test_authority_cutover)',
+    },
     'POST /api/v1/settings/external-access/customers/invite': {
         'customer_ids': 'unreviewed',
     },
@@ -1447,9 +1454,11 @@ MANIFEST: dict[str, dict[str, str]] = {
         'vendor_ids': 'unreviewed',
     },
     'POST /api/v1/settings/users': {
+        'employee_id': 'reviewed: create_user_with_authority links Employee.tenant_id only (test_authority_user_admin)',
         'role_id': 'unreviewed',
     },
     'POST /api/v1/settings/users/invite': {
+        'employee_id': 'reviewed: create_invite selects Employee by id+tenant_id (test_authority_user_admin)',
         'role_id': 'unreviewed',
     },
     'POST /api/v1/traceability/certificates': {

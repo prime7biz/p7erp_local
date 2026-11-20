@@ -26,6 +26,14 @@ export interface MeResponse {
   feature_flags?: Record<string, boolean | string | number | null> | null;
   role_name: string;
   role_permissions: Record<string, unknown>;
+  /** Fixed-class authority (empty / false while user_authority_classes_v1 is OFF). */
+  authority_classes_enabled?: boolean;
+  authority_class?: string | null;
+  is_tenant_super_admin?: boolean;
+  module_grants?: string[];
+  available_modules?: string[];
+  /** P&L / Balance Sheet; true while flag OFF or Class 1/Super with finance. */
+  can_view_pnl_balance_sheet?: boolean;
 }
 
 export interface ResolveTenantResponse {
@@ -73,6 +81,9 @@ export interface StaffInviteRowResponse {
   expires_at: string;
   accepted_at: string | null;
   created_at: string;
+  authority_class?: string | null;
+  module_grants?: string[];
+  employee_id?: number | null;
 }
 
 export interface StaffInviteCreateResponse {
@@ -3062,6 +3073,12 @@ export interface UserWithRoleResponse {
   last_name: string | null;
   is_active: boolean;
   role_name: string;
+  designation?: string | null;
+  authority_class?: string | null;
+  is_tenant_super_admin?: boolean;
+  module_grants?: string[];
+  employee_id?: number | null;
+  employee_label?: string | null;
 }
 
 export interface RoleResponse {
@@ -3087,13 +3104,16 @@ export interface SettingsRoleUpdate {
 }
 
 export interface SettingsUserCreate {
-  role_id: number;
+  role_id?: number | null;
   email: string;
   username?: string | null;
   password: string;
   first_name?: string | null;
   last_name?: string | null;
   is_active?: boolean;
+  authority_class?: string | null;
+  module_grants?: string[] | null;
+  employee_id?: number | null;
 }
 
 export interface SettingsUserUpdate {
@@ -3104,6 +3124,18 @@ export interface SettingsUserUpdate {
   last_name?: string | null;
   is_active?: boolean;
   password?: string;
+  authority_class?: string | null;
+  module_grants?: string[] | null;
+  employee_id?: number | null;
+  clear_employee_link?: boolean;
+}
+
+export interface LinkableEmployeeRow {
+  id: number;
+  employee_code: string;
+  full_name: string;
+  designation_title: string | null;
+  label: string;
 }
 
 export interface AuditLogResponse {
@@ -5546,6 +5578,11 @@ export interface PurchaseOrderResponse {
   source_order_id?: number | null;
   status: string;
   notes: string | null;
+  created_by_user_id?: number | null;
+  approved_by_user_id?: number | null;
+  class1_approval_status?: string | null;
+  class1_approved_by?: number | null;
+  class1_approved_at?: string | null;
   items: PurchaseOrderItemResponse[];
   vendor_qc_rejection_rate_pct?: number | null;
 }
@@ -6035,6 +6072,10 @@ export interface EnhancedGatePassResponse {
   verification_id?: string | null;
   signature_hash?: string | null;
   signed_at?: string | null;
+  created_by_user_id?: number | null;
+  class1_approval_status?: string | null;
+  class1_approved_by?: number | null;
+  class1_approved_at?: string | null;
 }
 
 export interface ProcessOrderCreate {
@@ -9244,6 +9285,9 @@ export interface VoucherResponse {
   trade_case_id?: number | null;
   btb_lc_id?: number | null;
   created_by: number | null;
+  class1_approval_status?: string | null;
+  class1_approved_by?: number | null;
+  class1_approved_at?: string | null;
   created_at: string;
   updated_at: string;
   lines: VoucherLineResponse[];

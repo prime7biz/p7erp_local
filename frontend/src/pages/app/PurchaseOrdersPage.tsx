@@ -359,7 +359,20 @@ export function PurchaseOrdersPage() {
         cell: (r) => (r.vendor_id ? vendorName.get(r.vendor_id) ?? `#${r.vendor_id}` : "—"),
       },
       { id: "currency", header: "Currency", mobile: "detail", value: (r) => r.currency ?? "", cell: (r) => r.currency || "—" },
-      { id: "status", header: "Status", mobile: "status", value: (r) => r.status, cell: (r) => r.status },
+      {
+        id: "status",
+        header: "Status",
+        mobile: "status",
+        value: (r) => r.status,
+        cell: (r) =>
+          r.class1_approval_status === "PENDING_CLASS1"
+            ? `${r.status} · Pending Class 1`
+            : r.class1_approval_status === "REJECTED"
+              ? `${r.status} · Class 1 rejected`
+              : r.class1_approval_status === "APPROVED"
+                ? `${r.status} · Audit-ready`
+                : r.status,
+      },
       {
         id: "items",
         header: "Items",
@@ -388,6 +401,37 @@ export function PurchaseOrdersPage() {
             { key: "grn", label: "Goods receiving (this PO)", href: `/app/inventory/goods-receiving?po=${r.id}` },
           ];
           if (st === "DRAFT") items.push({ key: "approve", label: "Approve", onClick: () => void patchPoStatus(r.id, "APPROVED") });
+          if (st === "APPROVED" && r.class1_approval_status === "PENDING_CLASS1") {
+            items.push({
+              key: "class1-approve",
+              label: "Class 1 approve",
+              onClick: () =>
+                void (async () => {
+                  try {
+                    await api.class1ApprovePurchaseOrder(r.id);
+                    await load();
+                  } catch (e) {
+                    logApiError("PurchaseOrdersPage.class1Approve", e);
+                    setError(e instanceof Error ? e.message : "Class 1 approve failed");
+                  }
+                })(),
+            });
+            items.push({
+              key: "class1-reject",
+              label: "Class 1 reject",
+              danger: true,
+              onClick: () =>
+                void (async () => {
+                  try {
+                    await api.class1RejectPurchaseOrder(r.id);
+                    await load();
+                  } catch (e) {
+                    logApiError("PurchaseOrdersPage.class1Reject", e);
+                    setError(e instanceof Error ? e.message : "Class 1 reject failed");
+                  }
+                })(),
+            });
+          }
           if (st === "APPROVED" || st === "PARTIALLY_RECEIVED")
             items.push({ key: "close", label: "Close (pre-close)", onClick: () => requestPoStatus(r.id, "CLOSED") });
           if (st === "DRAFT" || st === "APPROVED" || st === "PARTIALLY_RECEIVED")
@@ -400,7 +444,7 @@ export function PurchaseOrdersPage() {
         },
       },
     ],
-    [itemName, vendorName, openActionsId, openPoTrace, patchPoStatus, requestPoStatus],
+    [itemName, vendorName, openActionsId, openPoTrace, patchPoStatus, requestPoStatus, load],
   );
 
   const selectedVendor = useMemo(
@@ -769,12 +813,14 @@ export function PurchaseOrdersPage() {
                   <div className="mt-1 text-xs text-text-muted">
                     {row.vendor_id ? `Vendor #${row.vendor_id} · ` : ""}
                     {row.currency || "—"} · {row.status}
+                    {row.class1_approval_status === "PENDING_CLASS1" ? " · Pending Class 1" : ""}
                   </div>
                 </div>
                 <div className="shrink-0">
                   {(() => {
                     const st = (row.status || "").toUpperCase();
                     const canApprove = st === "DRAFT";
+                    const canClass1 = st === "APPROVED" && row.class1_approval_status === "PENDING_CLASS1";
                     const canClose = st === "APPROVED" || st === "PARTIALLY_RECEIVED";
                     const canCancel = st === "DRAFT" || st === "APPROVED" || st === "PARTIALLY_RECEIVED";
                     return (
@@ -832,6 +878,44 @@ export function PurchaseOrdersPage() {
                               >
                                 Approve
                               </button>
+                            )}
+                            {canClass1 && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    setOpenActionsId(null);
+                                    try {
+                                      await api.class1ApprovePurchaseOrder(row.id);
+                                      await load();
+                                    } catch (err) {
+                                      logApiError("PurchaseOrdersPage.class1Approve.mobile", err);
+                                      setError(err instanceof Error ? err.message : "Class 1 approve failed");
+                                    }
+                                  }}
+                                >
+                                  Class 1 approve
+                                </button>
+                                <button
+                                  type="button"
+                                  className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-status-danger-foreground hover:bg-status-danger-subtle sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    setOpenActionsId(null);
+                                    try {
+                                      await api.class1RejectPurchaseOrder(row.id);
+                                      await load();
+                                    } catch (err) {
+                                      logApiError("PurchaseOrdersPage.class1Reject.mobile", err);
+                                      setError(err instanceof Error ? err.message : "Class 1 reject failed");
+                                    }
+                                  }}
+                                >
+                                  Class 1 reject
+                                </button>
+                              </>
                             )}
                             {canClose && (
                               <button

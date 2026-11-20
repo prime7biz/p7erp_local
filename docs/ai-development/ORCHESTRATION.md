@@ -1,8 +1,8 @@
 # Prime7 multi-agent development workflow (balanced, cost-aware)
 
-> **Since 2026-11-09:** Premium agents are opt-in. The parent chat does most work itself, Auto agents do the
-> independent reviews, and the only automatic Premium step is `security-auditor-premium` once on CRITICAL work.
-> Budget per task without asking: 3 subagent runs, 1 Premium run, 2 correction rounds. See `MODEL-USAGE-POLICY.md`.
+> **Since 2026-11-19:** Premium agents are fully opt-in. No automatic Opus / Premium step. CRITICAL work uses Auto
+> `security-auditor`. Prefer cheaper models (GPT 5.6, Sonnet 5.5, Gemini). Budget per task without asking: 3 subagent
+> runs, 1 Premium run, 2 correction rounds. See `MODEL-USAGE-POLICY.md`.
 
 How the agents in `.cursor/agents/` work together. Models and authorization: `MODEL-USAGE-POLICY.md`. Always-applied rules:
 `prime7-core.mdc`, `prime7-security.mdc`, `prime7-orchestration.mdc`. Verified facts: `prime7-development.mdc`. Tracked
@@ -17,7 +17,7 @@ approval prompts and your dashboard limits. It does not enforce gate order, loop
 |---|---|---|---|---|
 | `explorer` | inherit (Auto) | true | no | Targeted evidence with file references |
 | `architect` | inherit | true | no | Plans too large for the parent (any mode) |
-| `architect-premium` | `claude-opus-4-8-thinking-high` | true | no | Opt-in only |
+| `architect-premium` | `gpt-5.6-sol-medium` | true | no | Opt-in only |
 | `plan-auditor` | inherit | true | no | Plan verdict for ADVANCED and CRITICAL |
 | `plan-auditor-premium` | `gpt-5.6-sol-medium` | true | no | Opt-in only |
 | `ui-designer` | inherit | true | no | UI briefs of any size |
@@ -31,7 +31,7 @@ approval prompts and your dashboard limits. It does not enforce gate order, loop
 | `qa-engineer-premium` | `gpt-5.6-sol-medium` | true | no | Opt-in only |
 | `debugger-premium` | `gpt-5.6-sol-medium` | false | **no** (by instruction) | Opt-in only |
 | `security-auditor` | inherit | true | no | Security screening for sensitive STANDARD / ADVANCED changes |
-| `security-auditor-premium` | `claude-opus-4-8-thinking-high` | true | no | Automatic once on the final diff of CRITICAL work; otherwise opt-in |
+| `security-auditor-premium` | `gpt-5.6-sol-medium` | true | no | Opt-in only (CRITICAL uses Auto `security-auditor` by default) |
 
 **Read-only agents cannot run shell** (observed: Cursor blocks it). The parent passes them `git status --short`,
 `git diff` and `test-runner` output in the prompt. Test **execution** (`test-runner`) is deliberately separated from QA
@@ -40,8 +40,8 @@ approval prompts and your dashboard limits. It does not enforce gate order, loop
 ## 2. Parent responsibilities
 
 - Classify the mode and say why.
-- Do most work itself; choose subagents only when they add clear value. Premium only on request (or the one automatic
-  CRITICAL security review).
+- Do most work itself; choose subagents only when they add clear value. Premium only when the user asks. Never
+  auto-launch Opus.
 - Give each subagent a complete prompt, since subagents do not see the chat.
 - Run `git status` and `git diff` itself, and forward the output to read-only reviewers.
 - Check verdict lines and count correction rounds.
@@ -55,8 +55,8 @@ The parent never accepts a subagent's claim as proof.
 1. The parent explores (Grep / Read; `explore` "quick" only for wide searches).
 2. The parent implements and runs focused tests in Shell.
 3. Substantial changes: `qa-engineer` reviews the diff and test output.
-4. Security-sensitive changes (section 5): `security-auditor` screens. A finding of medium severity or above is
-   reported to the user, who decides whether to run `security-auditor-premium`.
+4. Security-sensitive changes (section 5): `security-auditor` screens. Offer `security-auditor-premium` only if the
+   user wants a stronger review.
 5. Report.
 
 ### ADVANCED (new modules, architecture changes, complex integrations, major UI redesigns)
@@ -73,8 +73,8 @@ The parent never accepts a subagent's claim as proof.
 3. The parent (or `backend-developer`) implements.
 4. The parent runs the focused suite plus neighbouring suites (tenant ownership, route permissions, finance posting
    guards, inventory accounting, commercial).
-5. `security-auditor-premium` reviews the final diff (the one automatic Premium step; it also covers financial integrity).
-6. Block completion while any critical defect remains. If the Premium review is unavailable, stop and report.
+5. Auto `security-auditor` reviews the final diff (covers financial integrity as far as the Auto screener goes).
+6. Block completion while any critical defect remains. Offer `security-auditor-premium` only if the user asks.
 7. Extra Premium steps (`architect-premium`, `plan-auditor-premium`, `qa-engineer-premium`, Premium developers) only
    when the user asks for them.
 
@@ -135,7 +135,6 @@ external portals; env or config; raw SQL; deployment files.
 - An implementer needs a file outside its scope.
 - Two correction rounds failed.
 - Tests are blocked and cannot be unblocked safely.
-- The automatic Premium security review for CRITICAL work is unavailable.
 - The per-task budget (3 subagent runs, 1 Premium run) would be exceeded; ask the user first.
 - Any destructive or production-affecting step is needed.
 - Agent output contradicts `git diff` or the test output.
@@ -164,7 +163,8 @@ To force a mode, add `Treat this as CRITICAL.` or `Treat this as ADVANCED.` To a
 
 - Delegation is a model decision, so name an agent when it must be used.
 - New agent files appear from the next message onward.
-- Auto picks its own model on the server (observed `claude-opus-5-5-high`), and inherited agents follow it.
+- Auto picks its own model on the server; inherited agents follow it. Rules cannot force Auto away from an expensive
+  pick — if cost matters, choose GPT 5.6 / Sonnet 5.5 / Gemini in the chat model dropdown.
 - Which billing pool is charged is visible only on the dashboard.
 - Premium agents were confirmed running on 2026-11-09 (one chat made 12 Premium calls under the old policy).
 - Premium files depend on their base files.

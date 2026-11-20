@@ -1138,6 +1138,49 @@ async def update_proforma_invoice(
 
 
 @router.get(
+    "/proforma-invoices/{invoice_id}/pdf",
+    tags=["proforma-invoices"],
+)
+async def proforma_invoice_pdf(
+    invoice_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Server PDF for phone Save PDF / Share (tenant-scoped; mount uses merch.access)."""
+    from fastapi.responses import Response
+
+    from app.modules.merch.doc_pdf import render_simple_doc_pdf
+
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    row = await db.get(ProformaInvoice, invoice_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proforma invoice not found")
+    content = render_simple_doc_pdf(
+        tenant=tenant,
+        title="Proforma Invoice",
+        lines=[
+            ("Reference", row.reference),
+            ("Status", row.status),
+            ("Direction", row.direction),
+            ("Invoice date", row.invoice_date),
+            ("Currency", row.currency),
+            ("Amount", row.amount),
+            ("Buyer", (row.buyer_name or "")[:90]),
+            ("Terms of shipping", row.terms_of_shipping),
+            ("Terms of payment", row.terms_of_payment),
+        ],
+    )
+    filename = f"{row.reference or f'pi-{row.id}'}.pdf".replace("/", "-")
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get(
     "/proforma-invoices/{invoice_id}/for-print",
     response_model=ProformaInvoiceForPrint,
     tags=["proforma-invoices"],
@@ -1668,6 +1711,44 @@ async def get_commercial_invoice(
     if not inv:
         raise HTTPException(status_code=404, detail="Commercial invoice not found")
     return await _ci_out_enriched(db, tenant_id=tenant.id, inv=inv)
+
+
+@router.get("/invoices/{invoice_id}/pdf", tags=["commercial-invoices"])
+async def commercial_invoice_pdf(
+    invoice_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Server PDF for phone Save PDF / Share (tenant-scoped; mount uses merch.access)."""
+    from fastapi.responses import Response
+
+    from app.modules.merch.doc_pdf import render_simple_doc_pdf
+
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
+    inv = await load_commercial_invoice(db, tenant_id=tenant.id, invoice_id=invoice_id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Commercial invoice not found")
+    content = render_simple_doc_pdf(
+        tenant=tenant,
+        title="Commercial Invoice",
+        lines=[
+            ("Code", inv.invoice_code),
+            ("Status", inv.status),
+            ("Invoice date", inv.invoice_date),
+            ("Currency", inv.currency),
+            ("Total", inv.total_amount),
+            ("Customer id", inv.customer_id),
+            ("Notes", (inv.notes or "")[:90]),
+        ],
+    )
+    filename = f"{inv.invoice_code or f'ci-{inv.id}'}.pdf".replace("/", "-")
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post(

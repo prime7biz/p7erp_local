@@ -39,7 +39,7 @@ const ACTION_TO_STATUS: Record<string, string> = {
 };
 const ACTION_LABEL: Record<string, string> = {
   submit: "Submit",
-  check: "Check",
+  check: "Check / Verify",
   recommend: "Recommend",
   approve: "Approve",
   post: "Post",
@@ -48,9 +48,20 @@ const ACTION_LABEL: Record<string, string> = {
   cancel: "Cancel",
   reverse: "Reverse",
   cancel_posting: "Cancel posting",
+  class1_approve: "Class 1 approve (audit-ready)",
+  class1_reject: "Class 1 reject (reverse)",
 };
 
-const ACTIONS_NEEDING_REASON = new Set(["reject", "cancel", "reverse", "cancel_posting"]);
+const ACTIONS_NEEDING_REASON = new Set(["reject", "cancel", "reverse", "cancel_posting", "class1_reject"]);
+
+function class1BadgeText(status: string | null | undefined): string | null {
+  if (!status) return null;
+  const s = status.toUpperCase();
+  if (s === "PENDING_CLASS1") return "Pending Class 1 approval";
+  if (s === "APPROVED") return "Approved (audit-ready)";
+  if (s === "REJECTED") return "Rejected / reversed";
+  return status;
+}
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
@@ -229,7 +240,10 @@ export function VoucherDetailPage() {
           await api.reverseVoucher(voucher.id, { reason: reason.trim() || "Reversal" });
         }
         else if (action === "cancel_posting") await api.cancelVoucherPosting(voucher.id);
-        else {
+        else if (action === "class1_approve") await api.class1ApproveVoucher(voucher.id, { reason });
+        else if (action === "class1_reject") {
+          await api.class1RejectVoucher(voucher.id, { reason: reason.trim() || "Class 1 rejected" });
+        } else {
           const nextStatus = ACTION_TO_STATUS[action];
           if (!nextStatus) throw new Error(`Unsupported action: ${action}`);
           await api.updateVoucherStatus(voucher.id, nextStatus, { reason });
@@ -380,7 +394,16 @@ export function VoucherDetailPage() {
         title={voucher.voucher_number}
         description={`${voucher.voucher_type} voucher · ${voucher.voucher_date}`}
         backTo={{ label: "Back to vouchers", to: "/app/accounts/vouchers" }}
-        actions={<StatusBadge status={voucher.status} />}
+        actions={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <StatusBadge status={voucher.status} />
+            {class1BadgeText(voucher.class1_approval_status) ? (
+              <span className="inline-block rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900">
+                {class1BadgeText(voucher.class1_approval_status)}
+              </span>
+            ) : null}
+          </span>
+        }
         belowTitle={<WorkflowSummaryStrip items={workflowStripItems} />}
       />
 

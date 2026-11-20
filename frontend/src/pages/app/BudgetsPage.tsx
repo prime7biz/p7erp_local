@@ -14,7 +14,44 @@ import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { currentMonthLocal } from "@/lib/dates";
 import { getChartOfAccountsCached, getCostCentersCached } from "@/lib/masterData";
 import { useConfirm } from "@/components/app/useConfirm";
-import { useEmbeddedPage } from "@/components/app/embeddedPage";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import {
+  listPageEmptyClass,
+  listPageErrorClass,
+  listPageRootClass,
+  listPageToolbarButtonClass,
+  listPageToolbarSelectClass,
+  listTableBaseClass,
+  listTableTdClass,
+  listTableTdPrimaryClass,
+  listTableThClass,
+  listTableThRightClass,
+  listTableTheadClass,
+  listTableTrClass,
+} from "@/components/app/listPageLayout";
+import { RowActionsMenu } from "@/components/app/RowActionsMenu";
+import {
+  FinanceFormDrawer,
+  FinanceListToolbar,
+  FormSection,
+  ScrollTableCard,
+  SummaryStrip,
+  showingCountLabel,
+} from "@/components/finance/kit";
+
+const fieldClass =
+  "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary focus:border-brand-primary focus:outline-none focus:ring-0";
+const labelClass = "mb-1 block text-xs font-medium text-text-muted";
+
+function emptyBudgetForm(fiscalYear?: string): BudgetCreate {
+  const y = new Date().getFullYear();
+  return {
+    budget_name: "",
+    fiscal_year: fiscalYear ?? `${y}-${y + 1}`,
+    status: "DRAFT",
+    lines: [{ account_id: null, cost_center_id: null, period_month: currentMonthLocal(), amount: "0", notes: "" }],
+  };
+}
 
 function linesToCreate(lines: BudgetResponse["lines"]): BudgetLineCreate[] {
   return lines.map((l) => ({
@@ -50,7 +87,6 @@ function utilizationBarClass(pct: number): string {
 }
 
 export function BudgetsPage() {
-  const embedded = useEmbeddedPage();
   const confirm = useConfirm();
   const { me } = useAuth();
   const enforcementMode =
@@ -65,21 +101,11 @@ export function BudgetsPage() {
   const [vsActual, setVsActual] = useState<BudgetVsActualResponse | null>(null);
   const [error, setError] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
-  const [form, setForm] = useState<BudgetCreate>({
-    budget_name: "",
-    fiscal_year: `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
-    status: "DRAFT",
-    lines: [
-      {
-        account_id: null,
-        cost_center_id: null,
-        period_month: currentMonthLocal(),
-        amount: "0",
-        notes: "",
-      },
-    ],
-  });
+  const [openActionsId, setOpenActionsId] = useState<number | string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<BudgetCreate>(() => emptyBudgetForm());
 
   const latest = useLatestRequest();
   const load = useCallback(async () => {
@@ -114,44 +140,46 @@ export function BudgetsPage() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    const close = () => setOpenActionsId(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, []);
+  function closeDrawer() {
+    setDrawerOpen(false);
+    setEditingId(null);
+    setFormError(null);
+    setForm(emptyBudgetForm());
+  }
+
+  function openAdd() {
+    setEditingId(null);
+    setFormError(null);
+    setForm(emptyBudgetForm());
+    setDrawerOpen(true);
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    setFormError(null);
+    setSaving(true);
     try {
       if (editingId) {
         await api.updateBudget(editingId, form);
-        setEditingId(null);
       } else {
         await api.createBudget(form);
       }
-      setForm({
-        budget_name: "",
-        fiscal_year: form.fiscal_year,
-        status: "DRAFT",
-        lines: [
-          {
-            account_id: null,
-            cost_center_id: null,
-            period_month: currentMonthLocal(),
-            amount: "0",
-            notes: "",
-          },
-        ],
-      });
+      setDrawerOpen(false);
+      setEditingId(null);
+      setForm(emptyBudgetForm(form.fiscal_year));
       await load();
-    } catch (e) {
-      logApiError("BudgetsPage.submit", e);
-      setError((e as Error).message);
+    } catch (err) {
+      logApiError("BudgetsPage.submit", err);
+      setFormError((err as Error).message);
+    } finally {
+      setSaving(false);
     }
   }
 
   function startEdit(b: BudgetResponse) {
     setEditingId(b.id);
+    setFormError(null);
+    setDrawerOpen(true);
     setForm({
       budget_name: b.budget_name,
       fiscal_year: b.fiscal_year,
@@ -165,7 +193,7 @@ export function BudgetsPage() {
     try {
       await api.deleteBudget(id);
       if (selectedBudgetId === id) setSelectedBudgetId(null);
-      if (editingId === id) setEditingId(null);
+      if (editingId === id) closeDrawer();
       await load();
     } catch (e) {
       logApiError("BudgetsPage.deleteBudget", e);
@@ -174,22 +202,11 @@ export function BudgetsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-      {!embedded && (
-        <>
-          <h1 className="text-2xl font-semibold text-text-primary">Budgets & Budget vs Actual</h1>
-          <p className="text-sm text-text-muted">Create finance budgets and compare with posted actuals.</p>
-        </>
-      )}
-          <p className="text-xs text-text-muted mt-1">
-            Tip: set budgets to <strong>FINAL</strong> and enable Budget enforcement in Settings → Configuration (
-            <code className="mx-1 text-[11px]">off</code>/<code className="mx-1 text-[11px]">warn</code>/
-            <code className="text-[11px]">block</code>) so voucher posting respects cost-center limits.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-end gap-3">
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="Budgets & Budget vs Actual"
+        description="Create finance budgets and compare with posted actuals."
+        actions={
           <span
             className={`rounded-full px-2.5 py-1 text-xs font-medium ${
               enforcementMode === "block"
@@ -201,303 +218,101 @@ export function BudgetsPage() {
           >
             Enforcement: {enforcementMode === "block" ? "Block" : enforcementMode === "warn" ? "Warn" : "Off"}
           </span>
-          <div>
-            <label className="block text-xs text-text-muted">Fiscal year filter</label>
-            <input
-              className="rounded border px-3 py-2 text-sm"
-              placeholder="e.g. 2025-2026 (empty = all)"
-              value={fiscalYearFilter}
-              onChange={(e) => setFiscalYearFilter(e.target.value.trim())}
-            />
-          </div>
-        </div>
-      </div>
-      {error ? (
-        <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">
-          {error}
-        </div>
-      ) : null}
+        }
+        belowTitle={
+          <p className="text-xs text-text-muted">
+            Tip: set budgets to <strong>FINAL</strong> and enable Budget enforcement in Settings → Configuration (
+            <code className="mx-1 text-[11px]">off</code>/<code className="mx-1 text-[11px]">warn</code>/
+            <code className="text-[11px]">block</code>) so voucher posting respects cost-center limits.
+          </p>
+        }
+      />
 
-      <form onSubmit={submit} className="space-y-3 rounded-xl border border-border bg-surface-raised p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">{editingId ? `Edit budget #${editingId}` : "New budget"}</h2>
-          {editingId ? (
-            <button
-              type="button"
-              className="text-sm text-text-muted hover:text-text-primary"
-              onClick={() => {
-                setEditingId(null);
-                setForm({
-                  budget_name: "",
-                  fiscal_year: `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
-                  status: "DRAFT",
-                  lines: [
-                    {
-                      account_id: null,
-                      cost_center_id: null,
-                      period_month: currentMonthLocal(),
-                      amount: "0",
-                      notes: "",
-                    },
-                  ],
-                });
-              }}
+      <FinanceListToolbar
+        search={fiscalYearFilter}
+        onSearchChange={(v) => setFiscalYearFilter(v.trim())}
+        searchPlaceholder="Fiscal year filter, e.g. 2025-2026 (empty = all)"
+        primaryAction={{ label: "New budget", onClick: openAdd }}
+      />
+
+      {error ? <div className={listPageErrorClass}>{error}</div> : null}
+
+      <ScrollTableCard
+        maxHeight="panel"
+        toolbar={
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-text-primary">Budget List</h2>
+            <select
+              aria-label="Select budget for vs actual"
+              className={listPageToolbarSelectClass}
+              value={selectedBudgetId ?? ""}
+              onChange={(e) => setSelectedBudgetId(e.target.value ? Number(e.target.value) : null)}
             >
-              Cancel edit
-            </button>
-          ) : null}
-        </div>
-        <div className="grid gap-3 md:grid-cols-3">
-          <input
-            className="rounded border px-3 py-2 text-sm"
-            placeholder="Budget Name"
-            value={form.budget_name}
-            onChange={(e) => setForm((p) => ({ ...p, budget_name: e.target.value }))}
-          />
-          <input
-            className="rounded border px-3 py-2 text-sm"
-            placeholder="Fiscal Year"
-            value={form.fiscal_year}
-            onChange={(e) => setForm((p) => ({ ...p, fiscal_year: e.target.value }))}
-          />
-          <select
-            className="rounded border px-3 py-2 text-sm"
-            value={form.status}
-            onChange={(e) => setForm((p) => ({ ...p, status: e.target.value as "DRAFT" | "FINAL" }))}
-          >
-            <option value="DRAFT">DRAFT</option>
-            <option value="FINAL">FINAL</option>
-          </select>
-        </div>
-
-        <div className="overflow-x-auto rounded border">
-          <table className="min-w-full text-sm">
-            <thead className="bg-surface-subtle text-left">
-              <tr>
-                <th className="px-2 py-1">Month</th>
-                <th className="px-2 py-1">Account</th>
-                <th className="px-2 py-1">Cost Center</th>
-                <th className="px-2 py-1">Amount</th>
-                <th className="px-2 py-1">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {form.lines.map((line, idx) => (
-                <tr key={idx} className="border-t">
-                  <td className="px-2 py-1">
-                    <input
-                      className="rounded border px-2 py-1 text-sm"
-                      placeholder="YYYY-MM"
-                      value={line.period_month}
-                      onChange={(e) =>
-                        setForm((p) => ({
-                          ...p,
-                          lines: p.lines.map((r, i) => (i === idx ? { ...r, period_month: e.target.value } : r)),
-                        }))
-                      }
-                    />
-                  </td>
-                  <td className="px-2 py-1">
-                    <select
-                      className="rounded border px-2 py-1 text-sm"
-                      value={line.account_id ?? ""}
-                      onChange={(e) =>
-                        setForm((p) => ({
-                          ...p,
-                          lines: p.lines.map((r, i) =>
-                            i === idx ? { ...r, account_id: e.target.value ? Number(e.target.value) : null } : r,
-                          ),
-                        }))
-                      }
-                    >
-                      <option value="">Any Account</option>
-                      {accounts.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.account_number} - {a.name}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-2 py-1">
-                    <select
-                      className="rounded border px-2 py-1 text-sm"
-                      value={line.cost_center_id ?? ""}
-                      onChange={(e) =>
-                        setForm((p) => ({
-                          ...p,
-                          lines: p.lines.map((r, i) =>
-                            i === idx ? { ...r, cost_center_id: e.target.value ? Number(e.target.value) : null } : r,
-                          ),
-                        }))
-                      }
-                    >
-                      <option value="">Any Cost Center</option>
-                      {costCenters.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.center_code} - {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-2 py-1">
-                    <input
-                      className="rounded border px-2 py-1 text-sm"
-                      value={line.amount}
-                      onChange={(e) =>
-                        setForm((p) => ({
-                          ...p,
-                          lines: p.lines.map((r, i) => (i === idx ? { ...r, amount: e.target.value } : r)),
-                        }))
-                      }
-                    />
-                  </td>
-                  <td className="px-2 py-1">
-                    <button
-                      type="button"
-                      className="rounded border px-2 py-1 text-xs"
-                      onClick={() =>
-                        setForm((p) => ({
-                          ...p,
-                          lines: p.lines.filter((_, i) => i !== idx || p.lines.length === 1),
-                        }))
-                      }
-                    >
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="flex justify-between">
-          <button
-            type="button"
-            className="rounded border px-3 py-2 text-sm"
-            onClick={() =>
-              setForm((p) => ({
-                ...p,
-                lines: [
-                  ...p.lines,
-                  {
-                    account_id: null,
-                    cost_center_id: null,
-                    period_month: currentMonthLocal(),
-                    amount: "0",
-                    notes: "",
-                  },
-                ],
-              }))
-            }
-          >
-            Add Line
-          </button>
-          <button className="rounded bg-brand-primary px-3 py-2 text-sm text-brand-primary-foreground">
-            {editingId ? "Save budget" : "Create Budget"}
-          </button>
-        </div>
-      </form>
-
-      <div className="rounded-xl border border-border bg-surface-raised p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Budget List</h2>
-          <select
-            className="rounded border px-2 py-1 text-sm"
-            value={selectedBudgetId ?? ""}
-            onChange={(e) => setSelectedBudgetId(e.target.value ? Number(e.target.value) : null)}
-          >
-            <option value="">Select for vs actual</option>
-            {budgets.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.budget_name} ({b.fiscal_year})
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-surface-subtle text-left">
-              <tr>
-                <th className="px-2 py-1">Budget</th>
-                <th className="px-2 py-1">Fiscal Year</th>
-                <th className="px-2 py-1">Status</th>
-                <th className="px-2 py-1">Lines</th>
-                <th className="px-2 py-1 w-28">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+              <option value="">Select for vs actual</option>
               {budgets.map((b) => (
-                <tr key={b.id} className="border-t">
-                  <td className="px-2 py-1">{b.budget_name}</td>
-                  <td className="px-2 py-1">{b.fiscal_year}</td>
-                  <td className="px-2 py-1">{b.status}</td>
-                  <td className="px-2 py-1">{b.lines.length}</td>
-                  <td className="px-2 py-1 text-right">
-                    <div className="relative inline-block text-left">
-                      <button
-                        type="button"
-                        className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenActionsId((id) => (id === b.id ? null : b.id));
-                        }}
-                      >
-                        Actions
-                      </button>
-                      {openActionsId === b.id && (
-                        <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                          <button
-                            type="button"
-                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenActionsId(null);
-                              startEdit(b);
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenActionsId(null);
-                              void removeBudget(b.id);
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                <option key={b.id} value={b.id}>
+                  {b.budget_name} ({b.fiscal_year})
+                </option>
+              ))}
+            </select>
+          </div>
+        }
+        footer={showingCountLabel(budgets.length, budgets.length, "budget")}
+      >
+        <table className={`${listTableBaseClass} min-w-[36rem]`}>
+          <thead className={listTableTheadClass}>
+            <tr>
+              <th className={listTableThClass}>Budget</th>
+              <th className={listTableThClass}>Fiscal Year</th>
+              <th className={listTableThClass}>Status</th>
+              <th className={listTableThClass}>Lines</th>
+              <th className={listTableThClass}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {budgets.length === 0 ? (
+              <tr>
+                <td className={listPageEmptyClass} colSpan={5}>
+                  No budgets yet.
+                </td>
+              </tr>
+            ) : (
+              budgets.map((b) => (
+                <tr key={b.id} className={listTableTrClass}>
+                  <td className={listTableTdPrimaryClass}>{b.budget_name}</td>
+                  <td className={listTableTdClass}>{b.fiscal_year}</td>
+                  <td className={listTableTdClass}>{b.status}</td>
+                  <td className={listTableTdClass}>{b.lines.length}</td>
+                  <td className={listTableTdClass}>
+                    <RowActionsMenu
+                      rowId={b.id}
+                      openId={openActionsId}
+                      onOpenChange={setOpenActionsId}
+                      menuPortal
+                      items={[
+                        { key: "edit", label: "Edit", onClick: () => startEdit(b) },
+                        { key: "delete", label: "Delete", danger: true, onClick: () => void removeBudget(b.id) },
+                      ]}
+                    />
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+              ))
+            )}
+          </tbody>
+        </table>
+      </ScrollTableCard>
 
       {vsActual ? (
-        <div className="rounded-xl border border-border bg-surface-raised p-4">
-          <h2 className="mb-2 text-lg font-semibold">Budget vs Actual</h2>
-          <div className="mb-3 grid gap-2 md:grid-cols-3 text-sm">
-            <div className="rounded border p-2">
-              Budget: <b>{vsActual.total_budget.toLocaleString()}</b>
-            </div>
-            <div
-              className="rounded border p-2"
-              title="Sum of each line's actual for that line's own month / quarter / year"
-            >
-              Actual (line periods): <b>{vsActual.total_actual.toLocaleString()}</b>
-            </div>
-            <div className="rounded border p-2">
-              Variance: <b>{vsActual.total_variance.toLocaleString()}</b>
-            </div>
-          </div>
-          <div className="mb-6 space-y-2">
+        <div className="space-y-3 rounded-lg border border-border bg-surface-raised p-4">
+          <h2 className="text-sm font-semibold text-text-primary">Budget vs Actual</h2>
+          <SummaryStrip
+            items={[
+              { key: "budget", label: "Budget", value: vsActual.total_budget.toLocaleString() },
+              { key: "actual", label: "Actual (line periods)", value: vsActual.total_actual.toLocaleString() },
+              { key: "variance", label: "Variance", value: vsActual.total_variance.toLocaleString() },
+            ]}
+          />
+          <div className="space-y-2">
             <div className="text-sm font-medium text-text-secondary">
               Utilization by period (green ≤90%, yellow 90–100%, red &gt;100%)
             </div>
@@ -526,41 +341,193 @@ export function BudgetsPage() {
               );
             })}
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-surface-subtle text-left">
+          <ScrollTableCard maxHeight="secondary">
+            <table className={`${listTableBaseClass} min-w-[32rem]`}>
+              <thead className={listTableTheadClass}>
                 <tr>
-                  <th className="px-2 py-1">Period</th>
-                  <th className="px-2 py-1">Budget</th>
+                  <th className={listTableThClass}>Period</th>
+                  <th className={listTableThRightClass}>Budget</th>
                   <th
-                    className="px-2 py-1"
+                    className={listTableThRightClass}
                     title="Posted vouchers in this line's period only. Expense/asset = debit − credit; income/liability/equity = credit − debit."
                   >
                     Actual (line period)
                   </th>
-                  <th className="px-2 py-1">Variance</th>
-                  <th className="px-2 py-1">Variance %</th>
+                  <th className={listTableThRightClass}>Variance</th>
+                  <th className={listTableThRightClass}>Variance %</th>
                 </tr>
               </thead>
               <tbody>
                 {vsActual.rows.map((r) => (
-                  <tr key={r.line_id} className="border-t">
-                    <td className="px-2 py-1" title={linePeriodTitle(r)}>
+                  <tr key={r.line_id} className={listTableTrClass}>
+                    <td className={listTableTdPrimaryClass} title={linePeriodTitle(r)}>
                       {r.period_month}
                     </td>
-                    <td className="px-2 py-1">{r.budget_amount.toLocaleString()}</td>
-                    <td className="px-2 py-1" title={actualTitle(r)}>
+                    <td className={`${listTableTdClass} text-right`}>{r.budget_amount.toLocaleString()}</td>
+                    <td className={`${listTableTdClass} text-right`} title={actualTitle(r)}>
                       {r.actual_amount.toLocaleString()}
                     </td>
-                    <td className="px-2 py-1">{r.variance.toLocaleString()}</td>
-                    <td className="px-2 py-1">{r.variance_pct.toLocaleString()}%</td>
+                    <td className={`${listTableTdClass} text-right`}>{r.variance.toLocaleString()}</td>
+                    <td className={`${listTableTdClass} text-right`}>{r.variance_pct.toLocaleString()}%</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollTableCard>
         </div>
       ) : null}
+
+      <FinanceFormDrawer
+        open={drawerOpen}
+        size="xl"
+        title={editingId ? `Edit budget #${editingId}` : "New budget"}
+        onClose={closeDrawer}
+        onSubmit={(e) => void submit(e)}
+        submitLabel={editingId ? "Save budget" : "Create Budget"}
+        submitting={saving}
+        error={formError ?? undefined}
+      >
+        <FormSection title="Budget">
+          <div>
+            <label className={labelClass} htmlFor="bd-name">Budget name</label>
+            <input id="bd-name" className={fieldClass} value={form.budget_name} onChange={(e) => setForm((p) => ({ ...p, budget_name: e.target.value }))} />
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="bd-fy">Fiscal year</label>
+            <input id="bd-fy" className={fieldClass} value={form.fiscal_year} onChange={(e) => setForm((p) => ({ ...p, fiscal_year: e.target.value }))} />
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="bd-status">Status</label>
+            <select id="bd-status" className={fieldClass} value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value as "DRAFT" | "FINAL" }))}>
+              <option value="DRAFT">DRAFT</option>
+              <option value="FINAL">FINAL</option>
+            </select>
+          </div>
+        </FormSection>
+
+        <FormSection
+          title="Budget lines"
+          actions={
+            <button
+              type="button"
+              className={listPageToolbarButtonClass}
+              onClick={() =>
+                setForm((p) => ({
+                  ...p,
+                  lines: [...p.lines, { account_id: null, cost_center_id: null, period_month: currentMonthLocal(), amount: "0", notes: "" }],
+                }))
+              }
+            >
+              Add Line
+            </button>
+          }
+        >
+          <ScrollTableCard maxHeight="secondary">
+            <table className={`${listTableBaseClass} min-w-[42rem]`}>
+              <thead className={listTableTheadClass}>
+                <tr>
+                  <th className={listTableThClass}>Month</th>
+                  <th className={listTableThClass}>Account</th>
+                  <th className={listTableThClass}>Cost Center</th>
+                  <th className={listTableThClass}>Amount</th>
+                  <th className={listTableThClass}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {form.lines.map((line, idx) => (
+                  <tr key={idx} className={listTableTrClass}>
+                    <td className="px-3 py-2">
+                      <input
+                        className={fieldClass}
+                        placeholder="YYYY-MM"
+                        aria-label={`Line ${idx + 1} month`}
+                        value={line.period_month}
+                        onChange={(e) =>
+                          setForm((p) => ({
+                            ...p,
+                            lines: p.lines.map((r, i) => (i === idx ? { ...r, period_month: e.target.value } : r)),
+                          }))
+                        }
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <select
+                        className={fieldClass}
+                        aria-label={`Line ${idx + 1} account`}
+                        value={line.account_id ?? ""}
+                        onChange={(e) =>
+                          setForm((p) => ({
+                            ...p,
+                            lines: p.lines.map((r, i) =>
+                              i === idx ? { ...r, account_id: e.target.value ? Number(e.target.value) : null } : r,
+                            ),
+                          }))
+                        }
+                      >
+                        <option value="">Any Account</option>
+                        {accounts.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.account_number} - {a.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-3 py-2">
+                      <select
+                        className={fieldClass}
+                        aria-label={`Line ${idx + 1} cost center`}
+                        value={line.cost_center_id ?? ""}
+                        onChange={(e) =>
+                          setForm((p) => ({
+                            ...p,
+                            lines: p.lines.map((r, i) =>
+                              i === idx ? { ...r, cost_center_id: e.target.value ? Number(e.target.value) : null } : r,
+                            ),
+                          }))
+                        }
+                      >
+                        <option value="">Any Cost Center</option>
+                        {costCenters.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.center_code} - {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        className={fieldClass}
+                        aria-label={`Line ${idx + 1} amount`}
+                        value={line.amount}
+                        onChange={(e) =>
+                          setForm((p) => ({
+                            ...p,
+                            lines: p.lines.map((r, i) => (i === idx ? { ...r, amount: e.target.value } : r)),
+                          }))
+                        }
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <button
+                        type="button"
+                        className="rounded-lg border border-border-strong px-2 py-1 text-xs"
+                        onClick={() =>
+                          setForm((p) => ({
+                            ...p,
+                            lines: p.lines.filter((_, i) => i !== idx || p.lines.length === 1),
+                          }))
+                        }
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ScrollTableCard>
+        </FormSection>
+      </FinanceFormDrawer>
     </div>
   );
 }

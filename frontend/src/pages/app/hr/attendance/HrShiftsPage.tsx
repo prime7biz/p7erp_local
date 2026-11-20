@@ -115,7 +115,7 @@ export function HrShiftsPage() {
         searchPlaceholder="Search code or name…"
         initialSort={{ key: "code", dir: "asc" }}
         exportFileName="hr-shifts"
-        canExport={canExportHrData(me?.role_name)}
+        canExport={canExportHrData(me)}
         rowActions={(r) => [{ key: "edit", label: "Edit", primary: true, onClick: () => openEdit(r) }]}
       />
 

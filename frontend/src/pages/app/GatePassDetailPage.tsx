@@ -16,6 +16,10 @@ import { GlPostingsPanel } from "@/components/inventory/GlPostingsPanel";
 import { InventoryDocumentPrintSheets } from "@/components/print/InventoryDocumentPrintSheets";
 import { PrintPreviewModal } from "@/components/print/PrintPreviewModal";
 import { logApiError } from "@/utils/logApiError";
+import { preferShareOverPrint, shareOrSaveBlob } from "@/lib/fileSave";
+import { useMobileUiV2Phone } from "@/hooks/useMobileUiV2";
+import { useMediaQuery } from "@/hooks/useInventoryListView";
+import { PHONE_MEDIA_QUERY } from "@/lib/mobileUi";
 import { publicVerifyUrl } from "@/utils/verifyPrintUrl";
 
 const STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "RELEASED"];
@@ -79,6 +83,10 @@ export function GatePassDetailPage() {
     void loadDetail();
   }, [loadDetail]);
 
+  const mobileV2Phone = useMobileUiV2Phone();
+  const narrow = useMediaQuery(PHONE_MEDIA_QUERY);
+  const phoneActions = preferShareOverPrint(mobileV2Phone || narrow);
+
   async function openPrint() {
     if (!row) return;
     try {
@@ -86,6 +94,17 @@ export function GatePassDetailPage() {
       setPrintOpen(true);
     } catch (e) {
       logApiError("GatePassDetailPage.print", e);
+      setError((e as Error).message);
+    }
+  }
+
+  async function saveOrSharePdf() {
+    if (!row) return;
+    try {
+      const blob = await api.downloadGatePassPdf(row.id);
+      await shareOrSaveBlob(blob, `${row.gate_pass_code || `gate-pass-${row.id}`}.pdf`);
+    } catch (e) {
+      logApiError("GatePassDetailPage.pdf", e);
       setError((e as Error).message);
     }
   }
@@ -205,6 +224,9 @@ export function GatePassDetailPage() {
             items={[
               { label: "Status", value: row.status },
               { label: "Purpose", value: row.purpose || "—" },
+              ...(row.class1_approval_status
+                ? [{ label: "Class 1", value: row.class1_approval_status }]
+                : []),
               ...(row.challan_id
                 ? [
                     {
@@ -219,13 +241,62 @@ export function GatePassDetailPage() {
         }
         actions={
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => void openPrint()}
-              className="rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground"
-            >
-              Print
-            </button>
+            {phoneActions ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void saveOrSharePdf()}
+                  className="rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground"
+                >
+                  Save PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveOrSharePdf()}
+                  className="rounded-lg border border-border-strong px-3 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
+                >
+                  Share
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void openPrint()}
+                className="rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground"
+              >
+                Print
+              </button>
+            )}
+            {row.status === "RELEASED" && row.class1_approval_status === "PENDING_CLASS1" ? (
+              <>
+                <button
+                  type="button"
+                  className="rounded-lg border border-status-success/40 px-3 py-2 text-sm text-status-success-foreground"
+                  onClick={async () => {
+                    try {
+                      setRow(await api.class1ApproveGatePass(row.id));
+                    } catch (err) {
+                      setError((err as Error).message);
+                    }
+                  }}
+                >
+                  Class 1 approve
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-status-danger/40 px-3 py-2 text-sm text-status-danger-foreground"
+                  onClick={async () => {
+                    try {
+                      setRow(await api.class1RejectGatePass(row.id));
+                    } catch (err) {
+                      setError((err as Error).message);
+                    }
+                  }}
+                >
+                  Class 1 reject
+                </button>
+              </>
+            ) : null}
             <Link
               to="/app/inventory/enhanced-gate-passes"
               className="rounded-lg border border-border-strong px-3 py-2 text-sm text-text-secondary hover:bg-surface-subtle"

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ScrollTableCard } from "@/components/finance/kit";
 import { api, type GstReturnPayload } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { downloadCsv } from "@/lib/reportExport";
@@ -175,9 +176,9 @@ export function GstReturnsPage() {
       ) : null}
 
       {tab !== "gstr3b" ? (
-        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+        <ScrollTableCard maxHeight="main">
           <table className="min-w-full text-left text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+            <thead className="sticky top-0 z-10 bg-gray-50 text-xs uppercase text-gray-500">
               <tr>
                 <th className="px-3 py-2">Date</th>
                 <th className="px-3 py-2">Voucher</th>
@@ -209,7 +210,7 @@ export function GstReturnsPage() {
               ) : null}
             </tbody>
           </table>
-        </div>
+        </ScrollTableCard>
       ) : null}
     </div>
   );

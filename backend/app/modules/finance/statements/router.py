@@ -84,6 +84,13 @@ async def _report_gate(db: AsyncSession, tenant: Tenant, user: User) -> None:
     await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_MIS_REPORT_VIEW)
 
 
+async def _pnl_bs_gate(db: AsyncSession, tenant: Tenant, user: User) -> None:
+    """Extra Class 1 / Super gate for Profit & Loss and Balance Sheet when authority flag is ON."""
+    from app.common.authority.policy import assert_pnl_balance_sheet_allowed
+
+    await assert_pnl_balance_sheet_allowed(db, user, feature_flags=tenant.feature_flags)
+
+
 async def _setup_gate(db: AsyncSession, tenant: Tenant, user: User, *, write: bool) -> None:
     if user.tenant_id != tenant.id:
         raise HTTPException(status_code=403, detail="Tenant mismatch")
@@ -140,6 +147,7 @@ async def balance_sheet(
     db: AsyncSession = Depends(get_db),
 ):
     await _report_gate(db, tenant, user)
+    await _pnl_bs_gate(db, tenant, user)
     if fiscal_year is not None and as_of_date is not None:
         raise HTTPException(status_code=422, detail="Use either fiscal_year or as_of_date, not both")
     if fiscal_year is not None:
@@ -158,6 +166,7 @@ async def profit_loss(
     db: AsyncSession = Depends(get_db),
 ):
     await _report_gate(db, tenant, user)
+    await _pnl_bs_gate(db, tenant, user)
     start, end = _fiscal_range(tenant, from_date, to_date, fiscal_year)
     return await build_profit_loss(db, tenant, from_date=start, to_date=end, include_zero=include_zero)
 
@@ -289,6 +298,8 @@ async def export_statement(
 ):
     """Same numbers as the JSON report (built by the same service), written as XLSX or PDF."""
     await _report_gate(db, tenant, user)
+    if report in ("balance-sheet", "profit-loss"):
+        await _pnl_bs_gate(db, tenant, user)
     await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_MIS_REPORT_EXPORT)
     today = today_local(tenant)
     if report == "trial-balance":

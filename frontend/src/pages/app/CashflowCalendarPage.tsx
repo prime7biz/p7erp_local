@@ -4,7 +4,14 @@ import { api, type BtbLcRow, type OutstandingBillResponse } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
 import { toLocalISODate } from "@/lib/dates";
 import { addMoney, subtractMoney } from "@/lib/money";
-import { useEmbeddedPage } from "@/components/app/embeddedPage";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import {
+  listPageErrorClass,
+  listPageLoadingClass,
+  listPageRootClass,
+  listPageToolbarButtonClass,
+} from "@/components/app/listPageLayout";
+import { SummaryStrip } from "@/components/finance/kit";
 
 type DayCell = { date: string; inflow: number; outflow: number; labels: string[] };
 
@@ -19,7 +26,6 @@ function monthDays(year: number, month0: number): Date[] {
 }
 
 export function CashflowCalendarPage() {
-  const embedded = useEmbeddedPage();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
@@ -97,16 +103,12 @@ export function CashflowCalendarPage() {
   const monthLabel = new Date(year, month, 1).toLocaleString(undefined, { month: "long", year: "numeric" });
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-      {!embedded && (
-        <>
-          <h1 className="text-2xl font-bold text-text-primary">Cashflow Calendar</h1>
-        </>
-      )}
-          <p className="text-text-muted text-sm mt-0.5">
-            Planned inflows/outflows from open bills and LC maturities.{" "}
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="Cashflow Calendar"
+        description="Planned inflows/outflows from open bills and LC maturities."
+        belowTitle={
+          <p className="text-sm text-text-muted">
             <Link to="/app/finance/cash-forecast" className="text-brand-primary hover:underline">
               Cash forecast
             </Link>{" "}
@@ -115,56 +117,47 @@ export function CashflowCalendarPage() {
               Bills
             </Link>
           </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            className="rounded border border-border px-2 py-1 text-sm"
-            onClick={() => {
-              const d = new Date(year, month - 1, 1);
-              setYear(d.getFullYear());
-              setMonth(d.getMonth());
-            }}
-          >
-            ← Prev
-          </button>
-          <button
-            type="button"
-            className="rounded border border-border px-2 py-1 text-sm"
-            onClick={() => {
-              const d = new Date(year, month + 1, 1);
-              setYear(d.getFullYear());
-              setMonth(d.getMonth());
-            }}
-          >
-            Next →
-          </button>
-        </div>
-      </header>
+        }
+        actions={
+          <>
+            <button
+              type="button"
+              className={listPageToolbarButtonClass}
+              onClick={() => {
+                const d = new Date(year, month - 1, 1);
+                setYear(d.getFullYear());
+                setMonth(d.getMonth());
+              }}
+            >
+              ← Prev
+            </button>
+            <button
+              type="button"
+              className={listPageToolbarButtonClass}
+              onClick={() => {
+                const d = new Date(year, month + 1, 1);
+                setYear(d.getFullYear());
+                setMonth(d.getMonth());
+              }}
+            >
+              Next →
+            </button>
+          </>
+        }
+      />
       {summary && (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-lg border border-border bg-surface-raised p-3">
-            <div className="text-xs text-text-muted">Forecast summary (all scenarios)</div>
-            <div className="text-lg font-semibold text-emerald-700">{summary.expected_inflows.toLocaleString()}</div>
-          </div>
-          <div className="rounded-lg border border-border bg-surface-raised p-3">
-            <div className="text-xs text-text-muted">Expected outflows</div>
-            <div className="text-lg font-semibold text-amber-800">{summary.expected_outflows.toLocaleString()}</div>
-          </div>
-          <div className="rounded-lg border border-border bg-surface-raised p-3">
-            <div className="text-xs text-text-muted">Net</div>
-            <div className="text-lg font-semibold">{summary.net_cash_flow.toLocaleString()}</div>
-          </div>
-        </div>
+        <SummaryStrip
+          items={[
+            { key: "in", label: "Forecast summary (all scenarios)", value: summary.expected_inflows.toLocaleString(), tone: "success" },
+            { key: "out", label: "Expected outflows", value: summary.expected_outflows.toLocaleString(), tone: "warning" },
+            { key: "net", label: "Net", value: summary.net_cash_flow.toLocaleString() },
+          ]}
+        />
       )}
-      {error && (
-        <div className="rounded-lg bg-status-danger-subtle border border-status-danger/20 px-4 py-3 text-sm text-status-danger-foreground">
-          {error}
-        </div>
-      )}
-      <h2 className="text-lg font-semibold">{monthLabel}</h2>
+      {error && <div className={listPageErrorClass}>{error}</div>}
+      <h2 className="text-lg font-semibold text-text-primary">{monthLabel}</h2>
       {loading ? (
-        <div className="p-12 text-center text-text-muted">Loading…</div>
+        <div className={listPageLoadingClass}>Loading…</div>
       ) : (
         <div className="grid grid-cols-7 gap-1 text-xs sm:text-sm">
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (

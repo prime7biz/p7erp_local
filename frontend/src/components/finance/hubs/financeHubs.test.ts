@@ -433,6 +433,22 @@ describe("Finance hub tabs", () => {
       expect(visibleHubTabs(statements(), on, () => true)).toHaveLength(12);
     });
 
+    it("hides P&L / Balance Sheet tabs when confidential reports are denied", () => {
+      const on = { finance_statements_v2: true };
+      const allow = () => true;
+      const denied = visibleHubTabs(statements(), on, allow, { canViewConfidentialReports: false }).map((t) => t.id);
+      expect(denied).not.toContain("statement-profit-loss");
+      expect(denied).not.toContain("statement-balance-sheet");
+      expect(denied).not.toContain("financial-statements");
+      expect(denied).toContain("statement-trial-balance");
+      expect(denied).toHaveLength(9);
+      expect(
+        financeTabPaletteRoutes(on, allow, { canViewConfidentialReports: false }).some((r) =>
+          r.href.includes("statement-profit-loss"),
+        ),
+      ).toBe(false);
+    });
+
     it("only the exact value true counts as on", () => {
       expect(isFinanceStatementsV2Enabled({ finance_statements_v2: true })).toBe(true);
       for (const flags of [undefined, null, {}, { finance_statements_v2: false }, { finance_statements_v2: "true" }]) {

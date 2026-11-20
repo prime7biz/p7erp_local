@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Plus, X } from "lucide-react";
 import type { TenantType } from "@/api/client";
 import { getCreateActions } from "@/components/shell/createActions";
+import { useAuth } from "@/context/AuthContext";
 
 /**
  * Mobile-only quick-create FAB for authenticated /app/* routes.
@@ -10,9 +11,17 @@ import { getCreateActions } from "@/components/shell/createActions";
  */
 export function QuickCreateFab({ tenantType, roleName }: { tenantType: TenantType; roleName: string }) {
   const location = useLocation();
+  const { me } = useAuth();
+  const authorityOn = me?.feature_flags?.user_authority_classes_v1 === true;
   const QUICK_CREATE_LINKS = useMemo(
-    () => getCreateActions({ tenantType, roleName }).filter((a) => a.label !== "Items" && !a.paletteOnly),
-    [tenantType, roleName],
+    () =>
+      getCreateActions({
+        tenantType,
+        roleName,
+        authorityClassesEnabled: authorityOn,
+        moduleGrants: me?.module_grants,
+      }).filter((a) => a.label !== "Items" && !a.paletteOnly),
+    [tenantType, roleName, authorityOn, me?.module_grants],
   );
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);

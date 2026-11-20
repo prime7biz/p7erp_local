@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ExpenseGroupBy } from "@/api/financeBudgetAnalytics";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { listPageRootClass } from "@/components/app/listPageLayout";
+import { ScrollTableCard } from "@/components/finance/kit";
 import { FinanceAiCommentaryPanel } from "@/components/finance/ai/FinanceAiCommentaryPanel";
 import { GROUP_BY_OPTIONS, moneyText, percentText } from "@/components/finance/budget/budgetLogic";
 import { fieldClass, LoadingBlock, NotesList, ReportError, SwitchedOffNotice } from "@/components/finance/budget/BudgetPageParts";
@@ -93,7 +94,7 @@ export function ExpenseAnalysisPage() {
               ) : null}
 
               <div className="grid gap-4 lg:grid-cols-3">
-                <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised lg:col-span-2">
+                <ScrollTableCard maxHeight="main" className="lg:col-span-2">
                   {data.rows.length === 0 ? (
                     <p className="p-6 text-sm text-text-muted">No posted expense in either period.</p>
                   ) : (
@@ -129,7 +130,7 @@ export function ExpenseAnalysisPage() {
                       </tfoot>
                     </table>
                   )}
-                </div>
+                </ScrollTableCard>
 
                 <section className="rounded-xl border border-border bg-surface-raised" aria-label="By expense class">
                   <h2 className="border-b border-border-subtle px-3 py-2 text-sm font-semibold text-text-primary">By expense class</h2>

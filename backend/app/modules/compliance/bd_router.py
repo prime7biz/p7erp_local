@@ -688,3 +688,44 @@ async def mushak_6_3(
     if data is None:
         raise HTTPException(status_code=404, detail="Invoice not found")
     return data
+
+
+@bd_vat_router.get("/mushak/6-3/{invoice_id}/pdf")
+async def mushak_6_3_pdf(
+    invoice_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Server PDF for phone Save PDF / Share (tenant-scoped)."""
+    from fastapi.responses import Response
+
+    from app.modules.merch.doc_pdf import render_simple_doc_pdf
+
+    _guard(user, tenant)
+    data = await mushak_service.mushak_6_3(db, tenant, invoice_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    seller = data.get("seller") or {}
+    buyer = data.get("buyer") or {}
+    content = render_simple_doc_pdf(
+        tenant=tenant,
+        title="Mushak 6.3 Tax Invoice",
+        lines=[
+            ("Invoice", data.get("invoice_code")),
+            ("Date", data.get("invoice_date")),
+            ("Currency", data.get("currency")),
+            ("Seller", seller.get("name")),
+            ("Seller BIN", seller.get("bin")),
+            ("Buyer", buyer.get("name")),
+            ("Buyer BIN", buyer.get("bin")),
+            ("Supply type", data.get("supply_type")),
+            ("Note", (data.get("note") or "")[:90]),
+        ],
+    )
+    code = str(data.get("invoice_code") or f"mushak-{invoice_id}").replace("/", "-")
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{code}-mushak-6-3.pdf"'},
+    )

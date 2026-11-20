@@ -465,6 +465,15 @@ export const commercialApi = {
   async getProformaInvoiceForPrint(id: number): Promise<ProformaInvoiceForPrint> {
     return request<ProformaInvoiceForPrint>(`/api/v1/commercial/proforma-invoices/${id}/for-print`);
   },
+  async downloadProformaInvoicePdf(id: number): Promise<Blob> {
+    return requestBlob(`/api/v1/commercial/proforma-invoices/${id}/pdf`);
+  },
+  async downloadCommercialInvoicePdf(id: number): Promise<Blob> {
+    return requestBlob(`/api/v1/commercial/invoices/${id}/pdf`);
+  },
+  async downloadMushak63Pdf(invoiceId: number): Promise<Blob> {
+    return requestBlob(`/api/v1/compliance/bd/mushak/6-3/${invoiceId}/pdf`);
+  },
   async finalizeProformaInvoice(id: number): Promise<ProformaInvoiceRow> {
     return request<ProformaInvoiceRow>(`/api/v1/commercial/proforma-invoices/${id}/finalize`, { method: "POST" });
   },

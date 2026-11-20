@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type CustomerResponse, type InquiryResponse, type SettingsConfigResponse } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { SecureImage } from "@/components/SecureImage";
+import { PrintPdfToolbarActions } from "@/components/print/PrintPdfToolbarActions";
 import { logApiError } from "@/utils/logApiError";
 import "@/styles/quotation-print.css";
 
@@ -99,13 +100,11 @@ export function InquiryPrintPage() {
           >
             Back to inquiry
           </Link>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-brand-primary-foreground hover:bg-brand-primary/90"
-          >
-            Print / Save PDF
-          </button>
+          <PrintPdfToolbarActions
+            downloadPdf={() => api.downloadInquiryPdf(inquiry.id)}
+            filename={`${inquiry.inquiry_code || `inquiry-${inquiry.id}`}.pdf`}
+            logKey="InquiryPrintPage.pdf"
+          />
         </div>
       </div>
 

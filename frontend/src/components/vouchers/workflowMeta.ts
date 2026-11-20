@@ -22,7 +22,7 @@ export const ACTION_TO_STATUS: Record<string, string> = {
 
 export const ACTION_LABEL: Record<string, string> = {
   submit: "Submit",
-  check: "Check",
+  check: "Check / Verify",
   recommend: "Recommend",
   approve: "Approve",
   post: "Post",
@@ -31,9 +31,26 @@ export const ACTION_LABEL: Record<string, string> = {
   cancel: "Cancel",
   reverse: "Reverse",
   cancel_posting: "Cancel posting",
+  class1_approve: "Class 1 approve (audit-ready)",
+  class1_reject: "Class 1 reject (reverse)",
 };
 
-export const ACTIONS_NEEDING_REASON = new Set(["reject", "cancel", "reverse", "cancel_posting"]);
+export const ACTIONS_NEEDING_REASON = new Set([
+  "reject",
+  "cancel",
+  "reverse",
+  "cancel_posting",
+  "class1_reject",
+]);
+
+export function class1ApprovalLabel(status: string | null | undefined): string | null {
+  if (!status) return null;
+  const s = status.toUpperCase();
+  if (s === "PENDING_CLASS1") return "Pending Class 1 approval";
+  if (s === "APPROVED") return "Approved (audit-ready)";
+  if (s === "REJECTED") return "Rejected / reversed";
+  return status;
+}
 
 /** Approval chain in order; mirrors the backend voucher status transitions. */
 export const VOUCHER_WORKFLOW_STEPS = ["DRAFT", "SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED", "POSTED"] as const;

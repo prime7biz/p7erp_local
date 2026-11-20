@@ -8,6 +8,7 @@ import {
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { SecureImage } from "@/components/SecureImage";
+import { PrintPdfToolbarActions } from "@/components/print/PrintPdfToolbarActions";
 import { logApiError } from "@/utils/logApiError";
 import "@/styles/quotation-print.css";
 import { getInventoryItemsCached } from "@/lib/masterData";
@@ -101,13 +102,11 @@ export function PurchaseOrderPrintPage() {
           >
             Back to list
           </Link>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-brand-primary-foreground hover:bg-brand-primary/90"
-          >
-            Print / Save PDF
-          </button>
+          <PrintPdfToolbarActions
+            downloadPdf={() => api.downloadPurchaseOrderPdf(po.id)}
+            filename={`${po.po_code || `po-${po.id}`}.pdf`}
+            logKey="PurchaseOrderPrintPage.pdf"
+          />
         </div>
       </div>
 

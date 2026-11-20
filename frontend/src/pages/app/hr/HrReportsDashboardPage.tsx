@@ -49,7 +49,7 @@ const payrollColumns: HrTableColumn<HrPayrollReportRow>[] = [
 
 export function HrReportsDashboardPage() {
   const { me } = useAuth();
-  const canExport = canExportHrData(me?.role_name);
+  const canExport = canExportHrData(me);
   const [summary, setSummary] = useState<HrReportSummaryResponse | null>(null);
   const [attendanceRows, setAttendanceRows] = useState<HrAttendanceReportRow[]>([]);
   const [leaveRows, setLeaveRows] = useState<HrLeaveReportRow[]>([]);

@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type ComparativeStatementResponse } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { ScrollTableCard } from "@/components/finance/kit";
 import { downloadCsv } from "@/lib/reportExport";
+import {
+  CONFIDENTIAL_REPORTS_DENIED,
+  useCanViewConfidentialReports,
+} from "@/hooks/useCanViewConfidentialReports";
 import { logApiError } from "@/utils/logApiError";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { formatMoney } from "./misFormat";
@@ -15,6 +20,7 @@ function changeColor(pct: number): string {
 }
 
 export function ComparativeStatementsPage() {
+  const canViewConfidential = useCanViewConfidentialReports();
   const currentYear = new Date().getFullYear();
   const [tab, setTab] = useState<Tab>("balance_sheet");
   const [year1, setYear1] = useState(currentYear - 1);
@@ -26,6 +32,12 @@ export function ComparativeStatementsPage() {
 
   const latest = useLatestRequest();
   const load = useCallback(async () => {
+    if (!canViewConfidential) {
+      setData(null);
+      setError(CONFIDENTIAL_REPORTS_DENIED);
+      setLoading(false);
+      return;
+    }
     const token = latest.begin();
     try {
       setError("");
@@ -39,11 +51,13 @@ export function ComparativeStatementsPage() {
     } catch (e) {
       logApiError("ComparativeStatementsPage.load", e);
       if (!latest.isCurrent(token)) return;
-      setError((e as Error).message);
+      const status = (e as { status?: number }).status;
+      setError(status === 403 ? CONFIDENTIAL_REPORTS_DENIED : (e as Error).message);
+      setData(null);
     } finally {
       if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [latest, tab, year1, year2]);
+  }, [latest, tab, year1, year2, canViewConfidential]);
 
   useEffect(() => {
     void load();
@@ -148,9 +162,11 @@ export function ComparativeStatementsPage() {
       {loading && !data ? <p className="text-sm text-gray-500">Loading…</p> : null}
 
       {data ? (
-        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+        <ScrollTableCard
+          footer={`${data.significant_count} line(s) with >10% change. * = significant`}
+        >
           <table className="min-w-full text-sm">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs text-gray-500">
                 <th className="px-3 py-2 font-medium">Particulars</th>
                 <th className="px-3 py-2 font-medium text-right">{data.year1}</th>
@@ -176,10 +192,7 @@ export function ComparativeStatementsPage() {
               ))}
             </tbody>
           </table>
-          <p className="px-3 py-2 text-xs text-gray-500">
-            {data.significant_count} line(s) with &gt;10% change. * = significant
-          </p>
-        </div>
+        </ScrollTableCard>
       ) : null}
     </div>
   );

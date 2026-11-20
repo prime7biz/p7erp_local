@@ -25,7 +25,7 @@ export const financeSection: TutorialSection = {
 
 ## Steps — find your way around the Finance menu
 
-1. **Setup** — the master data. **Account Groups** (\`/app/accounts/groups\`) and **Chart of Accounts** (\`/app/accounts\`) hold your ledgers. **Cost Centers**, **Multi-Currency**, **Accounting Periods** and **Advance Options** are also here.
+1. **Setup** — the master data. **Account Groups** (\`/app/finance/setup?tab=account-groups\`) and **Chart of Accounts** (\`/app/finance/setup?tab=chart-of-accounts\`) hold your ledgers. **Cost Centers**, **Multi-Currency**, **Accounting Periods** and **Advance Options** are also here.
 2. **Transactions** — daily work. **Vouchers** (\`/app/accounts/vouchers\`) to enter and find vouchers, **Voucher Print**, **Voucher Approvals** (the approval queue), **Bills** (outstanding receivables and payables), **Vendor bills (GRN)** and **Purchase & AP**. Optional items such as **Party Ledgers**, **Credit Note**, **Debit Note**, **Post-dated Register** and **TDS Settings** appear only when your admin switches them on.
 3. **Banking** — **Bank Accounts**, **Bank Reconciliation**, **Payment Runs**, **Payment Advice**, **Settlement Audit** and **FX Receipts**.
 4. **Reports** — Day Book, Trial Balance, Financial Statements, Ledger Activity, Exception Reports and more. These have their own guides in the **Finance reports** section of Help.
@@ -175,9 +175,11 @@ Many accountants learned on **Tally**. P7 ERP works on the same ideas — groups
 
 **The one big difference:** in Tally, saving a voucher posts it at once. In P7 a voucher you type goes through an **approval chain** (Draft → Submitted → Checked → Recommended → Approved → Posted) so a second person can check it. Small teams can switch on **Direct posting** to get Tally-style "save = post" (see the end of this guide).
 
+When **User authority classes** are on (Settings → Configuration), the chain uses Class 4 → Class 3 verify → Class 2 recommend. Same-day vouchers **post after recommend**, then show **Pending Class 1 approval**. Past-dated vouchers need Class 1 **before** posting. Direct posting is blocked while authority classes are on.
+
 ## Before you start
 
-- You need a Finance role. Approve / Post need **manager** or **admin**.
+- You need a Finance role. Approve / Post need **manager** or **admin** (or Class 1–3 with the finance module when authority classes are on).
 - Ask your admin which optional features are on (**Settings → Configuration**, like Tally's **F11**).
 
 ## Steps — Tally to P7, screen by screen
@@ -187,7 +189,7 @@ Many accountants learned on **Tally**. P7 ERP works on the same ideas — groups
 | Gateway of Tally | Left **sidebar** → **Finance**. Press **Ctrl+K** (or **/**) to search any screen. |
 | **F11** Company features | **Settings → Configuration**. Use **Essential / More features / All features** at the top to show more switches. |
 | Groups (Sundry Debtors, Bank Accounts …) | **Finance → Setup → Account Groups**. **Seed default groups** gives a starting set. Nature is Asset, Liability, Income, Expense or Equity. |
-| Create ledger | **Finance → Setup → Chart of Accounts** → fill **Ledger Name**, group, opening balance → **Create**. |
+| Create ledger | **Finance → Setup → Chart of Accounts** → **Add ledger** → fill **Ledger name**, group, opening balance → **Create**. |
 | **Alt+C** (create master inside a voucher) | Same key: in a voucher's ledger box press **Alt+C** (or click **+ New ledger**). The **New ledger** box opens; the new ledger is selected on the line. |
 | **F4** Contra, **F5** Payment, **F6** Receipt, **F7** Journal | Same keys on the **Vouchers** page (\`/app/accounts/vouchers\`). **Alt+4 … Alt+7** also work on laptops where F-keys are locked. |
 | **F8** Sales, **F9** Purchase | No F-key. Sales come from **Export & Import → Commercial Invoices** (issuing raises an AR voucher). Purchases come from **Vendor bills (GRN)** or **Purchase & AP**. Other voucher types are in the **Voucher type** list on the form. |
@@ -296,20 +298,22 @@ The **chart of accounts** is the list of all your ledgers (cash, bank, suppliers
 
 ### A. Check or add account groups
 
-1. Open **Finance → Setup → Account Groups** (\`/app/accounts/groups\`).
+1. Open **Finance → Setup → Account Groups** (\`/app/finance/setup?tab=account-groups\`).
 2. Use **List**, **Hierarchy** or **Advance Design** at the top right to see the groups.
-3. To add a group, fill **Name \\***, optional **Code** (left blank = automatic), choose the **Nature** and an optional **Parent group**.
-4. Tick **Bank group** for bank groups and **Affects gross profit** for direct costs and sales, then click **Create**.
+3. Click **Add group**. A side panel opens for the new group.
+4. Fill **Name \\***, optional **Code** (left blank = automatic), choose the **Nature** and an optional **Parent group**.
+5. Tick **Bank group** for bank groups and **Affects gross profit** for direct costs and sales, then click **Create**. Edit later with **Actions → Edit**.
 
 ### B. Create a ledger
 
-1. Open **Finance → Setup → Chart of Accounts** (\`/app/accounts\`).
-2. **Account Number** is filled automatically when you save.
-3. Type the **Ledger Name** (for example "Generator Fuel") and choose its group in the drop-down next to it.
-4. Enter the **Opening Balance** and choose **Debit** or **Credit** (assets and expenses are usually Debit).
-5. Tick **Bank Account** for a bank ledger, and **Bill-Wise Tracking** for customer and supplier ledgers so you can follow each invoice.
-6. Optional: click **Show advanced** for **Posting / Statistical / Header** type, **Reporting code**, **Display order**, parent ledger and **Cost nature**.
-7. Click **Create**. To change a ledger later, use **Actions → Edit** on its row.
+1. Open **Finance → Setup → Chart of Accounts** (\`/app/finance/setup?tab=chart-of-accounts\`).
+2. Click **Add ledger**. A side panel opens for the new ledger.
+3. **Account number** is filled automatically when you save.
+4. Type the **Ledger name** (for example "Generator Fuel") and choose its **Group**.
+5. Enter the **Opening balance** and choose **Debit** or **Credit** (assets and expenses are usually Debit).
+6. Tick **Bank account** for a bank ledger, and **Bill-wise tracking** for customer and supplier ledgers so you can follow each invoice.
+7. Optional: click **Show advanced** for **Posting / Statistical / Header** type, **Reporting code**, **Display order**, parent ledger and **Cost nature**.
+8. Click **Create**. To change a ledger later, use **Actions → Edit** on its row (the same side panel opens).
 
 ### B2. Optional: activate interest (Asset / Liability)
 
@@ -363,7 +367,7 @@ When Settings → Configuration has **Ledger interest on Asset / Liability accou
         "import excel",
       ],
       estimatedMinutes: 7,
-      lastUpdated: "2026-11-18",
+      lastUpdated: "2026-11-20",
       audience: "finance",
       coverImage: "/tutorials/screens/accounts.jpg",
       infographics: [
@@ -373,25 +377,25 @@ When Settings → Configuration has **Ledger interest on Asset / Liability accou
           steps: [
             {
               title: "Check the group exists",
-              body: "**Finance → Setup → Account Groups**. Add a group with the right **Nature** if needed.",
+              body: "**Finance → Setup → Account Groups** → **Add group**. Choose the right **Nature** if needed.",
               imageSrc: "/tutorials/screens/fin-groups-hierarchy.jpg",
               imageAlt: "Account Groups page showing the group hierarchy",
-              href: "/app/accounts/groups",
+              href: "/app/finance/setup?tab=account-groups",
             },
             {
-              title: "Fill the ledger form",
-              body: "**Chart of Accounts** → **Ledger Name**, group, **Opening Balance**, **Debit/Credit**. Click **Show advanced** for type and cost nature. With the interest flag on, Asset/Liability ledgers can activate interest (draft journals only).",
+              title: "Open Add ledger",
+              body: "**Chart of Accounts** → **Add ledger**. In the side panel enter **Ledger name**, group, **Opening balance**, **Debit/Credit**. Click **Show advanced** for type and cost nature. With the interest flag on, Asset/Liability ledgers can activate interest (draft journals only).",
               imageSrc: "/tutorials/screens/fin-coa-new-ledger.jpg",
-              imageAlt: "Chart of Accounts form with ledger name Generator Fuel and the advanced fields open",
-              href: "/app/accounts",
+              imageAlt: "Chart of Accounts Add ledger side panel with ledger name Generator Fuel and the advanced fields open",
+              href: "/app/finance/setup?tab=chart-of-accounts",
             },
             {
-              title: "Tick Bank Account or Bill-Wise Tracking",
-              body: "Bank ledgers → **Bank Account**. Customers and suppliers → **Bill-Wise Tracking**.",
+              title: "Tick Bank account or Bill-wise tracking",
+              body: "Bank ledgers → **Bank account**. Customers and suppliers → **Bill-wise tracking**.",
             },
             {
               title: "Click Create",
-              body: "The account number is generated. Edit later with **Actions → Edit**.",
+              body: "The account number is generated. Edit later with **Actions → Edit** (same side panel).",
             },
           ],
         },
@@ -408,7 +412,13 @@ When Settings → Configuration has **Ledger interest on Asset / Liability accou
           caption: "Alt+C in a voucher's ledger box creates a ledger without leaving the voucher.",
         },
       ],
-      relatedAppRoutes: ["/app/accounts", "/app/accounts/groups", "/app/banking/accounts"],
+      relatedAppRoutes: [
+        "/app/finance/setup?tab=chart-of-accounts",
+        "/app/finance/setup?tab=account-groups",
+        "/app/accounts",
+        "/app/accounts/groups",
+        "/app/banking/accounts",
+      ],
       relatedArticleIds: ["fin-overview", "fin-voucher-entry", "fin-coming-from-tally", "fin-bank-reconciliation"],
     },
     {
@@ -824,10 +834,10 @@ Money in and money out are the most common vouchers:
 
 ### E. Keep outstanding bills right
 
-1. Open **Finance → Transactions → Bills** (\`/app/accounts/outstanding-bills\`) and choose **Receivable** or **Payable** at the top right.
+1. Open **Finance → Transactions → Bills** (\`/app/accounts/outstanding-bills\`) and choose **Receivable** or **Payable** in the toolbar. Use **Add bill** to create one.
 2. The aging boxes (**Current, 1-30, 31-60, 61-90, 90+**) show how old the open amounts are.
-3. To mark part of a bill paid, type the amount in **Settle** on its row and click **Settle**.
-4. To make bills from a posted voucher, enter its **Voucher ID** under **From voucher** and click **Auto-create bill references** or **Auto-create outstanding bill**.
+3. To mark part of a bill paid, open **Actions → Settle** on its row, type the amount and click **Settle**.
+4. To make bills from a posted voucher, click **From voucher** in the toolbar, enter its **Voucher ID** and click **Auto-create bill references** or **Auto-create outstanding bill**.
 
 ## What happens next
 
@@ -1504,7 +1514,7 @@ Only **posted** vouchers are counted. Nothing here changes a voucher or a balanc
 
 ## Steps — give every group a Statement class
 
-1. Open **Finance → Setup → Account Groups** (\`/app/accounts/groups\`). System groups already carry their standard class; check your own groups first.
+1. Open **Finance → Setup → Account Groups** (\`/app/finance/setup?tab=account-groups\`). System groups already carry their standard class; check your own groups first. Use **Actions → Edit** to open the side panel and set **Statement class**.
 2. Click **Actions → Edit** on a group. In the **Statement class** box choose a class, for example **Sundry Debtors**, **Cash In Hand**, **Sales Accounts** or **Indirect Expenses**.
 3. Read the **Preview**: it tells you how many sub-groups and ledgers follow this group and how their class changes.
 4. Click **Save statement class**. Sub-groups and ledgers follow the group unless they have their own class. **Inherit / Unclassified** removes the group's own class.

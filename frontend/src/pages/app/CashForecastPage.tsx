@@ -4,16 +4,38 @@ import { api, type CashForecastScenarioCreate, type CashForecastScenarioResponse
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
 import { useConfirm } from "@/components/app/useConfirm";
-import { useEmbeddedPage } from "@/components/app/embeddedPage";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import {
+  listPageEmptyClass,
+  listPageErrorClass,
+  listPageLoadingClass,
+  listPageRootClass,
+  listPageTableCardClass,
+  listTableBaseClass,
+  listTableTdClass,
+  listTableTdPrimaryClass,
+  listTableThClass,
+  listTableThRightClass,
+  listTableTheadClass,
+  listTableTrClass,
+} from "@/components/app/listPageLayout";
+import { RowActionsMenu } from "@/components/app/RowActionsMenu";
+import { FinanceFormDrawer, FinanceListToolbar, FormSection, ScrollTableCard, SummaryStrip } from "@/components/finance/kit";
+
+const fieldClass =
+  "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary focus:border-brand-primary focus:outline-none focus:ring-0";
+const labelClass = "mb-1 block text-xs font-medium text-text-muted";
 
 export function CashForecastPage() {
-  const embedded = useEmbeddedPage();
   const confirm = useConfirm();
   const [rows, setRows] = useState<CashForecastScenarioResponse[]>([]);
   const [summary, setSummary] = useState<{ expected_inflows: number; expected_outflows: number; net_cash_flow: number; scenarios_count: number } | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  const [openActionsId, setOpenActionsId] = useState<number | string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [editingScenarioId, setEditingScenarioId] = useState<number | null>(null);
   const [form, setForm] = useState<CashForecastScenarioCreate>({
     name: "",
@@ -45,21 +67,30 @@ export function CashForecastPage() {
     void load();
   }, []);
 
-  useEffect(() => {
-    const close = () => setOpenActionsId(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, []);
+  function openAdd() {
+    setFormError(null);
+    setDrawerOpen(true);
+  }
+
+  function closeDrawer() {
+    setDrawerOpen(false);
+    setFormError(null);
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    setFormError(null);
+    setSaving(true);
     try {
       await api.createCashForecastScenario(form);
       setForm({ ...form, name: "" });
+      closeDrawer();
       await load();
-    } catch (e) {
-      logApiError("CashForecastPage.createCashForecastScenario", e);
-      setError((e as Error).message);
+    } catch (err) {
+      logApiError("CashForecastPage.createCashForecastScenario", err);
+      setFormError((err as Error).message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -101,154 +132,79 @@ export function CashForecastPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-      {!embedded && (
-        <>
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Cash Forecast</h1>
-          <p className="mt-1 text-sm text-text-muted">Scenario-based inflow/outflow planning; BTB LC maturities can be merged on generate (server).</p>
-        </div>
-        </>
-      )}
-        <Link to="/app/cashflow/calendar" className="text-sm font-medium text-brand-primary hover:underline">
-          Cashflow calendar →
-        </Link>
-      </div>
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="Cash Forecast"
+        description="Scenario-based inflow/outflow planning; BTB LC maturities can be merged on generate (server)."
+        actions={
+          <Link to="/app/cashflow/calendar" className="text-sm font-medium text-brand-primary hover:underline">
+            Cashflow calendar →
+          </Link>
+        }
+      />
 
       {summary ? (
-        <div className="grid gap-3 md:grid-cols-4">
-          <div className="rounded-xl border border-border bg-surface-raised p-3">
-            <div className="text-xs text-text-muted">Expected Inflow</div>
-            <div className="text-xl font-semibold text-status-success">{summary.expected_inflows.toLocaleString()}</div>
-          </div>
-          <div className="rounded-xl border border-border bg-surface-raised p-3">
-            <div className="text-xs text-text-muted">Expected Outflow</div>
-            <div className="text-xl font-semibold text-status-danger-foreground">{summary.expected_outflows.toLocaleString()}</div>
-          </div>
-          <div className="rounded-xl border border-border bg-surface-raised p-3">
-            <div className="text-xs text-text-muted">Net Cash</div>
-            <div className="text-xl font-semibold">{summary.net_cash_flow.toLocaleString()}</div>
-          </div>
-          <div className="rounded-xl border border-border bg-surface-raised p-3">
-            <div className="text-xs text-text-muted">Scenarios</div>
-            <div className="text-xl font-semibold">{summary.scenarios_count}</div>
-          </div>
-        </div>
+        <SummaryStrip
+          items={[
+            { key: "in", label: "Expected Inflow", value: summary.expected_inflows.toLocaleString(), tone: "success" },
+            { key: "out", label: "Expected Outflow", value: summary.expected_outflows.toLocaleString(), tone: "danger" },
+            { key: "net", label: "Net Cash", value: summary.net_cash_flow.toLocaleString() },
+            { key: "count", label: "Scenarios", value: summary.scenarios_count },
+          ]}
+        />
       ) : null}
 
-      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-border bg-surface-raised p-4 md:grid-cols-4">
-        <input
-          className="rounded border px-3 py-2 text-sm"
-          placeholder="Scenario Name"
-          value={form.name}
-          onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-        />
-        <input
-          type="date"
-          className="rounded border px-3 py-2 text-sm"
-          value={form.start_date}
-          onChange={(e) => setForm((p) => ({ ...p, start_date: e.target.value }))}
-        />
-        <input
-          type="number"
-          min={1}
-          max={24}
-          className="rounded border px-3 py-2 text-sm"
-          value={form.months ?? 6}
-          onChange={(e) => setForm((p) => ({ ...p, months: Number(e.target.value) }))}
-        />
-        <button
-          type="submit"
-          className="rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
-        >
-          Create Scenario
-        </button>
-      </form>
+      <FinanceListToolbar primaryAction={{ label: "Create scenario", onClick: openAdd }} />
 
-      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
+      {error ? <div className={listPageErrorClass}>{error}</div> : null}
 
       <div className="space-y-3">
         {loading ? (
-          <div className="rounded border bg-surface-raised px-3 py-4 text-sm text-text-muted">Loading scenarios...</div>
+          <div className={`${listPageTableCardClass} ${listPageLoadingClass}`}>Loading scenarios...</div>
         ) : rows.length === 0 ? (
-          <div className="rounded border bg-surface-raised px-3 py-4 text-sm text-text-muted">No scenarios yet.</div>
+          <div className={`${listPageTableCardClass} ${listPageEmptyClass}`}>No scenarios yet.</div>
         ) : (
           rows.map((r) => (
-            <div key={r.id} className="rounded-xl border border-border bg-surface-raised p-4">
+            <div key={r.id} className="rounded-lg border border-border bg-surface-raised p-4">
               <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <div className="font-semibold">{r.name}</div>
+                  <div className="font-semibold text-text-primary">{r.name}</div>
                   <div className="text-xs text-text-muted">
                     Start {r.start_date} | Months {r.months} | {r.status}
                   </div>
                 </div>
-                <div className="relative inline-block text-left">
-                  <button
-                    type="button"
-                    className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpenActionsId((id) => (id === r.id ? null : r.id));
-                    }}
-                  >
-                    Actions
-                  </button>
-                  {openActionsId === r.id && (
-                    <div className="absolute right-0 z-10 mt-1 w-40 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                      <button
-                        type="button"
-                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenActionsId(null);
-                          setEditingScenarioId(r.id);
-                          setEditForm({
-                            name: r.name,
-                            start_date: r.start_date,
-                            months: r.months,
-                          });
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenActionsId(null);
-                          void generate(r.id);
-                        }}
-                      >
-                        Generate
-                      </button>
-                      <button
-                        type="button"
-                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenActionsId(null);
-                          void removeScenario(r.id);
-                        }}
-                      >
-                        Delete scenario
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <RowActionsMenu
+                  rowId={r.id}
+                  openId={openActionsId}
+                  onOpenChange={setOpenActionsId}
+                  menuPortal
+                  items={[
+                    {
+                      key: "edit",
+                      label: "Edit",
+                      onClick: () => {
+                        setEditingScenarioId(r.id);
+                        setEditForm({ name: r.name, start_date: r.start_date, months: r.months });
+                      },
+                    },
+                    { key: "generate", label: "Generate", onClick: () => void generate(r.id) },
+                    { key: "delete", label: "Delete scenario", danger: true, onClick: () => void removeScenario(r.id) },
+                  ]}
+                />
               </div>
               {editingScenarioId === r.id ? (
                 <div className="mb-3 grid gap-2 rounded-lg border border-border bg-surface-subtle p-3 md:grid-cols-4">
                   <input
-                    className="rounded border px-2 py-1 text-sm"
+                    className={fieldClass}
                     placeholder="Scenario Name"
+                    aria-label="Edit scenario name"
                     value={editForm.name}
                     onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
                   />
                   <input
                     type="date"
-                    className="rounded border px-2 py-1 text-sm"
+                    className={fieldClass}
+                    aria-label="Edit scenario start date"
                     value={editForm.start_date}
                     onChange={(e) => setEditForm((p) => ({ ...p, start_date: e.target.value }))}
                   />
@@ -256,7 +212,8 @@ export function CashForecastPage() {
                     type="number"
                     min={1}
                     max={24}
-                    className="rounded border px-2 py-1 text-sm"
+                    className={fieldClass}
+                    aria-label="Edit scenario months"
                     value={editForm.months ?? 6}
                     onChange={(e) => setEditForm((p) => ({ ...p, months: Number(e.target.value) }))}
                   />
@@ -279,35 +236,60 @@ export function CashForecastPage() {
                 </div>
               ) : null}
               {r.lines.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-surface-subtle text-left">
+                <ScrollTableCard maxHeight="secondary">
+                  <table className={`${listTableBaseClass} min-w-[32rem]`}>
+                    <thead className={listTableTheadClass}>
                       <tr>
-                        <th className="px-2 py-1">Month</th>
-                        <th className="px-2 py-1">Inflow</th>
-                        <th className="px-2 py-1">Outflow</th>
-                        <th className="px-2 py-1">Net</th>
-                        <th className="px-2 py-1">Cumulative</th>
+                        <th className={listTableThClass}>Month</th>
+                        <th className={listTableThRightClass}>Inflow</th>
+                        <th className={listTableThRightClass}>Outflow</th>
+                        <th className={listTableThRightClass}>Net</th>
+                        <th className={listTableThRightClass}>Cumulative</th>
                       </tr>
                     </thead>
                     <tbody>
                       {r.lines.map((line) => (
-                        <tr key={line.id} className="border-t">
-                          <td className="px-2 py-1">{line.month_label}</td>
-                          <td className="px-2 py-1">{Number(line.inflow).toLocaleString()}</td>
-                          <td className="px-2 py-1">{Number(line.outflow).toLocaleString()}</td>
-                          <td className="px-2 py-1">{Number(line.net).toLocaleString()}</td>
-                          <td className="px-2 py-1">{Number(line.cumulative).toLocaleString()}</td>
+                        <tr key={line.id} className={listTableTrClass}>
+                          <td className={listTableTdPrimaryClass}>{line.month_label}</td>
+                          <td className={`${listTableTdClass} text-right`}>{Number(line.inflow).toLocaleString()}</td>
+                          <td className={`${listTableTdClass} text-right`}>{Number(line.outflow).toLocaleString()}</td>
+                          <td className={`${listTableTdClass} text-right`}>{Number(line.net).toLocaleString()}</td>
+                          <td className={`${listTableTdClass} text-right`}>{Number(line.cumulative).toLocaleString()}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </ScrollTableCard>
               ) : null}
             </div>
           ))
         )}
       </div>
+
+      <FinanceFormDrawer
+        open={drawerOpen}
+        title="Create scenario"
+        onClose={closeDrawer}
+        onSubmit={(e) => void submit(e)}
+        submitLabel="Create Scenario"
+        submitting={saving}
+        error={formError ?? undefined}
+      >
+        <FormSection title="Scenario">
+          <div>
+            <label className={labelClass} htmlFor="cf-name">Scenario name</label>
+            <input id="cf-name" className={fieldClass} value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="cf-start">Start date</label>
+            <input id="cf-start" type="date" className={fieldClass} value={form.start_date} onChange={(e) => setForm((p) => ({ ...p, start_date: e.target.value }))} />
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="cf-months">Months</label>
+            <input id="cf-months" type="number" min={1} max={24} className={fieldClass} value={form.months ?? 6} onChange={(e) => setForm((p) => ({ ...p, months: Number(e.target.value) }))} />
+          </div>
+        </FormSection>
+      </FinanceFormDrawer>
     </div>
   );
 }

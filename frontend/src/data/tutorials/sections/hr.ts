@@ -2113,14 +2113,17 @@ A **temporary gate pass** lets someone without an ID card enter for a set time. 
 2. In **Settings**, set advisory ratio targets and map departments to Sewing / Cutting / Finishing groups.
 3. To block over-quota hiring, enable **Quota enforcement**. New create / import / activate / reassign into a full cell returns **409** until someone requests a **Quota exception** and a *different* user with the approve key approves it.
 4. Enable **Floor suggested** to see **Floor plan** (crew template → line defaults → IE line-balance advisory) and machine:operator ratio.
-5. Use **Organogram** and **Daily attendance** for Suggested | Approved | Present and a one-day attendance roll-up.
-6. Enable **SMV panel** for **SMV** (industry vs factory) and **Ratios** tabs.
+5. Open **Organogram** for the reporting hierarchy. The default **Chart** view shows boxes and lines (pan, zoom, Fit). Use **Search** to jump to a person, **Focus this team** to zoom into one manager’s subtree, and filters for department or **Present today only**. The KPI strip shows people shown, % present, managers and average span of control. **Print** works for everyone with manpower read; **Download PNG** is for manager / admin roles. Switch to **Table** for Suggested | Approved | Present columns. The tree follows each employee’s **Reporting manager** (set on **Employment & Salary** or **Job**).
+6. Use **Daily attendance** for a one-day attendance roll-up.
+7. Enable **SMV panel** for **SMV** (industry vs factory) and **Ratios** tabs.
 
 ## Common problems
 
 - **Every hire is blocked after turning enforcement on** → seed sanctioned rows first, or request an exception.
 - **Cannot approve my own exception** → four-eyes: another user with \`hr.manpower.exception.approve\` must decide.
-- **Floor / SMV tabs missing** → nested flags are still off (master alone is not enough).`,
+- **Floor / SMV tabs missing** → nested flags are still off (master alone is not enough).
+- **Organogram looks flat** → set **Reporting manager** on employees, then refresh the chart.
+- **PNG download missing** → your role cannot export HR data; use **Print** instead.`,
       tags: ["HR", "manpower", "quota", "SMV", "organogram"],
       keywords: [
         "sanctioned strength",
@@ -2128,19 +2131,23 @@ A **temporary gate pass** lets someone without an ID card enter for a set time. 
         "exception",
         "floor plan",
         "organogram",
+        "org chart",
+        "hierarchy",
+        "span of control",
         "daily attendance",
         "industry SMV",
         "factory SMV",
         "operator helper ratio",
       ],
-      lastUpdated: "2026-11-18",
+      lastUpdated: "2026-11-19",
       relatedAppRoutes: [
         "/app/hr/manpower",
         "/app/hr/manpower/sanctioned",
+        "/app/hr/manpower/organogram",
         "/app/production/crew-daily",
         "/app/production/ie/line-balance",
       ],
-      relatedArticleIds: ["hr-add-employee", "hr-overview"],
+      relatedArticleIds: ["hr-add-employee", "hr-overview", "hr-employee-workspace"],
     },
   ],
 };

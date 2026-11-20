@@ -35,6 +35,8 @@ export type MenuVisibilityContext = {
   enabledOptionalProductionUnits: string[];
   featureFlags?: MeResponse["feature_flags"];
   hasPermission: (key: string) => boolean;
+  /** When false, Finance hub tabs marked confidential (P&L / Balance Sheet) stay hidden. Undefined = allow. */
+  canViewConfidentialReports?: boolean;
 };
 
 /**
@@ -56,15 +58,17 @@ export function isMenuPermissionAllowed(
  * "More" drawer so both menus always list the same pages.
  */
 export function filterVisibleMenuSections(sections: MenuSection[], ctx: MenuVisibilityContext): MenuSection[] {
-  const { tenantType, enabledOptionalProductionUnits, featureFlags, hasPermission } = ctx;
+  const { tenantType, enabledOptionalProductionUnits, featureFlags, hasPermission, canViewConfidentialReports } = ctx;
   // finance_hubs_v2 ON: the Finance section is replaced by the hub links, each filtered by its own
   // permission (finance.access or facility.access), so the section-level check is skipped for it.
   const financeHubsOn = isFinanceHubsV2Enabled(featureFlags);
   const canAccess = (key: string) => isMenuPermissionAllowed(key, featureFlags, hasPermission);
+  const hubExtras =
+    canViewConfidentialReports === undefined ? undefined : { canViewConfidentialReports };
   const base = financeHubsOn
     ? sections.flatMap((s) => {
         if (s.section !== "Finance") return [s];
-        const hubSection = buildFinanceHubSection(s, featureFlags, canAccess);
+        const hubSection = buildFinanceHubSection(s, featureFlags, canAccess, hubExtras);
         return hubSection ? [hubSection] : [];
       })
     : sections;

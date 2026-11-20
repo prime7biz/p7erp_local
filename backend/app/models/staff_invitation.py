@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -23,6 +24,11 @@ class StaffInvitation(Base):
     first_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     role_id: Mapped[int] = mapped_column(ForeignKey("roles.id", ondelete="RESTRICT"), nullable=False)
+    authority_class: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    module_grants: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    employee_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("hr_employees.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     token_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     # Public lookup half of a "selector.verifier" token; NULL for invitations created before revision 251.
     token_selector: Mapped[str | None] = mapped_column(String(32), nullable=True)

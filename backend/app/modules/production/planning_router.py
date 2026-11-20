@@ -19,7 +19,6 @@ from app.models import (
     GarmentStyle,
     OperationBulletin,
     ProductionShift,
-    Role,
     SewingLine,
     SewingLineStyleConfig,
     Tenant,
@@ -93,10 +92,12 @@ async def _tenant_ai_config(db: AsyncSession, tenant_id: int) -> dict | None:
 
 
 async def _is_planning_admin(user: User, db: AsyncSession) -> bool:
-    role = await db.get(Role, user.role_id)
-    if not role:
-        return False
-    return role.name.lower() in {"admin", "super_admin", "superadmin", "owner"}
+    """Admin role, or Class 1 / Super when user_authority_classes_v1 is ON."""
+    from app.common.authority.policy import is_tenant_admin_equivalent
+
+    tenant = await db.get(Tenant, user.tenant_id)
+    flags = tenant.feature_flags if tenant is not None else None
+    return await is_tenant_admin_equivalent(db, user, user.tenant_id, feature_flags=flags)
 
 
 @router.get("/plan-board")

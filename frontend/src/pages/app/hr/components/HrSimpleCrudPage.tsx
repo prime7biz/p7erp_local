@@ -280,7 +280,7 @@ export function HrSimpleCrudPage<TItem, TCreate extends object>(props: HrSimpleC
         statusOf={statusColumn ? (row) => String(statusColumn.cell(row) ?? "") : undefined}
         rowActions={rowActions ? (row) => rowActions(row, { refresh }) : undefined}
         exportFileName={exportFileName}
-        canExport={canExportHrData(me?.role_name)}
+        canExport={canExportHrData(me)}
         labels={{
           refresh: t("crud.refresh"),
           exportCsv: t("crud.exportCsv"),

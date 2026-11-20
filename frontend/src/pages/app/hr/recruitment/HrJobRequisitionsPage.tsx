@@ -205,7 +205,7 @@ export function HrJobRequisitionsPage() {
         initialSort={{ key: "title", dir: "asc" }}
         statusOf={(r) => r.status}
         exportFileName="hr-job-requisitions"
-        canExport={canExportHrData(me?.role_name)}
+        canExport={canExportHrData(me)}
         rowActions={(r) => [{ key: "status", label: "Change status", primary: true, onClick: () => openStatus(r) }]}
       />
 

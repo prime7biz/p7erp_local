@@ -9,7 +9,7 @@ export const workflowSection: TutorialSection = {
       id: "wf-approvals",
       title: "All Approvals: one inbox for everything waiting on you",
       summary:
-        "What appears in Workflow → All Approvals (vouchers, POs, requisitions, BOMs, leave, payroll, payment runs, reconciliations, periods) and how to filter, open and act on it.",
+        "What appears in Workflow → All Approvals (vouchers, POs, requisitions, BOMs, leave, payroll, payment runs, reconciliations, periods) and how to filter, open and act on it. When fixed-class authority is on, the Authority inbox shows only items waiting for your class, including ledger/group change requests.",
       estimatedMinutes: 5,
       audience: "manager",
       featured: true,
@@ -74,9 +74,11 @@ export const workflowSection: TutorialSection = {
 
 The **Pending approvals** tile on the dashboard and the bell count the same queues.
 
+When your company turns on **fixed-class authority**, a separate **Approvals** card appears first on Home and an **Authority inbox** block appears at the top of All Approvals. Those lists show only what *your* class may act on (verify / recommend / approve / Class 1 ratification / master change requests). Ledger and account-group edits then go through a change request instead of a direct save.
+
 ## Before you start
 
-- Most actions need the **admin** or **manager** role. HR roles can also act on **Leave Request** and **Payroll Run**. Voucher steps follow your company's voucher approval setup.
+- Most actions need the **admin** or **manager** role. HR roles can also act on **Leave Request** and **Payroll Run**. Voucher steps follow your company's voucher approval setup. With fixed-class authority, class + module grants decide who can verify, recommend or approve.
 - Rows you can see but not act on show **No action** (or only **Open**).
 
 ## Steps
@@ -114,7 +116,7 @@ At the top: **Voucher Approvals** (the finance queue), **Leave Approvals**, **Pa
 - **Bank reconciliation asks for a "Finalize reason (optional)"** → a browser box opens; you may leave it empty and click OK.`,
       tags: ["approvals", "workflow", "inbox", "voucher", "purchase order", "leave", "payroll", "requisition", "bom"],
       keywords: ["approve", "pending approvals", "approval queue", "checker", "maker checker", "authorize", "sign off", "payment run", "accounting period", "anumodon"],
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-19",
       relatedAppRoutes: [
         "/app/approvals",
         "/app/accounts/vouchers/approval-queue",

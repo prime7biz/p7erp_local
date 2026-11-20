@@ -10,6 +10,7 @@ import {
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { SecureImage } from "@/components/SecureImage";
+import { PrintPdfToolbarActions } from "@/components/print/PrintPdfToolbarActions";
 import { SignatureBlocks } from "@/components/print/SignatureBlocks";
 import { logApiError } from "@/utils/logApiError";
 import { inventoryPrintVerifyUrl } from "@/utils/verifyPrintUrl";
@@ -116,13 +117,11 @@ export function GoodsReceivingPrintPage() {
           >
             Back to list
           </Link>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-brand-primary-foreground hover:bg-brand-primary/90"
-          >
-            Print / Save PDF
-          </button>
+          <PrintPdfToolbarActions
+            downloadPdf={() => api.downloadGoodsReceivingPdf(grn.id)}
+            filename={`${grn.grn_code || `grn-${grn.id}`}.pdf`}
+            logKey="GoodsReceivingPrintPage.pdf"
+          />
         </div>
       </div>
 

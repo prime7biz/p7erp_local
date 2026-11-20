@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, type Mushak63 } from "@/api/client";
+import { PrintPdfToolbarActions } from "@/components/print/PrintPdfToolbarActions";
 import { logApiError } from "@/utils/logApiError";
 import { num } from "./shared";
 
@@ -31,13 +32,17 @@ export function Mushak63PrintPage() {
   const cell = "border border-black px-2 py-1";
   return (
     <div className="mx-auto max-w-4xl bg-white p-6 text-[12px] text-black print:p-0">
-      <div className="no-print mb-4 flex items-center justify-between print:hidden">
+      <div className="no-print mb-4 flex items-center justify-between gap-2 print:hidden">
         <Link className="text-sm text-brand-primary hover:underline" to="/app/commercial/bd-compliance">
           Back to Bond &amp; VAT registers
         </Link>
-        <button type="button" className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground" onClick={() => window.print()}>
-          Print
-        </button>
+        <div className="flex gap-2">
+          <PrintPdfToolbarActions
+            downloadPdf={() => api.downloadMushak63Pdf(Number(invoiceId))}
+            filename={`${data.invoice_code || `mushak-${invoiceId}`}-mushak-6-3.pdf`}
+            logKey="Mushak63PrintPage.pdf"
+          />
+        </div>
       </div>
       <p className="no-print mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 print:hidden">{data.note}</p>
 

@@ -11,6 +11,7 @@ import {
   type FeatureTier,
 } from "./featureTiers";
 import { FinanceArApDueSourceField } from "../../components/finance/settings/FinanceArApDueSourceField";
+import { AuthorityCutoverPanel } from "@/components/authority/AuthorityCutoverPanel";
 
 const TENANT_TYPE_OPTIONS: Array<{ value: TenantType; label: string }> = [
   { value: "manufacturer", label: "Manufacturer" },
@@ -868,6 +869,32 @@ export function ConfigurationPage() {
         </div>
 
         <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3" hidden={!showTier("more")}>
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">User authority classes</p>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.user_authority_classes_v1 === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  user_authority_classes_v1: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">User authority classes</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Super Admin + Class 1–4 with per-user modules, Class 1 post-approval on vouchers / gate passes / POs,
+                and locked P&amp;L / Balance Sheet. Off by default. Only the company Super Admin can save this switch.
+                Run the cutover dry-run and Apply below before turning it on for a pilot company.
+              </span>
+            </span>
+          </label>
+          <AuthorityCutoverPanel />
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3" hidden={!showTier("more")}>
           <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Phone and tablet</p>
           <label className="flex items-start gap-3 text-sm text-text-secondary">
             <input
@@ -1000,6 +1027,48 @@ export function ConfigurationPage() {
                 the month&apos;s expense forecast against the budget with warnings and an owner → finance → manager
                 answer flow, break-even and production / sales targets, and the weekly cash forecast. While on, a FINAL
                 budget changes only through an approved budget revision. Writes no vouchers. Off by default.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.kpi_engine_v1 === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  kpi_engine_v1: e.target.checked,
+                  ...(e.target.checked ? {} : { kpi_predictive_v1: false }),
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">KPI engine (governed analytics)</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Enables the KPI registry, executive and role cards, evidence drill-down, and commitment-date history for
+                OTIF. Off by default. Does not change voucher posting or stock valuation.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.kpi_predictive_v1 === true}
+              disabled={featureFlags.kpi_engine_v1 !== true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  kpi_predictive_v1: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">KPI predictive scores</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Rule-based early-warning scores (for example order delay risk). Needs the KPI engine. Weights are
+                illustrative configuration, not industry benchmarks. Off by default.
               </span>
             </span>
           </label>

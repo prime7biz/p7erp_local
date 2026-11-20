@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ScrollTableCard } from "@/components/finance/kit";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, type ChartOfAccountResponse, type LedgerActivityResponse } from "@/api/client";
 import { dateParam, idParam, voucherHref } from "@/lib/financeDrilldown";
@@ -99,7 +100,7 @@ export function LedgerActivityPage() {
   }
 
   return (
-    <div className="space-y-6 print-report">
+    <div className="space-y-4 print-report">
       <div className="print-only mb-3 border-b border-border-strong pb-2">
         <h1 className="text-lg font-semibold">Ledger Activity Report</h1>
         <p className="text-xs text-text-secondary">
@@ -154,9 +155,9 @@ export function LedgerActivityPage() {
         </div>
       ) : null}
 
-      <div className="print-card overflow-x-auto rounded-xl border border-border bg-surface-raised">
+      <ScrollTableCard maxHeight="main" className="print-card">
         <table className={`min-w-full ${compactView ? "text-xs" : "text-sm"} print:text-xs`}>
-          <thead className="bg-surface-subtle text-left">
+          <thead className="sticky top-0 z-10 bg-surface-subtle text-left">
             <tr>
               <th className={compactView ? "px-1 py-1" : "px-2 py-1"}>Date</th>
               <th className={compactView ? "px-1 py-1" : "px-2 py-1"}>Voucher</th>
@@ -189,7 +190,7 @@ export function LedgerActivityPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollTableCard>
     </div>
   );
 }

@@ -25,6 +25,9 @@ from app.models.platform_admin import (
 )
 from app.models.tenant import CommissionMode, Tenant, TenantType
 from app.models.user import User, Role
+from app.models.user_authority import UserModuleGrant
+from app.models.authority_change_request import AuthorityChangeAction, AuthorityChangeRequest
+from app.models.authority_cutover import AuthorityCutoverSnapshot
 from app.models.staff_invitation import StaffInvitation
 from app.models.marketing import MarketingLead
 from app.models.saved_view import UserSavedView
@@ -278,6 +281,19 @@ from app.models.mgmt_performance import (
     MgmtExpenseCategoryMap,
     MgmtMonthlyTarget,
 )
+from app.models.kpi_engine import (
+    KpiAlert,
+    KpiDataQualityResult,
+    KpiDefinition,
+    KpiDefinitionVersion,
+    KpiPrediction,
+    KpiRecalculationJob,
+    KpiResult,
+    KpiSourceMapping,
+    KpiTarget,
+    KpiThreshold,
+    OrderCommitmentRevision,
+)  # noqa: F401 — registered for Alembic / metadata
 from app.models.hr_leave import (
     LeaveType,
     LeavePolicy,
@@ -469,6 +485,10 @@ __all__ = [
     "TenantType",
     "CommissionMode",
     "User",
+    "UserModuleGrant",
+    "AuthorityChangeRequest",
+    "AuthorityChangeAction",
+    "AuthorityCutoverSnapshot",
     "Role",
     "StaffInvitation",
     "ExternalRole",

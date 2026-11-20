@@ -192,7 +192,7 @@ export function HrPayrollComponentsPage() {
         searchPlaceholder="Search code, name or type…"
         initialSort={{ key: "code", dir: "asc" }}
         exportFileName="hr-payroll-components"
-        canExport={canExportHrData(me?.role_name)}
+        canExport={canExportHrData(me)}
         rowActions={(r) => [{ key: "edit", label: "Edit", primary: true, onClick: () => openEdit(r) }]}
       />
 

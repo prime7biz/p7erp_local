@@ -333,7 +333,7 @@ export function HrSalaryStructuresPage() {
                 emptyHint="Add basic, house rent and allowances below."
                 searchPlaceholder="Search components…"
                 exportFileName={`salary-structure-${selected.code}`}
-                canExport={canExportHrData(me?.role_name)}
+                canExport={canExportHrData(me)}
                 rowActions={(line) => [
                   {
                     key: "edit",

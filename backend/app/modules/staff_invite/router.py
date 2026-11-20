@@ -44,6 +44,7 @@ def _ensure_user_tenant(user: User, tenant: Tenant) -> None:
 async def _row_response(db: AsyncSession, inv: StaffInvitation) -> StaffInviteRowResponse:
     rr = await db.execute(select(Role).where(Role.id == inv.role_id).limit(1))
     role = rr.scalar_one_or_none()
+    grants = inv.module_grants if isinstance(inv.module_grants, list) else []
     return StaffInviteRowResponse(
         id=inv.id,
         tenant_id=inv.tenant_id,
@@ -56,6 +57,9 @@ async def _row_response(db: AsyncSession, inv: StaffInvitation) -> StaffInviteRo
         expires_at=inv.expires_at,
         accepted_at=inv.accepted_at,
         created_at=inv.created_at,
+        authority_class=inv.authority_class,
+        module_grants=[str(x) for x in grants],
+        employee_id=inv.employee_id,
     )
 
 
@@ -77,6 +81,9 @@ async def invite_staff_user(
         first_name=body.first_name,
         last_name=body.last_name,
         role_id=body.role_id,
+        authority_class=body.authority_class,
+        module_grants=body.module_grants,
+        employee_id=body.employee_id,
     )
     rr = await db.execute(select(Role).where(Role.id == inv.role_id).limit(1))
     role = rr.scalar_one_or_none()

@@ -291,6 +291,12 @@ export const menuSections: MenuSection[] = [
         href: `${PREFIX}/operations/control-tower`,
         requiresFeatureFlag: "control_tower_enabled",
       },
+      {
+        icon: Gauge,
+        label: "KPI cockpit",
+        href: `${PREFIX}/kpi`,
+        requiresFeatureFlag: "kpi_engine_v1",
+      },
     ],
   },
   {

@@ -31,7 +31,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.pagination import MAX_PAGE_SIZE
 from app.common.permissions import (
-    HR_SETUP_BYPASS_ROLES,
     PERMISSION_HR_EMPLOYEE_CHANGE_TIER1,
     PERMISSION_HR_EMPLOYEE_CHANGE_TIER2,
     PERMISSION_HR_PAYROLL_MANAGE,
@@ -231,9 +230,11 @@ async def _role(db: AsyncSession, user: User, tenant_id: int):
 
 
 async def _has_payroll(db: AsyncSession, user: User, tenant_id: int) -> bool:
-    role = await _role(db, user, tenant_id)
-    if (role.name if role else "").strip().lower() in HR_SETUP_BYPASS_ROLES:
+    from app.common.permissions import is_hr_manager_equivalent
+
+    if await is_hr_manager_equivalent(db, user, tenant_id):
         return True
+    role = await _role(db, user, tenant_id)
     return internal_permission_granted(role=role, permission_key=PERMISSION_HR_PAYROLL_MANAGE)
 
 
@@ -471,8 +472,9 @@ async def cancel(db: AsyncSession, *, tenant: Tenant, user: User, request_pk: in
         return req
     if req.status not in OPEN_CHANGE_STATUSES:
         raise HTTPException(status_code=409, detail=f"The request is {req.status} and can no longer be cancelled")
-    role = await _role(db, user, tenant.id)
-    is_manager = (role.name if role else "").strip().lower() in HR_SETUP_BYPASS_ROLES
+    from app.common.permissions import is_hr_manager_equivalent
+
+    is_manager = await is_hr_manager_equivalent(db, user, tenant.id)
     if req.requested_by != user.id and not is_manager:
         raise HTTPException(status_code=403, detail="Only the person who asked for the change (or a manager) can cancel it")
     req.status, req.updated_at = "CANCELLED", datetime.utcnow()

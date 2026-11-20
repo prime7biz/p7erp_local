@@ -306,6 +306,7 @@ export const FINANCE_HUBS = [
         load: pages.stmtBalanceSheet,
         requiresFeatureFlag: STATEMENTS_FLAG,
         permissionKey: MIS_VIEW,
+        requiresConfidentialReports: true,
       },
       {
         id: "statement-profit-loss",
@@ -314,6 +315,7 @@ export const FINANCE_HUBS = [
         load: pages.stmtProfitLoss,
         requiresFeatureFlag: STATEMENTS_FLAG,
         permissionKey: MIS_VIEW,
+        requiresConfidentialReports: true,
       },
       {
         id: "statement-cash-flow",
@@ -363,6 +365,7 @@ export const FINANCE_HUBS = [
         legacyPath: "accounts/reports/financial-statements",
         load: pages.financialStatements,
         permissionKey: MIS_VIEW,
+        requiresConfidentialReports: true,
       },
       {
         id: "cash-flow",
@@ -428,6 +431,7 @@ export const FINANCE_HUBS = [
         load: pages.misComparative,
         hideWhenFeatureFlagFalse: MIS_FLAG,
         permissionKey: MIS_VIEW,
+        requiresConfidentialReports: true,
       },
       {
         id: "cash-scenarios",
@@ -454,6 +458,7 @@ export const FINANCE_HUBS = [
         legacyPath: "finance/management-performance",
         load: pages.managementPerformance,
         requiresFeatureFlag: "mgmt_performance_v1",
+        requiresConfidentialReports: true,
       },
       // Budget analytics (tenant flag finance_budget_analytics_v2): read-only, listed first while the flag is on.
       {

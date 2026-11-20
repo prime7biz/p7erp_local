@@ -10,6 +10,7 @@ import {
 import { logApiError } from "@/utils/logApiError";
 import { LinkedRecordsSection } from "@/components/app/LinkedRecordsSection";
 import { WorkflowSummaryStrip } from "@/components/app/WorkflowSummaryStrip";
+import { PrintPdfToolbarActions } from "@/components/print/PrintPdfToolbarActions";
 import { PartyLedgerSummaryCard } from "@/pages/app/finance/party-ledger/PartyLedgerSummaryCard";
 import { todayLocalISO } from "@/lib/dates";
 import { getChartOfAccountsCached, getBankAccountsCached } from "@/lib/masterData";
@@ -252,13 +253,13 @@ export function CommercialInvoiceDetailPage() {
               AR voucher
             </Link>
           ) : null}
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="rounded-lg border border-border px-3 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
-          >
-            Print
-          </button>
+          <PrintPdfToolbarActions
+            downloadPdf={() => api.downloadCommercialInvoicePdf(invoice.id)}
+            filename={`${invoice.invoice_code || `invoice-${invoice.id}`}.pdf`}
+            logKey="CommercialInvoiceDetailPage.pdf"
+            desktopClassName="rounded-lg border border-border px-3 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
+            phoneClassName="rounded-lg border border-border px-3 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
+          />
           {isDraft ? (
             <button
               type="button"

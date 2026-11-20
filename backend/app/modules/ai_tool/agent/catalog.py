@@ -398,6 +398,11 @@ async def _finance_statement_summary(ctx: AgentContext, args: dict[str, Any]) ->
     report = str(args.get("report") or "")
     if report not in REPORTS or comparison not in COMPARISONS:
         return {"summary": f"report must be one of: {', '.join(REPORTS)}.", "data": {}}
+    if report in ("balance_sheet", "profit_loss"):
+        from app.common.authority.policy import can_view_pnl_balance_sheet
+
+        if not await can_view_pnl_balance_sheet(ctx.db, ctx.user, feature_flags=ctx.tenant.feature_flags):
+            return blocked
     try:
         fy = args.get("fiscal_year")
         req = CommentaryRequest(

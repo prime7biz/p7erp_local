@@ -924,6 +924,35 @@ export const inventoryApi = {
       body: JSON.stringify(data),
     });
   },
+  async class1ApproveGatePass(id: number): Promise<EnhancedGatePassResponse> {
+    return request<EnhancedGatePassResponse>(`/api/v1/inventory/enhanced-gate-passes/${id}/class1-approve`, {
+      method: "POST",
+    });
+  },
+  async class1RejectGatePass(id: number): Promise<EnhancedGatePassResponse> {
+    return request<EnhancedGatePassResponse>(`/api/v1/inventory/enhanced-gate-passes/${id}/class1-reject`, {
+      method: "POST",
+    });
+  },
+  async downloadGatePassPdf(id: number): Promise<Blob> {
+    return requestBlob(`/api/v1/inventory/enhanced-gate-passes/${id}/pdf`);
+  },
+  async downloadPurchaseOrderPdf(id: number): Promise<Blob> {
+    return requestBlob(`/api/v1/inventory/purchase-orders/${id}/pdf`);
+  },
+  async downloadGoodsReceivingPdf(id: number): Promise<Blob> {
+    return requestBlob(`/api/v1/inventory/goods-receiving/${id}/pdf`);
+  },
+  async class1ApprovePurchaseOrder(id: number): Promise<PurchaseOrderResponse> {
+    return request<PurchaseOrderResponse>(`/api/v1/inventory/purchase-orders/${id}/class1-approve`, {
+      method: "POST",
+    });
+  },
+  async class1RejectPurchaseOrder(id: number): Promise<PurchaseOrderResponse> {
+    return request<PurchaseOrderResponse>(`/api/v1/inventory/purchase-orders/${id}/class1-reject`, {
+      method: "POST",
+    });
+  },
   async listProcessOrders(): Promise<ProcessOrderResponse[]> {
     return request<ProcessOrderResponse[]>("/api/v1/inventory/process-orders");
   },

@@ -188,6 +188,10 @@ async def build_commentary(
     if not audit and req.use_ai:
         raise ValueError("audit=False requires use_ai=False")
     assert_report_enabled(tenant, req.report)
+    if req.report in ("balance_sheet", "profit_loss"):
+        from app.common.authority.policy import assert_pnl_balance_sheet_allowed
+
+        await assert_pnl_balance_sheet_allowed(db, user, feature_flags=tenant.feature_flags)
     started = time.monotonic()
     tid, uid = tenant.id, user.id
     periods = resolve_periods(

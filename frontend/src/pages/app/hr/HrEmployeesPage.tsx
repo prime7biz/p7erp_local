@@ -109,7 +109,7 @@ export function HrEmployeesPage() {
     (["ocr_cv_extraction_enabled", "ocr_id_extraction_enabled", "ocr_medical_extraction_enabled"] as const).some(
       (key) => me?.feature_flags?.[key] === true,
     );
-  const canExport = canExportHrData(me?.role_name);
+  const canExport = canExportHrData(me);
   const [departments, setDepartments] = useState<HrDepartmentResponse[]>([]);
   const [designations, setDesignations] = useState<HrDesignationResponse[]>([]);
   const [sections, setSections] = useState<HrSectionResponse[]>([]);

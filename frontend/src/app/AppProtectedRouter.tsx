@@ -57,6 +57,7 @@ const TradeDashboardPage = lazy(() =>
 const ControlTowerPage = lazy(() =>
   import("@/pages/app/operations/ControlTowerPage").then((m) => ({ default: m.ControlTowerPage })),
 );
+const KpiDashboardPage = lazy(() => import("@/pages/app/kpi/KpiDashboardPage"));
 const PartiesPage = lazy(() => import("@/pages/app/parties/PartiesPage").then((m) => ({ default: m.PartiesPage })));
 const DocumentFlowPage = lazy(() => import("@/pages/app/flow/DocumentFlowPage").then((m) => ({ default: m.DocumentFlowPage })));
 const CustomersPage = lazy(() => import("@/pages/app/crm/CustomersPage").then((m) => ({ default: m.CustomersPage })));
@@ -967,6 +968,7 @@ export function AppProtectedRouter() {
           <Route path="commercial/btb-lcs" element={<BtbLcsPage />} />
         </Route>
         <Route path="operations/control-tower" element={<ControlTowerPage />} />
+        <Route path="kpi" element={<KpiDashboardPage />} />
         <Route path="control-tower" element={<ControlTowerShortLinkRedirect />} />
         <Route element={<TradeFeatureRouteGuard />}>
           <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.trade} />}>

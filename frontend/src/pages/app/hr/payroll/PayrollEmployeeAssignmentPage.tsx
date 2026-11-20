@@ -251,7 +251,7 @@ export function PayrollEmployeeAssignmentPage() {
         searchPlaceholder="Search employee or structure…"
         statusOf={(r) => assignmentStatus(r)}
         exportFileName="payroll-structure-assignments"
-        canExport={canExportHrData(me?.role_name)}
+        canExport={canExportHrData(me)}
         rowActions={(r) => [
           {
             key: "end",

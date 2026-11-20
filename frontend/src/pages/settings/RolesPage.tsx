@@ -144,6 +144,7 @@ function templateDataEntry(reg: PermissionsRegistryResponse): PermMap {
 }
 
 export function RolesPage() {
+  // When authority classes are ON, Roles stay available as Super Admin break-glass only.
   const [registry, setRegistry] = useState<PermissionsRegistryResponse | null>(null);
   const [roles, setRoles] = useState<SettingsRoleResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -357,9 +358,19 @@ export function RolesPage() {
 
   if (loading || !registry) return <p>Loading roles...</p>;
 
+  const authorityOn =
+    me?.feature_flags?.user_authority_classes_v1 === true || me?.authority_classes_enabled === true;
+
   return (
     <div className="space-y-4">
       <h1 style={{ marginTop: 0 }}>Roles</h1>
+
+      {authorityOn ? (
+        <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          User authority classes are on. Prefer <strong>Settings → Users</strong> (Class + modules). This Roles page is
+          for Super Admin break-glass only and does not replace Class assignment.
+        </div>
+      ) : null}
 
       {rbacMode !== "enforce" && (
         <div className="rounded border border-status-warning/30 bg-status-warning-subtle px-3 py-2 text-sm text-status-warning-foreground">

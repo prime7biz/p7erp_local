@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import { api, type ProformaInvoiceForPrint } from "@/api/client";
 import { SecureImage } from "@/components/SecureImage";
+import { PrintPdfToolbarActions } from "@/components/print/PrintPdfToolbarActions";
 import "@/styles/quotation-print.css";
 
 function formatMoney(value: string | number | null | undefined): string {
@@ -88,28 +89,16 @@ export function ProformaInvoicePrintPage() {
             >
               Back to edit
             </Link>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="rounded-lg border border-primary bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-              title="Open print dialog (choose printer or Save as PDF)"
-            >
-              Print
-            </button>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="rounded-lg border border-border bg-surface-raised px-4 py-2 text-sm font-semibold text-text-secondary hover:bg-surface-subtle"
-              title="Open print dialog and select Save as PDF"
-            >
-              Save as PDF
-            </button>
+            <PrintPdfToolbarActions
+              downloadPdf={() => api.downloadProformaInvoicePdf(data.id)}
+              filename={`${data.reference || data.invoice_number || `pi-${data.id}`}.pdf`}
+              logKey="ProformaInvoicePrintPage.pdf"
+              desktopClassName="rounded-lg border border-primary bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+              phoneClassName="rounded-lg border border-primary bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+            />
           </div>
         </div>
       </div>
-      <p className="no-print mx-auto max-w-[210mm] text-center text-xs text-text-muted">
-        Both buttons open the print dialog. Select &quot;Save as PDF&quot; or &quot;Microsoft Print to PDF&quot; to save the document.
-      </p>
 
       <article className="qp-sheet qp-sheet-proforma">
         {/* QR code: top-right corner with "Scan to verify" */}

@@ -846,6 +846,46 @@ async def get_style(
     return GarmentStyleOut.model_validate(row)
 
 
+@router.get("/styles/{style_id}/pdf")
+async def style_pdf(
+    style_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Server PDF for phone Save PDF / Share (tenant-scoped)."""
+    from fastapi.responses import Response
+    from app.modules.merch.doc_pdf import render_simple_doc_pdf
+
+    _ensure_tenant(user, tenant)
+    row = await db.get(GarmentStyle, style_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Style not found")
+    content = render_simple_doc_pdf(
+        tenant=tenant,
+        title="Garment Style",
+        lines=[
+            ("Code", row.style_code),
+            ("Name", row.name),
+            ("Status", row.status),
+            ("Season", row.season),
+            ("Department", row.department),
+            ("Product type", row.product_type),
+            ("Fabric", row.fabric_type),
+            ("Buyer style ref", row.buyer_style_ref),
+            ("Target FOB", row.target_fob),
+            ("Currency", row.currency),
+            ("Notes", (row.notes or "")[:90]),
+        ],
+    )
+    filename = f"{row.style_code or f'style-{row.id}'}.pdf".replace("/", "-")
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.patch("/styles/{style_id}", response_model=GarmentStyleOut)
 async def update_style(
     style_id: int,

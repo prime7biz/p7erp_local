@@ -8,6 +8,7 @@ import {
 } from "@/api/financeBudgetAnalytics";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { listPageRootClass } from "@/components/app/listPageLayout";
+import { ScrollTableCard } from "@/components/finance/kit";
 import { FinanceAiCommentaryPanel } from "@/components/finance/ai/FinanceAiCommentaryPanel";
 import { BudgetDrillPanel, type BudgetDrillTarget } from "@/components/finance/budget/BudgetDrillPanel";
 import { DIMENSION_OPTIONS, drillFilterFor, moneyText, percentText } from "@/components/finance/budget/budgetLogic";
@@ -179,7 +180,7 @@ export function BudgetAnalyticsPage() {
                   No budget or actual spend in this financial year.
                 </p>
               ) : (
-                <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+                <ScrollTableCard maxHeight="main">
                   <table className="min-w-full text-sm" aria-label="Budget vs actual">
                     <thead className="bg-surface-subtle">
                       <tr>
@@ -237,7 +238,7 @@ export function BudgetAnalyticsPage() {
                       </tr>
                     </tfoot>
                   </table>
-                </div>
+                </ScrollTableCard>
               )}
               <p className="text-xs text-text-muted">
                 Variance = budget − actual (a minus figure means over budget). Status: within below 80% used, warning from 80%,

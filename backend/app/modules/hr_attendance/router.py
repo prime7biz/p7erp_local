@@ -9,7 +9,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
-from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.ownership import ensure_owned
 from app.common.pagination import (
     HR_LIST_DEFAULT_LIMIT,
@@ -70,10 +69,9 @@ def _ensure_tenant(user: User, tenant: Tenant) -> None:
 
 
 async def _require_manager_or_admin(db: AsyncSession, user: User, tenant_id: int) -> None:
-    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
-    role_name = (role.name if role else "").strip().lower()
-    if role_name not in {"admin", "manager", "super_admin", "superadmin", "owner"}:
-        raise HTTPException(status_code=403, detail="Only manager/admin can perform this action")
+    from app.common.permissions import require_hr_manager_or_admin
+
+    await require_hr_manager_or_admin(db, user, tenant_id)
 
 
 async def _assert_attendance_date_open(db: AsyncSession, tenant_id: int, day: date) -> None:

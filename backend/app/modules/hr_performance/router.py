@@ -6,7 +6,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
-from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.tenant import require_tenant
 from app.database import get_db, safe_async_session_rollback
@@ -42,10 +41,9 @@ def _ensure_user_tenant(user: User, tenant: Tenant) -> None:
 
 
 async def _require_manager_or_admin(db: AsyncSession, user: User, tenant_id: int) -> None:
-    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
-    role_name = (role.name if role else "").strip().lower()
-    if role_name not in {"admin", "manager", "super_admin", "superadmin", "owner"}:
-        raise HTTPException(status_code=403, detail="Only manager/admin can perform this action")
+    from app.common.permissions import require_hr_manager_or_admin
+
+    await require_hr_manager_or_admin(db, user, tenant_id)
 
 
 async def _get_employee_by_user(db: AsyncSession, tenant_id: int, user_id: int) -> Employee | None:

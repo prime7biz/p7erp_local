@@ -1,0 +1,76 @@
+"""Tier-1 KPI definition seeds (idempotent). Formulas live in compute/*, not React."""
+
+from __future__ import annotations
+
+from typing import Any
+
+# Each entry: code, name, module, unit, direction, sensitivity, adapter_key, dashboards, applicability, blocked_reason?
+SEED_DEFINITIONS: list[dict[str, Any]] = [
+    # D1
+    {"code": "MKT-02", "name": "Enquiry-to-order conversion", "module": "merch", "unit": "%", "direction": "UP", "adapter_key": "enquiry_to_order", "dashboards": ["executive", "merchandising", "sales"], "applicability": ["F", "A", "B"]},
+    {"code": "MKT-03", "name": "Quotation win rate", "module": "merch", "unit": "%", "direction": "UP", "adapter_key": "quotation_win_rate", "dashboards": ["merchandising", "sales"], "applicability": ["F", "A", "B"]},
+    {"code": "MKT-04", "name": "Order-book value", "module": "merch", "unit": "money", "direction": "UP", "adapter_key": "order_book_value", "dashboards": ["executive", "merchandising", "sales"], "applicability": ["F", "A", "B"], "sensitivity": "MANAGEMENT"},
+    {"code": "MKT-08", "name": "Buyer retention", "module": "merch", "unit": "%", "direction": "UP", "adapter_key": "buyer_retention", "dashboards": ["executive", "sales"], "applicability": ["F", "A", "B"]},
+    {"code": "MER-06", "name": "T&A milestone adherence", "module": "merch", "unit": "%", "direction": "UP", "adapter_key": "tna_adherence", "dashboards": ["executive", "merchandising"], "applicability": ["F", "A", "B"]},
+    {"code": "MER-07", "name": "Critical-path delay days", "module": "merch", "unit": "days", "direction": "DOWN", "adapter_key": "tna_delay_days", "dashboards": ["merchandising"], "applicability": ["F", "A", "B"]},
+    {"code": "MER-08", "name": "Order risk exposure", "module": "merch", "unit": "%", "direction": "DOWN", "adapter_key": "order_risk_exposure", "dashboards": ["executive", "merchandising"], "applicability": ["F", "A", "B"]},
+    {"code": "SMP-01", "name": "Sample on-time submission", "module": "merch", "unit": "%", "direction": "UP", "adapter_key": "sample_on_time", "dashboards": ["merchandising", "pd"], "applicability": ["F", "A", "B"]},
+    {"code": "SMP-02", "name": "Sample first-pass approval", "module": "merch", "unit": "%", "direction": "UP", "adapter_key": "sample_first_pass", "dashboards": ["merchandising", "pd"], "applicability": ["F", "A", "B"]},
+    {"code": "SMP-03", "name": "Sample approval cycle time", "module": "merch", "unit": "days", "direction": "DOWN", "adapter_key": "sample_cycle_days", "dashboards": ["pd"], "applicability": ["F", "A", "B"]},
+    {"code": "CST-01", "name": "Costing turnaround", "module": "merch", "unit": "days", "direction": "DOWN", "adapter_key": "costing_turnaround", "dashboards": ["costing"], "applicability": ["F", "A", "B"]},
+    {"code": "CST-03", "name": "Cost variance %", "module": "finance", "unit": "%", "direction": "RANGE", "adapter_key": "cost_variance", "dashboards": ["costing", "finance"], "applicability": ["F"], "sensitivity": "CONFIDENTIAL"},
+    {"code": "CST-04", "name": "CM variance", "module": "finance", "unit": "money", "direction": "UP", "adapter_key": "cm_variance", "dashboards": ["costing", "finance"], "applicability": ["F", "A"], "sensitivity": "CONFIDENTIAL"},
+    # D2
+    {"code": "PRC-02", "name": "Supplier OTIF", "module": "inventory", "unit": "%", "direction": "UP", "adapter_key": "supplier_otif", "dashboards": ["procurement", "sourcing"], "applicability": ["F", "A", "B"]},
+    {"code": "PRC-04", "name": "Purchase price variance", "module": "inventory", "unit": "money", "direction": "DOWN", "adapter_key": "ppv", "dashboards": ["procurement"], "applicability": ["F", "A", "B"], "sensitivity": "MANAGEMENT"},
+    {"code": "PRC-05", "name": "Supplier defect rate", "module": "inventory", "unit": "%", "direction": "DOWN", "adapter_key": "supplier_defect_rate", "dashboards": ["procurement", "quality"], "applicability": ["F", "A", "B"]},
+    {"code": "INV-01", "name": "Material readiness", "module": "inventory", "unit": "%", "direction": "UP", "adapter_key": "material_readiness", "dashboards": ["executive", "ppc", "inventory"], "applicability": ["F"]},
+    {"code": "INV-02", "name": "Fabric readiness", "module": "inventory", "unit": "%", "direction": "UP", "adapter_key": "fabric_readiness", "dashboards": ["ppc", "inventory"], "applicability": ["F"]},
+    {"code": "INV-03", "name": "Trim readiness", "module": "inventory", "unit": "%", "direction": "UP", "adapter_key": "trim_readiness", "dashboards": ["ppc", "inventory"], "applicability": ["F"]},
+    {"code": "INV-04", "name": "Inventory accuracy", "module": "inventory", "unit": "%", "direction": "UP", "adapter_key": "inventory_accuracy", "dashboards": ["inventory"], "applicability": ["F"]},
+    {"code": "INV-07", "name": "Inventory days", "module": "finance", "unit": "days", "direction": "DOWN", "adapter_key": "inventory_days", "dashboards": ["executive", "finance", "inventory"], "applicability": ["F", "A", "B"], "sensitivity": "MANAGEMENT"},
+    {"code": "INV-08", "name": "Dead-stock %", "module": "inventory", "unit": "%", "direction": "DOWN", "adapter_key": "dead_stock_pct", "dashboards": ["inventory"], "applicability": ["F", "A", "B"]},
+    # D3
+    {"code": "PPC-01", "name": "Capacity utilisation", "module": "production", "unit": "%", "direction": "RANGE", "adapter_key": "capacity_utilisation", "dashboards": ["executive", "ppc"], "applicability": ["F"]},
+    {"code": "PPC-02", "name": "Capacity booking load", "module": "production", "unit": "%", "direction": "RANGE", "adapter_key": "capacity_booking_load", "dashboards": ["executive", "ppc"], "applicability": ["F", "A", "B"]},
+    {"code": "PPC-03", "name": "Production plan attainment", "module": "production", "unit": "%", "direction": "UP", "adapter_key": "plan_attainment", "dashboards": ["executive", "production"], "applicability": ["F"]},
+    {"code": "PPC-04", "name": "Schedule adherence", "module": "production", "unit": "%", "direction": "UP", "adapter_key": "schedule_adherence", "dashboards": ["ppc"], "applicability": ["F"]},
+    {"code": "CUT-01", "name": "Fabric utilisation", "module": "production", "unit": "%", "direction": "UP", "adapter_key": "fabric_utilisation", "dashboards": ["cutting"], "applicability": ["F"]},
+    {"code": "CUT-03", "name": "Cut plan attainment", "module": "production", "unit": "%", "direction": "UP", "adapter_key": "cut_plan_attainment", "dashboards": ["cutting"], "applicability": ["F"]},
+    {"code": "CUT-05", "name": "Cutting re-cut rate", "module": "production", "unit": "%", "direction": "DOWN", "adapter_key": "cut_recut_rate", "dashboards": ["cutting"], "applicability": ["F"]},
+    {"code": "SEW-01", "name": "Sewing efficiency", "module": "production", "unit": "%", "direction": "UP", "adapter_key": "sewing_efficiency", "dashboards": ["executive", "production", "ie"], "applicability": ["F"]},
+    {"code": "SEW-02", "name": "Operator efficiency", "module": "production", "unit": "%", "direction": "UP", "adapter_key": "operator_efficiency", "dashboards": ["ie"], "applicability": ["F"]},
+    {"code": "SEW-04", "name": "Earned minutes", "module": "production", "unit": "minutes", "direction": "UP", "adapter_key": "earned_minutes", "dashboards": ["ie", "production"], "applicability": ["F"]},
+    {"code": "SEW-08", "name": "Hourly target attainment", "module": "production", "unit": "%", "direction": "UP", "adapter_key": "hourly_attainment", "dashboards": ["production"], "applicability": ["F"]},
+    {"code": "QA-01", "name": "RFT", "module": "production", "unit": "%", "direction": "UP", "adapter_key": "rft", "dashboards": ["executive", "quality"], "applicability": ["F", "A", "B"], "blocked_reason": "QA_04_UNSTRUCTURED_QC"},
+    {"code": "QA-02", "name": "DHU", "module": "production", "unit": "DHU", "direction": "DOWN", "adapter_key": "dhu", "dashboards": ["executive", "quality"], "applicability": ["F", "A", "B"], "blocked_reason": "QA_04_UNSTRUCTURED_QC"},
+    {"code": "QA-05", "name": "Reject rate", "module": "production", "unit": "%", "direction": "DOWN", "adapter_key": "reject_rate", "dashboards": ["quality", "production"], "applicability": ["F"]},
+    {"code": "QA-07", "name": "Final inspection pass rate", "module": "production", "unit": "%", "direction": "UP", "adapter_key": "final_inspection_pass", "dashboards": ["quality"], "applicability": ["F", "A", "B"]},
+    {"code": "QA-12", "name": "CAPA closure on time", "module": "production", "unit": "%", "direction": "UP", "adapter_key": "capa_on_time", "dashboards": ["quality"], "applicability": ["F", "A", "B"]},
+    # D4
+    {"code": "COM-01", "name": "Shipment OTIF", "module": "commercial", "unit": "%", "direction": "UP", "adapter_key": "shipment_otif", "dashboards": ["executive", "commercial"], "applicability": ["F", "A", "B"]},
+    {"code": "COM-02", "name": "On-time ex-factory", "module": "commercial", "unit": "%", "direction": "UP", "adapter_key": "on_time_ex_factory", "dashboards": ["commercial"], "applicability": ["F", "A", "B"]},
+    {"code": "COM-04", "name": "Documentation first-pass accuracy", "module": "commercial", "unit": "%", "direction": "UP", "adapter_key": "doc_first_pass", "dashboards": ["commercial"], "applicability": ["F", "A", "B"]},
+    {"code": "COM-05", "name": "Document cycle time", "module": "commercial", "unit": "days", "direction": "DOWN", "adapter_key": "doc_cycle_days", "dashboards": ["commercial"], "applicability": ["F", "A", "B"]},
+    {"code": "COM-07", "name": "Export proceeds ageing", "module": "finance", "unit": "days", "direction": "DOWN", "adapter_key": "export_proceeds_ageing", "dashboards": ["finance", "commercial"], "applicability": ["F", "A", "B"], "sensitivity": "CONFIDENTIAL"},
+    {"code": "COM-12", "name": "Bond entitlement utilisation", "module": "commercial", "unit": "%", "direction": "RANGE", "adapter_key": "bond_utilisation", "dashboards": ["commercial"], "applicability": ["F"]},
+    {"code": "FINA-01", "name": "Gross margin %", "module": "finance", "unit": "%", "direction": "UP", "adapter_key": "gross_margin_pct", "dashboards": ["executive", "finance"], "applicability": ["F", "A", "B"], "sensitivity": "CONFIDENTIAL"},
+    {"code": "FINA-02", "name": "Contribution margin %", "module": "finance", "unit": "%", "direction": "UP", "adapter_key": "contribution_margin_pct", "dashboards": ["executive", "finance"], "applicability": ["F", "A", "B"], "sensitivity": "CONFIDENTIAL"},
+    {"code": "FINA-04", "name": "Order profitability", "module": "finance", "unit": "money", "direction": "UP", "adapter_key": "order_profitability", "dashboards": ["finance"], "applicability": ["F", "A", "B"], "sensitivity": "CONFIDENTIAL"},
+    {"code": "FINA-06", "name": "DSO", "module": "finance", "unit": "days", "direction": "DOWN", "adapter_key": "dso", "dashboards": ["finance"], "applicability": ["F", "A", "B"], "sensitivity": "CONFIDENTIAL"},
+    {"code": "FINA-08", "name": "Cash conversion cycle", "module": "finance", "unit": "days", "direction": "DOWN", "adapter_key": "cash_conversion_cycle", "dashboards": ["executive", "finance"], "applicability": ["F", "A", "B"], "sensitivity": "CONFIDENTIAL"},
+    {"code": "FINA-09", "name": "Overdue AR %", "module": "finance", "unit": "%", "direction": "DOWN", "adapter_key": "overdue_ar_pct", "dashboards": ["executive", "finance"], "applicability": ["F", "A", "B"], "sensitivity": "CONFIDENTIAL"},
+    # D5
+    {"code": "HR-01", "name": "Attendance rate", "module": "hr", "unit": "%", "direction": "UP", "adapter_key": "attendance_rate", "dashboards": ["hr"], "applicability": ["F", "A", "B"]},
+    {"code": "HR-02", "name": "Absenteeism", "module": "hr", "unit": "%", "direction": "DOWN", "adapter_key": "absenteeism", "dashboards": ["hr"], "applicability": ["F", "A", "B"]},
+    {"code": "HR-03", "name": "Employee turnover", "module": "hr", "unit": "%", "direction": "DOWN", "adapter_key": "employee_turnover", "dashboards": ["executive", "hr"], "applicability": ["F", "A", "B"]},
+    {"code": "HR-05", "name": "Overtime ratio", "module": "hr", "unit": "%", "direction": "DOWN", "adapter_key": "overtime_ratio", "dashboards": ["hr"], "applicability": ["F"]},
+    {"code": "HR-06", "name": "Payroll accuracy", "module": "hr", "unit": "%", "direction": "UP", "adapter_key": "payroll_accuracy", "dashboards": ["hr"], "applicability": ["F", "A", "B"], "sensitivity": "CONFIDENTIAL"},
+    {"code": "HR-09", "name": "Training completion", "module": "hr", "unit": "%", "direction": "UP", "adapter_key": "training_completion", "dashboards": ["hr"], "applicability": ["F", "A", "B"]},
+    {"code": "AGT-01", "name": "Commission earned", "module": "commission", "unit": "money", "direction": "UP", "adapter_key": "commission_earned", "dashboards": ["agent"], "applicability": ["A"], "sensitivity": "CONFIDENTIAL"},
+    {"code": "AGT-02", "name": "Commission billed", "module": "commission", "unit": "money", "direction": "UP", "adapter_key": "commission_billed", "dashboards": ["agent"], "applicability": ["A"], "sensitivity": "CONFIDENTIAL"},
+    {"code": "AGT-03", "name": "Commission realisation %", "module": "commission", "unit": "%", "direction": "UP", "adapter_key": "commission_realisation", "dashboards": ["executive", "agent"], "applicability": ["A"], "sensitivity": "CONFIDENTIAL"},
+    {"code": "AGT-04", "name": "Commission DSO", "module": "commission", "unit": "days", "direction": "DOWN", "adapter_key": "commission_dso", "dashboards": ["agent"], "applicability": ["A"], "sensitivity": "CONFIDENTIAL"},
+    {"code": "AGT-05", "name": "Sourcing conversion", "module": "merch", "unit": "%", "direction": "UP", "adapter_key": "sourcing_conversion", "dashboards": ["agent", "buying_office"], "applicability": ["A", "B"]},
+    {"code": "AGT-08", "name": "Supplier OTIF portfolio", "module": "inventory", "unit": "%", "direction": "UP", "adapter_key": "supplier_otif_portfolio", "dashboards": ["agent", "buying_office", "sourcing"], "applicability": ["A", "B"]},
+]

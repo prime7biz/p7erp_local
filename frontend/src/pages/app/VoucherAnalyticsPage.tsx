@@ -9,10 +9,10 @@ import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
-import { useEmbeddedPage } from "@/components/app/embeddedPage";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { ScrollTableCard } from "@/components/finance/kit";
 
 export function VoucherAnalyticsPage() {
-  const embedded = useEmbeddedPage();
   const [fromDate, setFromDate] = useState(startOfMonthLocalISO());
   const [toDate, setToDate] = useState(todayLocalISO());
   const [voucherType, setVoucherType] = useState("");
@@ -120,7 +120,7 @@ export function VoucherAnalyticsPage() {
   }
 
   return (
-    <div className="space-y-6 print-report">
+    <div className="space-y-4 print-report">
       <div className="print-only mb-3 border-b border-border-strong pb-2">
         <h1 className="text-lg font-semibold">Voucher Analytics</h1>
         <p className="text-xs text-text-secondary">
@@ -128,12 +128,7 @@ export function VoucherAnalyticsPage() {
         </p>
       </div>
       <div className="no-print">
-      {!embedded && (
-        <>
-        <h1 className="text-2xl font-semibold text-text-primary">Voucher Analytics</h1>
-        <p className="text-sm text-text-muted">Voucher summary, monthly trend and top preparers.</p>
-        </>
-      )}
+        <AppPageHeader title="Voucher Analytics" description="Voucher summary, monthly trend and top preparers." />
       </div>
       {error ? <div className="no-print rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
       {success ? <div className="no-print rounded border border-status-success/20 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
@@ -180,10 +175,13 @@ export function VoucherAnalyticsPage() {
         </div>
       </div>
 
-      <div className="print-card overflow-x-auto rounded-xl border border-border bg-surface-raised p-4">
-        <h2 className="mb-2 text-lg font-semibold">Monthly Trend</h2>
+      <ScrollTableCard
+        maxHeight="panel"
+        className="print-card"
+        toolbar={<h2 className="text-lg font-semibold">Monthly Trend</h2>}
+      >
         <table className="min-w-full text-sm">
-          <thead className="bg-surface-subtle text-left">
+          <thead className="sticky top-0 z-10 bg-surface-subtle text-left">
             <tr>
               <th className="px-2 py-1">Month</th>
               <th className="px-2 py-1 text-right">Count</th>
@@ -200,12 +198,15 @@ export function VoucherAnalyticsPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollTableCard>
 
-      <div className="print-card overflow-x-auto rounded-xl border border-border bg-surface-raised p-4">
-        <h2 className="mb-2 text-lg font-semibold">Top Preparers</h2>
+      <ScrollTableCard
+        maxHeight="panel"
+        className="print-card"
+        toolbar={<h2 className="text-lg font-semibold">Top Preparers</h2>}
+      >
         <table className="min-w-full text-sm">
-          <thead className="bg-surface-subtle text-left">
+          <thead className="sticky top-0 z-10 bg-surface-subtle text-left">
             <tr>
               <th className="px-2 py-1">User</th>
               <th className="px-2 py-1 text-right">Vouchers</th>
@@ -220,7 +221,7 @@ export function VoucherAnalyticsPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollTableCard>
     </div>
   );
 }

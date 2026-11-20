@@ -4,6 +4,7 @@ import logging
 from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -50,8 +51,21 @@ from app.common.tenant_feature_keys import (
     is_hr_employee_change_approval_enabled,
     is_payroll_four_eyes_enabled,
     is_single_session_enforced,
+    is_user_authority_classes_v1_enabled,
     normalize_feature_flags,
     with_effective_default_flags,
+)
+from app.common.authority.policy import (
+    assert_super_admin_protected,
+    load_user_module_codes,
+    preflight_authority_activation,
+)
+from app.common.authority.user_admin import (
+    apply_authority_on_create,
+    apply_authority_on_update,
+    load_linked_employee_info,
+    resolve_role_for_authority_class,
+    search_linkable_employees,
 )
 from app.modules.hr.employee_identity import EMPLOYEE_NUMBER_FORMAT_KEY
 from app.modules.hr_localization.enforcement_flags import ENFORCEMENT_FLAGS
@@ -82,12 +96,36 @@ from app.modules.settings.schemas import (
     SettingsRoleCreate,
     SettingsRoleResponse,
     SettingsRoleUpdate,
+    LinkableEmployeeRow,
     SettingsUserCreate,
     SettingsUserResponse,
     SettingsUserUpdate,
 )
 
 logger = logging.getLogger(__name__)
+
+
+async def _settings_user_response(db, tenant_id: int, u: User, role: Role) -> SettingsUserResponse:
+    modules = sorted(await load_user_module_codes(db, tenant_id=tenant_id, user_id=u.id))
+    emp_id, emp_desig, emp_label = await load_linked_employee_info(db, tenant_id=tenant_id, user_id=u.id)
+    return SettingsUserResponse(
+        id=u.id,
+        tenant_id=u.tenant_id,
+        role_id=u.role_id,
+        email=u.email,
+        username=u.username,
+        first_name=u.first_name,
+        last_name=u.last_name,
+        is_active=u.is_active,
+        role_name=role.display_name,
+        designation=u.designation or emp_desig,
+        authority_class=u.authority_class,
+        is_tenant_super_admin=bool(getattr(u, "is_tenant_super_admin", False)),
+        module_grants=modules,
+        employee_id=emp_id,
+        employee_label=emp_label,
+    )
+
 
 router = APIRouter(
     prefix="/settings",
@@ -425,6 +463,35 @@ async def update_settings_config(
                         "otherwise nobody could approve a payroll run."
                     ),
                 )
+        authority_was = is_user_authority_classes_v1_enabled(current)
+        authority_now = is_user_authority_classes_v1_enabled(new_flags)
+        if authority_now != authority_was:
+            # Only the protected Super Admin may toggle this flag (prevents Class 1 from
+            # switching it off then deleting the Super Admin).
+            if not bool(getattr(user, "is_tenant_super_admin", False)):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only the company Super Admin can turn user authority classes on or off.",
+                )
+        if authority_now and not authority_was:
+            preflight = await preflight_authority_activation(db, tenant.id)
+            if not preflight.ok:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Cannot enable user authority classes yet. "
+                        + " ".join(preflight.errors)
+                    ),
+                )
+            if preflight.warnings:
+                await log_action(
+                    db,
+                    tenant_id=tenant.id,
+                    user_id=user.id,
+                    action="SETTINGS_UPDATE",
+                    resource="settings.user_authority_classes_v1",
+                    details="Warnings: " + " | ".join(preflight.warnings),
+                )
         change_approval_was = is_hr_employee_change_approval_enabled(current)
         change_approval_now = is_hr_employee_change_approval_enabled(new_flags)
         if change_approval_now and not change_approval_was:
@@ -484,6 +551,15 @@ async def update_settings_config(
                 action="SETTINGS_UPDATE",
                 resource="settings.payroll_four_eyes_approval",
                 details=f"Payroll four-eyes approval {'enabled' if four_eyes_now else 'disabled'}",
+            )
+        if authority_now != authority_was:
+            await log_action(
+                db,
+                tenant_id=tenant.id,
+                user_id=user.id,
+                action="SETTINGS_UPDATE",
+                resource="settings.user_authority_classes_v1",
+                details=f"User authority classes {'enabled' if authority_now else 'disabled'}",
             )
     if body.country_code is not None:
         cc = (body.country_code or "").strip().upper() or None
@@ -678,6 +754,21 @@ async def delete_settings_role(
     )
 
 
+@router.get("/users/linkable-employees", response_model=list[LinkableEmployeeRow])
+async def list_linkable_employees(
+    search: str | None = Query(default=None, max_length=128),
+    limit: int = Query(default=25, ge=1, le=50),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Active employees not yet linked to a login (for user create/edit picker)."""
+    _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
+    rows = await search_linkable_employees(db, tenant_id=tenant.id, search=search, limit=limit)
+    return [LinkableEmployeeRow(**row) for row in rows]
+
+
 @router.get("/users", response_model=list[SettingsUserResponse])
 async def list_settings_users(
     limit: int = Query(default=500, ge=1, le=MAX_PAGE_SIZE),
@@ -697,20 +788,7 @@ async def list_settings_users(
         .limit(limit)
     )
     rows = result.all()
-    return [
-        SettingsUserResponse(
-            id=u.id,
-            tenant_id=u.tenant_id,
-            role_id=u.role_id,
-            email=u.email,
-            username=u.username,
-            first_name=u.first_name,
-            last_name=u.last_name,
-            is_active=u.is_active,
-            role_name=r.display_name,
-        )
-        for u, r in rows
-    ]
+    return [await _settings_user_response(db, tenant.id, u, r) for u, r in rows]
 
 
 @router.post("/users", response_model=SettingsUserResponse, status_code=status.HTTP_201_CREATED)
@@ -722,7 +800,19 @@ async def create_settings_user(
 ):
     _ensure_user_tenant(user, tenant)
     await ensure_user_is_tenant_admin(db, user, tenant.id)
-    role = await _get_tenant_role(db, tenant.id, body.role_id)
+    flag_on = is_user_authority_classes_v1_enabled(tenant.feature_flags)
+    if flag_on:
+        # Ignore client role_id — Class + modules are the source of truth (no stealth admin role).
+        role = await resolve_role_for_authority_class(
+            db,
+            tenant_id=tenant.id,
+            authority_class=(body.authority_class or "").strip().upper() or "CLASS_4",
+            role_id=None,
+        )
+    else:
+        if body.role_id is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="role_id is required")
+        role = await _get_tenant_role(db, tenant.id, body.role_id)
 
     email_value = body.email.strip().lower()
     uname_in = (body.username or "").strip() or None
@@ -763,6 +853,16 @@ async def create_settings_user(
     db.add(new_user)
     await db.flush()
     await db.refresh(new_user)
+    await apply_authority_on_create(
+        db,
+        tenant_id=tenant.id,
+        user=new_user,
+        feature_flags=tenant.feature_flags,
+        authority_class=body.authority_class,
+        module_grants=body.module_grants,
+        employee_id=body.employee_id,
+    )
+    await db.refresh(new_user)
     try:
         await send_staff_welcome_email(
             to_email=new_user.email,
@@ -780,17 +880,7 @@ async def create_settings_user(
         resource="settings.user",
         details=f"Created user {new_user.email}",
     )
-    return SettingsUserResponse(
-        id=new_user.id,
-        tenant_id=new_user.tenant_id,
-        role_id=new_user.role_id,
-        email=new_user.email,
-        username=new_user.username,
-        first_name=new_user.first_name,
-        last_name=new_user.last_name,
-        is_active=new_user.is_active,
-        role_name=role.display_name,
-    )
+    return await _settings_user_response(db, tenant.id, new_user, role)
 
 
 @router.patch("/users/{target_user_id}", response_model=SettingsUserResponse)
@@ -804,6 +894,12 @@ async def update_settings_user(
     _ensure_user_tenant(user, tenant)
     await ensure_user_is_tenant_admin(db, user, tenant.id)
     target = await _get_tenant_user(db, tenant.id, target_user_id)
+    assert_super_admin_protected(
+        target,
+        feature_flags=tenant.feature_flags,
+        actor=user,
+        action="edit",
+    )
 
     if body.role_id is not None:
         role = await _get_tenant_role(db, tenant.id, body.role_id)
@@ -845,6 +941,18 @@ async def update_settings_user(
     if body.password is not None:
         target.password_hash = await hash_password(body.password)
 
+    await apply_authority_on_update(
+        db,
+        tenant_id=tenant.id,
+        user=target,
+        feature_flags=tenant.feature_flags,
+        authority_class=body.authority_class,
+        module_grants=body.module_grants,
+        employee_id=body.employee_id,
+        clear_employee_link=bool(body.clear_employee_link),
+        authority_fields_provided=body.authority_class is not None or body.module_grants is not None,
+    )
+
     await db.flush()
     await db.refresh(target)
     role_result = await db.execute(select(Role).where(Role.id == target.role_id))
@@ -859,17 +967,7 @@ async def update_settings_user(
         resource="settings.user",
         details=f"Updated user {target.username}",
     )
-    return SettingsUserResponse(
-        id=target.id,
-        tenant_id=target.tenant_id,
-        role_id=target.role_id,
-        email=target.email,
-        username=target.username,
-        first_name=target.first_name,
-        last_name=target.last_name,
-        is_active=target.is_active,
-        role_name=role.display_name,
-    )
+    return await _settings_user_response(db, tenant.id, target, role)
 
 
 @router.post("/users/{target_user_id}/deactivate", response_model=SettingsUserResponse)
@@ -882,6 +980,12 @@ async def deactivate_settings_user(
     _ensure_user_tenant(user, tenant)
     await ensure_user_is_tenant_admin(db, user, tenant.id)
     target = await _get_tenant_user(db, tenant.id, target_user_id)
+    assert_super_admin_protected(
+        target,
+        feature_flags=tenant.feature_flags,
+        actor=user,
+        action="deactivate",
+    )
     if target.id == user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot deactivate your own account")
     target.is_active = False
@@ -896,17 +1000,7 @@ async def deactivate_settings_user(
         resource="settings.user",
         details=f"Deactivated user {target.username}",
     )
-    return SettingsUserResponse(
-        id=target.id,
-        tenant_id=target.tenant_id,
-        role_id=target.role_id,
-        email=target.email,
-        username=target.username,
-        first_name=target.first_name,
-        last_name=target.last_name,
-        is_active=target.is_active,
-        role_name=role.display_name,
-    )
+    return await _settings_user_response(db, tenant.id, target, role)
 
 
 @router.post("/users/{target_user_id}/sign-out-devices", response_model=SettingsUserResponse)
@@ -920,6 +1014,12 @@ async def sign_out_settings_user_devices(
     _ensure_user_tenant(user, tenant)
     await ensure_user_is_tenant_admin(db, user, tenant.id)
     target = await _get_tenant_user(db, tenant.id, target_user_id)
+    assert_super_admin_protected(
+        target,
+        feature_flags=tenant.feature_flags,
+        actor=user,
+        action="sign out",
+    )
     if not is_single_session_enforced(tenant.feature_flags):
         # Tokens carry no session version while single-session is off, so there is nothing to end.
         raise HTTPException(
@@ -938,17 +1038,7 @@ async def sign_out_settings_user_devices(
         resource="settings.user",
         details=f"Signed out all devices of user {target.username}",
     )
-    return SettingsUserResponse(
-        id=target.id,
-        tenant_id=target.tenant_id,
-        role_id=target.role_id,
-        email=target.email,
-        username=target.username,
-        first_name=target.first_name,
-        last_name=target.last_name,
-        is_active=target.is_active,
-        role_name=role.display_name,
-    )
+    return await _settings_user_response(db, tenant.id, target, role)
 
 
 @router.post("/users/{target_user_id}/activate", response_model=SettingsUserResponse)
@@ -973,17 +1063,7 @@ async def activate_settings_user(
         resource="settings.user",
         details=f"Activated user {target.username}",
     )
-    return SettingsUserResponse(
-        id=target.id,
-        tenant_id=target.tenant_id,
-        role_id=target.role_id,
-        email=target.email,
-        username=target.username,
-        first_name=target.first_name,
-        last_name=target.last_name,
-        is_active=target.is_active,
-        role_name=role.display_name,
-    )
+    return await _settings_user_response(db, tenant.id, target, role)
 
 
 @router.delete("/users/{target_user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -996,6 +1076,12 @@ async def delete_settings_user(
     _ensure_user_tenant(user, tenant)
     await ensure_user_is_tenant_admin(db, user, tenant.id)
     target = await _get_tenant_user(db, tenant.id, target_user_id)
+    assert_super_admin_protected(
+        target,
+        feature_flags=tenant.feature_flags,
+        actor=user,
+        action="delete",
+    )
     if target.id == user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot delete your own account")
     username = target.username
@@ -1262,4 +1348,96 @@ async def reset_phase1_demo(
         "summary": result.get("summary"),
         "counts": result.get("counts"),
     }
+
+
+class AuthorityCutoverApplyBody(BaseModel):
+    """Confirm user ids to apply. Omit confirm_user_ids to apply all non-blocked proposals.
+
+    Unresolved users always block apply (no client override).
+    """
+
+    confirm_user_ids: list[int] | None = None
+
+
+@router.post("/authority-cutover/dry-run")
+async def authority_cutover_dry_run(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Propose Super Admin / Class / modules for every user. Does not change users or enable the flag."""
+    _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
+    from app.common.authority.cutover import dry_run_cutover
+    from app.modules.audit.service import log_action
+
+    result = await dry_run_cutover(db, tenant_id=tenant.id)
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="AUTHORITY_CUTOVER_DRY_RUN",
+        resource=f"tenant:{tenant.id}",
+        details=f"proposals={len(result.get('proposals') or [])} unresolved={result.get('unresolved_count')}",
+    )
+    await db.commit()
+    return result
+
+
+@router.post("/authority-cutover/apply")
+async def authority_cutover_apply(
+    body: AuthorityCutoverApplyBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Apply confirmed cutover proposals (class + modules + Super Admin). Does not enable the flag."""
+    _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
+    from app.common.authority.cutover import apply_cutover
+    from app.modules.audit.service import log_action
+
+    result = await apply_cutover(
+        db,
+        tenant_id=tenant.id,
+        actor=user,
+        confirm_user_ids=body.confirm_user_ids,
+        allow_unresolved=False,
+    )
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="AUTHORITY_CUTOVER_APPLY",
+        resource=f"tenant:{tenant.id}",
+        details=f"applied={result.get('applied')} skipped={result.get('skipped')}",
+    )
+    await db.commit()
+    return result
+
+
+@router.post("/authority-cutover/restore")
+async def authority_cutover_restore(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Restore class/modules/super from immutable originals. Role rows stay untouched."""
+    _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
+    from app.common.authority.cutover import restore_cutover
+    from app.modules.audit.service import log_action
+
+    result = await restore_cutover(db, tenant_id=tenant.id, actor=user)
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="AUTHORITY_CUTOVER_RESTORE",
+        resource=f"tenant:{tenant.id}",
+        details=f"restored={result.get('restored')}",
+    )
+    await db.commit()
+    return result
+
 

@@ -81,7 +81,7 @@ export function HrOvertimePage() {
         statusOf={(r) => String(r.status ?? "")}
         initialSort={{ key: "date", dir: "desc" }}
         exportFileName="overtime"
-        canExport={canExportHrData(me?.role_name)}
+        canExport={canExportHrData(me)}
         rowActions={(r) =>
           r.status === "PENDING"
             ? [

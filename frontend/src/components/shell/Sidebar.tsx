@@ -23,6 +23,8 @@ export type SidebarProps = {
   enabledOptionalProductionUnits: string[];
   featureFlags?: MeResponse["feature_flags"];
   hasPermission: (key: string) => boolean;
+  /** When false, Finance confidential report tabs are hidden from hub visibility. */
+  canViewConfidentialReports?: boolean;
   compact?: boolean;
 };
 
@@ -37,6 +39,7 @@ export function Sidebar({
   enabledOptionalProductionUnits,
   featureFlags,
   hasPermission,
+  canViewConfidentialReports,
   compact = false,
 }: SidebarProps) {
   const location = useLocation();
@@ -61,8 +64,9 @@ export function Sidebar({
         enabledOptionalProductionUnits,
         featureFlags,
         hasPermission,
+        canViewConfidentialReports,
       }),
-    [tenantType, enabledOptionalProductionUnits, featureFlags, hasPermission],
+    [tenantType, enabledOptionalProductionUnits, featureFlags, hasPermission, canViewConfidentialReports],
   );
 
   useEffect(() => {

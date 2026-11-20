@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -6,31 +6,61 @@ import {
   type CurrencyExchangeRateResponse,
   type MultiCurrencyRevaluationResponse,
 } from "@/api/client";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import {
+  listPageEmptyClass,
+  listPageErrorClass,
+  listPageFilterBarClass,
+  listPageRootClass,
+  listPageTableCardClass,
+  listPageToolbarInputClass,
+  listTableBaseClass,
+  listTableTdClass,
+  listTableTdPrimaryClass,
+  listTableThClass,
+  listTableTheadClass,
+  listTableTrClass,
+} from "@/components/app/listPageLayout";
+import { RowActionsMenu } from "@/components/app/RowActionsMenu";
+import { FinanceFormDrawer, FormSection } from "@/components/finance/kit";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
 import { useConfirm } from "@/components/app/useConfirm";
-import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
-export function AccountsCurrencyPage() {
-  const embedded = useEmbeddedPage();
-  const confirm = useConfirm();
-  const [rates, setRates] = useState<CurrencyExchangeRateResponse[]>([]);
-  const [reval, setReval] = useState<MultiCurrencyRevaluationResponse | null>(null);
-  const [error, setError] = useState("");
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
-  const [form, setForm] = useState<CurrencyExchangeRateCreate>({
+const fieldClass =
+  "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary focus:border-brand-primary focus:outline-none focus:ring-0";
+const labelClass = "mb-1 block text-xs font-medium text-text-muted";
+
+function defaultForm(): CurrencyExchangeRateCreate {
+  return {
     from_currency: "USD",
     to_currency: "BDT",
     exchange_rate: "120",
     effective_date: todayLocalISO(),
     source: "manual",
-  });
+  };
+}
+
+export function AccountsCurrencyPage() {
+  const confirm = useConfirm();
+  const [rates, setRates] = useState<CurrencyExchangeRateResponse[]>([]);
+  const [reval, setReval] = useState<MultiCurrencyRevaluationResponse | null>(null);
+  const [error, setError] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [openActionsId, setOpenActionsId] = useState<number | string | null>(null);
+  const [search, setSearch] = useState("");
+  const [form, setForm] = useState<CurrencyExchangeRateCreate>(defaultForm);
 
   async function load() {
     try {
       setError("");
-      const [list, rv] = await Promise.all([api.listCurrencyExchangeRates({ active_only: false }), api.getMultiCurrencyRevaluationSummary()]);
+      const [list, rv] = await Promise.all([
+        api.listCurrencyExchangeRates({ active_only: false }),
+        api.getMultiCurrencyRevaluationSummary(),
+      ]);
       setRates(list);
       setReval(rv);
     } catch (e) {
@@ -43,14 +73,35 @@ export function AccountsCurrencyPage() {
     void load();
   }, []);
 
-  useEffect(() => {
-    const close = () => setOpenActionsId(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, []);
+  const filteredRates = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rates;
+    return rates.filter(
+      (r) =>
+        r.from_currency.toLowerCase().includes(q) ||
+        r.to_currency.toLowerCase().includes(q) ||
+        `${r.from_currency}/${r.to_currency}`.toLowerCase().includes(q),
+    );
+  }, [rates, search]);
+
+  function closeDrawer() {
+    setDrawerOpen(false);
+    setEditingId(null);
+    setFormError(null);
+    setForm(defaultForm());
+  }
+
+  function openAdd() {
+    setEditingId(null);
+    setFormError(null);
+    setForm(defaultForm());
+    setDrawerOpen(true);
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    setFormError(null);
+    setSaving(true);
     try {
       if (editingId) {
         await api.updateCurrencyExchangeRate(editingId, {
@@ -59,26 +110,22 @@ export function AccountsCurrencyPage() {
           source: form.source,
           is_active: true,
         });
-        setEditingId(null);
       } else {
         await api.createCurrencyExchangeRate(form);
       }
-      setForm({
-        from_currency: "USD",
-        to_currency: "BDT",
-        exchange_rate: "120",
-        effective_date: todayLocalISO(),
-        source: "manual",
-      });
+      closeDrawer();
       await load();
-    } catch (e) {
-      logApiError("AccountsCurrencyPage.submit", e);
-      setError((e as Error).message);
+    } catch (err) {
+      logApiError("AccountsCurrencyPage.submit", err);
+      setFormError((err as Error).message);
+    } finally {
+      setSaving(false);
     }
   }
 
   function startEdit(r: CurrencyExchangeRateResponse) {
     setEditingId(r.id);
+    setFormError(null);
     setForm({
       from_currency: r.from_currency,
       to_currency: r.to_currency,
@@ -86,22 +133,14 @@ export function AccountsCurrencyPage() {
       effective_date: r.effective_date.slice(0, 10),
       source: r.source ?? "manual",
     });
+    setDrawerOpen(true);
   }
 
   async function removeRate(id: number) {
     if (!(await confirm({ title: "Delete this exchange rate row?", danger: true }))) return;
     try {
       await api.deleteCurrencyExchangeRate(id);
-      if (editingId === id) {
-        setEditingId(null);
-        setForm({
-          from_currency: "USD",
-          to_currency: "BDT",
-          exchange_rate: "120",
-          effective_date: todayLocalISO(),
-          source: "manual",
-        });
-      }
+      if (editingId === id) closeDrawer();
       await load();
     } catch (e) {
       logApiError("AccountsCurrencyPage.deleteCurrencyExchangeRate", e);
@@ -110,129 +149,90 @@ export function AccountsCurrencyPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-      {!embedded && (
-        <>
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Multi-Currency</h1>
-          <p className="text-sm text-text-muted">Exchange rate maintenance and FX revaluation preview.</p>
-        </div>
-        </>
-      )}
-        <Link to="/app/finance/fx-receipts" className="text-sm font-medium text-brand-primary hover:underline">
-          FX receipts →
-        </Link>
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="Multi-Currency"
+        description="Exchange rate maintenance and FX revaluation preview."
+        actions={
+          <Link to="/app/finance/fx-receipts" className="text-sm font-medium text-brand-primary hover:underline">
+            FX receipts →
+          </Link>
+        }
+      />
+
+      <div className={listPageFilterBarClass}>
+        <input
+          type="search"
+          aria-label="Search exchange rates"
+          placeholder="Search currency pair…"
+          className={listPageToolbarInputClass}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <button
+          type="button"
+          onClick={openAdd}
+          className="rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90 sm:ml-auto"
+        >
+          Add rate
+        </button>
       </div>
-      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
 
-      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-border bg-surface-raised p-4 sm:grid-cols-2 lg:grid-cols-6">
-        <input className="rounded border px-3 py-2 text-sm" value={form.from_currency} onChange={(e) => setForm((p) => ({ ...p, from_currency: e.target.value.toUpperCase() }))} />
-        <input className="rounded border px-3 py-2 text-sm" value={form.to_currency} onChange={(e) => setForm((p) => ({ ...p, to_currency: e.target.value.toUpperCase() }))} />
-        <input className="rounded border px-3 py-2 text-sm" value={form.exchange_rate} onChange={(e) => setForm((p) => ({ ...p, exchange_rate: e.target.value }))} />
-        <input type="date" className="rounded border px-3 py-2 text-sm" value={form.effective_date} onChange={(e) => setForm((p) => ({ ...p, effective_date: e.target.value }))} />
-        <input className="rounded border px-3 py-2 text-sm" placeholder="Source" value={form.source ?? ""} onChange={(e) => setForm((p) => ({ ...p, source: e.target.value }))} />
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="submit"
-            className="rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
-          >
-            {editingId ? "Save rate" : "Add rate"}
-          </button>
-          {editingId ? (
-            <button
-              type="button"
-              className="rounded border px-3 py-2 text-sm"
-              onClick={() => {
-                setEditingId(null);
-                setForm({
-                  from_currency: "USD",
-                  to_currency: "BDT",
-                  exchange_rate: "120",
-                  effective_date: todayLocalISO(),
-                  source: "manual",
-                });
-              }}
-            >
-              Cancel
-            </button>
-          ) : null}
+      {error ? <div className={listPageErrorClass}>{error}</div> : null}
+
+      <div className={listPageTableCardClass}>
+        <div className="border-b border-border px-4 py-3">
+          <h2 className="text-sm font-semibold text-text-primary">Exchange Rates</h2>
         </div>
-      </form>
-
-      <div className="rounded-xl border border-border bg-surface-raised p-4">
-        <h2 className="mb-2 text-lg font-semibold">Exchange Rates</h2>
-        <p className="mb-2 text-xs text-text-muted">Click a row to load it into the form above, or use Actions to edit/delete.</p>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-surface-subtle text-left">
+        <div className="max-h-[28rem] overflow-auto">
+          <table className={`${listTableBaseClass} min-w-[40rem]`}>
+            <thead className={listTableTheadClass}>
               <tr>
-                <th className="px-2 py-1">Pair</th>
-                <th className="px-2 py-1">Rate</th>
-                <th className="px-2 py-1">Date</th>
-                <th className="px-2 py-1">Source</th>
-                <th className="px-2 py-1">Active</th>
-                <th className="px-2 py-1 w-28">Actions</th>
+                <th className={listTableThClass}>Pair</th>
+                <th className={listTableThClass}>Rate</th>
+                <th className={listTableThClass}>Date</th>
+                <th className={listTableThClass}>Source</th>
+                <th className={listTableThClass}>Active</th>
+                <th className={listTableThClass}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {rates.map((r) => (
-                <tr
-                  key={r.id}
-                  className={`cursor-pointer border-t hover:bg-surface-subtle ${editingId === r.id ? "bg-brand-primary/5" : ""}`}
-                  onClick={() => startEdit(r)}
-                >
-                  <td className="px-2 py-1">
-                    {r.from_currency}/{r.to_currency}
-                  </td>
-                  <td className="px-2 py-1">{r.exchange_rate}</td>
-                  <td className="px-2 py-1">{r.effective_date}</td>
-                  <td className="px-2 py-1">{r.source}</td>
-                  <td className="px-2 py-1">{r.is_active ? "Yes" : "No"}</td>
-                  <td className="px-2 py-1 text-right" onClick={(e) => e.stopPropagation()}>
-                    <div className="relative inline-block text-left">
-                      <button
-                        type="button"
-                        className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenActionsId((id) => (id === r.id ? null : r.id));
-                        }}
-                      >
-                        Actions
-                      </button>
-                      {openActionsId === r.id && (
-                        <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                          <button
-                            type="button"
-                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenActionsId(null);
-                              startEdit(r);
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenActionsId(null);
-                              void removeRate(r.id);
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      )}
-                    </div>
+              {filteredRates.length === 0 ? (
+                <tr>
+                  <td className={listPageEmptyClass} colSpan={6}>
+                    {rates.length === 0 ? "No exchange rates yet." : "No rates match your search."}
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredRates.map((r) => (
+                  <tr key={r.id} className={listTableTrClass}>
+                    <td className={listTableTdPrimaryClass}>
+                      {r.from_currency}/{r.to_currency}
+                    </td>
+                    <td className={listTableTdClass}>{r.exchange_rate}</td>
+                    <td className={listTableTdClass}>{r.effective_date}</td>
+                    <td className={listTableTdClass}>{r.source}</td>
+                    <td className={listTableTdClass}>{r.is_active ? "Yes" : "No"}</td>
+                    <td className={listTableTdClass}>
+                      <RowActionsMenu
+                        rowId={r.id}
+                        openId={openActionsId}
+                        onOpenChange={setOpenActionsId}
+                        menuPortal
+                        items={[
+                          { key: "edit", label: "Edit", onClick: () => startEdit(r) },
+                          { key: "delete", label: "Delete", danger: true, onClick: () => void removeRate(r.id) },
+                        ]}
+                      />
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
+        </div>
+        <div className="border-t border-border px-4 py-2 text-xs text-text-muted">
+          Showing {filteredRates.length} of {rates.length} rate{rates.length === 1 ? "" : "s"}
         </div>
       </div>
 
@@ -251,27 +251,27 @@ export function AccountsCurrencyPage() {
                 Gain/Loss: <b>{reval.total_gain_loss.toLocaleString()}</b>
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-surface-subtle text-left">
+            <div className="max-h-[24rem] overflow-auto">
+              <table className={`${listTableBaseClass} min-w-[40rem]`}>
+                <thead className={listTableTheadClass}>
                   <tr>
-                    <th className="px-2 py-1">Receipt</th>
-                    <th className="px-2 py-1">Currency</th>
-                    <th className="px-2 py-1">FC</th>
-                    <th className="px-2 py-1">Old Base</th>
-                    <th className="px-2 py-1">New Base</th>
-                    <th className="px-2 py-1">Gain/Loss</th>
+                    <th className={listTableThClass}>Receipt</th>
+                    <th className={listTableThClass}>Currency</th>
+                    <th className={listTableThClass}>FC</th>
+                    <th className={listTableThClass}>Old Base</th>
+                    <th className={listTableThClass}>New Base</th>
+                    <th className={listTableThClass}>Gain/Loss</th>
                   </tr>
                 </thead>
                 <tbody>
                   {reval.rows.map((r) => (
-                    <tr key={r.receipt_id} className="border-t">
-                      <td className="px-2 py-1">{r.receipt_no}</td>
-                      <td className="px-2 py-1">{r.currency}</td>
-                      <td className="px-2 py-1">{r.fc_amount.toLocaleString()}</td>
-                      <td className="px-2 py-1">{r.old_base_amount.toLocaleString()}</td>
-                      <td className="px-2 py-1">{r.new_base_amount.toLocaleString()}</td>
-                      <td className="px-2 py-1">{r.gain_loss.toLocaleString()}</td>
+                    <tr key={r.receipt_id} className={listTableTrClass}>
+                      <td className={listTableTdClass}>{r.receipt_no}</td>
+                      <td className={listTableTdClass}>{r.currency}</td>
+                      <td className={listTableTdClass}>{r.fc_amount.toLocaleString()}</td>
+                      <td className={listTableTdClass}>{r.old_base_amount.toLocaleString()}</td>
+                      <td className={listTableTdClass}>{r.new_base_amount.toLocaleString()}</td>
+                      <td className={listTableTdClass}>{r.gain_loss.toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -280,6 +280,80 @@ export function AccountsCurrencyPage() {
           </>
         ) : null}
       </div>
+
+      <FinanceFormDrawer
+        open={drawerOpen}
+        title={editingId ? "Edit exchange rate" : "Add exchange rate"}
+        onClose={closeDrawer}
+        onSubmit={(e) => void submit(e)}
+        submitLabel={editingId ? "Save rate" : "Add rate"}
+        submitting={saving}
+        error={formError ?? undefined}
+      >
+        <FormSection title="Exchange rate">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className={labelClass} htmlFor="fx-from">
+              From currency
+            </label>
+            <input
+              id="fx-from"
+              className={`${fieldClass}${editingId ? " bg-surface-subtle" : ""}`}
+              readOnly={!!editingId}
+              value={form.from_currency}
+              onChange={(e) => setForm((p) => ({ ...p, from_currency: e.target.value.toUpperCase() }))}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className={labelClass} htmlFor="fx-to">
+              To currency
+            </label>
+            <input
+              id="fx-to"
+              className={`${fieldClass}${editingId ? " bg-surface-subtle" : ""}`}
+              readOnly={!!editingId}
+              value={form.to_currency}
+              onChange={(e) => setForm((p) => ({ ...p, to_currency: e.target.value.toUpperCase() }))}
+            />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="fx-rate">
+            Exchange rate
+          </label>
+          <input
+            id="fx-rate"
+            className={fieldClass}
+            value={form.exchange_rate}
+            onChange={(e) => setForm((p) => ({ ...p, exchange_rate: e.target.value }))}
+          />
+        </div>
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="fx-date">
+            Effective date
+          </label>
+          <input
+            id="fx-date"
+            type="date"
+            className={fieldClass}
+            value={form.effective_date}
+            onChange={(e) => setForm((p) => ({ ...p, effective_date: e.target.value }))}
+          />
+        </div>
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="fx-source">
+            Source
+          </label>
+          <input
+            id="fx-source"
+            className={fieldClass}
+            placeholder="Source"
+            value={form.source ?? ""}
+            onChange={(e) => setForm((p) => ({ ...p, source: e.target.value }))}
+          />
+        </div>
+        </FormSection>
+      </FinanceFormDrawer>
     </div>
   );
 }

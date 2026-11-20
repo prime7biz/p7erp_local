@@ -4,7 +4,7 @@ import { RefreshCw } from "lucide-react";
 import type { ControlCard, SeverityFilter } from "@/api/financeControl";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { FinanceAiCommentaryPanel } from "@/components/finance/ai/FinanceAiCommentaryPanel";
-import { listPageRootClass } from "@/components/app/listPageLayout";
+import { listPageFilterBarClass, listPageRootClass } from "@/components/app/listPageLayout";
 import { amountText, SEVERITY_CHIP, SEVERITY_LABEL } from "@/components/finance/control/controlLogic";
 import { ExceptionPanel } from "@/components/finance/control/ExceptionPanel";
 import { DUE_SOURCE_CHANGE_HINT, dueSourceText } from "@/components/finance/settings/arApDueSource";
@@ -71,7 +71,7 @@ export function FinanceControlTowerPage() {
         </div>
       ) : (
         <>
-          <div className="flex flex-wrap items-end gap-3">
+          <div className={`${listPageFilterBarClass} items-end`}>
             <StatementPeriodPicker mode="as-of" value={asOf} onChange={setAsOf} />
             <label className="text-xs font-medium text-text-muted">
               Severity
@@ -161,7 +161,7 @@ function ControlCardButton({ card, currency, onOpen }: { card: ControlCard; curr
       onClick={onOpen}
       data-testid={`card-${card.code}`}
       data-muted={clear ? "true" : "false"}
-      className={`flex min-h-[7rem] flex-col rounded-xl border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-focus-ring ${
+      className={`flex h-full min-h-[7rem] flex-col rounded-xl border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-focus-ring ${
         clear
           ? "border-border-subtle bg-surface-subtle text-text-muted opacity-70 hover:opacity-100"
           : "border-border bg-surface-raised text-text-primary shadow-sm hover:border-brand-primary"

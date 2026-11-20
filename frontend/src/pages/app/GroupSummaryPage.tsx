@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ScrollTableCard } from "@/components/finance/kit";
 import { api, type AccountGroupResponse, type ChartOfAccountResponse, type TrialBalanceResponse } from "@/api/client";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { todayLocalISO } from "@/lib/dates";
@@ -84,7 +85,7 @@ export function GroupSummaryPage() {
   }
 
   return (
-    <div className="space-y-6 print-report">
+    <div className="space-y-4 print-report">
       <div className="print-only mb-3 border-b border-border pb-2">
         <h1 className="text-lg font-semibold">Group Summary</h1>
         <p className="text-xs text-text-muted">As of: {asOfDate}</p>
@@ -123,9 +124,9 @@ export function GroupSummaryPage() {
       </div>
       {error ? <div className="no-print rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
       {success ? <div className="no-print rounded border border-status-success/20 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
-      <div className="print-card overflow-x-auto rounded-xl border border-border bg-surface-raised">
+      <ScrollTableCard maxHeight="main" className="print-card">
         <table className={`min-w-full ${compactView ? "text-xs" : "text-sm"} print:text-xs`}>
-          <thead className="bg-surface-subtle text-left">
+          <thead className="sticky top-0 z-10 bg-surface-subtle text-left">
             <tr>
               <th className={compactView ? "px-2 py-1" : "px-3 py-2"}>Group</th>
               <th className={`${compactView ? "px-2 py-1" : "px-3 py-2"} text-right`}>Debit</th>
@@ -144,7 +145,7 @@ export function GroupSummaryPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollTableCard>
     </div>
   );
 }

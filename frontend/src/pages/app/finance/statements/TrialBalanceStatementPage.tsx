@@ -48,9 +48,9 @@ export function TrialBalanceStatementPage() {
         }
       >
         {(data) => (
-          <div className="statement-sheet print-card overflow-x-auto rounded-xl border border-border bg-surface-raised">
+          <div className="statement-sheet print-card max-h-[calc(100dvh-18rem)] overflow-auto rounded-xl border border-border bg-surface-raised print:max-h-none print:overflow-visible">
             <table className="min-w-full text-sm">
-              <thead className="bg-surface-subtle">
+              <thead className="sticky top-0 z-10 bg-surface-subtle">
                 <tr>
                   <th rowSpan={2} className={`${th} text-left`}>Particulars</th>
                   <th colSpan={2} className={`${th} text-center`}>Opening</th>

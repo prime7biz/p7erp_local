@@ -20,13 +20,15 @@ const quickActionClass =
 function FinanceHomeLanding({
   featureFlags,
   canAccess,
+  visibilityExtras,
 }: {
   featureFlags: Record<string, boolean | string | number | null> | null | undefined;
   canAccess: (key: string) => boolean;
+  visibilityExtras?: { canViewConfidentialReports?: boolean };
 }) {
-  const cards = hubs.filter((h) => h.id !== "home" && isHubVisible(h, featureFlags, canAccess));
+  const cards = hubs.filter((h) => h.id !== "home" && isHubVisible(h, featureFlags, canAccess, visibilityExtras));
   const facilities = hubs.find((h) => h.id === "facilities");
-  const showOverview = facilities ? isHubVisible(facilities, featureFlags, canAccess) : false;
+  const showOverview = facilities ? isHubVisible(facilities, featureFlags, canAccess, visibilityExtras) : false;
   return (
     <div className="space-y-4">
       <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -73,6 +75,9 @@ export function FinanceHubPage({ hubId }: { hubId: FinanceHubId }) {
     (key: string) => isMenuPermissionAllowed(key, featureFlags, hasPermission),
     [featureFlags, hasPermission],
   );
+  const visibilityExtras = {
+    canViewConfidentialReports: me?.can_view_pnl_balance_sheet !== false,
+  };
   const hub = getFinanceHub(hubId);
 
   if (!isFinanceHubsV2Enabled(featureFlags)) return <Navigate to="/app/accounts" replace />;
@@ -111,9 +116,18 @@ export function FinanceHubPage({ hubId }: { hubId: FinanceHubId }) {
       hub={hub}
       featureFlags={featureFlags}
       canAccess={canAccess}
+      visibilityExtras={visibilityExtras}
       headerActions={headerActions}
       renderEmpty={
-        hub.id === "home" ? () => <FinanceHomeLanding featureFlags={featureFlags} canAccess={canAccess} /> : undefined
+        hub.id === "home"
+          ? () => (
+              <FinanceHomeLanding
+                featureFlags={featureFlags}
+                canAccess={canAccess}
+                visibilityExtras={visibilityExtras}
+              />
+            )
+          : undefined
       }
     />
   );

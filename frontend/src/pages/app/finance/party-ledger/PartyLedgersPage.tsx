@@ -1,7 +1,10 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api, type PartyLedgerResponse } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { RowActionsMenu } from "@/components/app/RowActionsMenu";
+import { listTableTheadClass } from "@/components/app/listPageLayout";
+import { ScrollTableCard, showingCountLabel } from "@/components/finance/kit";
 import { logApiError } from "@/utils/logApiError";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 
@@ -13,8 +16,8 @@ export function PartyLedgersPage() {
   const [balanceType, setBalanceType] = useState("");
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [error, setError] = useState("");
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
-  const actionsRef = useRef<HTMLDivElement | null>(null);
+  const [openActionsId, setOpenActionsId] = useState<string | number | null>(null);
+  const navigate = useNavigate();
 
   // Typing in the search box does not reload; the list reloads on submit or when a filter changes.
   const searchRef = useRef(search);
@@ -47,16 +50,6 @@ export function PartyLedgersPage() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    function onDocClick(ev: MouseEvent) {
-      if (actionsRef.current && !actionsRef.current.contains(ev.target as Node)) {
-        setOpenActionsId(null);
-      }
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
 
   function onSearch(e: FormEvent) {
     e.preventDefault();
@@ -124,9 +117,9 @@ export function PartyLedgersPage() {
         <span className="ml-auto text-xs text-gray-500">{total} parties</span>
       </form>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+      <ScrollTableCard footer={showingCountLabel(rows.length, total, "party")}>
         <table className="min-w-full text-left text-sm">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+          <thead className={`${listTableTheadClass} text-xs uppercase text-gray-500`}>
             <tr>
               <th className="px-3 py-2">Party Name</th>
               <th className="px-3 py-2">Type</th>
@@ -164,34 +157,21 @@ export function PartyLedgersPage() {
                     "—"
                   )}
                 </td>
-                <td className="relative px-3 py-2">
-                  <div ref={openActionsId === r.id ? actionsRef : undefined} className="relative inline-block">
-                    <button
-                      type="button"
-                      className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      onClick={() => setOpenActionsId(openActionsId === r.id ? null : r.id)}
-                    >
-                      Actions
-                    </button>
-                    {openActionsId === r.id ? (
-                      <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                        <Link
-                          to={`/app/finance/party-ledgers/${r.id}`}
-                          className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                          onClick={() => setOpenActionsId(null)}
-                        >
-                          View
-                        </Link>
-                        <Link
-                          to={`/app/finance/party-ledgers/${r.id}?tab=statement`}
-                          className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                          onClick={() => setOpenActionsId(null)}
-                        >
-                          Statement
-                        </Link>
-                      </div>
-                    ) : null}
-                  </div>
+                <td className="px-3 py-2">
+                  <RowActionsMenu
+                    menuPortal
+                    rowId={r.id}
+                    openId={openActionsId}
+                    onOpenChange={setOpenActionsId}
+                    items={[
+                      { key: "view", label: "View", onClick: () => navigate(`/app/finance/party-ledgers/${r.id}`) },
+                      {
+                        key: "statement",
+                        label: "Statement",
+                        onClick: () => navigate(`/app/finance/party-ledgers/${r.id}?tab=statement`),
+                      },
+                    ]}
+                  />
                 </td>
               </tr>
             ))}
@@ -204,7 +184,7 @@ export function PartyLedgersPage() {
             ) : null}
           </tbody>
         </table>
-      </div>
+      </ScrollTableCard>
     </div>
   );
 }

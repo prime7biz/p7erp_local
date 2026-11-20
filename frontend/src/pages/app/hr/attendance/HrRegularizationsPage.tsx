@@ -136,7 +136,7 @@ export function HrRegularizationsPage() {
         initialSort={{ key: "created", dir: "desc" }}
         statusOf={(r) => r.status}
         exportFileName="hr-regularizations"
-        canExport={canExportHrData(me?.role_name)}
+        canExport={canExportHrData(me)}
         rowActions={rowActions}
       />
     </div>

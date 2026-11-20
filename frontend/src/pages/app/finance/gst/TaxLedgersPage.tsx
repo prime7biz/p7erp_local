@@ -4,7 +4,14 @@ import { api, type ChartOfAccountResponse, type TaxLedgerResponse } from "@/api/
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { listPageRootClass } from "@/components/app/listPageLayout";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
-import { logApiError } from "@/utils/logApiError";
+import {
+  FinanceFormDrawer,
+  FinanceListToolbar,
+  FormSection,
+  ScrollTableCard,
+  showingCountLabel,
+} from "@/components/finance/kit";
+import { logApiError } from "@/utils/logApiError";
 import { getChartOfAccountsCached } from "@/lib/masterData";
 
 const TAX_TYPES = ["CGST", "SGST", "IGST", "UTGST", "VAT", "CST"] as const;
@@ -14,6 +21,7 @@ export function TaxLedgersPage() {
   const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
   const [error, setError] = useState("");
   const [openActionsId, setOpenActionsId] = useState<number | string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [form, setForm] = useState({
     chart_account_id: "",
     tax_type: "CGST",
@@ -53,6 +61,7 @@ export function TaxLedgersPage() {
         nature_of_transaction: form.nature_of_transaction || null,
       });
       setForm((p) => ({ ...p, nature_of_transaction: "" }));
+      setDrawerOpen(false);
       await load();
     } catch (err) {
       logApiError("TaxLedgersPage.create", err);
@@ -93,11 +102,18 @@ export function TaxLedgersPage() {
         </p>
       ) : null}
 
-      <form
+      <FinanceListToolbar primaryAction={{ label: "Add tax ledger", onClick: () => setDrawerOpen(true) }} />
+
+      <FinanceFormDrawer
+        open={drawerOpen}
+        title="Add tax ledger"
+        description="Duplicate tax type + rate is blocked."
+        onClose={() => setDrawerOpen(false)}
         onSubmit={onCreate}
-        className="grid gap-2 rounded-lg border border-border bg-surface-raised p-3 sm:grid-cols-2 lg:grid-cols-6"
+        submitLabel="Add"
       >
-        <label className="text-xs text-text-muted lg:col-span-2">
+        <FormSection title="Tax ledger">
+        <label className="text-xs text-text-muted">
           Account
           <select
             className="mt-1 block w-full rounded-lg border border-border-strong px-2 py-1.5 text-sm"
@@ -147,19 +163,12 @@ export function TaxLedgersPage() {
             <option value="SERVICES">SERVICES</option>
           </select>
         </label>
-        <div className="flex items-end">
-          <button
-            type="submit"
-            className="w-full rounded-lg bg-brand-primary px-3 py-1.5 text-sm font-medium text-brand-primary-foreground hover:opacity-95"
-          >
-            Add
-          </button>
-        </div>
-      </form>
+        </FormSection>
+      </FinanceFormDrawer>
 
-      <div className="overflow-x-auto rounded-lg border border-border bg-surface-raised">
+      <ScrollTableCard footer={showingCountLabel(rows.length, rows.length, "tax ledger")}>
         <table className="min-w-full text-left text-sm">
-          <thead className="bg-surface-subtle text-xs uppercase text-text-muted">
+          <thead className="sticky top-0 z-10 bg-surface-subtle text-xs uppercase text-text-muted">
             <tr>
               <th className="px-3 py-2">Tax type</th>
               <th className="px-3 py-2 text-right">Rate</th>
@@ -181,6 +190,7 @@ export function TaxLedgersPage() {
                 <td className="px-3 py-2">{r.is_active ? "Active" : "Inactive"}</td>
                 <td className="px-3 py-2">
                   <RowActionsMenu
+                    menuPortal
                     rowId={r.id}
                     openId={openActionsId}
                     onOpenChange={setOpenActionsId}
@@ -202,7 +212,7 @@ export function TaxLedgersPage() {
             ) : null}
           </tbody>
         </table>
-      </div>
+      </ScrollTableCard>
     </div>
   );
 }

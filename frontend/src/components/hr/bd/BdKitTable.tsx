@@ -80,7 +80,7 @@ export function KitTable<T>({
       rowActions={actions ? (row) => toRowActions(actions(row)) : undefined}
       statusOf={statusOf}
       exportFileName={exportFileName}
-      canExport={Boolean(exportFileName) && canExportHrData(me?.role_name)}
+      canExport={Boolean(exportFileName) && canExportHrData(me)}
       toolbar={toolbar}
       defaultPageSize={defaultPageSize}
       labels={labels}

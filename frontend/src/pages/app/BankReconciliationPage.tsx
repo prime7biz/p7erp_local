@@ -15,10 +15,33 @@ import { todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { saveBlob } from "@/lib/fileSave";
-import { useEmbeddedPage } from "@/components/app/embeddedPage";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import {
+  listPageEmptyClass,
+  listPageErrorClass,
+  listPageFilterBarClass,
+  listPageRootClass,
+  listPageToolbarButtonClass,
+  listTableBaseClass,
+  listTableTdClass,
+  listTableTdPrimaryClass,
+  listTableThClass,
+  listTableThRightClass,
+  listTableTheadClass,
+  listTableTrClass,
+} from "@/components/app/listPageLayout";
+import { RowActionsMenu, type RowActionItem } from "@/components/app/RowActionsMenu";
+import { FinanceFormDrawer, FormSection, ScrollTableCard, SummaryStrip, showingCountLabel } from "@/components/finance/kit";
+
+const fieldClass =
+  "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary focus:border-brand-primary focus:outline-none focus:ring-0";
+const labelClass = "mb-1 block text-xs font-medium text-text-muted";
 
 export function BankReconciliationPage() {
-  const embedded = useEmbeddedPage();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [openActionsId, setOpenActionsId] = useState<number | string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const { me } = useAuth();
   const [accounts, setAccounts] = useState<BankAccountResponse[]>([]);
   const [rows, setRows] = useState<BankReconciliationResponse[]>([]);
@@ -155,15 +178,30 @@ export function BankReconciliationPage() {
     return "bg-status-warning-subtle text-status-warning-foreground border-status-warning/30";
   }
 
+  function openAdd() {
+    setFormError(null);
+    setDrawerOpen(true);
+  }
+
+  function closeDrawer() {
+    setDrawerOpen(false);
+    setFormError(null);
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
+    setFormError(null);
+    setSaving(true);
     try {
       setSuccess("");
       if (!form.bank_account_id) throw new Error("Please select a bank account");
       await api.createBankReconciliation(form);
+      closeDrawer();
       await load();
-    } catch (e) {
-      setError((e as Error).message);
+    } catch (err) {
+      setFormError((err as Error).message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -320,93 +358,124 @@ export function BankReconciliationPage() {
     }
   }
 
+  const bankSelect = (id: string, ariaLabel: string) => (
+    <select
+      id={id}
+      aria-label={ariaLabel}
+      className={fieldClass}
+      value={form.bank_account_id}
+      onChange={(e) => void onBankChange(Number(e.target.value))}
+    >
+      <option value={0}>Select bank account</option>
+      {accounts.map((a) => (
+        <option key={a.id} value={a.id}>
+          {a.bank_name} - {a.account_name}
+        </option>
+      ))}
+    </select>
+  );
+
   return (
-    <div className="space-y-6">
-      <div>
-      {!embedded && (
-        <>
-        <h1 className="text-2xl font-semibold text-text-primary">Bank Reconciliation</h1>
-        <p className="text-sm text-text-muted">Compare statement balance with book balance and close differences.</p>
-        </>
-      )}
-        <div className={`mt-2 inline-flex rounded-full border px-3 py-1 text-xs font-medium ${selectedStatusClass()}`}>
-          Selected Status: {selectedStatusLabel()}
-        </div>
-      </div>
-      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
-      {success ? <div className="rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="Bank Reconciliation"
+        description="Compare statement balance with book balance and close differences."
+        belowTitle={
+          <div className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${selectedStatusClass()}`}>
+            Selected Status: {selectedStatusLabel()}
+          </div>
+        }
+      />
 
-      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-border bg-surface-raised p-4 sm:grid-cols-2 lg:grid-cols-4">
-        <select className="rounded border px-3 py-2 text-sm" value={form.bank_account_id} onChange={(e) => void onBankChange(Number(e.target.value))}>
-          <option value={0}>Select bank account</option>
-          {accounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.bank_name} - {a.account_name}
-            </option>
-          ))}
-        </select>
-        <input type="date" className="rounded border px-3 py-2 text-sm" value={form.statement_date} onChange={(e) => setForm((p) => ({ ...p, statement_date: e.target.value }))} />
-        <input className="rounded border px-3 py-2 text-sm" placeholder="Statement balance" value={form.statement_balance} onChange={(e) => setForm((p) => ({ ...p, statement_balance: e.target.value }))} />
+      <div className={listPageFilterBarClass}>
+        <div className="w-full sm:w-72">{bankSelect("recon-bank-filter", "Bank account filter")}</div>
         <button
-          type="submit"
-          className="rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+          type="button"
+          onClick={openAdd}
+          className="rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90 sm:ml-auto"
         >
-          Add Statement
+          Add statement
         </button>
-      </form>
+      </div>
 
-      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
-        <table className="min-w-full text-sm">
-          <thead className="bg-surface-subtle text-left">
+      {error ? <div className={listPageErrorClass}>{error}</div> : null}
+      {success ? (
+        <div className="rounded-lg border border-status-success/30 bg-status-success-subtle px-3 py-2.5 text-sm text-status-success-foreground">
+          {success}
+        </div>
+      ) : null}
+
+      <ScrollTableCard maxHeight="panel" footer={showingCountLabel(rows.length, rows.length, "reconciliation")}>
+        <table className={`${listTableBaseClass} min-w-[40rem]`}>
+          <thead className={listTableTheadClass}>
             <tr>
-              <th className="px-2 py-1">Date</th>
-              <th className="px-2 py-1 text-right">Statement</th>
-              <th className="px-2 py-1 text-right">Book</th>
-              <th className="px-2 py-1 text-right">Difference</th>
-              <th className="px-2 py-1">Status</th>
-              <th className="px-2 py-1">Action</th>
-              <th className="px-2 py-1">Lines</th>
+              <th className={listTableThClass}>Date</th>
+              <th className={listTableThRightClass}>Statement</th>
+              <th className={listTableThRightClass}>Book</th>
+              <th className={listTableThRightClass}>Difference</th>
+              <th className={listTableThClass}>Status</th>
+              <th className={listTableThClass}>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className="border-t">
-                <td className="px-2 py-1">{r.statement_date}</td>
-                <td className="px-2 py-1 text-right">{Number(r.statement_balance).toLocaleString()}</td>
-                <td className="px-2 py-1 text-right">{Number(r.book_balance).toLocaleString()}</td>
-                <td className="px-2 py-1 text-right">{Number(r.difference_amount).toLocaleString()}</td>
-                <td className="px-2 py-1">{r.status}{r.is_finalized ? " / FINALIZED" : ""}</td>
-                <td className="px-2 py-1">
-                  {r.is_finalized ? (
-                    <span className="text-xs text-text-muted">Locked</span>
-                  ) : r.status !== "MATCHED" ? (
-                    <button className="rounded border px-2 py-1 text-xs" onClick={() => void resolve(r.id)}>
-                      Resolve
-                    </button>
-                  ) : (
-                    <span className="text-xs text-status-success">Done</span>
-                  )}
-                </td>
-                <td className="px-2 py-1">
-                  <button className="rounded border px-2 py-1 text-xs" onClick={() => void selectReconciliation(r.id)}>
-                    {selectedReconId === r.id ? "Selected" : "Open"}
-                  </button>
+            {rows.length === 0 ? (
+              <tr>
+                <td className={listPageEmptyClass} colSpan={6}>
+                  No reconciliations for this bank account.
                 </td>
               </tr>
-            ))}
+            ) : (
+              rows.map((r) => {
+                const items: RowActionItem[] = [
+                  {
+                    key: "open",
+                    label: selectedReconId === r.id ? "Selected" : "Open lines",
+                    onClick: () => void selectReconciliation(r.id),
+                  },
+                ];
+                if (!r.is_finalized && r.status !== "MATCHED") {
+                  items.push({ key: "resolve", label: "Resolve", onClick: () => void resolve(r.id) });
+                }
+                return (
+                  <tr key={r.id} className={listTableTrClass}>
+                    <td className={listTableTdPrimaryClass}>{r.statement_date}</td>
+                    <td className={`${listTableTdClass} text-right`}>{Number(r.statement_balance).toLocaleString()}</td>
+                    <td className={`${listTableTdClass} text-right`}>{Number(r.book_balance).toLocaleString()}</td>
+                    <td className={`${listTableTdClass} text-right`}>{Number(r.difference_amount).toLocaleString()}</td>
+                    <td className={listTableTdClass}>
+                      {r.status}
+                      {r.is_finalized ? " / FINALIZED" : ""}
+                      {r.is_finalized ? <span className="ml-2 text-xs text-text-muted">Locked</span> : null}
+                      {!r.is_finalized && r.status === "MATCHED" ? (
+                        <span className="ml-2 text-xs text-status-success">Done</span>
+                      ) : null}
+                    </td>
+                    <td className={listTableTdClass}>
+                      <RowActionsMenu
+                        rowId={r.id}
+                        openId={openActionsId}
+                        onOpenChange={setOpenActionsId}
+                        menuPortal
+                        items={items}
+                      />
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
-      </div>
+      </ScrollTableCard>
 
-      <div className="space-y-3 rounded-xl border border-border bg-surface-raised p-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-text-primary">Statement Lines</h2>
+      <div className="space-y-3 rounded-lg border border-border bg-surface-raised p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-text-primary">Statement Lines</h2>
           <div className="flex gap-2">
-            <button className="rounded border px-3 py-1 text-sm" onClick={() => void autoMatch()} disabled={!selectedReconId || selectedReconciliation?.is_finalized}>
+            <button className={listPageToolbarButtonClass} onClick={() => void autoMatch()} disabled={!selectedReconId || selectedReconciliation?.is_finalized}>
               Auto Match
             </button>
             {canFinalize ? (
-              <button className="rounded border px-3 py-1 text-sm" onClick={() => setShowFinalizeConfirm(true)} disabled={!selectedReconId || selectedReconciliation?.is_finalized || isFinalizing}>
+              <button className={listPageToolbarButtonClass} onClick={() => setShowFinalizeConfirm(true)} disabled={!selectedReconId || selectedReconciliation?.is_finalized || isFinalizing}>
                 Finalize
               </button>
             ) : null}
@@ -416,42 +485,44 @@ export function BankReconciliationPage() {
         <div className="grid gap-2 sm:grid-cols-2">
           {canFinalize ? (
             <input
-              className="rounded border px-3 py-2 text-sm"
+              className={fieldClass}
               placeholder="Finalize reason (optional but recommended)"
               value={finalizeReason}
               onChange={(e) => setFinalizeReason(e.target.value)}
               disabled={selectedReconciliation?.is_finalized}
             />
           ) : (
-            <div className="rounded border bg-surface-subtle px-3 py-2 text-sm">
+            <div className="rounded-lg border border-border bg-surface-subtle px-3 py-2 text-sm">
               Only manager/admin can finalize reconciliation.
             </div>
           )}
           {selectedReconciliation?.is_finalized ? (
-            <div className="rounded border bg-surface-subtle px-3 py-2 text-sm">
+            <div className="rounded-lg border border-border bg-surface-subtle px-3 py-2 text-sm">
               Finalized reason: {selectedReconciliation.finalize_reason || "-"}
             </div>
           ) : null}
         </div>
 
         {summary ? (
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded border bg-surface-subtle px-3 py-2 text-sm">Lines: {summary.line_count}</div>
-            <div className="rounded border bg-status-success-subtle px-3 py-2 text-sm">Matched: {summary.matched_count}</div>
-            <div className="rounded border bg-status-warning-subtle px-3 py-2 text-sm">Unmatched: {summary.unmatched_count}</div>
-            <div className="rounded border bg-surface-subtle px-3 py-2 text-sm">Difference: {summary.difference_amount.toLocaleString()}</div>
-          </div>
+          <SummaryStrip
+            items={[
+              { key: "lines", label: "Lines", value: summary.line_count },
+              { key: "matched", label: "Matched", value: summary.matched_count, tone: "success" },
+              { key: "unmatched", label: "Unmatched", value: summary.unmatched_count, tone: "warning" },
+              { key: "diff", label: "Difference", value: summary.difference_amount.toLocaleString() },
+            ]}
+          />
         ) : null}
 
         {showFinalizeConfirm && canFinalize && selectedReconciliation && !selectedReconciliation.is_finalized ? (
-          <div className="rounded border border-status-warning/30 bg-status-warning-subtle p-3 text-sm">
+          <div className="rounded-lg border border-status-warning/30 bg-status-warning-subtle p-3 text-sm">
             <p className="mb-2 font-medium text-status-warning-foreground">Confirm finalize?</p>
             <p className="mb-3 text-status-warning-foreground">After finalize, this reconciliation will be locked for edits and matching changes.</p>
             <div className="flex gap-2">
-              <button className="rounded bg-status-warning px-3 py-1 text-brand-primary-foreground" onClick={() => void finalizeSelected()}>
+              <button className="rounded-lg bg-status-warning px-3 py-1 text-brand-primary-foreground" onClick={() => void finalizeSelected()}>
                 {isFinalizing ? "Finalizing..." : "Yes, Finalize"}
               </button>
-              <button className="rounded border px-3 py-1" onClick={() => setShowFinalizeConfirm(false)} disabled={isFinalizing}>
+              <button className="rounded-lg border border-border-strong px-3 py-1" onClick={() => setShowFinalizeConfirm(false)} disabled={isFinalizing}>
                 Cancel
               </button>
             </div>
@@ -459,14 +530,14 @@ export function BankReconciliationPage() {
         ) : null}
 
         <form onSubmit={addStatementLine} className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          <input type="date" className="rounded border px-3 py-2 text-sm" value={lineForm.transaction_date} onChange={(e) => setLineForm((p) => ({ ...p, transaction_date: e.target.value }))} />
-          <input className="rounded border px-3 py-2 text-sm" placeholder="Description" value={lineForm.description ?? ""} onChange={(e) => setLineForm((p) => ({ ...p, description: e.target.value }))} />
-          <input className="rounded border px-3 py-2 text-sm" placeholder="Reference" value={lineForm.reference ?? ""} onChange={(e) => setLineForm((p) => ({ ...p, reference: e.target.value }))} />
-          <input className="rounded border px-3 py-2 text-sm" placeholder="Debit" value={lineForm.debit_amount ?? "0"} onChange={(e) => setLineForm((p) => ({ ...p, debit_amount: e.target.value }))} />
-          <input className="rounded border px-3 py-2 text-sm" placeholder="Credit" value={lineForm.credit_amount ?? "0"} onChange={(e) => setLineForm((p) => ({ ...p, credit_amount: e.target.value }))} />
+          <input type="date" aria-label="Line date" className={fieldClass} value={lineForm.transaction_date} onChange={(e) => setLineForm((p) => ({ ...p, transaction_date: e.target.value }))} />
+          <input className={fieldClass} placeholder="Description" value={lineForm.description ?? ""} onChange={(e) => setLineForm((p) => ({ ...p, description: e.target.value }))} />
+          <input className={fieldClass} placeholder="Reference" value={lineForm.reference ?? ""} onChange={(e) => setLineForm((p) => ({ ...p, reference: e.target.value }))} />
+          <input className={fieldClass} placeholder="Debit" value={lineForm.debit_amount ?? "0"} onChange={(e) => setLineForm((p) => ({ ...p, debit_amount: e.target.value }))} />
+          <input className={fieldClass} placeholder="Credit" value={lineForm.credit_amount ?? "0"} onChange={(e) => setLineForm((p) => ({ ...p, credit_amount: e.target.value }))} />
           <button
             type="submit"
-            className="rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90 disabled:opacity-50"
+            className="rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90 disabled:opacity-50"
             disabled={selectedReconciliation?.is_finalized}
           >
             Add Line
@@ -476,110 +547,156 @@ export function BankReconciliationPage() {
         <div className="space-y-2">
           <p className="text-sm font-medium text-text-secondary">CSV Import (paste CSV text)</p>
           <textarea
-            className="h-24 w-full rounded border px-3 py-2 text-sm"
+            className={`${fieldClass} h-24`}
             placeholder="transaction_date,description,reference,debit_amount,credit_amount,running_balance"
             value={csvText}
             onChange={(e) => setCsvText(e.target.value)}
           />
-          <button className="rounded border px-3 py-1 text-sm" onClick={() => void importCsvText()} disabled={!selectedReconId || selectedReconciliation?.is_finalized}>
+          <button className={listPageToolbarButtonClass} onClick={() => void importCsvText()} disabled={!selectedReconId || selectedReconciliation?.is_finalized}>
             Import CSV
           </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-surface-subtle text-left">
+        <ScrollTableCard maxHeight="secondary" footer={showingCountLabel(statementLines.length, statementLines.length, "statement line")}>
+          <table className={`${listTableBaseClass} min-w-[56rem]`}>
+            <thead className={listTableTheadClass}>
               <tr>
-                <th className="px-2 py-1">Date</th>
-                <th className="px-2 py-1">Description</th>
-                <th className="px-2 py-1">Reference</th>
-                <th className="px-2 py-1 text-right">Debit</th>
-                <th className="px-2 py-1 text-right">Credit</th>
-                <th className="px-2 py-1">Match</th>
-                <th className="px-2 py-1">Action</th>
+                <th className={listTableThClass}>Date</th>
+                <th className={listTableThClass}>Description</th>
+                <th className={listTableThClass}>Reference</th>
+                <th className={listTableThRightClass}>Debit</th>
+                <th className={listTableThRightClass}>Credit</th>
+                <th className={listTableThClass}>Match</th>
+                <th className={listTableThClass}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {statementLines.map((line) => (
-                <tr key={line.id} className="border-t">
-                  <td className="px-2 py-1">{line.transaction_date}</td>
-                  <td className="px-2 py-1">{line.description ?? "-"}</td>
-                  <td className="px-2 py-1">{line.reference ?? "-"}</td>
-                  <td className="px-2 py-1 text-right">{Number(line.debit_amount).toLocaleString()}</td>
-                  <td className="px-2 py-1 text-right">{Number(line.credit_amount).toLocaleString()}</td>
-                  <td className="px-2 py-1">
-                    {line.matched_status}
-                    {line.matched_payment_run_id ? ` (Run #${line.matched_payment_run_id})` : ""}
-                  </td>
-                  <td className="px-2 py-1">
-                    <div className="flex gap-2">
-                      <select
-                        className="rounded border px-2 py-1 text-xs"
-                        value={lineMatchSelection[line.id] ?? ""}
-                        disabled={selectedReconciliation?.is_finalized}
-                        onChange={(e) =>
-                          setLineMatchSelection((prev) => ({
-                            ...prev,
-                            [line.id]: e.target.value ? Number(e.target.value) : "",
-                          }))
-                        }
-                      >
-                        <option value="">Select run</option>
-                        {paymentRuns.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.run_code} ({Number(r.total_amount).toLocaleString()})
-                          </option>
-                        ))}
-                      </select>
-                      <button className="rounded border px-2 py-1 text-xs" onClick={() => void manualMatch(line.id)} disabled={selectedReconciliation?.is_finalized}>
-                        Match
-                      </button>
-                      {line.matched_status === "MATCHED" ? (
-                        <button className="rounded border px-2 py-1 text-xs" onClick={() => void unmatch(line.id)} disabled={selectedReconciliation?.is_finalized}>
-                          Unmatch
-                        </button>
-                      ) : null}
-                    </div>
+              {statementLines.length === 0 ? (
+                <tr>
+                  <td className={listPageEmptyClass} colSpan={7}>
+                    No statement lines yet.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                statementLines.map((line) => (
+                  <tr key={line.id} className={listTableTrClass}>
+                    <td className={listTableTdPrimaryClass}>{line.transaction_date}</td>
+                    <td className={listTableTdClass}>{line.description ?? "-"}</td>
+                    <td className={listTableTdClass}>{line.reference ?? "-"}</td>
+                    <td className={`${listTableTdClass} text-right`}>{Number(line.debit_amount).toLocaleString()}</td>
+                    <td className={`${listTableTdClass} text-right`}>{Number(line.credit_amount).toLocaleString()}</td>
+                    <td className={listTableTdClass}>
+                      {line.matched_status}
+                      {line.matched_payment_run_id ? ` (Run #${line.matched_payment_run_id})` : ""}
+                    </td>
+                    <td className={listTableTdClass}>
+                      <div className="flex gap-2">
+                        <select
+                          className="rounded-lg border border-border-strong bg-surface-raised px-2 py-1 text-xs"
+                          value={lineMatchSelection[line.id] ?? ""}
+                          disabled={selectedReconciliation?.is_finalized}
+                          onChange={(e) =>
+                            setLineMatchSelection((prev) => ({
+                              ...prev,
+                              [line.id]: e.target.value ? Number(e.target.value) : "",
+                            }))
+                          }
+                        >
+                          <option value="">Select run</option>
+                          {paymentRuns.map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.run_code} ({Number(r.total_amount).toLocaleString()})
+                            </option>
+                          ))}
+                        </select>
+                        <button className="rounded-lg border border-border-strong px-2 py-1 text-xs" onClick={() => void manualMatch(line.id)} disabled={selectedReconciliation?.is_finalized}>
+                          Match
+                        </button>
+                        {line.matched_status === "MATCHED" ? (
+                          <button className="rounded-lg border border-border-strong px-2 py-1 text-xs" onClick={() => void unmatch(line.id)} disabled={selectedReconciliation?.is_finalized}>
+                            Unmatch
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
-        </div>
+        </ScrollTableCard>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Match Audit Trail</h2>
-          <button className="rounded border px-3 py-1 text-sm" onClick={() => void exportAuditCsv()} disabled={!selectedReconId || isExporting}>
-            {isExporting ? "Exporting..." : "Export CSV"}
-          </button>
-        </div>
-        <table className="min-w-full text-sm">
-          <thead className="bg-surface-subtle text-left">
+      <ScrollTableCard
+        maxHeight="secondary"
+        toolbar={
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-text-primary">Match Audit Trail</h2>
+            <button className={listPageToolbarButtonClass} onClick={() => void exportAuditCsv()} disabled={!selectedReconId || isExporting}>
+              {isExporting ? "Exporting..." : "Export CSV"}
+            </button>
+          </div>
+        }
+        footer={showingCountLabel(matchLogs.length, matchLogs.length, "log entry").replace("log entrys", "log entries")}
+      >
+        <table className={`${listTableBaseClass} min-w-[40rem]`}>
+          <thead className={listTableTheadClass}>
             <tr>
-              <th className="px-2 py-1">When</th>
-              <th className="px-2 py-1">Action</th>
-              <th className="px-2 py-1">Line</th>
-              <th className="px-2 py-1">Run</th>
-              <th className="px-2 py-1">User</th>
-              <th className="px-2 py-1">Note</th>
+              <th className={listTableThClass}>When</th>
+              <th className={listTableThClass}>Action</th>
+              <th className={listTableThClass}>Line</th>
+              <th className={listTableThClass}>Run</th>
+              <th className={listTableThClass}>User</th>
+              <th className={listTableThClass}>Note</th>
             </tr>
           </thead>
           <tbody>
-            {matchLogs.map((log) => (
-              <tr key={log.id} className="border-t">
-                <td className="px-2 py-1">{new Date(log.created_at).toLocaleString()}</td>
-                <td className="px-2 py-1">{log.action}</td>
-                <td className="px-2 py-1">#{log.statement_line_id}</td>
-                <td className="px-2 py-1">{log.payment_run_id ? `#${log.payment_run_id}` : "-"}</td>
-                <td className="px-2 py-1">{log.created_by ?? "-"}</td>
-                <td className="px-2 py-1">{log.note ?? "-"}</td>
+            {matchLogs.length === 0 ? (
+              <tr>
+                <td className={listPageEmptyClass} colSpan={6}>
+                  No audit entries yet.
+                </td>
               </tr>
-            ))}
+            ) : (
+              matchLogs.map((log) => (
+                <tr key={log.id} className={listTableTrClass}>
+                  <td className={listTableTdClass}>{new Date(log.created_at).toLocaleString()}</td>
+                  <td className={listTableTdClass}>{log.action}</td>
+                  <td className={listTableTdClass}>#{log.statement_line_id}</td>
+                  <td className={listTableTdClass}>{log.payment_run_id ? `#${log.payment_run_id}` : "-"}</td>
+                  <td className={listTableTdClass}>{log.created_by ?? "-"}</td>
+                  <td className={listTableTdClass}>{log.note ?? "-"}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
-      </div>
+      </ScrollTableCard>
+
+      <FinanceFormDrawer
+        open={drawerOpen}
+        title="Add statement"
+        onClose={closeDrawer}
+        onSubmit={(e) => void submit(e)}
+        submitLabel="Add Statement"
+        submitting={saving}
+        error={formError ?? undefined}
+      >
+        <FormSection title="Bank statement">
+          <div>
+            <label className={labelClass} htmlFor="recon-bank">Bank account *</label>
+            {bankSelect("recon-bank", "Bank account")}
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="recon-date">Statement date</label>
+            <input id="recon-date" type="date" className={fieldClass} value={form.statement_date} onChange={(e) => setForm((p) => ({ ...p, statement_date: e.target.value }))} />
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="recon-balance">Statement balance</label>
+            <input id="recon-balance" className={fieldClass} value={form.statement_balance} onChange={(e) => setForm((p) => ({ ...p, statement_balance: e.target.value }))} />
+          </div>
+        </FormSection>
+      </FinanceFormDrawer>
     </div>
   );
 }

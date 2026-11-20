@@ -5,6 +5,18 @@ import {
   type AdvancedVoucherTypeRow,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import {
+  listPageEmptyClass,
+  listPageErrorClass,
+  listPageRootClass,
+  listPageTableCardClass,
+  listTableBaseClass,
+  listTableTdClass,
+  listTableTdPrimaryClass,
+  listTableThClass,
+  listTableTheadClass,
+  listTableTrClass,
+} from "@/components/app/listPageLayout";
 import { logApiError } from "@/utils/logApiError";
 
 const FLAG_LABELS: { key: keyof AdvancedVoucherFeatureFlags; label: string }[] = [
@@ -63,85 +75,92 @@ export function VoucherTypeConfigPage() {
   }
 
   return (
-    <div className="space-y-4 p-4 md:p-6">
+    <div className={listPageRootClass}>
       <AppPageHeader
         title="Voucher types (advanced)"
         description="Configure voucher type flags. Tenant feature flags control whether each workflow is available."
       />
 
-      {error ? (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-      ) : null}
+      {error ? <div className={listPageErrorClass}>{error}</div> : null}
 
       {featureFlags ? (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Tenant feature flags</p>
+        <div className="rounded-lg border border-border bg-surface-subtle p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">Tenant feature flags</p>
           <div className="flex flex-wrap gap-2">
             {FLAG_LABELS.map(({ key, label }) => (
               <span
                 key={key}
                 className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  featureFlags[key] ? "bg-green-100 text-green-800" : "bg-gray-200 text-gray-600"
+                  featureFlags[key]
+                    ? "bg-status-success-subtle text-status-success-foreground"
+                    : "bg-surface-raised text-text-muted"
                 }`}
               >
                 {label}: {featureFlags[key] ? "On" : "Off"}
               </span>
             ))}
           </div>
-          <p className="mt-2 text-xs text-gray-500">
+          <p className="mt-2 text-xs text-text-muted">
             Enable flags in Settings → Configuration. Types can be toggled here regardless of flags.
           </p>
         </div>
       ) : null}
 
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-        <table className="min-w-full text-left text-sm">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-            <tr>
-              <th className="px-3 py-2">Code</th>
-              <th className="px-3 py-2">Name</th>
-              <th className="px-3 py-2">Active</th>
-              {KIND_FLAGS.map((f) => (
-                <th key={f.key} className="px-3 py-2">
-                  {f.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className="border-t border-gray-100">
-                <td className="px-3 py-2 font-mono text-xs">{r.code}</td>
-                <td className="px-3 py-2 font-medium">{r.name}</td>
-                <td className="px-3 py-2">
-                  <input
-                    type="checkbox"
-                    checked={r.is_active}
-                    disabled={savingId === r.id}
-                    onChange={(e) => void patchRow(r.id, { is_active: e.target.checked })}
-                  />
-                </td>
+      <div className={listPageTableCardClass}>
+        <div className="max-h-[calc(100dvh-18rem)] overflow-auto">
+          <table className={`${listTableBaseClass} min-w-[56rem]`}>
+            <thead className={listTableTheadClass}>
+              <tr>
+                <th className={listTableThClass}>Code</th>
+                <th className={listTableThClass}>Name</th>
+                <th className={listTableThClass}>Active</th>
                 {KIND_FLAGS.map((f) => (
-                  <td key={f.key} className="px-3 py-2">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(r[f.key])}
-                      disabled={savingId === r.id}
-                      onChange={(e) => void patchRow(r.id, { [f.key]: e.target.checked })}
-                    />
-                  </td>
+                  <th key={f.key} className={listTableThClass}>
+                    {f.label}
+                  </th>
                 ))}
               </tr>
-            ))}
-            {!rows.length ? (
-              <tr>
-                <td colSpan={8} className="px-3 py-8 text-center text-gray-500">
-                  No voucher types found.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className={listTableTrClass}>
+                  <td className={`${listTableTdClass} font-mono text-xs`}>{r.code}</td>
+                  <td className={listTableTdPrimaryClass}>{r.name}</td>
+                  <td className={listTableTdClass}>
+                    <input
+                      type="checkbox"
+                      aria-label={`${r.code} active`}
+                      checked={r.is_active}
+                      disabled={savingId === r.id}
+                      onChange={(e) => void patchRow(r.id, { is_active: e.target.checked })}
+                    />
+                  </td>
+                  {KIND_FLAGS.map((f) => (
+                    <td key={f.key} className={listTableTdClass}>
+                      <input
+                        type="checkbox"
+                        aria-label={`${r.code} ${f.label}`}
+                        checked={Boolean(r[f.key])}
+                        disabled={savingId === r.id}
+                        onChange={(e) => void patchRow(r.id, { [f.key]: e.target.checked })}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+              {!rows.length ? (
+                <tr>
+                  <td className={listPageEmptyClass} colSpan={3 + KIND_FLAGS.length}>
+                    No voucher types found.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+        <div className="border-t border-border px-4 py-2 text-xs text-text-muted">
+          Showing {rows.length} voucher type{rows.length === 1 ? "" : "s"}
+        </div>
       </div>
     </div>
   );

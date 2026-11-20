@@ -248,6 +248,9 @@ export const merchApi = {
   async getStyle(id: number): Promise<StyleResponse> {
     return request<StyleResponse>(`/api/v1/merch/styles/${id}`);
   },
+  async downloadStylePdf(id: number): Promise<Blob> {
+    return requestBlob(`/api/v1/merch/styles/${id}/pdf`);
+  },
   async updateStyle(id: number, data: StyleUpdate): Promise<StyleResponse> {
     return request<StyleResponse>(`/api/v1/merch/styles/${id}`, {
       method: "PATCH",

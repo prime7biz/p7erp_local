@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
-import { listPageRootClass } from "@/components/app/listPageLayout";
+import { listPageFilterBarClass, listPageRootClass } from "@/components/app/listPageLayout";
 import { ENTITY_KINDS, fetchersFor, type EntityPickKind } from "@/components/finance/profitability/entityFetchers";
 import { ProfitDetail } from "@/components/finance/profitability/ProfitDetail";
 import { initialPeriod, type StatementPeriod } from "@/components/finance/statements/statementPeriod";
@@ -62,7 +62,7 @@ export function EntityProfitabilityGlPage() {
         </div>
       ) : (
         <>
-          <div className="flex flex-wrap items-end gap-3">
+          <div className={`${listPageFilterBarClass} items-end`}>
             <label className="text-xs font-medium text-text-muted">
               Show profit of
               <select

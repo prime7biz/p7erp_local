@@ -88,8 +88,14 @@ async def require_order_ai_capability(db: AsyncSession, user: User, capability: 
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"code": "AI_FORBIDDEN", "message": "No role assigned for this tenant."},
         )
-    role_name = (role.name or "").strip().lower()
-    if role_name in _ROLE_ALLOW_ALL:
+    from app.common.authority.policy import elevated_role_or_manager_equivalent
+    from app.models import Tenant
+
+    tenant = await db.get(Tenant, user.tenant_id)
+    flags = tenant.feature_flags if tenant is not None else None
+    if await elevated_role_or_manager_equivalent(
+        db, user, module_code="merch", feature_flags=flags, elevated_role_names=_ROLE_ALLOW_ALL
+    ):
         return
 
     perms = role.permissions or {}

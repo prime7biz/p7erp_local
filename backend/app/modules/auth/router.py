@@ -474,6 +474,9 @@ async def register(
         password_hash=await hash_password(body.password),
         first_name=body.first_name,
         last_name=body.last_name,
+        # Company registrant is the protected Super Admin identity (flag OFF until cutover).
+        authority_class="SUPER" if is_bootstrap else None,
+        is_tenant_super_admin=bool(is_bootstrap),
     )
     db.add(user)
     await db.flush()
@@ -629,6 +632,10 @@ async def me(
     role_obj = role_result.scalar_one_or_none()
     role_name = role_obj.name if role_obj else ""
     role_permissions = role_obj.permissions if role_obj and isinstance(role_obj.permissions, dict) else {}
+    flags = with_effective_default_flags(tenant.feature_flags)
+    from app.common.authority.policy import effective_authority_payload
+
+    authority = await effective_authority_payload(db, user, feature_flags=flags)
     return MeResponse(
         user_id=user.id,
         tenant_id=user.tenant_id,
@@ -639,7 +646,13 @@ async def me(
         tenant_name=tenant.name,
         tenant_type=tenant.tenant_type,
         company_code=tenant.company_code,
-        feature_flags=with_effective_default_flags(tenant.feature_flags),
+        feature_flags=flags,
         role_name=role_name,
         role_permissions=role_permissions,
+        authority_classes_enabled=bool(authority.get("authority_classes_enabled")),
+        authority_class=authority.get("authority_class"),
+        is_tenant_super_admin=bool(authority.get("is_tenant_super_admin")),
+        module_grants=list(authority.get("module_grants") or []),
+        available_modules=list(authority.get("available_modules") or []),
+        can_view_pnl_balance_sheet=bool(authority.get("can_view_pnl_balance_sheet", True)),
     )

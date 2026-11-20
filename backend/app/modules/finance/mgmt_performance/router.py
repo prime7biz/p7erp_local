@@ -120,6 +120,10 @@ async def mp_summary(period: str | None = PERIOD_Q, tenant: Tenant = Depends(req
                      user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     ensure_enabled(user, tenant)
     await assert_company_view(db, user, tenant)
+    # Posted profit is the same P&L as Finance → Profit & Loss.
+    from app.common.authority.policy import assert_pnl_balance_sheet_allowed
+
+    await assert_pnl_balance_sheet_allowed(db, user, feature_flags=tenant.feature_flags)
     p = _period(period, tenant)
     scope = await viewer_scope(db, user, tenant)
     try:

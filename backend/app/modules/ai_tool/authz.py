@@ -49,7 +49,15 @@ async def can_use_ai_module(db: AsyncSession, user: User) -> bool:
     if role_name in _AI_ALLOWED_ROLES:
         return True
     permissions = role.permissions or {}
-    return _permission_truthy(permissions.get("ai.read")) or _permission_truthy(permissions.get("ai.chat"))
+    if _permission_truthy(permissions.get("ai.read")) or _permission_truthy(permissions.get("ai.chat")):
+        return True
+    # Class 1 / Super with ai module when authority classes are ON.
+    from app.common.authority.policy import is_manager_equivalent_for_module
+    from app.models import Tenant
+
+    tenant = await db.get(Tenant, user.tenant_id)
+    flags = tenant.feature_flags if tenant is not None else None
+    return await is_manager_equivalent_for_module(db, user, user.tenant_id, "ai", feature_flags=flags)
 
 
 def is_fail_closed_tool_key(permission_key: str) -> bool:
@@ -73,6 +81,15 @@ async def has_tool_permission(db: AsyncSession, user: User, permission_key: str)
     role_name = (role.name or "").strip().lower()
     if role_name in HR_SETUP_BYPASS_ROLES:
         return True
+    from app.common.authority.policy import is_manager_equivalent_for_module
+    from app.models import Tenant
+
+    tenant = await db.get(Tenant, user.tenant_id)
+    flags = tenant.feature_flags if tenant is not None else None
+    if await is_manager_equivalent_for_module(db, user, user.tenant_id, "ai", feature_flags=flags):
+        # Fail-closed finance/HR tools still need an explicit grant even for Class 1+ai.
+        if not is_fail_closed_tool_key(permission_key):
+            return True
     permissions = role.permissions if isinstance(role.permissions, dict) else {}
     if is_fail_closed_tool_key(permission_key):
         return _fail_closed_granted(permissions, permission_key)

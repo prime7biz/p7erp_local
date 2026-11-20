@@ -317,6 +317,10 @@ class Voucher(Base):
         ForeignKey("voucher_classes.id", ondelete="SET NULL"), nullable=True
     )
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    # Class 1 ratification after posting (user_authority_classes_v1). NULL = pre-flag / N/A.
+    class1_approval_status: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    class1_approved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    class1_approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow

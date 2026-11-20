@@ -14,9 +14,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.auth import create_access_token, hash_password
 from app.database import get_db
 from app.models import ImpersonationSession, Role, Tenant, User
-from app.modules.admin.auth import AdminContext, client_ip, log_admin_action, super_or_support
-from app.modules.admin.schemas import AdminUserResetPasswordResponse, ImpersonateResponse, TenantUserListItem
+from app.modules.admin.auth import AdminContext, client_ip, log_admin_action, super_only, super_or_support
+from app.modules.admin.schemas import (
+    AdminUserResetPasswordResponse,
+    ImpersonateResponse,
+    SuperAdminBreakGlassRequest,
+    TenantUserListItem,
+)
 from app.modules.audit.service import log_action
+from app.common.authority.constants import AUTHORITY_SUPER
+from app.common.authority.policy import bump_auth_session_version, is_authority_classes_enabled_for_tenant
+from app.common.totp import verify_totp
 
 router = APIRouter(prefix="/tenants/{tenant_id}/users", tags=["platform-admin-users"])
 IMPERSONATION_MINUTES = 15
@@ -99,6 +107,11 @@ async def reset_password(
     user = u.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if bool(getattr(user, "is_tenant_super_admin", False)):
+        raise HTTPException(
+            status_code=403,
+            detail="Use the Super Admin break-glass endpoint to reset the protected Super Admin password",
+        )
     temp = _random_password(16)
     user.password_hash = await hash_password(temp)
     await log_action(
@@ -122,6 +135,67 @@ async def reset_password(
     return AdminUserResetPasswordResponse(temporary_password=temp)
 
 
+@router.post("/{user_id}/break-glass-reset-password", response_model=AdminUserResetPasswordResponse)
+async def break_glass_reset_super_admin_password(
+    tenant_id: int,
+    user_id: int,
+    body: SuperAdminBreakGlassRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    ctx: AdminContext = Depends(super_only),
+):
+    """Audited recovery for the protected tenant Super Admin only (platform super_admin + MFA)."""
+    t = await db.get(Tenant, tenant_id)
+    if not t or t.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    u = await db.execute(select(User).where(User.id == user_id, User.tenant_id == tenant_id))
+    user = u.scalar_one_or_none()
+    if not user or not bool(getattr(user, "is_tenant_super_admin", False)):
+        raise HTTPException(status_code=404, detail="Protected Super Admin not found")
+    if not is_authority_classes_enabled_for_tenant(t.feature_flags):
+        # Still allow recovery of the marked identity; audit as break-glass either way.
+        pass
+    if not ctx.admin.totp_enabled or not (ctx.admin.totp_secret or "").strip():
+        raise HTTPException(
+            status_code=403,
+            detail="Platform Super Admin must enrol authenticator MFA before break-glass recovery",
+        )
+    step = verify_totp(
+        ctx.admin.totp_secret or "",
+        body.totp_code,
+        last_used_step=ctx.admin.totp_last_used_step,
+    )
+    if step is None:
+        raise HTTPException(status_code=401, detail="Invalid or missing authenticator code")
+    ctx.admin.totp_last_used_step = step
+    reason = (body.reason or "").strip()
+    temp = _random_password(16)
+    user.password_hash = await hash_password(temp)
+    if not user.authority_class:
+        user.authority_class = AUTHORITY_SUPER
+    bump_auth_session_version(user)
+    await log_action(
+        db,
+        tenant_id=tenant_id,
+        action="SUPER_ADMIN_BREAK_GLASS_PASSWORD_RESET",
+        user_id=user.id,
+        resource="user",
+        details=f"by_platform_admin={ctx.admin.id}; reason={reason[:200]}",
+    )
+    await log_admin_action(
+        db,
+        admin_id=ctx.admin.id,
+        action="BREAK_GLASS_SUPER_ADMIN_PASSWORD_RESET",
+        target_tenant_id=tenant_id,
+        target_user_id=user_id,
+        resource="user",
+        details=reason[:500],
+        ip_address=client_ip(request),
+    )
+    await db.commit()
+    return AdminUserResetPasswordResponse(temporary_password=temp)
+
+
 @router.post("/{user_id}/deactivate")
 async def deactivate_user(
     tenant_id: int,
@@ -134,6 +208,11 @@ async def deactivate_user(
     user = u.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if bool(getattr(user, "is_tenant_super_admin", False)):
+        raise HTTPException(
+            status_code=403,
+            detail="The company Super Admin cannot be deactivated",
+        )
     user.is_active = False
     await log_admin_action(
         db,

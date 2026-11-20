@@ -504,6 +504,46 @@ async def get_inquiry(
   )
 
 
+@router.get("/{inquiry_id}/pdf")
+async def inquiry_pdf(
+  inquiry_id: int,
+  tenant: Tenant = Depends(require_tenant),
+  user: User = Depends(get_current_user),
+  db: AsyncSession = Depends(get_db),
+):
+  """Server PDF for phone Save PDF / Share (tenant-scoped)."""
+  from fastapi.responses import Response
+  from app.modules.merch.doc_pdf import render_simple_doc_pdf
+
+  if user.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+  inquiry = await db.get(Inquiry, inquiry_id)
+  if not inquiry or inquiry.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inquiry not found")
+  content = render_simple_doc_pdf(
+    tenant=tenant,
+    title="Inquiry",
+    lines=[
+      ("Code", inquiry.inquiry_code),
+      ("Status", inquiry.status),
+      ("Style ref", inquiry.style_ref),
+      ("Season", inquiry.season),
+      ("Quantity", inquiry.quantity),
+      ("Target price", inquiry.target_price),
+      ("Currency", inquiry.currency or inquiry.target_price_currency),
+      ("Expected delivery", inquiry.expected_delivery_date),
+      ("Shipping term", inquiry.shipping_term),
+      ("Notes", (inquiry.notes or "")[:90]),
+    ],
+  )
+  filename = f"{inquiry.inquiry_code or f'inquiry-{inquiry.id}'}.pdf".replace("/", "-")
+  return Response(
+    content=content,
+    media_type="application/pdf",
+    headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+  )
+
+
 @router.patch("/{inquiry_id}", response_model=InquiryResponse)
 async def update_inquiry(
   inquiry_id: int,

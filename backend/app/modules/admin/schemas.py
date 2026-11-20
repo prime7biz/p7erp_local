@@ -139,3 +139,10 @@ class PaginatedMeta(BaseModel):
 class AdminUserResetPasswordResponse(BaseModel):
     temporary_password: str
 
+
+class SuperAdminBreakGlassRequest(BaseModel):
+    """Platform-only recovery for the protected tenant Super Admin credentials."""
+
+    reason: str = Field(min_length=10, max_length=500)
+    totp_code: str | None = Field(default=None, min_length=6, max_length=10)
+

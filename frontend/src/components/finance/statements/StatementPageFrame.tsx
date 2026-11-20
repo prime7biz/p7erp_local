@@ -6,6 +6,10 @@ import type { StatementEnvelope, StatementExportReport, StatementQuery } from "@
 import { FinanceAiCommentaryPanel } from "@/components/finance/ai/FinanceAiCommentaryPanel";
 import type { StatementResource } from "@/hooks/useFinanceStatements";
 import { useStatementsEnabled } from "@/hooks/useFinanceStatements";
+import {
+  CONFIDENTIAL_REPORTS_DENIED,
+  useCanViewConfidentialReports,
+} from "@/hooks/useCanViewConfidentialReports";
 import { StatementWarnings, ReconciliationBadge } from "./StatementBanners";
 import { StatementExportBar } from "./StatementExportBar";
 import { StatementHeader } from "./StatementHeader";
@@ -24,6 +28,8 @@ interface Props<T extends StatementEnvelope> {
   hideReconciliation?: boolean;
   /** "Explain this report" (shown only while `finance_ai_insights_v2` is on). Leave out for reports AI does not cover. */
   aiReport?: { report: CommentaryReport; period: CommentaryPeriodQuery };
+  /** When true, Class 2–4 users see a deny message before any numbers load. */
+  requiresConfidentialReports?: boolean;
   children: (data: T) => ReactNode;
 }
 
@@ -40,16 +46,23 @@ export function StatementPageFrame<T extends StatementEnvelope>({
   exportInfo,
   hideReconciliation,
   aiReport,
+  requiresConfidentialReports = false,
   children,
 }: Props<T>) {
   const enabled = useStatementsEnabled();
+  const canViewConfidential = useCanViewConfidentialReports();
   const { data, loading, error, errorStatus, reload } = resource;
+  const confidentialDenied = requiresConfidentialReports && !canViewConfidential;
 
   return (
     <div className={`${listPageRootClass} statement-print-root print-report`}>
       <AppPageHeader title={title} description={description} className="no-print" />
 
-      {!enabled ? (
+      {confidentialDenied ? (
+        <div role="alert" className="rounded-xl border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
+          {CONFIDENTIAL_REPORTS_DENIED}
+        </div>
+      ) : !enabled ? (
         <div role="status" className="rounded-xl border border-border bg-surface-raised p-6 text-sm text-text-secondary">
           <p className="font-semibold text-text-primary">Tally-style statements are switched off</p>
           <p className="mt-1">

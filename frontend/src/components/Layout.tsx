@@ -63,11 +63,13 @@ export function Layout() {
 
   const paletteRoutes = useMemo(() => {
     if (!me) return [];
+    const canViewConfidentialReports = me.can_view_pnl_balance_sheet !== false;
     const filtered = filterVisibleMenuSections(menuSections, {
       tenantType: me.tenant_type,
       enabledOptionalProductionUnits: enabledOptionalUnits,
       featureFlags: me.feature_flags,
       hasPermission,
+      canViewConfidentialReports,
     });
     const rows = flattenMenuRoutes(filtered);
     // HR pages live as tabs inside hubs; list each tab so it stays searchable in the palette.
@@ -75,7 +77,7 @@ export function Layout() {
     // Same for Finance when the hubs are switched on (finance_hubs_v2).
     if (!isFinanceHubsV2Enabled(me.feature_flags) || !filtered.some((s) => s.section === "Finance")) return withHr;
     const canAccess = (key: string) => isMenuPermissionAllowed(key, me.feature_flags, hasPermission);
-    return [...withHr, ...financeTabPaletteRoutes(me.feature_flags, canAccess)];
+    return [...withHr, ...financeTabPaletteRoutes(me.feature_flags, canAccess, { canViewConfidentialReports })];
   }, [me, enabledOptionalUnits, hasPermission]);
 
   if (loading) return <div className="p-6">Loading...</div>;
@@ -129,10 +131,11 @@ export function Layout() {
           enabledOptionalProductionUnits={enabledOptionalUnits}
           featureFlags={me.feature_flags}
           hasPermission={hasPermission}
+          canViewConfidentialReports={me.can_view_pnl_balance_sheet !== false}
           compact={appShellV2}
         />
       </div>
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col lg:min-h-0">
         <ShellTopHeader
           me={me}
           displayName={displayName}
@@ -143,7 +146,7 @@ export function Layout() {
         <main
           id="main-content"
           tabIndex={-1}
-          className="erp-main-content min-w-0 flex-1 bg-surface-base p-3 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-4 sm:pb-[calc(6rem+env(safe-area-inset-bottom))] lg:overflow-y-auto lg:p-5 lg:pb-4 focus:outline-none"
+          className="erp-main-content min-w-0 flex-1 bg-surface-base p-3 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-4 sm:pb-[calc(6rem+env(safe-area-inset-bottom))] lg:min-h-0 lg:overflow-y-auto lg:p-5 lg:pb-4 focus:outline-none"
         >
           <DemoModeBanner />
           {announcements.length > 0 && (
@@ -184,6 +187,7 @@ export function Layout() {
         enabledOptionalProductionUnits={enabledOptionalUnits}
         featureFlags={me.feature_flags}
         hasPermission={hasPermission}
+        canViewConfidentialReports={me.can_view_pnl_balance_sheet !== false}
       />
     </div>
   );

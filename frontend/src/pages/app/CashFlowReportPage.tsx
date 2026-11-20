@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ScrollTableCard } from "@/components/finance/kit";
 import { api, type CashFlowStatementResponse, type CashForecastScenarioResponse } from "@/api/client";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
@@ -99,7 +100,7 @@ export function CashFlowReportPage() {
   }
 
   return (
-    <div className="space-y-6 print-report">
+    <div className="space-y-4 print-report">
       <div className="print-only mb-3 border-b border-border pb-2">
         <h1 className="text-lg font-semibold">Cash Flow Report</h1>
         <p className="text-xs text-text-muted">
@@ -146,9 +147,9 @@ export function CashFlowReportPage() {
                   (Inflow {Number(statement?.sections[section].inflow ?? 0).toLocaleString()} | Outflow {Number(statement?.sections[section].outflow ?? 0).toLocaleString()} | Net {Number(statement?.sections[section].net ?? 0).toLocaleString()})
                 </span>
               </div>
-              <div className="overflow-x-auto">
+              <ScrollTableCard maxHeight="panel">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-surface-subtle text-left">
+                  <thead className="sticky top-0 z-10 bg-surface-subtle text-left">
                     <tr>
                       <th className="px-2 py-1">Voucher</th>
                       <th className="px-2 py-1">Date</th>
@@ -171,7 +172,7 @@ export function CashFlowReportPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </ScrollTableCard>
             </div>
           ))}
         </div>
@@ -182,9 +183,9 @@ export function CashFlowReportPage() {
               <div className="mb-2 font-semibold">
                 {scenario.name} <span className="text-xs text-text-muted">({scenario.status})</span>
               </div>
-              <div className="overflow-x-auto">
+              <ScrollTableCard maxHeight="panel">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-surface-subtle text-left">
+                  <thead className="sticky top-0 z-10 bg-surface-subtle text-left">
                     <tr>
                       <th className="px-2 py-1">Month</th>
                       <th className="px-2 py-1 text-right">Inflow</th>
@@ -205,7 +206,7 @@ export function CashFlowReportPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </ScrollTableCard>
             </div>
           ))}
         </div>

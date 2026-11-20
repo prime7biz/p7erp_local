@@ -117,7 +117,7 @@ export function HrLeaveTypesPage() {
         searchPlaceholder="Search code or name…"
         initialSort={{ key: "code", dir: "asc" }}
         exportFileName="hr-leave-types"
-        canExport={canExportHrData(me?.role_name)}
+        canExport={canExportHrData(me)}
         rowActions={(r) => [{ key: "edit", label: "Edit", primary: true, onClick: () => openEdit(r) }]}
       />
 

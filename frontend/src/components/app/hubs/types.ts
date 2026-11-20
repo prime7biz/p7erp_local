@@ -26,6 +26,11 @@ export interface HubTab {
   labelWhenFlagOn?: { flag: string; label: string };
   /** Navigation filter only. Route and API guards stay the real control. */
   permissionKey?: string;
+  /**
+   * When true, hide the tab if fixed-class authority is ON and the user cannot view
+   * Profit & Loss / Balance Sheet (`me.can_view_pnl_balance_sheet === false`).
+   */
+  requiresConfidentialReports?: boolean;
   /** A standalone tab is never embedded in the hub (it keeps its own page). */
   standalone?: boolean;
 }

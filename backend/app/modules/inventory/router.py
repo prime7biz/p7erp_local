@@ -188,6 +188,11 @@ def _purchase_order_to_out(
         source_order_id=getattr(row, "source_order_id", None),
         status=row.status,
         notes=row.notes,
+        created_by_user_id=getattr(row, "created_by_user_id", None),
+        approved_by_user_id=getattr(row, "approved_by_user_id", None),
+        class1_approval_status=getattr(row, "class1_approval_status", None),
+        class1_approved_by=getattr(row, "class1_approved_by", None),
+        class1_approved_at=getattr(row, "class1_approved_at", None),
         items=[PurchaseOrderItemOut.model_validate(i) for i in items],
         vendor_qc_rejection_rate_pct=vendor_qc_rejection_rate_pct,
     )
@@ -432,8 +437,17 @@ async def _sum_accepted_for_po_line_excluding_grn_dec(
 async def _require_manager_or_admin(db: AsyncSession, user: User, tenant_id: int) -> None:
     role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
     role_name = (role.name if role else "").strip().lower()
-    if role_name not in {"admin", "manager"}:
-        raise HTTPException(status_code=403, detail="Only admin or manager can review change requests")
+    if role_name in {"admin", "manager"}:
+        return
+    tenant = await db.get(Tenant, tenant_id)
+    feature_flags = tenant.feature_flags if tenant is not None else None
+    from app.common.authority.policy import is_manager_equivalent_for_module
+
+    if await is_manager_equivalent_for_module(
+        db, user, tenant_id, "inventory", feature_flags=feature_flags
+    ):
+        return
+    raise HTTPException(status_code=403, detail="Only admin or manager can review change requests")
 
 
 def _scale_line_qty_for_covered(line_value: float | None, base_order_qty: float, covered: int) -> float:
@@ -1404,6 +1418,11 @@ class PurchaseOrderOut(BaseModel):
     source_order_id: int | None = None
     status: str
     notes: str | None
+    created_by_user_id: int | None = None
+    approved_by_user_id: int | None = None
+    class1_approval_status: str | None = None
+    class1_approved_by: int | None = None
+    class1_approved_at: datetime | None = None
     items: list[PurchaseOrderItemOut]
     vendor_qc_rejection_rate_pct: float | None = None
 
@@ -1776,6 +1795,10 @@ class GatePassOut(BaseModel):
     verification_id: str | None = None
     signature_hash: str | None = None
     signed_at: datetime | None = None
+    created_by_user_id: int | None = None
+    class1_approval_status: str | None = None
+    class1_approved_by: int | None = None
+    class1_approved_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -2698,6 +2721,132 @@ async def get_purchase_order(
     )
 
 
+@router.get("/purchase-orders/{po_id}/pdf")
+async def purchase_order_pdf(
+    po_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Server PDF for phone Save PDF / Share (tenant-scoped)."""
+    from fastapi.responses import Response
+
+    from app.modules.merch.doc_pdf import render_simple_doc_pdf
+
+    _ensure_tenant(user, tenant)
+    row = await db.get(PurchaseOrder, po_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    items_result = await db.execute(
+        select(PurchaseOrderItem)
+        .where(PurchaseOrderItem.purchase_order_id == row.id)
+        .order_by(PurchaseOrderItem.id)
+    )
+    items = list(items_result.scalars().all())
+    content = render_simple_doc_pdf(
+        tenant=tenant,
+        title="Purchase Order",
+        lines=[
+            ("Code", row.po_code),
+            ("Status", row.status),
+            ("Supplier", row.supplier_name),
+            ("Order date", row.order_date),
+            ("Expected", row.expected_date),
+            ("Currency", row.currency),
+            ("Lines", len(items)),
+            ("Notes", (row.notes or "")[:90]),
+        ],
+    )
+    filename = f"{row.po_code or f'po-{row.id}'}.pdf".replace("/", "-")
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/purchase-orders/{po_id}/class1-approve", response_model=PurchaseOrderOut)
+async def class1_approve_purchase_order(
+    po_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = (
+        await db.execute(
+            select(PurchaseOrder)
+            .where(PurchaseOrder.id == po_id, PurchaseOrder.tenant_id == tenant.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    from app.common.authority.purchase_order_workflow import (
+        apply_class1_approve_purchase_order,
+        assert_can_class1_ratify_purchase_order,
+    )
+    from app.modules.audit.service import log_action
+
+    await assert_can_class1_ratify_purchase_order(db, user=user, row=row, feature_flags=tenant.feature_flags)
+    apply_class1_approve_purchase_order(row, user_id=user.id, when=datetime.utcnow())
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="PO_CLASS1_APPROVED",
+        resource=f"purchase_order:{row.id}",
+        details=f"po_code={row.po_code}",
+    )
+    await db.commit()
+    await db.refresh(row)
+    items_result = await db.execute(select(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == row.id))
+    return _purchase_order_to_out(row, list(items_result.scalars().all()))
+
+
+@router.post("/purchase-orders/{po_id}/class1-reject", response_model=PurchaseOrderOut)
+async def class1_reject_purchase_order(
+    po_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = (
+        await db.execute(
+            select(PurchaseOrder)
+            .where(PurchaseOrder.id == po_id, PurchaseOrder.tenant_id == tenant.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    from app.common.authority.purchase_order_workflow import (
+        apply_class1_reject_purchase_order,
+        assert_can_class1_ratify_purchase_order,
+    )
+    from app.modules.audit.service import log_action
+
+    await assert_can_class1_ratify_purchase_order(db, user=user, row=row, feature_flags=tenant.feature_flags)
+    previous_status = row.status
+    apply_class1_reject_purchase_order(row, user_id=user.id, when=datetime.utcnow())
+    await _record_po_status_event(db, tenant.id, user.id, row, previous_status, "Class 1 rejected")
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="PO_CLASS1_REJECTED",
+        resource=f"purchase_order:{row.id}",
+        details=f"po_code={row.po_code}",
+    )
+    await db.commit()
+    await db.refresh(row)
+    items_result = await db.execute(select(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == row.id))
+    return _purchase_order_to_out(row, list(items_result.scalars().all()))
+
+
 @router.post("/purchase-orders", response_model=PurchaseOrderOut)
 async def create_purchase_order(
     body: PurchaseOrderBody,
@@ -2707,6 +2856,18 @@ async def create_purchase_order(
 ):
     _ensure_tenant(user, tenant)
     row = await add_purchase_order_rows(db, tenant, body)
+    row.created_by_user_id = user.id
+    if (row.status or "").strip().upper() == "APPROVED":
+        row.approved_by_user_id = user.id
+        from app.common.authority.purchase_order_workflow import on_purchase_order_approved
+
+        await on_purchase_order_approved(
+            db,
+            user=user,
+            row=row,
+            feature_flags=tenant.feature_flags,
+            when=datetime.utcnow(),
+        )
     await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     items_result = await db.execute(select(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == row.id))
@@ -2876,6 +3037,23 @@ async def update_purchase_order_status(
     _assert_status_transition(PO_TRANSITIONS, row.status, next_status, label="Purchase order")
     previous_status = row.status
     row.status = next_status
+    if next_status == "APPROVED" and previous_status != "APPROVED":
+        row.approved_by_user_id = user.id
+        from app.common.authority.purchase_order_workflow import on_purchase_order_approved
+
+        await on_purchase_order_approved(
+            db,
+            user=user,
+            row=row,
+            feature_flags=tenant.feature_flags,
+            when=datetime.utcnow(),
+        )
+    elif next_status in {"DRAFT", "CANCELLED"}:
+        row.approved_by_user_id = None
+        # Clear Class 1 state so a later re-approve re-queues (four-eyes) instead of staying APPROVED.
+        row.class1_approval_status = None
+        row.class1_approved_by = None
+        row.class1_approved_at = None
     if previous_status != next_status:
         await _record_po_status_event(db, tenant.id, user.id, row, previous_status, status_body.get("reason"))
     await db.commit()
@@ -3100,6 +3278,46 @@ async def get_goods_receiving(
         .order_by(GoodsReceivingItem.id)
     )
     return _goods_receiving_to_out(row, list(items_result.scalars().all()))
+
+
+@router.get("/goods-receiving/{grn_id}/pdf")
+async def goods_receiving_pdf(
+    grn_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Server PDF for phone Save PDF / Share (tenant-scoped)."""
+    from fastapi.responses import Response
+
+    from app.modules.merch.doc_pdf import render_simple_doc_pdf
+
+    _ensure_tenant(user, tenant)
+    row = await db.get(GoodsReceiving, grn_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="GRN not found")
+    items_result = await db.execute(
+        select(GoodsReceivingItem).where(GoodsReceivingItem.goods_receiving_id == row.id)
+    )
+    items = list(items_result.scalars().all())
+    content = render_simple_doc_pdf(
+        tenant=tenant,
+        title="Goods Receiving Note",
+        lines=[
+            ("Code", row.grn_code),
+            ("Status", row.status),
+            ("PO id", row.purchase_order_id),
+            ("Received date", getattr(row, "received_date", None) or getattr(row, "grn_date", None)),
+            ("Lines", len(items)),
+            ("Notes", (getattr(row, "notes", None) or "")[:90]),
+        ],
+    )
+    filename = f"{row.grn_code or f'grn-{row.id}'}.pdf".replace("/", "-")
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/goods-receiving", response_model=GoodsReceivingOut)
@@ -4610,7 +4828,12 @@ async def create_enhanced_gate_pass(
         code = body.gate_pass_code
     else:
         code = await next_tenant_code(db, model=EnhancedGatePass, tenant_id=tenant.id, prefix="GP-", width=4)
-    row = EnhancedGatePass(tenant_id=tenant.id, gate_pass_code=code, **body.model_dump(exclude={"gate_pass_code"}))
+    row = EnhancedGatePass(
+        tenant_id=tenant.id,
+        gate_pass_code=code,
+        created_by_user_id=user.id,
+        **body.model_dump(exclude={"gate_pass_code"}),
+    )
     db.add(row)
     await flush_handling_duplicate_document_code(db)
     # Sign at creation so print / QR work before RELEASED (re-signed on RELEASED with updated status in payload).
@@ -4646,6 +4869,15 @@ async def update_enhanced_gate_pass_status(
         if next_status == "RELEASED" and prev_status != "RELEASED":
             if row.signed_by_user_id is None:
                 row.signed_by_user_id = user.id
+            from app.common.authority.gate_pass_workflow import on_gate_pass_released
+
+            await on_gate_pass_released(
+                db,
+                user=user,
+                row=row,
+                feature_flags=tenant.feature_flags,
+                when=datetime.utcnow(),
+            )
     if "guard_acknowledged" in body:
         row.guard_acknowledged = bool(body["guard_acknowledged"])
     # Status and guard acknowledgement are both in the QR hash; sign after both are set.
@@ -7029,6 +7261,22 @@ async def bulk_purchase_order_status(
             continue
         previous_status = row.status
         row.status = st
+        if st == "APPROVED" and previous_status != "APPROVED":
+            row.approved_by_user_id = user.id
+            from app.common.authority.purchase_order_workflow import on_purchase_order_approved
+
+            await on_purchase_order_approved(
+                db,
+                user=user,
+                row=row,
+                feature_flags=tenant.feature_flags,
+                when=datetime.utcnow(),
+            )
+        elif st in {"DRAFT", "CANCELLED"}:
+            row.approved_by_user_id = None
+            row.class1_approval_status = None
+            row.class1_approved_by = None
+            row.class1_approved_at = None
         if previous_status != st:
             await _record_po_status_event(db, tenant.id, user.id, row, previous_status, body.reason)
         updated += 1
@@ -7325,6 +7573,7 @@ async def gate_pass_print_data(
             "verification_id": getattr(row, "verification_id", None),
             "signature_hash": getattr(row, "signature_hash", None),
             "signed_at": row.signed_at.isoformat() if getattr(row, "signed_at", None) else None,
+            "class1_approval_status": getattr(row, "class1_approval_status", None),
         },
         "lines": [],
         "verification_path": verification_path,
@@ -7335,6 +7584,94 @@ async def gate_pass_print_data(
             "copy_labels": ["Original", "Duplicate", "Triplicate"],
         },
     }
+
+
+@router.post("/enhanced-gate-passes/{gate_pass_id}/class1-approve", response_model=GatePassOut)
+async def class1_approve_gate_pass(
+    gate_pass_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(EnhancedGatePass, gate_pass_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Gate pass not found")
+    from app.common.authority.gate_pass_workflow import apply_class1_approve_gate_pass, assert_can_class1_ratify_gate_pass
+    from app.modules.audit.service import log_action
+
+    await assert_can_class1_ratify_gate_pass(db, user=user, row=row, feature_flags=tenant.feature_flags)
+    apply_class1_approve_gate_pass(row, user_id=user.id, when=datetime.utcnow())
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="GATE_PASS_CLASS1_APPROVE",
+        resource=f"enhanced_gate_pass:{row.id}",
+        details=f"gate_pass_code={row.gate_pass_code}",
+    )
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+@router.post("/enhanced-gate-passes/{gate_pass_id}/class1-reject", response_model=GatePassOut)
+async def class1_reject_gate_pass(
+    gate_pass_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(EnhancedGatePass, gate_pass_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Gate pass not found")
+    from app.common.authority.gate_pass_workflow import apply_class1_reject_gate_pass, assert_can_class1_ratify_gate_pass
+    from app.modules.audit.service import log_action
+
+    await assert_can_class1_ratify_gate_pass(db, user=user, row=row, feature_flags=tenant.feature_flags)
+    apply_class1_reject_gate_pass(row, user_id=user.id, when=datetime.utcnow())
+    sign_gate_pass(row)
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="GATE_PASS_CLASS1_REJECT",
+        resource=f"enhanced_gate_pass:{row.id}",
+        details=f"gate_pass_code={row.gate_pass_code}",
+    )
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+@router.get("/enhanced-gate-passes/{gate_pass_id}/pdf")
+async def gate_pass_pdf(
+    gate_pass_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Server PDF for phone Save PDF / Share (tenant-scoped)."""
+    from fastapi.responses import Response
+    from app.modules.inventory.gate_pass_pdf import render_gate_pass_pdf
+
+    _ensure_tenant(user, tenant)
+    row = await db.get(EnhancedGatePass, gate_pass_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Gate pass not found")
+    challan_code = None
+    if row.challan_id:
+        dc = await db.get(DeliveryChallan, row.challan_id)
+        if dc and dc.tenant_id == tenant.id:
+            challan_code = dc.challan_code
+    content = render_gate_pass_pdf(tenant=tenant, row=row, challan_code=challan_code)
+    filename = f"{row.gate_pass_code or f'gate-pass-{row.id}'}.pdf".replace("/", "-")
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/goods-receiving/{grn_id}/gl-postings")

@@ -96,12 +96,15 @@ export function AppBottomNav({
   enabledOptionalProductionUnits = [],
   featureFlags,
   hasPermission,
+  canViewConfidentialReports,
 }: {
   tenantType: TenantType;
   /** From Production setup; gates optional units (knitting, dyeing, …) in the mobile “More” menu. */
   enabledOptionalProductionUnits?: string[];
   featureFlags?: Record<string, boolean | string | number | null> | null;
   hasPermission: (key: string) => boolean;
+  /** When false, Finance confidential report tabs stay out of mobile search. */
+  canViewConfidentialReports?: boolean;
 }) {
   const location = useLocation();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
@@ -124,8 +127,9 @@ export function AppBottomNav({
         enabledOptionalProductionUnits,
         featureFlags,
         hasPermission,
+        canViewConfidentialReports,
       }),
-    [tenantType, enabledOptionalProductionUnits, featureFlags, hasPermission],
+    [tenantType, enabledOptionalProductionUnits, featureFlags, hasPermission, canViewConfidentialReports],
   );
 
   const financeHubsOn = isFinanceHubsV2Enabled(featureFlags);
@@ -177,10 +181,12 @@ export function AppBottomNav({
     const q = drawerSearch.trim().toLowerCase();
     if (!q || !financeHubsOn || !visibleSectionNames.has("Finance")) return [];
     const canAccess = (key: string) => isMenuPermissionAllowed(key, featureFlags, hasPermission);
-    return financeTabPaletteRoutes(featureFlags, canAccess)
+    const extras =
+      canViewConfidentialReports === undefined ? undefined : { canViewConfidentialReports };
+    return financeTabPaletteRoutes(featureFlags, canAccess, extras)
       .filter((r) => r.label.toLowerCase().includes(q))
       .map((r) => ({ href: r.href, label: `${r.label} · ${r.section.replace(/^Finance · /, "")}`, icon: r.icon }));
-  }, [drawerSearch, financeHubsOn, featureFlags, hasPermission, visibleSectionNames]);
+  }, [drawerSearch, financeHubsOn, featureFlags, hasPermission, canViewConfidentialReports, visibleSectionNames]);
 
   useEffect(() => {
     setIsMoreOpen(false);

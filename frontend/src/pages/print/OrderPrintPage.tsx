@@ -9,6 +9,7 @@ import {
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { SecureImage } from "@/components/SecureImage";
+import { PrintPdfToolbarActions } from "@/components/print/PrintPdfToolbarActions";
 import { logApiError } from "@/utils/logApiError";
 import "@/styles/quotation-print.css";
 
@@ -174,13 +175,13 @@ export function OrderPrintPage() {
           >
             Back to order
           </Link>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
-          >
-            Print / Save PDF
-          </button>
+          <PrintPdfToolbarActions
+            downloadPdf={() => api.downloadOrderPdf(order.id)}
+            filename={`${order.order_code || `order-${order.id}`}.pdf`}
+            logKey="OrderPrintPage.pdf"
+            desktopClassName="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+            phoneClassName="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+          />
         </div>
       </div>
       <div className="no-print mx-auto mb-3 w-full max-w-[210mm] rounded-xl border border-border bg-status-info-subtle p-3">

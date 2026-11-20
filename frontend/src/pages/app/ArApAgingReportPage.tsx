@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ScrollTableCard } from "@/components/finance/kit";
 import { api, type BillsAgingResponse } from "@/api/client";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { todayLocalISO } from "@/lib/dates";
@@ -54,7 +55,7 @@ export function ArApAgingReportPage() {
   }
 
   return (
-    <div className="space-y-6 print-report">
+    <div className="space-y-4 print-report">
       <div className="print-only mb-3 border-b border-border-strong pb-2">
         <h1 className="text-lg font-semibold">AR/AP Aging Report</h1>
         <p className="text-xs text-text-secondary">
@@ -105,9 +106,9 @@ export function ArApAgingReportPage() {
         </div>
       ) : null}
 
-      <div className="print-card overflow-x-auto rounded-xl border border-border bg-surface-raised">
+      <ScrollTableCard maxHeight="main" className="print-card">
         <table className="min-w-full text-sm">
-          <thead className="bg-surface-subtle text-left">
+          <thead className="sticky top-0 z-10 bg-surface-subtle text-left">
             <tr>
               <th className="px-2 py-1">Bill</th>
               <th className="px-2 py-1">Party</th>
@@ -130,7 +131,7 @@ export function ArApAgingReportPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollTableCard>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { hubTabLabel, pickActiveHubTab, visibleHubTabs } from "./hubVisibility";
+import { hubTabLabel, pickActiveHubTab, visibleHubTabs, type HubVisibilityExtras } from "./hubVisibility";
 import type { Hub, HubAccessCheck, HubFeatureFlags, HubTab } from "./types";
 
 /** The hub URL under the app root, optionally with `?tab=<tab id>`. */
@@ -26,11 +26,12 @@ export function resolveHubHelpPath(
   search: string,
   featureFlags?: HubFeatureFlags,
   canAccess?: HubAccessCheck,
+  extras?: HubVisibilityExtras,
 ): string {
   const clean = pathname.replace(/\/+$/, "");
   const hub = hubs.find((h) => clean === `/app/${h.path}`);
   if (!hub) return pathname;
-  const tab = pickActiveHubTab(hub, new URLSearchParams(search).get("tab"), featureFlags, canAccess);
+  const tab = pickActiveHubTab(hub, new URLSearchParams(search).get("tab"), featureFlags, canAccess, extras);
   return tab ? `/app/${tab.legacyPath}` : pathname;
 }
 
@@ -47,11 +48,12 @@ export function hubTabPaletteRoutes(
   sectionPrefix: string,
   featureFlags: HubFeatureFlags,
   canAccess?: HubAccessCheck,
+  extras?: HubVisibilityExtras,
 ): HubPaletteRow[] {
   return hubs
     .filter((hub) => !hub.permissionKey || !canAccess || canAccess(hub.permissionKey))
     .flatMap((hub) =>
-      visibleHubTabs(hub, featureFlags, canAccess).map((tab) => ({
+      visibleHubTabs(hub, featureFlags, canAccess, extras).map((tab) => ({
         href: hubHref(hub, tab.id),
         label: hubTabLabel(tab, featureFlags),
         section: `${sectionPrefix} · ${hub.label}`,

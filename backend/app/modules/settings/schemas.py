@@ -91,16 +91,25 @@ class SettingsUserResponse(BaseModel):
     last_name: str | None
     is_active: bool
     role_name: str
+    designation: str | None = None
+    authority_class: str | None = None
+    is_tenant_super_admin: bool = False
+    module_grants: list[str] = Field(default_factory=list)
+    employee_id: int | None = None
+    employee_label: str | None = None
 
 
 class SettingsUserCreate(BaseModel):
-    role_id: int
+    role_id: int | None = None
     email: str = Field(min_length=5, max_length=255)
     username: str | None = Field(default=None, min_length=3, max_length=128)
     password: str = Field(min_length=8, max_length=128)
     first_name: str | None = Field(default=None, max_length=128)
     last_name: str | None = Field(default=None, max_length=128)
     is_active: bool = True
+    authority_class: str | None = Field(default=None, max_length=16)
+    module_grants: list[str] | None = None
+    employee_id: int | None = None
 
 
 class SettingsUserUpdate(BaseModel):
@@ -111,6 +120,18 @@ class SettingsUserUpdate(BaseModel):
     last_name: str | None = Field(default=None, max_length=128)
     is_active: bool | None = None
     password: str | None = Field(default=None, min_length=8, max_length=128)
+    authority_class: str | None = Field(default=None, max_length=16)
+    module_grants: list[str] | None = None
+    employee_id: int | None = None
+    clear_employee_link: bool = False
+
+
+class LinkableEmployeeRow(BaseModel):
+    id: int
+    employee_code: str
+    full_name: str
+    designation_title: str | None = None
+    label: str
 
 
 class SettingsAuditLogRow(BaseModel):

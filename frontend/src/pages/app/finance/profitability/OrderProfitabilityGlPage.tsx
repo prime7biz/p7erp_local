@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { ORDER_PROFIT_SORT_FIELDS, type OrderProfitRow, type OrderProfitSortField } from "@/api/financeControl";
 import { api } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { ScrollTableCard } from "@/components/finance/kit";
 import { listPageRootClass } from "@/components/app/listPageLayout";
 import { amountText, entityProfitHref, isLastPage, marginText } from "@/components/finance/control/controlLogic";
 import { ProfitDetail } from "@/components/finance/profitability/ProfitDetail";
@@ -124,12 +125,16 @@ export function OrderProfitabilityGlPage() {
           {loading && !data ? <div className="h-48 animate-pulse rounded-xl bg-surface-subtle" aria-busy="true" aria-label="Loading orders" /> : null}
 
           {data ? (
-            <section className="overflow-x-auto rounded-xl border border-border bg-surface-raised" aria-label="Order profit">
-              <p className="px-3 py-2 text-xs text-text-muted">
-                Amounts in {data.base_currency}. {data.total} order(s){loading ? " · refreshing…" : ""}
-              </p>
+            <section aria-label="Order profit">
+              <ScrollTableCard
+                toolbar={
+                  <p className="text-xs text-text-muted">
+                    Amounts in {data.base_currency}. {data.total} order(s){loading ? " · refreshing…" : ""}
+                  </p>
+                }
+              >
               <table className="min-w-full text-sm">
-                <thead className="bg-surface-subtle">
+                <thead className="sticky top-0 z-10 bg-surface-subtle">
                   <tr>
                     {COLUMNS.map((c) => (
                       <th
@@ -183,8 +188,9 @@ export function OrderProfitabilityGlPage() {
                   </tr>
                 </tbody>
               </table>
+              </ScrollTableCard>
               {data.total > ORDER_PROFIT_PAGE_SIZE ? (
-                <div className="flex items-center justify-between border-t border-border px-3 py-2 text-xs text-text-muted">
+                <div className="mt-2 flex items-center justify-between rounded-lg border border-border bg-surface-raised px-3 py-2 text-xs text-text-muted">
                   <span>
                     {offset + 1}–{Math.min(offset + ORDER_PROFIT_PAGE_SIZE, data.total)} of {data.total}
                   </span>

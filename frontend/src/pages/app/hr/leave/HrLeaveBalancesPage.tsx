@@ -180,7 +180,7 @@ export function HrLeaveBalancesPage() {
         emptyHint="No leave balances have been set up for employees yet."
         searchPlaceholder="Search employee or leave type…"
         exportFileName="leave-balances"
-        canExport={canExportHrData(me?.role_name)}
+        canExport={canExportHrData(me)}
       />
     </div>
   );

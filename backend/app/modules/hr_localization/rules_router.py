@@ -23,9 +23,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
-from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.business_date import today_local
-from app.common.permissions import HR_SETUP_BYPASS_ROLES, PERMISSION_HR_PAYROLL_MANAGE, assert_hr_manager_or_permission
+from app.common.permissions import PERMISSION_HR_PAYROLL_MANAGE, assert_hr_manager_or_permission
 from app.common.tenant import require_tenant
 from app.database import get_db, safe_async_session_rollback
 from app.models import Tenant, User
@@ -60,9 +59,9 @@ def _ensure_tenant(user: User, tenant: Tenant) -> None:
 
 
 async def require_manager_admin(db: AsyncSession, user: User, tenant_id: int) -> None:
-    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
-    if (role.name if role else "").strip().lower() not in HR_SETUP_BYPASS_ROLES:
-        raise HTTPException(status_code=403, detail="Only manager/admin can approve or switch enforcement")
+    from app.common.permissions import require_hr_manager_or_admin
+
+    await require_hr_manager_or_admin(db, user, tenant_id)
 
 
 async def _payroll_manage(db: AsyncSession, user: User, tenant_id: int) -> None:

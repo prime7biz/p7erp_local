@@ -42,6 +42,30 @@ def test_budget_line_period():
     assert budget_line_period("", None, 1) == ("all", None, None)
 
 
+def test_budget_to_out_converts_decimal_amount_to_string():
+    """GET /finance/budgets must not 500 when line.amount is a Decimal (BudgetOut expects str)."""
+    from types import SimpleNamespace
+
+    from app.modules.finance.router import _budget_to_out
+
+    budget = SimpleNamespace(
+        id=1, tenant_id=1, budget_name="Ops", fiscal_year="2026", status="DRAFT", created_by=1
+    )
+    line = SimpleNamespace(
+        id=10,
+        budget_id=1,
+        tenant_id=1,
+        cost_center_id=None,
+        account_id=5,
+        period_month="2026-01",
+        amount=Decimal("0.0000"),
+        notes=None,
+    )
+    out = _budget_to_out(budget, [line])
+    assert out.lines[0].amount == "0.0000"
+    assert isinstance(out.lines[0].amount, str)
+
+
 def test_net_rule_by_nature():
     assert net_rule("Expense", "debit") == "debit_minus_credit"
     assert net_rule("Asset", "debit") == "debit_minus_credit"

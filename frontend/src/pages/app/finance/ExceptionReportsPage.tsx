@@ -15,6 +15,7 @@ import {
   type ExceptionSummaryResponse,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { ScrollTableCard } from "@/components/finance/kit";
 import { RowActionsMenu, type RowActionItem } from "@/components/app/RowActionsMenu";
 import { ledgerActivityHref, voucherHref, yearStart } from "@/lib/financeDrilldown";
 import { logApiError } from "@/utils/logApiError";
@@ -124,7 +125,7 @@ export function ExceptionReportsPage() {
   const activeMeta = CHECKS.find((c) => c.key === active)!;
 
   function actions(rowKey: string, items: RowActionItem[]) {
-    return <RowActionsMenu rowId={rowKey} openId={openActionsId} onOpenChange={setOpenActionsId} items={items} />;
+    return <RowActionsMenu rowId={rowKey} openId={openActionsId} onOpenChange={setOpenActionsId} items={items} menuPortal />;
   }
 
   function renderTable() {
@@ -136,7 +137,7 @@ export function ExceptionReportsPage() {
       case "grn_not_billed":
         return (
           <table className="min-w-full text-sm">
-            <thead className="bg-surface-subtle"><tr><th className={TH}>GRN</th><th className={TH}>Received</th><th className={TH}>Days waiting</th><th className={TH}>Supplier</th><th className={TH}>PO</th><th className={TH}>Supplier invoice</th><th className={TH} /></tr></thead>
+            <thead className="sticky top-0 z-10 bg-surface-subtle"><tr><th className={TH}>GRN</th><th className={TH}>Received</th><th className={TH}>Days waiting</th><th className={TH}>Supplier</th><th className={TH}>PO</th><th className={TH}>Supplier invoice</th><th className={TH} /></tr></thead>
             <tbody>
               {data.rows.map((r) => (
                 <tr key={r.grn_id} className="border-t border-border">
@@ -160,7 +161,7 @@ export function ExceptionReportsPage() {
       case "challan_not_invoiced":
         return (
           <table className="min-w-full text-sm">
-            <thead className="bg-surface-subtle"><tr><th className={TH}>Challan</th><th className={TH}>Customer</th><th className={TH}>Delivered</th><th className={TH}>Days waiting</th></tr></thead>
+            <thead className="sticky top-0 z-10 bg-surface-subtle"><tr><th className={TH}>Challan</th><th className={TH}>Customer</th><th className={TH}>Delivered</th><th className={TH}>Days waiting</th></tr></thead>
             <tbody>
               {data.rows.map((r) => (
                 <tr key={r.challan_id} className="border-t border-border">
@@ -176,7 +177,7 @@ export function ExceptionReportsPage() {
       case "negative_cash_bank":
         return (
           <table className="min-w-full text-sm">
-            <thead className="bg-surface-subtle"><tr><th className={TH}>Ledger</th><th className={TH}>Group</th><th className={`${TH} text-right`}>Balance</th></tr></thead>
+            <thead className="sticky top-0 z-10 bg-surface-subtle"><tr><th className={TH}>Ledger</th><th className={TH}>Group</th><th className={`${TH} text-right`}>Balance</th></tr></thead>
             <tbody>
               {data.rows.map((r) => (
                 <tr key={r.account_id} className="border-t border-border">
@@ -191,7 +192,7 @@ export function ExceptionReportsPage() {
       case "negative_stock":
         return (
           <table className="min-w-full text-sm">
-            <thead className="bg-surface-subtle"><tr><th className={TH}>Item</th><th className={TH}>Warehouse</th><th className={`${TH} text-right`}>On hand</th></tr></thead>
+            <thead className="sticky top-0 z-10 bg-surface-subtle"><tr><th className={TH}>Item</th><th className={TH}>Warehouse</th><th className={`${TH} text-right`}>On hand</th></tr></thead>
             <tbody>
               {data.rows.map((r) => (
                 <tr key={`${r.item_id}-${r.warehouse_id ?? "none"}`} className="border-t border-border">
@@ -206,7 +207,7 @@ export function ExceptionReportsPage() {
       case "overdue_bills":
         return (
           <table className="min-w-full text-sm">
-            <thead className="bg-surface-subtle"><tr><th className={TH}>Bill</th><th className={TH}>Party</th><th className={TH}>Type</th><th className={TH}>Due</th><th className={TH}>Days overdue</th><th className={`${TH} text-right`}>Amount due</th></tr></thead>
+            <thead className="sticky top-0 z-10 bg-surface-subtle"><tr><th className={TH}>Bill</th><th className={TH}>Party</th><th className={TH}>Type</th><th className={TH}>Due</th><th className={TH}>Days overdue</th><th className={`${TH} text-right`}>Amount due</th></tr></thead>
             <tbody>
               {data.rows.map((r) => (
                 <tr key={`${r.source}-${r.id}`} className="border-t border-border">
@@ -227,7 +228,7 @@ export function ExceptionReportsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <AppPageHeader
         title="Exception reports"
         description="Things that are stuck between documents or should never happen. Fix them before month-end."
@@ -273,7 +274,7 @@ export function ExceptionReportsPage() {
           <h2 className="text-sm font-semibold text-text-primary">{activeMeta.title}</h2>
           <p className="text-xs text-text-muted">{activeMeta.hint}</p>
         </div>
-        <div className="overflow-x-auto">{loading ? <p className="px-3 py-6 text-center text-sm text-text-muted">Loading…</p> : renderTable()}</div>
+        {loading ? <p className="px-3 py-6 text-center text-sm text-text-muted">Loading…</p> : <ScrollTableCard className="rounded-none border-0">{renderTable()}</ScrollTableCard>}
       </div>
     </div>
   );

@@ -270,8 +270,18 @@ def _add_months(base_date: date, months: int) -> date:
 async def _require_manager_or_admin(db: AsyncSession, user: User, tenant_id: int) -> None:
     role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
     role_name = (role.name if role else "").strip().lower()
-    if role_name not in {"admin", "manager", "super_admin", "superadmin", "owner"}:
-        raise HTTPException(status_code=403, detail="Only manager/admin can perform this action")
+    if role_name in {"admin", "manager", "super_admin", "superadmin", "owner"}:
+        return
+    # When authority classes are ON, Class 1 / Super Admin are admin-equivalent.
+    from app.common.authority.policy import is_tenant_admin_equivalent
+    from app.models import Tenant as TenantModel
+
+    tenant_row = await db.get(TenantModel, tenant_id)
+    if tenant_row is not None and await is_tenant_admin_equivalent(
+        db, user, tenant_id, feature_flags=tenant_row.feature_flags
+    ):
+        return
+    raise HTTPException(status_code=403, detail="Only manager/admin can perform this action")
 
 
 async def _account_group_parent_would_cycle(
@@ -639,6 +649,9 @@ class VoucherOut(BaseModel):
     btb_lc_id: int | None
     facility_utilization_id: int | None = None
     created_by: int | None
+    class1_approval_status: str | None = None
+    class1_approved_by: int | None = None
+    class1_approved_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     lines: list[VoucherLineOut]
@@ -1116,6 +1129,9 @@ def _voucher_to_out(
         btb_lc_id=voucher.btb_lc_id,
         facility_utilization_id=getattr(voucher, "facility_utilization_id", None),
         created_by=voucher.created_by,
+        class1_approval_status=getattr(voucher, "class1_approval_status", None),
+        class1_approved_by=getattr(voucher, "class1_approved_by", None),
+        class1_approved_at=getattr(voucher, "class1_approved_at", None),
         created_at=voucher.created_at,
         updated_at=voucher.updated_at,
         lines=sorted_lines,
@@ -1135,6 +1151,7 @@ async def _voucher_out(
 
 
 def _budget_to_out(budget: Budget, line_rows: list[BudgetLine]) -> BudgetOut:
+    # Money fields must be decimal strings for BudgetLineOut.amount (not ORM Decimal).
     return BudgetOut(
         id=budget.id,
         tenant_id=budget.tenant_id,
@@ -1142,7 +1159,19 @@ def _budget_to_out(budget: Budget, line_rows: list[BudgetLine]) -> BudgetOut:
         fiscal_year=budget.fiscal_year,
         status=budget.status,
         created_by=budget.created_by,
-        lines=sorted(line_rows, key=lambda x: x.id),
+        lines=[
+            BudgetLineOut(
+                id=line.id,
+                budget_id=line.budget_id,
+                tenant_id=line.tenant_id,
+                cost_center_id=line.cost_center_id,
+                account_id=line.account_id,
+                period_month=line.period_month,
+                amount=decimal_to_money_response(line.amount),
+                notes=line.notes,
+            )
+            for line in sorted(line_rows, key=lambda x: x.id)
+        ],
     )
 
 
@@ -1587,6 +1616,9 @@ async def create_account_group(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    from app.common.authority.master_change_guard import assert_master_direct_mutate_allowed
+
+    assert_master_direct_mutate_allowed(tenant)
     coa_cfg = await _get_coa_config(db, tenant.id)
     code = (body.code or "").strip() if body.code else None
     if code:
@@ -1638,6 +1670,9 @@ async def update_account_group(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    from app.common.authority.master_change_guard import assert_master_direct_mutate_allowed
+
+    assert_master_direct_mutate_allowed(tenant)
     row = await db.get(AccountGroup, group_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Account group not found")
@@ -1691,6 +1726,9 @@ async def delete_account_group(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    from app.common.authority.master_change_guard import assert_master_direct_mutate_allowed
+
+    assert_master_direct_mutate_allowed(tenant)
     row = await db.get(AccountGroup, group_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Account group not found")
@@ -1721,9 +1759,11 @@ async def seed_account_groups(
     db: AsyncSession = Depends(get_db),
 ):
     """Seed default account groups if none exist. Idempotent."""
+    from app.common.authority.master_change_guard import assert_master_direct_mutate_allowed
     from app.modules.finance.system_coa_seeding_service import seed_tenant_system_coa
 
     _ensure_tenant(user, tenant)
+    assert_master_direct_mutate_allowed(tenant)
     existing = await db.execute(select(AccountGroup).where(AccountGroup.tenant_id == tenant.id).limit(1))
     if not existing.scalars().first():
         defaults = [
@@ -1858,6 +1898,9 @@ async def create_chart_account(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    from app.common.authority.master_change_guard import assert_master_direct_mutate_allowed
+
+    assert_master_direct_mutate_allowed(tenant)
     coa_cfg = await _get_coa_config(db, tenant.id)
     group = await db.get(AccountGroup, body.group_id)
     if not group or group.tenant_id != tenant.id:
@@ -1942,6 +1985,9 @@ async def update_chart_account(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    from app.common.authority.master_change_guard import assert_master_direct_mutate_allowed
+
+    assert_master_direct_mutate_allowed(tenant)
     row = (
         await db.execute(
             select(ChartOfAccount)
@@ -2028,6 +2074,9 @@ async def delete_chart_account(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    from app.common.authority.master_change_guard import assert_master_direct_mutate_allowed
+
+    assert_master_direct_mutate_allowed(tenant)
     row = await db.get(ChartOfAccount, account_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Ledger account not found")
@@ -2206,9 +2255,11 @@ async def coa_import(
     db: AsyncSession = Depends(get_db),
 ):
     """Import Chart of Accounts from CSV or Excel (.xlsx, first sheet). conflict: skip / update / abort."""
+    from app.common.authority.master_change_guard import assert_master_direct_mutate_allowed
     from app.common.spreadsheet_upload import upload_to_csv_text
 
     _ensure_tenant(user, tenant)
+    assert_master_direct_mutate_allowed(tenant)
     await _require_manager_or_admin(db, user, tenant.id)
     if conflict not in ("skip", "update", "abort"):
         raise HTTPException(status_code=400, detail="conflict must be skip, update, or abort")
@@ -3053,16 +3104,97 @@ async def update_voucher_status(
         raise HTTPException(status_code=400, detail="Invalid voucher status")
     if next_status == "POSTED" and row.status == "POSTED":
         raise HTTPException(status_code=409, detail="Voucher is already posted")
-    if next_status != row.status:
-        _assert_voucher_transition(row.status, next_status)
-    # Approval, posting, rejection and cancellation are restricted; a creator may
-    # still cancel their own draft.
+
+    from app.common.authority.voucher_workflow import (
+        assert_authority_voucher_transition,
+        mark_class1_approved_on_past_post,
+        mark_pending_class1_on_post,
+    )
+    from app.common.business_date import today_local
+
+    today = today_local(tenant)
+    requested_status = next_status
+    authority = await assert_authority_voucher_transition(
+        db,
+        user=user,
+        voucher=row,
+        next_status=requested_status,
+        today=today,
+        feature_flags=tenant.feature_flags,
+    )
+    class1_direct = bool(authority and authority.class1_direct_post and requested_status == "POSTED")
+    chain_post = bool(
+        authority
+        and (
+            (authority.auto_post_after_recommend and requested_status == "RECOMMENDED")
+            or (authority.auto_post_after_approve and requested_status == "APPROVED")
+        )
+    )
+
+    async def _advance_to(target: str, *, reason_extra: str | None = None) -> None:
+        nonlocal previous_status
+        if row.status == target:
+            return
+        if authority is not None and (
+            (authority.allow_recommend_to_post and row.status == "RECOMMENDED" and target == "POSTED")
+            or (authority.auto_post_after_approve and row.status == "APPROVED" and target == "POSTED")
+            or (class1_direct and target == "POSTED")
+        ):
+            pass
+        else:
+            _assert_voucher_transition(row.status, target)
+        prev = row.status
+        row.status = target
+        previous_status = prev
+        reason_parts = [
+            p
+            for p in (
+                (body.reason or "").strip(),
+                (budget_override_reason or "").strip() if budget_override else "",
+                reason_extra or "",
+            )
+            if p
+        ]
+        await record_voucher_event(
+            db,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            voucher_id=row.id,
+            event="status",
+            summary=f"{prev} → {target}",
+            from_status=prev,
+            to_status=target,
+            reason=" | ".join(reason_parts) or None,
+        )
+
     if next_status != row.status:
         own_draft_cancel = (
             next_status == "CANCELLED" and row.status == "DRAFT" and row.created_by == user.id
         )
-        if next_status in {"CHECKED", "RECOMMENDED", "APPROVED", "POSTED", "REJECTED", "CANCELLED"} and not own_draft_cancel:
-            await _require_manager_or_admin(db, user, tenant.id)
+        if authority is None:
+            if next_status in {"CHECKED", "RECOMMENDED", "APPROVED", "POSTED", "REJECTED", "CANCELLED"} and not own_draft_cancel:
+                await _require_manager_or_admin(db, user, tenant.id)
+            _assert_voucher_transition(row.status, next_status)
+        elif chain_post:
+            # Move to requested intermediate first; posting runs below.
+            intermediate = requested_status
+            _assert_voucher_transition(row.status, intermediate)
+            await _advance_to(
+                intermediate,
+                reason_extra=(
+                    "system post after Class 2 recommend"
+                    if requested_status == "RECOMMENDED"
+                    else "system post after Class 1 approve"
+                ),
+            )
+            previous_status = row.status  # intermediate; POSTED event is separate
+            next_status = "POSTED"
+        elif class1_direct:
+            # Class 1 same-day direct: hop to POSTED without intermediate SoD steps.
+            pass
+        else:
+            _assert_voucher_transition(row.status, next_status)
+
     post_control_warnings: list[str] = []
     from app.modules.finance.advanced_voucher_service import voucher_should_affect_books
 
@@ -3148,6 +3280,13 @@ async def update_voucher_status(
         else:
             row.books_applied = False
             post_control_warnings.append("Posted without books impact (memorandum/optional/post-dated/stock transfer)")
+        if authority is not None:
+            if authority.auto_post_after_approve and requested_status == "APPROVED":
+                mark_class1_approved_on_past_post(row, user_id=user.id, when=datetime.utcnow())
+            else:
+                mark_pending_class1_on_post(row, feature_flags=tenant.feature_flags)
+                if class1_direct:
+                    post_control_warnings.append("Class 1 direct post — pending Class 1 ratification by another user")
     row.status = next_status
     if next_status == "POSTED" and affect_books:
         from app.modules.facility.posting_hooks import process_facility_voucher_posted
@@ -3216,18 +3355,31 @@ async def update_voucher_status(
     lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == row.id))).scalars().all())
     _apply_internal_signature(row, lines)
     if previous_status != next_status:
-        reason_parts = [p for p in ((body.reason or "").strip(), (budget_override_reason or "").strip() if budget_override else "") if p]
-        await record_voucher_event(
-            db,
-            tenant_id=tenant.id,
-            user_id=user.id,
-            voucher_id=row.id,
-            event="status",
-            summary=f"{previous_status} → {next_status}",
-            from_status=previous_status,
-            to_status=next_status,
-            reason=" | ".join(reason_parts) or None,
-        )
+        # Intermediate chain steps already wrote their own event via _advance_to.
+        already_logged = chain_post and next_status != "POSTED"
+        if not already_logged:
+            reason_parts = [
+                p
+                for p in (
+                    (body.reason or "").strip(),
+                    (budget_override_reason or "").strip() if budget_override else "",
+                    "Class 1 direct post" if class1_direct else "",
+                    "system post after recommend" if chain_post and requested_status == "RECOMMENDED" else "",
+                    "system post after Class 1 approve" if chain_post and requested_status == "APPROVED" else "",
+                )
+                if p
+            ]
+            await record_voucher_event(
+                db,
+                tenant_id=tenant.id,
+                user_id=user.id,
+                voucher_id=row.id,
+                event="status",
+                summary=f"{previous_status} → {next_status}",
+                from_status=previous_status,
+                to_status=next_status,
+                reason=" | ".join(reason_parts) or None,
+            )
     await db.commit()
     await db.refresh(row)
     if next_status == "POSTED" and affect_books and (row.voucher_type or "").upper() == "RECEIPT":
@@ -3527,6 +3679,9 @@ async def financial_statements(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    from app.common.authority.policy import assert_pnl_balance_sheet_allowed
+
+    await assert_pnl_balance_sheet_allowed(db, user, feature_flags=tenant.feature_flags)
     if as_of_date is None:
         as_of_date = today_local(tenant)
     accounts_stmt = (
@@ -6607,6 +6762,74 @@ async def voucher_approval_rules_meta():
     }
 
 
+async def _compute_voucher_available_actions(
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    user: User,
+    voucher: Voucher,
+    is_privileged: bool,
+) -> list[str]:
+    from app.common.authority.constants import (
+        AUTHORITY_CLASS_1,
+        AUTHORITY_CLASS_2,
+        AUTHORITY_CLASS_3,
+        AUTHORITY_CLASS_4,
+        AUTHORITY_SUPER,
+        CLASS1_APPROVAL_PENDING,
+    )
+    from app.common.authority.policy import (
+        is_authority_classes_enabled_for_tenant,
+        is_class1_for_module,
+        load_user_module_codes,
+        user_has_module,
+    )
+    from app.common.authority.voucher_workflow import is_past_voucher_date
+    from app.common.business_date import today_local
+    from app.modules.finance.voucher_history import voucher_stage_signers
+
+    if not is_authority_classes_enabled_for_tenant(tenant.feature_flags):
+        return _voucher_actions_for_status(voucher.status, is_privileged=is_privileged)
+
+    modules = await load_user_module_codes(db, tenant_id=tenant.id, user_id=user.id)
+    has_finance = bool(getattr(user, "is_tenant_super_admin", False)) or user_has_module(modules, "finance")
+    cls = (getattr(user, "authority_class", None) or "").strip().upper()
+    if bool(getattr(user, "is_tenant_super_admin", False)):
+        cls = AUTHORITY_SUPER
+    past = is_past_voucher_date(voucher.voucher_date, today_local(tenant))
+    st = voucher.status
+    actions: list[str] = []
+    if has_finance:
+        if st == "DRAFT":
+            if cls in {AUTHORITY_CLASS_1, AUTHORITY_CLASS_2, AUTHORITY_CLASS_3, AUTHORITY_CLASS_4, AUTHORITY_SUPER}:
+                actions = ["submit", "cancel"]
+        elif st == "SUBMITTED" and cls in {AUTHORITY_CLASS_3, AUTHORITY_CLASS_1, AUTHORITY_SUPER}:
+            actions = ["check", "reject"]
+        elif st == "CHECKED" and cls in {AUTHORITY_CLASS_2, AUTHORITY_CLASS_1, AUTHORITY_SUPER}:
+            actions = ["recommend", "reject"]
+        elif st == "RECOMMENDED" and past and cls in {AUTHORITY_CLASS_1, AUTHORITY_SUPER}:
+            actions = ["approve", "reject"]
+        elif st == "APPROVED" and past and cls in {AUTHORITY_CLASS_1, AUTHORITY_SUPER}:
+            actions = ["post", "reject"]
+        elif st == "POSTED":
+            actions = ["reverse", "cancel_posting"] if cls in {AUTHORITY_CLASS_1, AUTHORITY_SUPER} else []
+        elif st == "REJECTED":
+            actions = ["set_draft"]
+        if st == "DRAFT" and cls in {AUTHORITY_CLASS_1, AUTHORITY_SUPER} and not past:
+            actions = list(dict.fromkeys(actions + ["post"]))
+    if (
+        st == "POSTED"
+        and getattr(voucher, "class1_approval_status", None) == CLASS1_APPROVAL_PENDING
+        and voucher.created_by != user.id
+        and await is_class1_for_module(db, user, "finance", feature_flags=tenant.feature_flags)
+    ):
+        signers = await voucher_stage_signers(db, tenant_id=tenant.id, voucher_id=voucher.id)
+        prior_ids = {uid for uid, _ in signers.values() if uid is not None}
+        if user.id not in prior_ids:
+            actions = list(dict.fromkeys(actions + ["class1_approve", "class1_reject"]))
+    return actions
+
+
 @router.get("/vouchers/{voucher_id}/available-actions")
 async def voucher_available_actions(
     voucher_id: int,
@@ -6621,8 +6844,15 @@ async def voucher_available_actions(
     voucher = await db.get(Voucher, voucher_id)
     if not voucher or voucher.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Voucher not found")
-    actions = _voucher_actions_for_status(voucher.status, is_privileged=is_privileged)
-    return {"voucher_id": voucher_id, "status": voucher.status, "actions": actions}
+    actions = await _compute_voucher_available_actions(
+        db, tenant=tenant, user=user, voucher=voucher, is_privileged=is_privileged
+    )
+    return {
+        "voucher_id": voucher_id,
+        "status": voucher.status,
+        "actions": actions,
+        "class1_approval_status": getattr(voucher, "class1_approval_status", None),
+    }
 
 
 class VoucherAvailableActionsBatchBody(BaseModel):
@@ -6645,24 +6875,23 @@ async def voucher_available_actions_batch(
     if not ids:
         return {"items": []}
     rows = (
-        await db.execute(
-            select(Voucher.id, Voucher.status).where(
-                Voucher.tenant_id == tenant.id,
-                Voucher.id.in_(ids),
-            )
-        )
-    ).all()
-    by_id = {int(r.id): str(r.status) for r in rows}
+        await db.execute(select(Voucher).where(Voucher.tenant_id == tenant.id, Voucher.id.in_(ids)))
+    ).scalars().all()
+    by_id = {int(r.id): r for r in rows}
     items = []
     for vid in ids:
-        st = by_id.get(vid)
-        if st is None:
+        voucher = by_id.get(vid)
+        if voucher is None:
             continue
+        actions = await _compute_voucher_available_actions(
+            db, tenant=tenant, user=user, voucher=voucher, is_privileged=is_privileged
+        )
         items.append(
             {
                 "voucher_id": vid,
-                "status": st,
-                "actions": _voucher_actions_for_status(st, is_privileged=is_privileged),
+                "status": voucher.status,
+                "actions": actions,
+                "class1_approval_status": getattr(voucher, "class1_approval_status", None),
             }
         )
     return {"items": items}
@@ -6709,6 +6938,85 @@ async def post_voucher(
     )
 
 
+class VoucherClass1DecisionBody(BaseModel):
+    reason: str | None = Field(default=None, max_length=2000)
+
+
+@router.post("/vouchers/{voucher_id}/class1-approve", response_model=VoucherOut)
+async def class1_approve_voucher(
+    voucher_id: int,
+    body: VoucherClass1DecisionBody | None = None,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Ratify a posted voucher (audit-ready). Does not change posted amounts."""
+    from app.common.authority.voucher_workflow import apply_class1_approve, assert_can_class1_ratify
+
+    _ensure_tenant(user, tenant)
+    row = await _lock_voucher(db, tenant.id, voucher_id)
+    await assert_can_class1_ratify(db, user=user, voucher=row, feature_flags=tenant.feature_flags)
+    apply_class1_approve(row, user_id=user.id, when=datetime.utcnow())
+    await record_voucher_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        voucher_id=row.id,
+        event="class1_approve",
+        summary="Class 1 approved (audit-ready)",
+        from_status=row.status,
+        to_status=row.status,
+        reason=(body.reason if body else None),
+    )
+    await db.commit()
+    await db.refresh(row)
+    return await _voucher_out(db, row)
+
+
+@router.post("/vouchers/{voucher_id}/class1-reject", response_model=VoucherOut)
+async def class1_reject_voucher(
+    voucher_id: int,
+    body: VoucherReverseBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reject a posted voucher pending Class 1: create one reversal and mark REJECTED."""
+    from app.common.authority.voucher_workflow import apply_class1_reject_mark, assert_can_class1_ratify
+
+    _ensure_tenant(user, tenant)
+    row = await _lock_voucher(db, tenant.id, voucher_id)
+    await assert_can_class1_ratify(db, user=user, voucher=row, feature_flags=tenant.feature_flags)
+    if row.reversed_by_voucher_id:
+        raise HTTPException(status_code=409, detail="Voucher already has a reversal")
+    # Reuse the normal reverse path (idempotent via reversed_by_voucher_id).
+    reversed_out = await reverse_voucher(
+        voucher_id=voucher_id,
+        body=body,
+        tenant=tenant,
+        user=user,
+        db=db,
+    )
+    # reverse_voucher commits; re-lock and mark Class 1 rejected.
+    row = await _lock_voucher(db, tenant.id, voucher_id)
+    apply_class1_reject_mark(row, user_id=user.id, when=datetime.utcnow())
+    await record_voucher_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        voucher_id=row.id,
+        event="class1_reject",
+        summary="Class 1 rejected — reversal created",
+        from_status="POSTED",
+        to_status="POSTED",
+        reason=body.reason.strip(),
+    )
+    await db.commit()
+    await db.refresh(row)
+    del reversed_out
+    return await _voucher_out(db, row)
+
+
 DIRECT_POST_PATH = ("SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED", "POSTED")
 
 
@@ -6725,9 +7033,14 @@ async def direct_post_voucher(
     step is still validated and recorded in the voucher History. Admin / manager only. If a later
     step fails (e.g. closed period, budget block) the voucher stays at the last successful step.
     """
-    from app.common.tenant_feature_keys import is_direct_post_vouchers_enabled
+    from app.common.tenant_feature_keys import is_direct_post_vouchers_enabled, is_user_authority_classes_v1_enabled
 
     _ensure_tenant(user, tenant)
+    if is_user_authority_classes_v1_enabled(tenant.feature_flags):
+        raise HTTPException(
+            status_code=409,
+            detail="Direct post is blocked while user authority classes are enabled. Use the Class workflow or Class 1 same-day post.",
+        )
     if not is_direct_post_vouchers_enabled(tenant.feature_flags):
         raise HTTPException(status_code=404, detail="Direct posting is disabled. Set tenant feature flag direct_post_vouchers to true.")
     await _require_manager_or_admin(db, user, tenant.id)

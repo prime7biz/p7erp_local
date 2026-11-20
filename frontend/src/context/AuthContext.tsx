@@ -82,6 +82,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (key: string) => {
       if (!me) return false;
       if ((me.role_name || "").toLowerCase() === "admin") return true;
+      // When fixed-class authority is ON, Super Admin / Class 1 are admin-equivalent in the UI.
+      if (
+        me.authority_classes_enabled &&
+        (me.is_tenant_super_admin || (me.authority_class || "").toUpperCase() === "CLASS_1")
+      ) {
+        return true;
+      }
       const p = me.role_permissions || {};
       if (p["*"] === true) return true;
       const mod = key.split(".")[0];

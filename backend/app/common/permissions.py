@@ -72,6 +72,9 @@ PERMISSION_SCENARIO_ANALYSIS_VIEW = "finance.scenario_analysis.view"
 # Finance > Management Performance (docs/management-performance/). Fail closed: admin / manager or an explicit true.
 PERMISSION_MGMT_PERFORMANCE_VIEW = "finance.mgmt_performance.view"
 PERMISSION_MGMT_PERFORMANCE_SETUP = "finance.mgmt_performance.setup"
+PERMISSION_KPI_READ = "kpi.read"
+PERMISSION_KPI_EXECUTIVE_VIEW = "kpi.executive.view"
+PERMISSION_KPI_MANAGE = "kpi.manage"
 PERMISSION_BUDGET_REVISION_APPROVE = "finance.budget.revision.approve"
 PERMISSION_BUDGET_EXCEPTION_RESPOND = "finance.budget.exception.respond"
 PERMISSION_BUDGET_EXCEPTION_REVIEW = "finance.budget.exception.review"
@@ -807,6 +810,21 @@ MATERIAL_CONTROL_GOVERNANCE_KEYS: list[dict[str, str]] = [
         "group": "Management performance",
     },
     {
+        "key": PERMISSION_KPI_READ,
+        "label": "View KPI definitions, cards, values and evidence",
+        "group": "KPI engine",
+    },
+    {
+        "key": PERMISSION_KPI_EXECUTIVE_VIEW,
+        "label": "View executive KPI cockpit",
+        "group": "KPI engine",
+    },
+    {
+        "key": PERMISSION_KPI_MANAGE,
+        "label": "Manage KPI definitions and seed registry",
+        "group": "KPI engine",
+    },
+    {
         "key": PERMISSION_BUDGET_REVISION_APPROVE,
         "label": "Approve budget revisions (not your own request)",
         "group": "Management performance",
@@ -977,12 +995,27 @@ async def assert_delegate_manager_or_permission(
     *,
     permission_key: str,
 ) -> None:
-    """Allow if user is admin/manager, or role.permissions grants the boolean key."""
+    """Allow if user is admin/manager, or role.permissions grants the boolean key.
+
+    When ``user_authority_classes_v1`` is ON, Class 1 / Super with the module mapped
+    from ``permission_key`` (e.g. ``inventory.*`` → inventory) is also allowed.
+    """
     role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
     rn = (role.name if role else "").strip().lower()
     if rn in {"admin", "manager"}:
         return
     if internal_permission_granted(role=role, permission_key=permission_key):
+        return
+    from app.common.authority.module_access import module_code_for_permission
+    from app.common.authority.policy import is_manager_equivalent_for_module
+    from app.models import Tenant
+
+    tenant = await db.get(Tenant, tenant_id)
+    flags = tenant.feature_flags if tenant is not None else None
+    module = module_code_for_permission(permission_key)
+    if module and await is_manager_equivalent_for_module(
+        db, user, tenant_id, module, feature_flags=flags
+    ):
         return
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
@@ -994,21 +1027,57 @@ MANAGER_ONLY_ROLES = frozenset({"admin", "manager"})
 
 
 async def assert_manager_role_only(db: AsyncSession, user: User, tenant_id: int) -> None:
-    """403 unless the user's role (in this tenant) is admin or manager.
+    """403 unless admin/manager, or Class 1 with production/inventory when authority flag is ON.
 
     No permission-key bypass and no RBAC-mode switch: it is enforced in the handler even when the tenant's
     RBAC mode is off. Used for moving held material between orders and releasing hard holds / pegs
     (Manufacturing Intelligence Phase 2, owner rule: admin / manager only).
+    Flag OFF keeps legacy admin/manager-only behaviour.
     """
     if user.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
     role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
     rn = (role.name if role else "").strip().lower()
-    if rn not in MANAGER_ONLY_ROLES:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires admin or manager role")
+    if rn in MANAGER_ONLY_ROLES:
+        return
+    from app.common.authority.policy import is_manager_equivalent_for_module
+    from app.models import Tenant
+
+    tenant = await db.get(Tenant, tenant_id)
+    flags = tenant.feature_flags if tenant is not None else None
+    if await is_manager_equivalent_for_module(
+        db, user, tenant_id, "production", feature_flags=flags
+    ) or await is_manager_equivalent_for_module(
+        db, user, tenant_id, "inventory", feature_flags=flags
+    ):
+        return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires admin or manager role")
 
 
 HR_SETUP_BYPASS_ROLES = frozenset({"admin", "manager", "super_admin", "superadmin", "owner"})
+
+
+async def is_hr_manager_equivalent(db: AsyncSession, user: User, tenant_id: int) -> bool:
+    """Legacy HR setup bypass roles, or Class 1 / Super with the hr module when authority flag is ON."""
+    if user.tenant_id != tenant_id:
+        return False
+    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
+    rn = (role.name if role else "").strip().lower()
+    if rn in HR_SETUP_BYPASS_ROLES:
+        return True
+    from app.common.authority.policy import is_manager_equivalent_for_module
+    from app.models import Tenant
+
+    tenant = await db.get(Tenant, tenant_id)
+    flags = tenant.feature_flags if tenant is not None else None
+    return await is_manager_equivalent_for_module(db, user, tenant_id, "hr", feature_flags=flags)
+
+
+async def require_hr_manager_or_admin(db: AsyncSession, user: User, tenant_id: int) -> None:
+    """403 unless HR manager-equivalent (role name or Class 1 + hr when flag ON)."""
+    if await is_hr_manager_equivalent(db, user, tenant_id):
+        return
+    raise HTTPException(status_code=403, detail="Only manager/admin can perform this action")
 
 
 async def assert_hr_manager_or_permission(
@@ -1018,11 +1087,13 @@ async def assert_hr_manager_or_permission(
     *,
     permission_key: str,
 ) -> None:
-    """Fail-closed gate for pay-affecting HR writes: manager-type role or an explicit True grant."""
-    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
-    rn = (role.name if role else "").strip().lower()
-    if rn in HR_SETUP_BYPASS_ROLES:
+    """Fail-closed gate for pay-affecting HR writes: manager-type role or an explicit True grant.
+
+    When ``user_authority_classes_v1`` is ON, Class 1 / Super with the hr module is also allowed.
+    """
+    if await is_hr_manager_equivalent(db, user, tenant_id):
         return
+    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
     if internal_permission_granted(role=role, permission_key=permission_key):
         return
     raise HTTPException(
@@ -1142,6 +1213,12 @@ def require_any_internal_permission(*permission_keys: str):
             request.state.tenant_feature_flags = tenant_feature_flags
             request.state.tenant_feature_flags_cached = True
         rbac_mode = get_tenant_rbac_mode(tenant_feature_flags)
+
+        # Fixed-class authority: module grants are required even when soft RBAC is off.
+        from app.common.authority.module_access import assert_module_grant_for_permissions
+
+        await assert_module_grant_for_permissions(db, user, keys, feature_flags=tenant_feature_flags)
+
         if rbac_mode == RBAC_MODE_OFF:
             return
 

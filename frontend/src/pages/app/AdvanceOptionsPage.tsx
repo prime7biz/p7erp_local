@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { useEmbeddedPage } from "@/components/app/embeddedPage";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { listPageRootClass } from "@/components/app/listPageLayout";
 import {
   CalendarClock,
   Coins,
@@ -9,9 +10,10 @@ import {
   Link2,
   ListTree,
   Receipt,
+  Settings2,
 } from "lucide-react";
 
-const PREFIX = "/app";
+const HUB = "/app/finance/setup";
 
 const CARDS: Array<{
   title: string;
@@ -23,81 +25,79 @@ const CARDS: Array<{
     title: "Chart of Accounts & CoA settings",
     description:
       "Account numbering, posting rules, and CoA configuration. Import/export CSV and manage inventory clearing defaults on the same page.",
-    href: `${PREFIX}/accounts`,
-    icon: <ListTree className="h-8 w-8 text-brand-primary" />,
+    href: `${HUB}?tab=chart-of-accounts`,
+    icon: <ListTree className="h-7 w-7 text-brand-primary" />,
   },
   {
     title: "Account Groups (Advanced)",
     description:
       "Hierarchy, reporting codes, default normal balance, summary groups, and advance design view.",
-    href: `${PREFIX}/accounts/groups`,
-    icon: <FolderTree className="h-8 w-8 text-brand-primary" />,
+    href: `${HUB}?tab=account-groups`,
+    icon: <FolderTree className="h-7 w-7 text-brand-primary" />,
   },
   {
-    title: "Cost centers",
+    title: "Cost centres",
     description: "Department or project cost tracking and dashboards.",
-    href: `${PREFIX}/accounts/cost-centers`,
-    icon: <Landmark className="h-8 w-8 text-brand-primary" />,
+    href: `${HUB}?tab=cost-centers`,
+    icon: <Landmark className="h-7 w-7 text-brand-primary" />,
   },
   {
     title: "Multi-currency & FX",
     description: "Exchange rates, revaluation preview, and link to FX receipts workflow.",
-    href: `${PREFIX}/accounts/currency`,
-    icon: <Coins className="h-8 w-8 text-brand-primary" />,
+    href: `${HUB}?tab=currency`,
+    icon: <Coins className="h-7 w-7 text-brand-primary" />,
   },
   {
     title: "Accounting periods",
     description: "Open and close fiscal periods; control which dates can be posted.",
-    href: `${PREFIX}/accounts/accounting-periods`,
-    icon: <CalendarClock className="h-8 w-8 text-brand-primary" />,
+    href: `${HUB}?tab=accounting-periods`,
+    icon: <CalendarClock className="h-7 w-7 text-brand-primary" />,
   },
   {
     title: "Outstanding bills & bill references",
     description: "AP/AR bills, aging, allocation, and auto-create from vouchers.",
-    href: `${PREFIX}/accounts/outstanding-bills`,
-    icon: <Receipt className="h-8 w-8 text-brand-primary" />,
+    href: "/app/finance/vouchers-payables?tab=outstanding-bills",
+    icon: <Receipt className="h-7 w-7 text-brand-primary" />,
   },
   {
     title: "Vouchers & voucher types",
-    description: "Create vouchers; voucher type lists are driven from posted data and day book filters.",
-    href: `${PREFIX}/accounts/vouchers`,
-    icon: <FileSpreadsheet className="h-8 w-8 text-brand-primary" />,
+    description: "Create vouchers; configure voucher types from Finance Setup.",
+    href: "/app/finance/vouchers-payables?tab=vouchers",
+    icon: <FileSpreadsheet className="h-7 w-7 text-brand-primary" />,
   },
   {
     title: "Purchase & AP workflow",
     description: "PO, GRN, and payable bill creation from operational documents.",
-    href: `${PREFIX}/accounts/purchase-workflow`,
-    icon: <Link2 className="h-8 w-8 text-brand-primary" />,
+    href: "/app/finance/vouchers-payables?tab=purchase-ap",
+    icon: <Link2 className="h-7 w-7 text-brand-primary" />,
   },
 ];
 
 export function AdvanceOptionsPage() {
-  const embedded = useEmbeddedPage();
   return (
-    <div className="space-y-6">
-      {!embedded && (
-        <>
-      <div>
-        <h1 className="text-2xl font-semibold text-text-primary">Finance — Advance Options</h1>
-        <p className="mt-1 text-sm text-text-muted">
-          Central hub for finance configuration: masters, periods, currency, bills, and links into transactions.
-        </p>
-      </div>
-        </>
-      )}
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="Advance Options"
+        description="Shortcuts into finance masters, periods, currency, bills, and transactions."
+      />
 
-      <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-1 lg:grid-cols-2">
         {CARDS.map((item) => (
           <Link
             key={item.href}
             to={item.href}
-            className="flex gap-4 rounded-xl border border-border bg-surface-raised p-5 shadow-sm transition hover:border-border-strong hover:shadow-md"
+            className="group flex gap-4 rounded-xl border border-border bg-surface-raised p-4 transition hover:border-brand-primary/40 hover:shadow-md"
           >
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-surface-subtle">{item.icon}</div>
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-subtle transition group-hover:bg-brand-primary/10">
+              {item.icon}
+            </div>
             <div className="min-w-0 flex-1">
-              <h2 className="font-medium text-text-primary">{item.title}</h2>
-              <p className="mt-1 text-sm text-text-muted">{item.description}</p>
-              <span className="mt-2 inline-block text-sm font-medium text-brand-primary">Open →</span>
+              <h2 className="text-sm font-semibold text-text-primary">{item.title}</h2>
+              <p className="mt-1 text-xs text-text-muted">{item.description}</p>
+              <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand-primary">
+                <Settings2 className="h-3 w-3" />
+                Open
+              </span>
             </div>
           </Link>
         ))}

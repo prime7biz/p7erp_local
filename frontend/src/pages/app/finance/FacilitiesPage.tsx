@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type FacilityRow } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { ScrollTableCard, showingCountLabel } from "@/components/finance/kit";
 import { listPageRootClass } from "@/components/app/listPageLayout";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
-import { logApiError } from "@/utils/logApiError";
+import { logApiError } from "@/utils/logApiError";
 import { useConfirm } from "@/components/app/useConfirm";
 
-export function FacilitiesPage() {
+export function FacilitiesPage() {
   const confirm = useConfirm();
   const [rows, setRows] = useState<FacilityRow[]>([]);
   const [error, setError] = useState("");
@@ -68,9 +69,9 @@ export function FacilitiesPage() {
       {loading ? (
         <p className="text-sm text-text-muted">Loading…</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+        <ScrollTableCard footer={showingCountLabel(rows.length, rows.length, "facility").replace("facilitys", "facilities")}>
           <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-border bg-surface-base text-xs uppercase text-text-muted">
+            <thead className="sticky top-0 z-10 border-b border-border bg-surface-base text-xs uppercase text-text-muted">
               <tr>
                 <th className="px-3 py-2">Code</th>
                 <th className="px-3 py-2">Type</th>
@@ -99,6 +100,7 @@ export function FacilitiesPage() {
                   </td>
                   <td className="px-3 py-2">
                     <RowActionsMenu
+                      menuPortal
                       rowId={r.id}
                       openId={openActionsId}
                       onOpenChange={setOpenActionsId}
@@ -127,7 +129,7 @@ export function FacilitiesPage() {
             </tbody>
           </table>
           {rows.length === 0 ? <p className="p-4 text-sm text-text-muted">No facilities yet.</p> : null}
-        </div>
+        </ScrollTableCard>
       )}
     </div>
   );

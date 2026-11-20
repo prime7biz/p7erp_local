@@ -151,7 +151,7 @@ Who uses it: the company admin, usually during setup and at the start of a finan
 ## The switches, by view
 
 - **Essential (always shown):** **Enable Trade module**; **Finance & costing** — **Financial year starts in** (choose **July (Bangladesh July–June)** for most BD companies), **VAT BIN**, **Budget enforcement mode** (Off / Warn / Block), **Auto-post WIP journals**, **Enable MIS reports**, **Enable party ledger**, **Enable stock hierarchy**, **Enable batch tracking**, **Enable GST / tax ledger system**, **Auto-calculate tax on vouchers**.
-- **More features adds:** **Require master contract for RM procurement**, **Enable Knitting module**, **Enable Operations Control Tower**, **Auto-propose line bookings**, **Advanced vouchers** (credit/debit notes, stock transfer, memorandum, optional, post-dated, recurring, voucher classes, **Direct posting (save = post)**), **Order execution spine** (TNA event sync, require order on shop floor, line allocation → TNA sync, sample approvals gate BOM→PO, open CAPA blocks challan, colour / size breakdowns, shop-floor scan station, carton detail on packing lists, traceability & certificates, commission engine, Bangladesh bond & VAT registers, **AI exception agents**, **Ask-a-metric dashboard cards**, **AI assistant agent mode**), **Requisitions & comparative statement (CS)**, **Simpler mobile layout** (phones and tablets only: shorter bottom bar and More menu without Reports / AI Tools / Settings, card lists, one-column forms; see *Using P7 ERP on a phone*), **Payroll auto-calculate**, **Payroll four-eyes approval** (the person who finalized a payroll run cannot approve it; needs at least 2 active admin or manager users).
+- **More features adds:** **Require master contract for RM procurement**, **Enable Knitting module**, **Enable Operations Control Tower**, **Auto-propose line bookings**, **Advanced vouchers** (credit/debit notes, stock transfer, memorandum, optional, post-dated, recurring, voucher classes, **Direct posting (save = post)**), **Order execution spine** (TNA event sync, require order on shop floor, line allocation → TNA sync, sample approvals gate BOM→PO, open CAPA blocks challan, colour / size breakdowns, shop-floor scan station, carton detail on packing lists, traceability & certificates, commission engine, Bangladesh bond & VAT registers, **AI exception agents**, **Ask-a-metric dashboard cards**, **AI assistant agent mode**), **Requisitions & comparative statement (CS)**, **User authority classes** (Super Admin + Class 1–4; see *Authority cutover*), **Simpler mobile layout** (phones and tablets only: shorter bottom bar and More menu without Reports / AI Tools / Settings, card lists, one-column forms; see *Using P7 ERP on a phone*), **Payroll auto-calculate**, **Payroll four-eyes approval** (the person who finalized a payroll run cannot approve it; needs at least 2 active admin or manager users).
 - **All features adds:** **TDS system**, **Statutory payroll**, and **HR compliance / OCR / AI** (compliance tracking, age verification, medical certificates, OCR for CV / ID / medical, auto document generation, AI attendance / turnover / payroll anomaly / compliance risk).
 
 ## What happens next
@@ -187,7 +187,7 @@ Switched-on modules appear in the sidebar for users whose role allows them. Swit
         "phone layout",
       ],
       estimatedMinutes: 6,
-      lastUpdated: "2026-11-12",
+      lastUpdated: "2026-11-19",
       coverImage: "/tutorials/screens/settings-config.jpg",
       infographics: [
         {
@@ -228,33 +228,118 @@ Switched-on modules appear in the sidebar for users whose role allows them. Swit
         },
       ],
       relatedAppRoutes: ["/app/settings/config"],
-      relatedArticleIds: ["settings-overview", "gs-tenant-modes", "ai-exception-agents", "settings-roles-permissions", "gs-mobile-use"],
+      relatedArticleIds: [
+        "settings-overview",
+        "settings-authority-cutover",
+        "gs-tenant-modes",
+        "ai-exception-agents",
+        "settings-roles-permissions",
+        "gs-mobile-use",
+      ],
+    },
+    {
+      id: "settings-authority-cutover",
+      title: "Authority cutover: Class 1–4 for one pilot company",
+      summary:
+        "Dry-run, review Super Admin / Class proposals, Apply, then turn on User authority classes. Shared Roles stay unchanged; restore rolls Class metadata back.",
+      content: `## Overview
+
+**User authority classes** (Super Admin + Class 1–4 with modules) stay **off** until a human pilot. On **Settings → Configuration** (view **More features**), admins see:
+
+1. The **User authority classes** switch (only the company **Super Admin** can save it on).
+2. An **Authority cutover (pilot)** box: **Dry-run** → **Apply** → optional **Restore**.
+
+Cutover **never** rewrites shared **Roles**. It only sets each user's Class, module list and Super Admin flag from a proposal table.
+
+## Before you start
+
+- You need an **admin** login (or Super Admin after cutover).
+- Every active user must already have a **role**. Users without a role show as **Needs fix** and block Apply.
+- Agree who will be the single **Super Admin** (the dry-run suggests the earliest admin).
+
+## Steps
+
+1. Open **Settings → Configuration** and choose **More features**.
+2. Scroll to **User authority classes** / **Authority cutover (pilot)**.
+3. Click **1. Dry-run**. Review the table: suggested Super Admin, Class 1–4, modules, and any **Needs fix** rows.
+4. Fix unresolved people on **User Mgmt** (give them a role), then Dry-run again until Apply is enabled.
+5. Click **2. Apply** and confirm. Other people may need to sign in again.
+6. As the Super Admin, tick **User authority classes** and click **Save configuration**. Activation runs a preflight (enough Class 1–4 actors per module).
+7. On **User Mgmt**, assign Class + modules for new people. Use **Approvals** for Class 1 pending items.
+
+## Rollback
+
+- Turn **User authority classes** **off** and Save — legacy role access returns immediately.
+- **Restore** in the cutover box puts Class / modules / Super Admin back to the dry-run snapshot (admin / Super Admin only). Roles still stay untouched.
+
+## Tips
+
+- Pilot **one company** first. Do not enable globally.
+- Class 1 alone cannot run Restore (protects Super Admin).
+
+## Common problems
+
+- **Apply stays disabled** → unresolved users; Dry-run again after fixing roles.
+- **Cannot turn the switch on** → you are not Super Admin, or preflight failed (need distinct Class 1–4 users with modules).
+- **Menus missing after enable** → check that person's **modules** on Users.`,
+      tags: ["settings", "authority", "cutover", "class", "super admin", "pilot"],
+      keywords: [
+        "user authority classes",
+        "dry-run",
+        "apply cutover",
+        "restore cutover",
+        "class 1",
+        "super admin",
+        "module grants",
+      ],
+      audience: "admin",
+      estimatedMinutes: 8,
+      order: 25,
+      relatedAppRoutes: ["/app/settings/config", "/app/settings/users"],
+      relatedArticleIds: ["settings-configuration", "settings-users-invitations", "settings-roles-permissions"],
+      lastUpdated: "2026-11-19",
     },
     {
       id: "settings-users-invitations",
       title: "Users and invitations: add, change and remove logins",
       summary:
-        "Invite staff by email (they set their own password) or create a user directly, assign one role, and deactivate leavers instead of deleting them.",
+        "Invite staff by email or create a user directly; with authority classes ON assign Class 1–4 and modules (and optional employee link); deactivate leavers instead of deleting them.",
       content: `## Overview
 
-**Settings → User Mgmt** (\`/app/settings/users\`, page title **Users**) controls who can log in to P7 ERP for your company. Every person gets **one login** and **one role**.
+**Settings → User Mgmt** (\`/app/settings/users\`, page title **Users**) controls who can log in to P7 ERP for your company. Every person gets **one login**.
 
 Two ways to add someone:
 
 - **Invite staff** (recommended) — P7 ERP emails a secure link; the person sets their own password.
 - **Create user** — you type the email and a starting password yourself and tell the person.
 
+### When user authority classes are OFF (default)
+
+Every person still gets **one role** from **Roles**. Create/invite forms ask for a role as before. To pilot Class 1–4, run the cutover first (see *Authority cutover*).
+
+### When user authority classes are ON
+
+Super Admin turns on **User authority classes** in Configuration (after cutover Apply). Then Users asks for:
+
+- **Class** (Class 1–4; Super Admin is not assigned here)
+- **Modules** (at least one) — what the person can work in
+- Optional **employee** link (designation comes from HR)
+
+The **Roles** page stays for Super Admin break-glass only; prefer Class + modules on Users.
+
+Class 1 with the **Finance** module (and Super Admin) can open **Profit & Loss** and **Balance Sheet**. Other classes with Finance still see Trial Balance and day-to-day books.
+
 ## Before you start
 
-- Admin rights (Settings access).
-- The **role** must already exist (see *Roles and permissions*). If no roles exist you see *"No roles found. Create a role first."*
+- Admin rights (Settings access). Class 1 (with Settings module) or Super Admin when authority classes are ON.
+- When authority classes are OFF, the **role** must already exist (see *Roles and permissions*).
 - One user = one device at a time: if someone logs in on a second device, the first one is signed out with *session replaced*.
 
 ## Steps: invite a new staff member
 
 1. Open **Settings → User Mgmt** and click **Invite staff**.
 2. Type **Email \\*\\***, **First name** and **Last name**.
-3. Choose the **role**. A line shows how many permission keys that role has.
+3. Choose the **role** (flag OFF) **or** Class + modules (flag ON). Optionally pick a linkable employee.
 4. Click **Send invite**. The message **Invitation sent.** appears and the person is listed under **Pending invitations** with an **Expires** time.
 5. The person opens the email link (\`/accept-invite?token=…\`), sets a password, and signs in at \`/login\` with your **company code**, their email and password.
 6. Not received? Click **Resend** on the invitation row. Wrong person? Click **Cancel**.
@@ -262,20 +347,21 @@ Two ways to add someone:
 ## Steps: create a user directly
 
 1. In the **Create user** box type **Email \\*\\***, **First name**, **Last name**.
-2. Choose the role and type a **Password \\*\\*** (at least **8 characters**). Keep **Active user** ticked.
-3. Click **Create user**. New users sign in with **email + password** (a username is generated automatically).
+2. Flag OFF: choose the role. Flag ON: choose Class, tick modules, optionally link an employee.
+3. Type a **Password \\*\\*** (at least **8 characters**). Keep **Active user** ticked.
+4. Click **Create user**. New users sign in with **email + password** (a username is generated automatically).
 
 ## Steps: change or remove a user
 
 1. Find the person in the table and click **Actions**.
-2. **Edit** loads them into the form (now called **Edit user**). Change the role, name, or type a **New password (optional)** — at least **8 characters** — then click **Update user** (or **Cancel edit**). Existing passwords that are shorter keep working until they are changed.
+2. **Edit** loads them into the form (now called **Edit user**). Change class/modules (or role), name, or type a **New password (optional)** — at least **8 characters** — then click **Update user** (or **Cancel edit**). Changing class or modules signs the person out of other devices.
 3. **Sign out devices** ends every signed-in session of an active user, for example after a **lost or stolen phone**. Confirm the question; the account stays active and the person simply signs in again. (Needs one-device sign-in, which is on by default.)
 4. **Deactivate** blocks login but keeps their history — use this for leavers. **Activate** brings them back.
-5. **Delete** removes the user permanently (*"This cannot be undone."*). Prefer **Deactivate**.
+5. **Delete** removes the user permanently (*"This cannot be undone."*). Prefer **Deactivate**. Super Admin cannot be deleted.
 
 ## What happens next
 
-The user sees only the menus their role allows. Every change is written to **Activity Logs** (for example \`SETTINGS_USER_UPDATE\`).
+The user sees only the menus their role or Class + modules allow. Every change is written to **Activity Logs** (for example \`SETTINGS_USER_UPDATE\`).
 
 ## Tips
 
@@ -286,10 +372,11 @@ The user sees only the menus their role allows. Every change is written to **Act
 
 - **"Failed to send invitation"** → the email already belongs to a user, or the mail server is not set up. Create the user directly instead.
 - **Password refused when creating or editing a user** → new or changed passwords need at least **8 characters**.
-- **User cannot see a menu** → check their role in **Roles**, and the feature switch in **Configuration**.
-- **"Session replaced" message for a user** → they logged in somewhere else, or an admin used **Sign out devices**. Only the newest login stays active.
+- **Select at least one module** → with authority classes ON you must tick one or more modules.
+- **User cannot see a menu** → check Class/modules (or role) and the feature switch in **Configuration**.
+- **"Session replaced" message for a user** → they logged in somewhere else, an admin used **Sign out devices**, or their Class/modules changed. Only the newest login stays active.
 - **A staff phone was lost** → **Actions → Sign out devices** at once (logged as \`SETTINGS_USER_SIGN_OUT_DEVICES\`). If the password may be known, also set a new password, or **Deactivate** the user.`,
-      tags: ["settings", "users", "invite", "staff", "login", "deactivate", "password"],
+      tags: ["settings", "users", "invite", "staff", "login", "deactivate", "password", "authority", "class"],
       keywords: [
         "add user",
         "new user",
@@ -299,14 +386,17 @@ The user sees only the menus their role allows. Every change is written to **Act
         "leaver",
         "reset password",
         "change role",
+        "authority class",
+        "module grants",
+        "class 1",
         "accept invite",
         "user management",
         "lost phone",
         "stolen phone",
         "sign out devices",
       ],
-      estimatedMinutes: 5,
-      lastUpdated: "2026-11-11",
+      estimatedMinutes: 6,
+      lastUpdated: "2026-11-19",
       featured: true,
       coverImage: "/tutorials/screens/settings-users.jpg",
       videos: [

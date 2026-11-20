@@ -19,7 +19,7 @@ const EMPTY_FORM: GoalForm = { cycle_id: null, employee_id: null, title: "", des
 
 export function HrGoalsPage() {
   const { me } = useAuth();
-  const isManager = canExportHrData(me?.role_name);
+  const isManager = canExportHrData(me);
   const [rows, setRows] = useState<HrGoalResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -185,7 +185,7 @@ export function HrGoalsPage() {
         searchPlaceholder="Search employee, goal or cycle…"
         statusOf={(r) => r.status}
         exportFileName="hr-performance-goals"
-        canExport={canExportHrData(me?.role_name)}
+        canExport={canExportHrData(me)}
         rowActions={(r) => {
           if (myEmployeeId === undefined) return [];
           const own = myEmployeeId === r.employee_id;

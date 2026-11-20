@@ -18,7 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.business_date import today_local
 from app.common.permissions import (
-    HR_SETUP_BYPASS_ROLES,
     PERMISSION_HR_ALLOWANCE_MANAGE,
     PERMISSION_HR_BONUS_MANAGE,
     PERMISSION_HR_DISCIPLINE_MANAGE,
@@ -59,9 +58,9 @@ def _iso(value: Any) -> str | None:
 
 
 class _Access:
-    def __init__(self, role: Any) -> None:
+    def __init__(self, role: Any, *, manager: bool) -> None:
         self.role = role
-        self.manager = (role.name if role else "").strip().lower() in HR_SETUP_BYPASS_ROLES
+        self.manager = manager
 
     def granted(self, *keys: str) -> bool:
         return self.manager or any(internal_permission_granted(role=self.role, permission_key=k) for k in keys)
@@ -484,7 +483,10 @@ async def _reviews(db: AsyncSession, tenant_id: int, employee_id: int) -> dict[s
 async def employee_overview(db: AsyncSession, *, tenant: Tenant, user: User, employee: Employee) -> dict[str, Any]:
     """``employee`` must already be checked to belong to ``tenant``."""
     tenant_id, employee_id = tenant.id, employee.id
-    access = _Access(await get_user_role_scoped_to_tenant(db, user, tenant_id))
+    from app.common.permissions import is_hr_manager_equivalent
+
+    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
+    access = _Access(role, manager=await is_hr_manager_equivalent(db, user, tenant_id))
     today = today_local(tenant)
     payroll = access.granted(PERMISSION_HR_PAYROLL_MANAGE)
     return {

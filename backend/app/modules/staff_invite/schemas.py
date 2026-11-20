@@ -11,7 +11,10 @@ class StaffInviteCreateRequest(BaseModel):
     email: EmailStr
     first_name: str | None = Field(default=None, max_length=128)
     last_name: str | None = Field(default=None, max_length=128)
-    role_id: int
+    role_id: int | None = None
+    authority_class: str | None = Field(default=None, max_length=16)
+    module_grants: list[str] | None = None
+    employee_id: int | None = None
 
 
 class StaffInviteRowResponse(BaseModel):
@@ -26,6 +29,9 @@ class StaffInviteRowResponse(BaseModel):
     expires_at: datetime
     accepted_at: datetime | None
     created_at: datetime
+    authority_class: str | None = None
+    module_grants: list[str] = Field(default_factory=list)
+    employee_id: int | None = None
 
 
 class StaffInviteCreateResponse(BaseModel):

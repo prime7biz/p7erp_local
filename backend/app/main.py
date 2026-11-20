@@ -57,6 +57,7 @@ from app.modules.hr.router import router as hr_router
 from app.modules.hr.compensation_router import router as hr_compensation_router
 from app.modules.hr.onboarding_router import router as hr_onboarding_router
 from app.modules.hr_change_requests.router import router as hr_change_requests_router
+from app.modules.authority_inbox.router import router as authority_inbox_router
 from app.modules.hr_manpower.router import router as hr_manpower_router
 from app.modules.hr_attendance.router import router as hr_attendance_router
 from app.modules.hr_attendance.device_router import push_router as hr_attendance_device_push_router
@@ -83,6 +84,7 @@ from app.modules.trade_case.router import router as trade_case_router
 from app.modules.logistics.router import router as logistics_router
 from app.modules.logistics.carton_router import router as packing_carton_router
 from app.modules.control_tower.router import router as control_tower_router
+from app.modules.kpi_engine.router import router as kpi_engine_router
 from app.modules.mfg_intelligence.router import router as mfg_intelligence_router
 from app.modules.mfg_intelligence.finance_router import router as mfg_intelligence_finance_router
 from app.modules.mfg_intelligence.predictive_router import router as mfg_intelligence_predictive_router
@@ -281,6 +283,7 @@ app.include_router(saved_views_router, prefix=settings.api_v1_prefix)
 app.include_router(global_search_router, prefix=settings.api_v1_prefix)
 app.include_router(notifications_router, prefix=settings.api_v1_prefix)
 app.include_router(onboarding_router, prefix=settings.api_v1_prefix)
+app.include_router(authority_inbox_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(tenant_router, prefix=settings.api_v1_prefix)
 app.include_router(
@@ -304,6 +307,7 @@ app.include_router(
     dependencies=[Depends(require_internal_permission("merch.access"))],
 )
 app.include_router(dashboard_router, prefix=settings.api_v1_prefix)
+app.include_router(kpi_engine_router, prefix=settings.api_v1_prefix)
 app.include_router(
     reports_router,
     prefix=settings.api_v1_prefix,

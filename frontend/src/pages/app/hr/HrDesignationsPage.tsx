@@ -58,7 +58,7 @@ function departmentFromParam(value: string | null): DepartmentFilter {
 export function HrDesignationsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { me } = useAuth();
-  const canExport = canExportHrData(me?.role_name);
+  const canExport = canExportHrData(me);
   const [departments, setDepartments] = useState<HrDepartmentResponse[]>([]);
   const [designations, setDesignations] = useState<HrDesignationResponse[]>([]);
   const [loading, setLoading] = useState(true);

@@ -32,7 +32,10 @@ function loadFindArticles(): Promise<FindArticles> {
 /** Header "Help" button: guides whose related screens match the current page. Hidden when none match. */
 export function PageHelpButton() {
   const { pathname, search } = useLocation();
-  const featureFlags = useAuth().me?.feature_flags;
+  const me = useAuth().me;
+  const featureFlags = me?.feature_flags;
+  const helpExtras =
+    me?.can_view_pnl_balance_sheet === false ? { canViewConfidentialReports: false as const } : undefined;
   const [findArticles, setFindArticles] = useState<FindArticles | null>(null);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -74,9 +77,15 @@ export function PageHelpButton() {
   const articles = useMemo(() => {
     if (!findArticles || pathname.startsWith("/app/tutorials")) return [];
     // Hub tabs (HR, then Finance) resolve to the open tab's old route, where the tutorials point.
-    const helpPath = resolveFinanceHelpPath(resolveHrHelpPath(pathname, search, featureFlags), search, featureFlags);
+    const helpPath = resolveFinanceHelpPath(
+      resolveHrHelpPath(pathname, search, featureFlags),
+      search,
+      featureFlags,
+      undefined,
+      helpExtras,
+    );
     return findArticles(helpPath).slice(0, MAX_ARTICLES);
-  }, [findArticles, pathname, search, featureFlags]);
+  }, [findArticles, pathname, search, featureFlags, helpExtras]);
 
   if (articles.length === 0) return null;
 

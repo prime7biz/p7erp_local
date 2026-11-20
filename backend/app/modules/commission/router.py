@@ -71,9 +71,20 @@ def _require_enabled(tenant: Tenant) -> None:
 
 
 async def _require_manager(db: AsyncSession, user: User, tenant_id: int) -> None:
-    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
-    if (role.name if role else "").strip().lower() not in {"admin", "manager", "owner", "super_admin", "superadmin"}:
-        raise HTTPException(status_code=403, detail="Only a manager or admin can do this")
+    from app.common.authority.policy import elevated_role_or_manager_equivalent
+    from app.models import Tenant
+
+    tenant = await db.get(Tenant, tenant_id)
+    flags = tenant.feature_flags if tenant is not None else None
+    if await elevated_role_or_manager_equivalent(
+        db,
+        user,
+        module_code="merch",
+        feature_flags=flags,
+        elevated_role_names=("admin", "manager", "owner", "super_admin", "superadmin"),
+    ):
+        return
+    raise HTTPException(status_code=403, detail="Only a manager or admin can do this")
 
 
 async def _owned(db: AsyncSession, model: Any, obj_id: int | None, tenant_id: int, label: str) -> Any:

@@ -12,6 +12,10 @@ import { listPageRootClass } from "@/components/app/listPageLayout";
 import { LoadingBlock, ReportError } from "@/components/finance/budget/BudgetPageParts";
 import { useFiscalStartMonth } from "@/components/finance/statements/StatementPeriodPicker";
 import { useAuth } from "@/context/AuthContext";
+import {
+  CONFIDENTIAL_REPORTS_DENIED,
+  useCanViewConfidentialReports,
+} from "@/hooks/useCanViewConfidentialReports";
 import { useStatementResource } from "@/hooks/useFinanceStatements";
 import { todayLocalISO } from "@/lib/dates";
 import { BudgetForecastView } from "./BudgetForecastView";
@@ -38,13 +42,22 @@ function SwitchedOff() {
 
 export function ManagementPerformancePage() {
   const enabled = isMgmtPerformanceEnabled(useAuth().me?.feature_flags);
+  const canViewConfidential = useCanViewConfidentialReports();
   return (
     <div className={listPageRootClass}>
       <AppPageHeader
         title="Management Performance"
         description="What we are earning against what we are spending: posted profit, the expected contribution of finished goods, the expense forecast against the budget, break-even targets and cash."
       />
-      {enabled ? <Body /> : <SwitchedOff />}
+      {!canViewConfidential ? (
+        <div role="alert" className="rounded-xl border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
+          {CONFIDENTIAL_REPORTS_DENIED}
+        </div>
+      ) : enabled ? (
+        <Body />
+      ) : (
+        <SwitchedOff />
+      )}
     </div>
   );
 }

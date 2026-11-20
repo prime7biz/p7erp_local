@@ -12,8 +12,7 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.authz import get_user_role_scoped_to_tenant
-from app.common.permissions import HR_SETUP_BYPASS_ROLES, PERMISSION_HR_PAYROLL_MANAGE, assert_hr_manager_or_permission
+from app.common.permissions import PERMISSION_HR_PAYROLL_MANAGE, assert_hr_manager_or_permission
 from app.common.tenant_feature_keys import is_age_verification_required
 from app.models import Tenant, User
 from app.models.hr import Employee
@@ -52,9 +51,9 @@ async def apply_employee_update(
         await assert_hr_manager_or_permission(db, actor, tenant.id, permission_key=PERMISSION_HR_PAYROLL_MANAGE)
     # Activation has its own manager-only endpoints, so a plain edit must not flip it.
     if "is_active" in payload and bool(payload["is_active"]) != bool(row.is_active):
-        role = await get_user_role_scoped_to_tenant(db, actor, tenant.id)
-        if (role.name if role else "").strip().lower() not in HR_SETUP_BYPASS_ROLES:
-            raise HTTPException(status_code=403, detail="Only manager/admin can perform this action")
+        from app.common.permissions import require_hr_manager_or_admin
+
+        await require_hr_manager_or_admin(db, actor, tenant.id)
     access = await employee_service.employee_field_access(db, actor, tenant.id)
     # Masked fields come back as null in a resubmitted form and must not overwrite real data.
     employee_service.drop_masked_resubmits(access, payload)

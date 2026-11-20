@@ -43,9 +43,18 @@ class User(Base):
     invited_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # Fixed-class authority (nullable while flag OFF / legacy users). Values: SUPER, CLASS_1..CLASS_4.
+    authority_class: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    is_tenant_super_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     tenant = relationship("Tenant", back_populates="users")
     role = relationship("Role", back_populates="users")
     invited_by = relationship("User", remote_side="User.id", foreign_keys=[invited_by_user_id], viewonly=True)
+    module_grants = relationship(
+        "UserModuleGrant",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )

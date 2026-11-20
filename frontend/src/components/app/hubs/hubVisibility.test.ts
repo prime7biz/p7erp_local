@@ -78,6 +78,14 @@ describe("hub tab visibility", () => {
     expect(isHubVisible(hub, {}, (k) => k !== "demo.access")).toBe(false);
     expect(isHubVisible(hub, {}, allow)).toBe(true);
   });
+
+  it("confidential report tabs hide only when canViewConfidentialReports is false", () => {
+    const secret = tab({ id: "pnl", requiresConfidentialReports: true });
+    expect(isHubTabVisible(secret, {})).toBe(true);
+    expect(isHubTabVisible(secret, {}, allow, {})).toBe(true);
+    expect(isHubTabVisible(secret, {}, allow, { canViewConfidentialReports: true })).toBe(true);
+    expect(isHubTabVisible(secret, {}, allow, { canViewConfidentialReports: false })).toBe(false);
+  });
 });
 
 describe("hub navigation helpers", () => {

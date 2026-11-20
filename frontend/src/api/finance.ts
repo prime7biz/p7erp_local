@@ -394,6 +394,18 @@ export const financeApi = {
   async cancelVoucherPosting(id: number): Promise<VoucherResponse> {
     return request<VoucherResponse>(`/api/v1/finance/vouchers/${id}/cancel-posting`, { method: "POST" });
   },
+  async class1ApproveVoucher(id: number, body?: { reason?: string | null }): Promise<VoucherResponse> {
+    return request<VoucherResponse>(`/api/v1/finance/vouchers/${id}/class1-approve`, {
+      method: "POST",
+      body: JSON.stringify({ reason: body?.reason?.trim() || undefined }),
+    });
+  },
+  async class1RejectVoucher(id: number, body: { reason: string }): Promise<VoucherResponse> {
+    return request<VoucherResponse>(`/api/v1/finance/vouchers/${id}/class1-reject`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
   async getVoucherTypesMeta(): Promise<string[]> {
     return request<string[]>("/api/v1/finance/vouchers/meta/types");
   },
@@ -413,8 +425,13 @@ export const financeApi = {
       notes: string;
     }>("/api/v1/finance/vouchers/meta/approval-rules");
   },
-  async getVoucherAvailableActions(voucherId: number): Promise<{ voucher_id: number; status: string; actions: string[] }> {
-    return request<{ voucher_id: number; status: string; actions: string[] }>(`/api/v1/finance/vouchers/${voucherId}/available-actions`);
+  async getVoucherAvailableActions(voucherId: number): Promise<{
+    voucher_id: number;
+    status: string;
+    actions: string[];
+    class1_approval_status?: string | null;
+  }> {
+    return request(`/api/v1/finance/vouchers/${voucherId}/available-actions`);
   },
 
   async getVoucherAvailableActionsBatch(

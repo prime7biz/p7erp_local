@@ -184,6 +184,44 @@ async def get_customer(
     return customer_service.customer_to_response(customer)
 
 
+@router.get("/{customer_id}/pdf")
+async def customer_pdf(
+    customer_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Server PDF for phone Save PDF / Share (tenant-scoped)."""
+    from fastapi.responses import Response
+    from app.modules.merch.doc_pdf import render_simple_doc_pdf
+
+    customer_service.ensure_user_tenant(user, tenant)
+    customer = await db.get(Customer, customer_id)
+    if not customer or customer.tenant_id != tenant.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
+    content = render_simple_doc_pdf(
+        tenant=tenant,
+        title="Customer",
+        lines=[
+            ("Code", customer.customer_code),
+            ("Name", customer.name),
+            ("Status", customer.status),
+            ("Country", customer.country or customer.billing_country),
+            ("Email", customer.email),
+            ("Phone", customer.phone),
+            ("Contact", customer.primary_contact_name),
+            ("Currency", customer.preferred_currency),
+            ("Address", (customer.address or "")[:90]),
+        ],
+    )
+    filename = f"{customer.customer_code or f'customer-{customer.id}'}.pdf".replace("/", "-")
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.post("", response_model=CustomerResponse, status_code=status.HTTP_201_CREATED)
 async def create_customer(
     body: CustomerCreate,

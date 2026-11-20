@@ -22,7 +22,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.permissions import (
-    HR_SETUP_BYPASS_ROLES,
     PERMISSION_HR_IDENTITY_MANAGE,
     PERMISSION_HR_PAYROLL_MANAGE,
     assert_hr_manager_or_permission,
@@ -99,9 +98,11 @@ FULL_ACCESS = EmployeeFieldAccess(True, True, True)
 
 
 async def employee_field_access(db: AsyncSession, user: User, tenant_id: int) -> EmployeeFieldAccess:
-    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
-    if (role.name if role else "").strip().lower() in HR_SETUP_BYPASS_ROLES:
+    from app.common.permissions import is_hr_manager_equivalent
+
+    if await is_hr_manager_equivalent(db, user, tenant_id):
         return FULL_ACCESS
+    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
     payroll = internal_permission_granted(role=role, permission_key=PERMISSION_HR_PAYROLL_MANAGE)
     return EmployeeFieldAccess(
         can_view_sensitive=payroll or internal_permission_granted(role=role, permission_key="hr.access"),

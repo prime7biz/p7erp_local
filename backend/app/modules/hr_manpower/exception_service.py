@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.authz import get_user_role_scoped_to_tenant
@@ -129,9 +129,21 @@ async def list_exceptions(
     return out
 
 
-async def get_exception(db: AsyncSession, tenant_id: int, exception_id: int) -> HrManpowerQuotaException:
-    row = await db.get(HrManpowerQuotaException, exception_id)
-    if row is None or row.tenant_id != tenant_id:
+async def get_exception(
+    db: AsyncSession,
+    tenant_id: int,
+    exception_id: int,
+    *,
+    for_update: bool = False,
+) -> HrManpowerQuotaException:
+    q = select(HrManpowerQuotaException).where(
+        HrManpowerQuotaException.id == exception_id,
+        HrManpowerQuotaException.tenant_id == tenant_id,
+    )
+    if for_update:
+        q = q.with_for_update()
+    row = (await db.execute(q)).scalar_one_or_none()
+    if row is None:
         raise HTTPException(status_code=404, detail="Exception not found")
     return row
 
@@ -145,7 +157,8 @@ async def decide_exception(
     decision: str,
     note: str | None,
 ) -> dict:
-    row = await get_exception(db, tenant_id, exception_id)
+    # Row lock so concurrent approve/reject cannot both pass the PENDING guard.
+    row = await get_exception(db, tenant_id, exception_id, for_update=True)
     if row.status != "PENDING":
         raise HTTPException(status_code=409, detail=f"Exception is already {row.status}")
 
@@ -165,18 +178,35 @@ async def decide_exception(
         raise HTTPException(status_code=400, detail="decision must be APPROVE or REJECT")
 
     now = datetime.utcnow()
-    row.status = "APPROVED" if decision == "APPROVE" else "REJECTED"
-    row.approved_by = user.id
-    row.decided_at = now
-    row.decision_note = (note or "").strip() or None
-    row.updated_at = now
+    new_status = "APPROVED" if decision == "APPROVE" else "REJECTED"
+    note_clean = (note or "").strip() or None
+    # Compare-and-swap: only one concurrent writer can flip PENDING → decided.
+    result = await db.execute(
+        update(HrManpowerQuotaException)
+        .where(
+            HrManpowerQuotaException.id == row.id,
+            HrManpowerQuotaException.tenant_id == tenant_id,
+            HrManpowerQuotaException.status == "PENDING",
+        )
+        .values(
+            status=new_status,
+            approved_by=user.id,
+            decided_at=now,
+            decision_note=note_clean,
+            updated_at=now,
+        )
+    )
+    if result.rowcount != 1:
+        raise HTTPException(status_code=409, detail="Exception is already decided")
+
+    await db.refresh(row)
     await log_action(
         db,
         tenant_id=tenant_id,
         user_id=user.id,
-        action="HR_MANPOWER_EXCEPTION_APPROVED" if decision == "APPROVE" else "HR_MANPOWER_EXCEPTION_REJECTED",
+        action="HR_MANPOWER_EXCEPTION_APPROVED" if new_status == "APPROVED" else "HR_MANPOWER_EXCEPTION_REJECTED",
         resource=f"hr_manpower_quota_exceptions:{row.id}",
-        details=row.decision_note,
+        details=note_clean,
     )
     await db.commit()
     await db.refresh(row)
@@ -191,14 +221,25 @@ async def cancel_exception(
     user: User,
     exception_id: int,
 ) -> dict:
-    row = await get_exception(db, tenant_id, exception_id)
+    row = await get_exception(db, tenant_id, exception_id, for_update=True)
     if row.status != "PENDING":
         raise HTTPException(status_code=409, detail=f"Exception is already {row.status}")
     if row.requested_by is not None and row.requested_by != user.id:
         # Requester or someone with manage — keep simple: requester only for cancel
         raise HTTPException(status_code=403, detail="Only the requester can cancel a pending exception")
-    row.status = "CANCELLED"
-    row.updated_at = datetime.utcnow()
+    now = datetime.utcnow()
+    result = await db.execute(
+        update(HrManpowerQuotaException)
+        .where(
+            HrManpowerQuotaException.id == row.id,
+            HrManpowerQuotaException.tenant_id == tenant_id,
+            HrManpowerQuotaException.status == "PENDING",
+        )
+        .values(status="CANCELLED", updated_at=now)
+    )
+    if result.rowcount != 1:
+        raise HTTPException(status_code=409, detail="Exception is already decided")
+    await db.refresh(row)
     await log_action(
         db,
         tenant_id=tenant_id,

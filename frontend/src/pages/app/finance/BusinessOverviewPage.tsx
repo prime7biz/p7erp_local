@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
+import { ScrollTableCard } from "@/components/finance/kit";
 import { Link } from "react-router-dom";
 import { api } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
 import { listPageKpiGridClass } from "@/components/app/listPageLayout";
 import { AiMetaDisplay, type AiGovernanceMetaView } from "@/components/external-access/AiMetaDisplay";
-import { useEmbeddedPage } from "@/components/app/embeddedPage";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
 
 type Overview = {
   base_currency?: string;
@@ -31,7 +32,6 @@ function fmtMoney(n: unknown, ccy: string) {
 }
 
 export function BusinessOverviewPage() {
-  const embedded = useEmbeddedPage();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [health, setHealth] = useState<Record<string, unknown> | null>(null);
   const [rules, setRules] = useState<Record<string, unknown> | null>(null);
@@ -81,20 +81,16 @@ export function BusinessOverviewPage() {
   const cfLines = overview?.system_cash_forecast_lines ?? [];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-      {!embedded && (
-        <>
-        <div>
-          <h1 className="text-xl font-semibold text-text-primary">Business overview</h1>
-          <p className="text-sm text-text-muted">Cross-module KPIs and optional AI narrative.</p>
-        </div>
-        </>
-      )}
-        <Link to="/app/finance/facilities/dashboard" className="text-sm text-brand-primary">
-          Facilities dashboard →
-        </Link>
-      </div>
+    <div className="space-y-4">
+      <AppPageHeader
+        title="Business overview"
+        description="Cross-module KPIs and optional AI narrative."
+        actions={
+          <Link to="/app/finance/facilities/dashboard" className="text-sm text-brand-primary">
+            Facilities dashboard →
+          </Link>
+        }
+      />
       {err ? <p className="text-sm text-red-600">{err}</p> : null}
 
       <div className={listPageKpiGridClass}>
@@ -126,7 +122,7 @@ export function BusinessOverviewPage() {
         {emiMonths.length === 0 ? (
           <p className="mt-2 text-sm text-text-muted">No upcoming / due installments in scope.</p>
         ) : (
-          <div className="mt-3 overflow-x-auto">
+          <ScrollTableCard maxHeight="panel">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-text-muted">
@@ -143,7 +139,7 @@ export function BusinessOverviewPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollTableCard>
         )}
       </div>
 
@@ -152,7 +148,7 @@ export function BusinessOverviewPage() {
         {btbs.length === 0 ? (
           <p className="mt-2 text-sm text-text-muted">No master contracts on file.</p>
         ) : (
-          <div className="mt-3 overflow-x-auto">
+          <ScrollTableCard maxHeight="panel">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-text-muted">
@@ -173,7 +169,7 @@ export function BusinessOverviewPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollTableCard>
         )}
       </div>
 
@@ -182,7 +178,7 @@ export function BusinessOverviewPage() {
         {cfLines.length === 0 ? (
           <p className="mt-2 text-sm text-text-muted">No generated cash forecast scenario found.</p>
         ) : (
-          <div className="mt-3 overflow-x-auto">
+          <ScrollTableCard maxHeight="panel">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-text-muted">
@@ -201,7 +197,7 @@ export function BusinessOverviewPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollTableCard>
         )}
       </div>
 

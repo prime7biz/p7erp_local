@@ -4,7 +4,7 @@
  * Merged into `api` in `api/client.ts`, so existing `api.someMethod()` calls keep working.
  * Types live in `api/models.ts` (re-exported by `api/client.ts`).
  */
-import { fetchAllPaginated, request } from "@/api/core";
+import { fetchAllPaginated, request, requestBlob } from "@/api/core";
 import { inquiryWriteBodyForApi } from "@/api/models";
 import type {
   CommercialChangeRequestOut,
@@ -741,6 +741,9 @@ export const salesApi = {
   async getCustomer(id: number): Promise<CustomerResponse> {
     return request<CustomerResponse>(`/api/v1/customers/${id}`);
   },
+  async downloadCustomerPdf(id: number): Promise<Blob> {
+    return requestBlob(`/api/v1/customers/${id}/pdf`);
+  },
   async createCustomer(data: CustomerCreate): Promise<CustomerResponse> {
     return request<CustomerResponse>("/api/v1/customers", {
       method: "POST",
@@ -860,6 +863,9 @@ export const salesApi = {
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<InquiryListPageResponse>(`/api/v1/inquiries/paginated${suffix}`);
   },
+  async downloadInquiryPdf(id: number): Promise<Blob> {
+    return requestBlob(`/api/v1/inquiries/${id}/pdf`);
+  },
   async getInquiry(id: number): Promise<InquiryResponse> {
     return request<InquiryResponse>(`/api/v1/inquiries/${id}`);
   },
@@ -932,6 +938,9 @@ export const salesApi = {
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<QuotationListPageResponse>(`/api/v1/quotations/paginated${suffix}`);
   },
+  async downloadQuotationPdf(id: number): Promise<Blob> {
+    return requestBlob(`/api/v1/quotations/${id}/pdf`);
+  },
   async getQuotation(id: number, params?: { ai_indicators?: 0 | 1 }): Promise<QuotationDetailResponse> {
     const q =
       params?.ai_indicators === 1 ? `?ai_indicators=${params.ai_indicators}` : "";
@@ -997,6 +1006,9 @@ export const salesApi = {
     if (params?.page_size != null) q.set("page_size", String(params.page_size));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<OrderListPageResponse>(`/api/v1/orders/paginated${suffix}`);
+  },
+  async downloadOrderPdf(id: number): Promise<Blob> {
+    return requestBlob(`/api/v1/orders/${id}/pdf`);
   },
   async getOrder(id: number, params?: { ai_indicators?: number }): Promise<OrderResponse> {
     const q = new URLSearchParams();

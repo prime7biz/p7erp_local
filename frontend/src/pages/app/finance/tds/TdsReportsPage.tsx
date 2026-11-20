@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { ScrollTableCard } from "@/components/finance/kit";
 import { Link } from "react-router-dom";
 import { api, type TdsDeductionResponse, type TdsReturnResponse } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
@@ -173,9 +174,9 @@ export function TdsReportsPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+          <ScrollTableCard maxHeight="panel">
             <table className="min-w-full text-left text-sm">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+              <thead className="sticky top-0 z-10 bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-3 py-2">Date</th>
                   <th className="px-3 py-2">Section</th>
@@ -207,7 +208,7 @@ export function TdsReportsPage() {
                 ) : null}
               </tbody>
             </table>
-          </div>
+          </ScrollTableCard>
         </div>
       ) : null}
 
@@ -225,9 +226,9 @@ export function TdsReportsPage() {
             <option value="CERTIFICATE_ISSUED">Certificate issued</option>
           </select>
         </div>
-        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+        <ScrollTableCard maxHeight="panel">
           <table className="min-w-full text-left text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+            <thead className="sticky top-0 z-10 bg-gray-50 text-xs uppercase text-gray-500">
               <tr>
                 <th className="px-3 py-2">ID</th>
                 <th className="px-3 py-2">Date</th>
@@ -259,7 +260,7 @@ export function TdsReportsPage() {
               ) : null}
             </tbody>
           </table>
-        </div>
+        </ScrollTableCard>
       </div>
     </div>
   );

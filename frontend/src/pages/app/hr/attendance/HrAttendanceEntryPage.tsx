@@ -193,7 +193,7 @@ export function HrAttendanceEntryPage() {
         statusOf={(r) => r.status}
         initialSort={{ key: "date", dir: "desc" }}
         exportFileName="attendance-entries"
-        canExport={canExportHrData(me?.role_name)}
+        canExport={canExportHrData(me)}
         rowActions={(r) => [{ key: "edit", label: "Edit", primary: true, onClick: () => openEdit(r) }]}
       />
 

@@ -8,23 +8,23 @@ import {
   type PurchaseOrderResponse,
 } from "@/api/client";
 import { subtractMoney } from "@/lib/money";
-import { useEmbeddedPage } from "@/components/app/embeddedPage";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { RowActionsMenu } from "@/components/app/RowActionsMenu";
+import {
+  listPageErrorClass,
+  listPageRootClass,
+  listTableTheadClass,
+} from "@/components/app/listPageLayout";
+import { ScrollTableCard, showingCountLabel } from "@/components/finance/kit";
 
 export function PurchaseWorkflowPage() {
-  const embedded = useEmbeddedPage();
   const [overview, setOverview] = useState<PurchaseApOverviewResponse | null>(null);
   const [openPayables, setOpenPayables] = useState<OutstandingBillResponse[]>([]);
   const [approvedPoRows, setApprovedPoRows] = useState<PurchaseOrderResponse[]>([]);
   const [receivedGrnRows, setReceivedGrnRows] = useState<GoodsReceivingResponse[]>([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [openActionsKey, setOpenActionsKey] = useState<string | null>(null);
-
-  useEffect(() => {
-    const close = () => setOpenActionsKey(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, []);
+  const [openActionsKey, setOpenActionsKey] = useState<string | number | null>(null);
 
   async function load() {
     try {
@@ -78,16 +78,12 @@ export function PurchaseWorkflowPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {!embedded && (
-        <>
-      <div>
-        <h1 className="text-2xl font-semibold text-text-primary">Purchase & AP Workflow</h1>
-        <p className="text-sm text-text-muted">Review purchase liabilities and prepare payments from one place.</p>
-      </div>
-        </>
-      )}
-      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="Purchase & AP Workflow"
+        description="Review purchase liabilities and prepare payments from one place."
+      />
+      {error ? <div className={listPageErrorClass}>{error}</div> : null}
       {success ? <div className="rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
 
       <div className="grid gap-3 md:grid-cols-4">
@@ -121,9 +117,9 @@ export function PurchaseWorkflowPage() {
         </Link>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+      <ScrollTableCard maxHeight="secondary" footer={showingCountLabel(openPayables.length, openPayables.length, "bill")}>
         <table className="min-w-full text-sm">
-          <thead className="bg-surface-subtle text-left">
+          <thead className={`${listTableTheadClass} text-left`}>
             <tr>
               <th className="px-2 py-1">Bill No</th>
               <th className="px-2 py-1">Party</th>
@@ -151,14 +147,15 @@ export function PurchaseWorkflowPage() {
             })}
           </tbody>
         </table>
-      </div>
+      </ScrollTableCard>
 
-      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
-        <div className="border-b bg-surface-subtle px-3 py-2">
-          <h2 className="text-sm font-semibold text-text-secondary">Approved Purchase Orders (Create AP Bill from PO)</h2>
-        </div>
+      <ScrollTableCard
+        maxHeight="secondary"
+        toolbar={<h2 className="text-sm font-semibold text-text-secondary">Approved Purchase Orders (Create AP Bill from PO)</h2>}
+        footer={showingCountLabel(approvedPoRows.length, approvedPoRows.length, "purchase order")}
+      >
         <table className="min-w-full text-sm">
-          <thead className="bg-surface-subtle text-left">
+          <thead className={`${listTableTheadClass} text-left`}>
             <tr>
               <th className="px-2 py-1">PO Code</th>
               <th className="px-2 py-1">Supplier</th>
@@ -185,47 +182,27 @@ export function PurchaseWorkflowPage() {
                 </td>
                 <td className="px-2 py-1">{po.status}</td>
                 <td className="px-2 py-1 text-right">
-                  <div className="relative inline-block text-left">
-                    <button
-                      type="button"
-                      className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const k = `po:${po.id}`;
-                        setOpenActionsKey((prev) => (prev === k ? null : k));
-                      }}
-                    >
-                      Actions
-                    </button>
-                    {openActionsKey === `po:${po.id}` && (
-                      <div className="absolute right-0 z-10 mt-1 w-40 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                        <button
-                          type="button"
-                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenActionsKey(null);
-                            void createPayable(po);
-                          }}
-                        >
-                          Create AP bill
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <RowActionsMenu
+                    menuPortal
+                    rowId={`po:${po.id}`}
+                    openId={openActionsKey}
+                    onOpenChange={setOpenActionsKey}
+                    items={[{ key: "ap", label: "Create AP bill", onClick: () => void createPayable(po) }]}
+                  />
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollTableCard>
 
-      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
-        <div className="border-b bg-surface-subtle px-3 py-2">
-          <h2 className="text-sm font-semibold text-text-secondary">Received GRNs (Create AP Bill from actual receipt)</h2>
-        </div>
+      <ScrollTableCard
+        maxHeight="secondary"
+        toolbar={<h2 className="text-sm font-semibold text-text-secondary">Received GRNs (Create AP Bill from actual receipt)</h2>}
+        footer={showingCountLabel(receivedGrnRows.length, receivedGrnRows.length, "GRN")}
+      >
         <table className="min-w-full text-sm">
-          <thead className="bg-surface-subtle text-left">
+          <thead className={`${listTableTheadClass} text-left`}>
             <tr>
               <th className="px-2 py-1">GRN Code</th>
               <th className="px-2 py-1">PO ID</th>
@@ -244,40 +221,19 @@ export function PurchaseWorkflowPage() {
                 <td className="px-2 py-1">{grn.purchase_order_id ? poById.get(grn.purchase_order_id)?.currency ?? "BDT" : "BDT"}</td>
                 <td className="px-2 py-1">{grn.status}</td>
                 <td className="px-2 py-1 text-right">
-                  <div className="relative inline-block text-left">
-                    <button
-                      type="button"
-                      className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const k = `grn:${grn.id}`;
-                        setOpenActionsKey((prev) => (prev === k ? null : k));
-                      }}
-                    >
-                      Actions
-                    </button>
-                    {openActionsKey === `grn:${grn.id}` && (
-                      <div className="absolute right-0 z-10 mt-1 w-40 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                        <button
-                          type="button"
-                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenActionsKey(null);
-                            void createPayableFromGrn(grn);
-                          }}
-                        >
-                          Create AP bill
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <RowActionsMenu
+                    menuPortal
+                    rowId={`grn:${grn.id}`}
+                    openId={openActionsKey}
+                    onOpenChange={setOpenActionsKey}
+                    items={[{ key: "ap", label: "Create AP bill", onClick: () => void createPayableFromGrn(grn) }]}
+                  />
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollTableCard>
     </div>
   );
 }

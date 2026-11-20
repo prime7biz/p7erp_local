@@ -139,7 +139,7 @@ export function HrPayrollBonusesPage() {
         initialSort={{ key: "period", dir: "desc" }}
         statusOf={(r) => r.status}
         exportFileName="hr-bonus-declarations"
-        canExport={canExportHrData(me?.role_name)}
+        canExport={canExportHrData(me)}
       />
 
       <HrFormDrawer

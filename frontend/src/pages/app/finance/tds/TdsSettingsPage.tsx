@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -7,7 +7,16 @@ import {
   type TdsSectionResponse,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
-import { logApiError } from "@/utils/logApiError";
+import { RowActionsMenu } from "@/components/app/RowActionsMenu";
+import {
+  FinanceFormDrawer,
+  FinanceListToolbar,
+  FormSection,
+  ScrollTableCard,
+  showingCountLabel,
+} from "@/components/finance/kit";
+import { logApiError } from "@/utils/logApiError";
+
 import { getChartOfAccountsCached } from "@/lib/masterData";
 
 const emptySectionForm = (): TdsSectionBody & { id?: number } => ({
@@ -29,8 +38,8 @@ export function TdsSettingsPage() {
   const [assignSectionId, setAssignSectionId] = useState("");
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
-  const actionsRef = useRef<HTMLDivElement | null>(null);
+  const [openActionsId, setOpenActionsId] = useState<number | string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   async function load() {
     try {
@@ -53,16 +62,6 @@ export function TdsSettingsPage() {
     void load();
   }, []);
 
-  useEffect(() => {
-    function onDoc(ev: MouseEvent) {
-      if (actionsRef.current && !actionsRef.current.contains(ev.target as Node)) {
-        setOpenActionsId(null);
-      }
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
-
   function startEdit(row: TdsSectionResponse) {
     setForm({
       id: row.id,
@@ -75,6 +74,17 @@ export function TdsSettingsPage() {
       is_active: row.is_active,
     });
     setOpenActionsId(null);
+    setDrawerOpen(true);
+  }
+
+  function openNewSection() {
+    setForm(emptySectionForm());
+    setDrawerOpen(true);
+  }
+
+  function closeDrawer() {
+    setDrawerOpen(false);
+    setForm(emptySectionForm());
   }
 
   async function onSaveSection(e: FormEvent) {
@@ -99,6 +109,7 @@ export function TdsSettingsPage() {
         setMsg("Section created.");
       }
       setForm(emptySectionForm());
+      setDrawerOpen(false);
       await load();
     } catch (err) {
       logApiError("TdsSettingsPage.saveSection", err);
@@ -165,8 +176,8 @@ export function TdsSettingsPage() {
         <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">{msg}</p>
       ) : null}
 
-      <form onSubmit={onSaveSettings} className="rounded-lg border border-gray-200 bg-white p-3 space-y-2 max-w-xl">
-        <p className="text-xs font-semibold uppercase text-gray-500">Global settings</p>
+      <form onSubmit={onSaveSettings} className="max-w-2xl">
+        <FormSection title="Global settings" description="GL account that receives deducted TDS.">
         <label className="block text-xs text-gray-600">
           TDS payable account
           <select
@@ -185,15 +196,19 @@ export function TdsSettingsPage() {
         <button type="submit" className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
           Save settings
         </button>
+        </FormSection>
       </form>
 
-      <form
+      <FinanceListToolbar primaryAction={{ label: "Add TDS section", onClick: openNewSection }} />
+
+      <FinanceFormDrawer
+        open={drawerOpen}
+        title={form.id ? `Edit section #${form.id}` : "New TDS section"}
+        onClose={closeDrawer}
         onSubmit={onSaveSection}
-        className="grid gap-2 rounded-lg border border-gray-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-4"
+        submitLabel={form.id ? "Update" : "Create"}
       >
-        <p className="text-xs font-semibold uppercase text-gray-500 lg:col-span-4">
-          {form.id ? `Edit section #${form.id}` : "New TDS section"}
-        </p>
+        <FormSection title="Section details">
         <label className="text-xs text-gray-600">
           Section code
           <input
@@ -204,7 +219,7 @@ export function TdsSettingsPage() {
             required
           />
         </label>
-        <label className="text-xs text-gray-600 lg:col-span-2">
+        <label className="text-xs text-gray-600 ">
           Description
           <input
             className="mt-1 block w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
@@ -254,25 +269,12 @@ export function TdsSettingsPage() {
           />
           Active
         </label>
-        <div className="flex items-end gap-2">
-          <button type="submit" className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
-            {form.id ? "Update" : "Create"}
-          </button>
-          {form.id ? (
-            <button
-              type="button"
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
-              onClick={() => setForm(emptySectionForm())}
-            >
-              Cancel
-            </button>
-          ) : null}
-        </div>
-      </form>
+        </FormSection>
+      </FinanceFormDrawer>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+      <ScrollTableCard footer={showingCountLabel(rows.length, rows.length, "section")}>
         <table className="min-w-full text-left text-sm">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+          <thead className="sticky top-0 z-10 bg-gray-50 text-xs uppercase text-gray-500">
             <tr>
               <th className="px-3 py-2">Code</th>
               <th className="px-3 py-2">Description</th>
@@ -290,27 +292,14 @@ export function TdsSettingsPage() {
                 <td className="px-3 py-2 text-right tabular-nums">{r.threshold_amount}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{r.tds_rate}%</td>
                 <td className="px-3 py-2">{r.is_active ? "Active" : "Inactive"}</td>
-                <td className="relative px-3 py-2">
-                  <div ref={openActionsId === r.id ? actionsRef : undefined} className="relative inline-block">
-                    <button
-                      type="button"
-                      className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      onClick={() => setOpenActionsId(openActionsId === r.id ? null : r.id)}
-                    >
-                      Actions
-                    </button>
-                    {openActionsId === r.id ? (
-                      <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                        <button
-                          type="button"
-                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                          onClick={() => startEdit(r)}
-                        >
-                          Edit
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
+                <td className="px-3 py-2">
+                  <RowActionsMenu
+                    rowId={r.id}
+                    openId={openActionsId}
+                    onOpenChange={setOpenActionsId}
+                    menuPortal
+                    items={[{ key: "edit", label: "Edit", onClick: () => startEdit(r) }]}
+                  />
                 </td>
               </tr>
             ))}
@@ -323,10 +312,10 @@ export function TdsSettingsPage() {
             ) : null}
           </tbody>
         </table>
-      </div>
+      </ScrollTableCard>
 
-      <form onSubmit={onAssignSection} className="rounded-lg border border-gray-200 bg-white p-3 space-y-2 max-w-xl">
-        <p className="text-xs font-semibold uppercase text-gray-500">Assign section to party ledger</p>
+      <form onSubmit={onAssignSection} className="max-w-2xl">
+        <FormSection title="Assign section to party ledger">
         <div className="grid gap-2 sm:grid-cols-2">
           <label className="text-xs text-gray-600">
             Party ledger ID
@@ -360,6 +349,7 @@ export function TdsSettingsPage() {
           Tip: open a party ledger detail page to see its assigned section. Payable account:{" "}
           {tdsPayableAccountId ? acctLabel.get(Number(tdsPayableAccountId)) ?? `#${tdsPayableAccountId}` : "not set"}.
         </p>
+        </FormSection>
       </form>
     </div>
   );

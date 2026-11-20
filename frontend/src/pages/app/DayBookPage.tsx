@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ScrollTableCard } from "@/components/finance/kit";
 import { Link, useNavigate } from "react-router-dom";
 import { api, type AccountGroupResponse, type ChartOfAccountResponse, type DayBookResponse } from "@/api/client";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
@@ -122,7 +123,7 @@ export function DayBookPage() {
   const cell = compactView ? "px-2 py-1" : "px-3 py-2";
 
   return (
-    <div className="space-y-6 print-report">
+    <div className="space-y-4 print-report">
       <div className="print-only mb-3 border-b border-border pb-2">
         <h1 className="text-lg font-semibold">Day Book</h1>
         <p className="text-xs text-text-muted">
@@ -194,9 +195,9 @@ export function DayBookPage() {
             {loading ? "Loading…" : `${rows.length} voucher${rows.length === 1 ? "" : "s"}`}
           </span>
         </div>
-        <div className="overflow-x-auto">
+        <ScrollTableCard maxHeight="main">
           <table className={`min-w-full ${compactView ? "text-xs" : "text-sm"} print:text-xs`}>
-            <thead className="bg-surface-subtle text-left">
+            <thead className="sticky top-0 z-10 bg-surface-subtle text-left">
               <tr>
                 <th className={cell}>Voucher</th>
                 <th className={cell}>Date</th>
@@ -264,7 +265,7 @@ export function DayBookPage() {
               ) : null}
             </tbody>
           </table>
-        </div>
+        </ScrollTableCard>
       </div>
     </div>
   );

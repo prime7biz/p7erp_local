@@ -399,7 +399,7 @@ export function HrPayrollRunsPage() {
         searchPlaceholder="Search run, period or status…"
         statusOf={(r) => r.status}
         exportFileName="payroll-runs"
-        canExport={canExportHrData(me?.role_name)}
+        canExport={canExportHrData(me)}
         rowActions={(r) => payrollRunRowActions(r.status, (key) => onRunAction(r, key), busy)}
       />
 

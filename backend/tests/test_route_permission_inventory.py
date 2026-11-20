@@ -31,6 +31,7 @@ ALLOWED_WITHOUT_MODULE_KEY = (
     f"{API}/notifications",
     f"{API}/onboarding",
     f"{API}/dashboard",  # shared home screen; sensitive widgets have their own keys
+    f"{API}/authority",  # flag + class + module grants inside handlers (user_authority_classes_v1)
     f"{API}/announcements",
     f"{API}/support",
     f"{API}/billing",
@@ -95,6 +96,9 @@ def test_newly_gated_routers_use_expected_keys():
         f"{API}/mfg-intelligence/forward-plan": "production.planning.read",
         f"{API}/mfg-intelligence/forward-plan/finance-constrained": "finance.access",
         f"{API}/mfg-intelligence/scheduler/convert": "production.planning.write",
+        f"{API}/kpi/definitions": "kpi.read",
+        f"{API}/kpi/cards": "kpi.read",
+        f"{API}/kpi/seed": "kpi.read",
     }
     seen: dict[str, set[str]] = {}
     for route in app.routes:

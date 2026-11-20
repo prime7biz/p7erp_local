@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type FundFlowResponse } from "@/api/client";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { ScrollTableCard } from "@/components/finance/kit";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { logApiError } from "@/utils/logApiError";
 import { formatMoney } from "./misFormat";
@@ -58,13 +59,18 @@ export function FundFlowPage() {
     total: number,
   ) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white">
-        <div className="border-b border-gray-100 px-3 py-2">
-          <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
-          <p className="text-xs text-gray-500">Total: {formatMoney(total)}</p>
-        </div>
+      <ScrollTableCard
+        maxHeight="panel"
+        className="print-card"
+        toolbar={
+          <div>
+            <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+            <p className="text-xs text-gray-500">Total: {formatMoney(total)}</p>
+          </div>
+        }
+      >
         <table className="w-full text-sm">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-white">
             <tr className="border-b border-gray-100 text-left text-xs text-gray-500">
               <th className="px-3 py-2 font-medium">Item</th>
               <th className="px-3 py-2 font-medium text-right">Amount</th>
@@ -81,7 +87,7 @@ export function FundFlowPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollTableCard>
     );
   }
 

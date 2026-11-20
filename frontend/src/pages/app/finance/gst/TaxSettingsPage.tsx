@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type GstSettings } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { FormSection } from "@/components/finance/kit";
 import { logApiError } from "@/utils/logApiError";
 
 export function TaxSettingsPage() {
@@ -67,7 +68,8 @@ export function TaxSettingsPage() {
         <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">Saved.</p>
       ) : null}
 
-      <form onSubmit={onSubmit} className="max-w-xl space-y-3 rounded-lg border border-gray-200 bg-white p-4">
+      <form onSubmit={onSubmit} className="max-w-2xl space-y-4">
+        <FormSection title="Registration" description="GSTIN and state decide intra- vs inter-state tax.">
         <label className="block text-xs text-gray-600">
           Registration type
           <select
@@ -107,6 +109,8 @@ export function TaxSettingsPage() {
             placeholder="Same as state for intra-state"
           />
         </label>
+        </FormSection>
+        <FormSection title="Rates and rules">
         <label className="block text-xs text-gray-600">
           Default GST rate %
           <input
@@ -131,6 +135,7 @@ export function TaxSettingsPage() {
           />
           Reverse charge enabled
         </label>
+        </FormSection>
         <button
           type="submit"
           disabled={saving}

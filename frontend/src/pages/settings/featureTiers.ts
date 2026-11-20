@@ -53,6 +53,7 @@ export const TIER_KEYS: Record<Exclude<FeatureTier, "essential">, string[]> = {
     "payroll_auto_calculate_enabled",
     "payroll_four_eyes_approval",
     "hr_employee_change_approval",
+    "user_authority_classes_v1",
     "mobile_ui_v2",
     "finance_hubs_v2",
     "finance_statements_v2",
@@ -60,6 +61,8 @@ export const TIER_KEYS: Record<Exclude<FeatureTier, "essential">, string[]> = {
     "finance_budget_analytics_v2",
     "finance_ai_insights_v2",
     "mgmt_performance_v1",
+    "kpi_engine_v1",
+    "kpi_predictive_v1",
   ],
   all: [
     "tds_system_enabled",

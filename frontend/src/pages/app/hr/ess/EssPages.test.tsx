@@ -5,7 +5,14 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 
 vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ me: { role_name: "employee", feature_flags: {} } }) }));
-vi.mock("@/lib/fileSave", () => ({ saveBlob: vi.fn().mockResolvedValue("downloaded") }));
+const fileSave = vi.hoisted(() => ({
+  saveBlob: vi.fn().mockResolvedValue("downloaded"),
+  shareOrSaveBlob: vi.fn().mockResolvedValue("downloaded"),
+  preferShareOverPrint: vi.fn(() => false),
+}));
+vi.mock("@/lib/fileSave", () => fileSave);
+vi.mock("@/hooks/useMobileUiV2", () => ({ useMobileUiV2Phone: () => false }));
+vi.mock("@/hooks/useInventoryListView", () => ({ useMediaQuery: () => false }));
 
 const api = vi.hoisted(() => ({
   listHrEssMyAttendance: vi.fn(),
@@ -82,5 +89,7 @@ describe("My HR pages read the self-service API shapes", () => {
     expect(row.textContent).toContain("14,500.00");
     await user.click(within(row).getByRole("button", { name: /download pdf|PDF/i }));
     expect(api.downloadHrPayslipPdf).toHaveBeenCalledWith(77);
+    expect(fileSave.shareOrSaveBlob).toHaveBeenCalledWith(expect.any(Blob), "payslip-2026-10.pdf");
+    expect(fileSave.saveBlob).not.toHaveBeenCalled();
   });
 });

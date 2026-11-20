@@ -11,8 +11,24 @@ import {
   type CoaInterestMethod,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
-import { listPageRootClass } from "@/components/app/listPageLayout";
+import {
+  listPageEmptyClass,
+  listPageErrorClass,
+  listPageFilterBarClass,
+  listPageLoadingClass,
+  listPageRootClass,
+  listPageToolbarButtonClass,
+  listPageToolbarInputClass,
+  listPageToolbarSelectClass,
+  listTableBaseClass,
+  listTableTdClass,
+  listTableTdPrimaryClass,
+  listTableThClass,
+  listTableTheadClass,
+  listTableTrClass,
+} from "@/components/app/listPageLayout";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
+import { FinanceFormDrawer, FormSection, ScrollTableCard, showingCountLabel } from "@/components/finance/kit";
 import { logApiError } from "@/utils/logApiError";
 import { downloadCsv } from "@/lib/reportExport";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
@@ -46,6 +62,10 @@ const defaultForm: ChartOfAccountCreate = {
   interest_activation_date: null,
 };
 
+const fieldClass =
+  "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary focus:border-brand-primary focus:outline-none focus:ring-0";
+const labelClass = "mb-1 block text-xs font-medium text-text-muted";
+
 export function ChartOfAccountsPage() {
   const confirm = useConfirm();
   const { me } = useAuth();
@@ -59,24 +79,40 @@ export function ChartOfAccountsPage() {
   const [coaConfig, setCoaConfig] = useState<CoAConfigResponse | null>(null);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importConflict, setImportConflict] = useState<"skip" | "update" | "abort">("skip");
-  const [importResult, setImportResult] = useState<{ ok: boolean; groups_created: number; groups_updated: number; accounts_created: number; accounts_updated: number; errors: string[] } | null>(null);
+  const [importResult, setImportResult] = useState<{
+    ok: boolean;
+    groups_created: number;
+    groups_updated: number;
+    accounts_created: number;
+    accounts_updated: number;
+    errors: string[];
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
   const [openActionsId, setOpenActionsId] = useState<number | string | null>(null);
   const [form, setForm] = useState<ChartOfAccountCreate>({ ...defaultForm });
   const [interestPreview, setInterestPreview] = useState<string | null>(null);
   const [interestRunMsg, setInterestRunMsg] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [filterGroupId, setFilterGroupId] = useState<number | "">("");
 
   const latest = useLatestRequest();
   const load = useCallback(async () => {
     const token = latest.begin();
     setLoading(true);
     try {
-      const [g, a] = await Promise.all([api.listAccountGroups(), api.listChartOfAccounts({ active_only: !showInactive })]);
+      const [g, a] = await Promise.all([
+        api.listAccountGroups(),
+        api.listChartOfAccounts({ active_only: !showInactive }),
+      ]);
       if (!latest.isCurrent(token)) return;
       setGroups(g);
       setRows(a);
+      setError(null);
       const firstGroup = g[0];
       if (firstGroup) {
         setForm((p) => (p.group_id ? p : { ...p, group_id: firstGroup.id }));
@@ -109,7 +145,10 @@ export function ChartOfAccountsPage() {
   const selectedGroup = useMemo(() => groups.find((g) => g.id === form.group_id), [groups, form.group_id]);
   const selectedNature = (selectedGroup?.nature || "").toLowerCase();
   const canActivateInterest =
-    interestFlagOn && (selectedNature === "asset" || selectedNature === "liability") && !form.enable_bill_wise && !form.maintain_fc_balance;
+    interestFlagOn &&
+    (selectedNature === "asset" || selectedNature === "liability") &&
+    !form.enable_bill_wise &&
+    !form.maintain_fc_balance;
   const counterpartOptions = useMemo(() => {
     const want = selectedNature === "liability" ? "expense" : selectedNature === "asset" ? "income" : "";
     if (!want) return [];
@@ -119,9 +158,43 @@ export function ChartOfAccountsPage() {
     });
   }, [rows, groups, selectedNature, editingId]);
 
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (filterGroupId !== "" && r.group_id !== filterGroupId) return false;
+      if (!q) return true;
+      return (
+        (r.account_number ?? "").toLowerCase().includes(q) ||
+        r.name.toLowerCase().includes(q) ||
+        (groupMap.get(r.group_id) || "").toLowerCase().includes(q)
+      );
+    });
+  }, [rows, search, filterGroupId, groupMap]);
+
+  function closeDrawer() {
+    setDrawerOpen(false);
+    setEditingId(null);
+    setFormError(null);
+    setShowAdvanced(false);
+    setInterestPreview(null);
+    setInterestRunMsg(null);
+    setForm({ ...defaultForm, group_id: groups[0]?.id ?? 0 });
+  }
+
+  function openAdd() {
+    setEditingId(null);
+    setFormError(null);
+    setShowAdvanced(false);
+    setInterestPreview(null);
+    setInterestRunMsg(null);
+    setForm({ ...defaultForm, group_id: groups[0]?.id ?? 0 });
+    setDrawerOpen(true);
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
-    setError(null);
+    setFormError(null);
+    setSaving(true);
     try {
       if (!form.name?.trim()) throw new Error("Ledger name is required");
       if (!form.group_id) throw new Error("Please select a group");
@@ -153,16 +226,19 @@ export function ChartOfAccountsPage() {
       } else {
         await api.createChartOfAccount(payload);
       }
-      setEditingId(null);
-      setForm({ ...defaultForm, group_id: form.group_id });
+      closeDrawer();
       await load();
-    } catch (e) {
-      setError((e as Error).message);
+    } catch (err) {
+      setFormError((err as Error).message);
+    } finally {
+      setSaving(false);
     }
   }
 
   function startEdit(row: ChartOfAccountResponse) {
     setEditingId(row.id);
+    setFormError(null);
+    setShowAdvanced(false);
     setForm({
       ...defaultForm,
       account_number: row.account_number,
@@ -194,14 +270,15 @@ export function ChartOfAccountsPage() {
     });
     setInterestPreview(null);
     setInterestRunMsg(null);
+    setDrawerOpen(true);
   }
 
   async function previewInterest() {
     if (!editingId) {
-      setError("Save the ledger first, then preview interest.");
+      setFormError("Save the ledger first, then preview interest.");
       return;
     }
-    setError(null);
+    setFormError(null);
     setInterestPreview(null);
     try {
       const res = await api.previewCoaInterest({ account_id: editingId });
@@ -214,19 +291,19 @@ export function ChartOfAccountsPage() {
       });
       setInterestPreview(lines.length ? lines.join("\n") : "No completed periods due yet.");
     } catch (e) {
-      setError((e as Error).message);
+      setFormError((e as Error).message);
     }
   }
 
   async function runInterest() {
     if (!(await confirm({ title: "Create draft interest journals for completed periods?" }))) return;
-    setError(null);
+    setFormError(null);
     setInterestRunMsg(null);
     try {
       const res = await api.runCoaInterest(editingId ? { account_id: editingId } : undefined);
       setInterestRunMsg(`Created ${res.created} draft voucher(s), skipped ${res.skipped}.`);
     } catch (e) {
-      setError((e as Error).message);
+      setFormError((e as Error).message);
     }
   }
 
@@ -298,35 +375,68 @@ export function ChartOfAccountsPage() {
             <button
               type="button"
               onClick={() => void handleExport()}
-              className="rounded border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
+              className={listPageToolbarButtonClass}
             >
               Export CoA
             </button>
             <button
               type="button"
               onClick={() => setShowImport((i) => !i)}
-              className="rounded border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
+              className={listPageToolbarButtonClass}
             >
               Import CoA
             </button>
             <button
               type="button"
               onClick={() => setShowCoaConfig((c) => !c)}
-              className="rounded border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
+              className={listPageToolbarButtonClass}
             >
               CoA settings
             </button>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
-              Show Inactive
-            </label>
           </>
         }
       />
 
+      <div className={listPageFilterBarClass}>
+        <input
+          type="search"
+          aria-label="Search ledgers"
+          placeholder="Search number or name…"
+          className={listPageToolbarInputClass}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select
+          aria-label="Filter by group"
+          className={listPageToolbarSelectClass}
+          value={filterGroupId}
+          onChange={(e) => setFilterGroupId(e.target.value ? Number(e.target.value) : "")}
+        >
+          <option value="">All groups</option>
+          {groups.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
+            </option>
+          ))}
+        </select>
+        <label className="flex items-center gap-2 whitespace-nowrap text-sm text-text-secondary">
+          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+          Show inactive
+        </label>
+        <button
+          type="button"
+          onClick={openAdd}
+          className="rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90 sm:ml-auto"
+        >
+          Add ledger
+        </button>
+      </div>
+
       {showImport && (
         <div className="rounded-xl border border-border bg-surface-raised p-4">
-          <h3 className="mb-2 text-sm font-medium text-text-primary">Import Chart of Accounts (CSV or Excel .xlsx — first sheet)</h3>
+          <h3 className="mb-2 text-sm font-medium text-text-primary">
+            Import Chart of Accounts (CSV or Excel .xlsx — first sheet)
+          </h3>
           <div className="flex flex-wrap items-end gap-3">
             <input
               type="file"
@@ -358,7 +468,8 @@ export function ChartOfAccountsPage() {
             <div className="mt-3 rounded border border-border-subtle bg-surface-subtle p-2 text-sm">
               {importResult.ok ? (
                 <p className="text-text-secondary">
-                  Done. Groups: {importResult.groups_created} created, {importResult.groups_updated} updated. Accounts: {importResult.accounts_created} created, {importResult.accounts_updated} updated.
+                  Done. Groups: {importResult.groups_created} created, {importResult.groups_updated} updated.
+                  Accounts: {importResult.accounts_created} created, {importResult.accounts_updated} updated.
                   {importResult.errors.length > 0 && ` Warnings: ${importResult.errors.join("; ")}`}
                 </p>
               ) : (
@@ -378,7 +489,9 @@ export function ChartOfAccountsPage() {
               <input
                 className="w-full rounded border px-2 py-1.5 text-sm"
                 value={coaConfig.account_number_prefix}
-                onChange={(e) => setCoaConfig((c) => c ? { ...c, account_number_prefix: e.target.value } : c)}
+                onChange={(e) =>
+                  setCoaConfig((c) => (c ? { ...c, account_number_prefix: e.target.value } : c))
+                }
               />
             </div>
             <div>
@@ -389,7 +502,9 @@ export function ChartOfAccountsPage() {
                 max={8}
                 className="w-full rounded border px-2 py-1.5 text-sm"
                 value={coaConfig.account_number_width}
-                onChange={(e) => setCoaConfig((c) => c ? { ...c, account_number_width: Number(e.target.value) || 4 } : c)}
+                onChange={(e) =>
+                  setCoaConfig((c) => (c ? { ...c, account_number_width: Number(e.target.value) || 4 } : c))
+                }
               />
             </div>
             <div>
@@ -397,7 +512,7 @@ export function ChartOfAccountsPage() {
               <input
                 className="w-full rounded border px-2 py-1.5 text-sm"
                 value={coaConfig.group_code_prefix}
-                onChange={(e) => setCoaConfig((c) => c ? { ...c, group_code_prefix: e.target.value } : c)}
+                onChange={(e) => setCoaConfig((c) => (c ? { ...c, group_code_prefix: e.target.value } : c))}
               />
             </div>
             <div>
@@ -408,14 +523,18 @@ export function ChartOfAccountsPage() {
                 max={8}
                 className="w-full rounded border px-2 py-1.5 text-sm"
                 value={coaConfig.group_code_width}
-                onChange={(e) => setCoaConfig((c) => c ? { ...c, group_code_width: Number(e.target.value) || 4 } : c)}
+                onChange={(e) =>
+                  setCoaConfig((c) => (c ? { ...c, group_code_width: Number(e.target.value) || 4 } : c))
+                }
               />
             </div>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={coaConfig.allow_manual_account_number}
-                onChange={(e) => setCoaConfig((c) => c ? { ...c, allow_manual_account_number: e.target.checked } : c)}
+                onChange={(e) =>
+                  setCoaConfig((c) => (c ? { ...c, allow_manual_account_number: e.target.checked } : c))
+                }
               />
               Allow manual account number
             </label>
@@ -423,7 +542,9 @@ export function ChartOfAccountsPage() {
               <input
                 type="checkbox"
                 checked={coaConfig.validate_normal_balance}
-                onChange={(e) => setCoaConfig((c) => c ? { ...c, validate_normal_balance: e.target.checked } : c)}
+                onChange={(e) =>
+                  setCoaConfig((c) => (c ? { ...c, validate_normal_balance: e.target.checked } : c))
+                }
               />
               Validate normal balance vs group
             </label>
@@ -434,7 +555,11 @@ export function ChartOfAccountsPage() {
                 min={0}
                 className="w-full rounded border px-2 py-1.5 text-sm"
                 value={coaConfig.max_group_depth ?? ""}
-                onChange={(e) => setCoaConfig((c) => c ? { ...c, max_group_depth: e.target.value ? Number(e.target.value) : null } : c)}
+                onChange={(e) =>
+                  setCoaConfig((c) =>
+                    c ? { ...c, max_group_depth: e.target.value ? Number(e.target.value) : null } : c,
+                  )
+                }
               />
             </div>
             <div>
@@ -444,7 +569,11 @@ export function ChartOfAccountsPage() {
                 min={0}
                 className="w-full rounded border px-2 py-1.5 text-sm"
                 value={coaConfig.max_account_depth ?? ""}
-                onChange={(e) => setCoaConfig((c) => c ? { ...c, max_account_depth: e.target.value ? Number(e.target.value) : null } : c)}
+                onChange={(e) =>
+                  setCoaConfig((c) =>
+                    c ? { ...c, max_account_depth: e.target.value ? Number(e.target.value) : null } : c,
+                  )
+                }
               />
             </div>
             <div className="sm:col-span-2">
@@ -518,144 +647,323 @@ export function ChartOfAccountsPage() {
         </div>
       )}
 
-      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-border bg-surface-raised p-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-text-muted">Account Number</label>
+      {error ? <div className={listPageErrorClass}>{error}</div> : null}
+
+      <ScrollTableCard
+        maxHeight="main"
+        footer={!loading ? showingCountLabel(filteredRows.length, rows.length, "account") : undefined}
+      >
+        <table className={`${listTableBaseClass} min-w-[64rem]`}>
+          <thead className={listTableTheadClass}>
+            <tr>
+              <th className={listTableThClass}>No</th>
+              <th className={listTableThClass}>Name</th>
+              <th className={listTableThClass}>Group</th>
+              <th className={listTableThClass}>Type</th>
+              <th className={listTableThClass}>Cost nature</th>
+              <th className={listTableThClass}>Normal</th>
+              <th className={listTableThClass}>Opening</th>
+              <th className={listTableThClass}>Balance</th>
+              <th className={listTableThClass}>Bill-Wise</th>
+              <th className={listTableThClass}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td className={listPageLoadingClass} colSpan={10}>
+                  Loading chart of accounts…
+                </td>
+              </tr>
+            ) : filteredRows.length === 0 ? (
+              <tr>
+                <td className={listPageEmptyClass} colSpan={10}>
+                  {rows.length === 0
+                    ? "No ledger accounts found."
+                    : "No ledgers match your search or group filter."}
+                </td>
+              </tr>
+            ) : (
+              filteredRows.map((r) => (
+                <tr key={r.id} className={listTableTrClass}>
+                  <td className={listTableTdPrimaryClass}>{r.account_number}</td>
+                  <td className={listTableTdClass}>{r.name}</td>
+                  <td className={listTableTdClass}>{groupMap.get(r.group_id) || "—"}</td>
+                  <td className={listTableTdClass}>{r.account_type ?? "posting"}</td>
+                  <td className={`${listTableTdClass} text-text-muted`}>{r.cost_nature ?? "—"}</td>
+                  <td className={`${listTableTdClass} uppercase`}>{r.normal_balance}</td>
+                  <td className={listTableTdClass}>{Number(r.opening_balance || 0).toLocaleString()}</td>
+                  <td className={listTableTdClass}>{Number(r.balance || 0).toLocaleString()}</td>
+                  <td className={listTableTdClass}>
+                    {r.enable_bill_wise ? (
+                      <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                        Yes
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className={listTableTdClass}>
+                    <RowActionsMenu
+                      rowId={r.id}
+                      openId={openActionsId}
+                      onOpenChange={setOpenActionsId}
+                      menuPortal
+                      items={[
+                        { key: "edit", label: "Edit", onClick: () => startEdit(r) },
+                        { key: "delete", label: "Delete", danger: true, onClick: () => void remove(r.id) },
+                      ]}
+                    />
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </ScrollTableCard>
+
+      <FinanceFormDrawer
+        open={drawerOpen}
+        title={editingId ? "Edit ledger" : "Add ledger"}
+        description="Account number is generated on create. Use advanced fields for reporting and interest."
+        onClose={closeDrawer}
+        onSubmit={(e) => void submit(e)}
+        submitLabel={editingId ? "Update" : "Create"}
+        submitting={saving}
+        error={formError ?? undefined}
+        size="lg"
+      >
+        <FormSection title="Ledger details">
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="coa-account-number">
+            Account number
+          </label>
           <input
-            className="rounded border bg-surface-subtle px-3 py-2 text-sm"
+            id="coa-account-number"
+            className={`${fieldClass} bg-surface-subtle`}
             readOnly
             placeholder="Auto-generated"
             value={editingId ? form.account_number : ""}
           />
         </div>
-        <input
-          className="rounded border px-3 py-2 text-sm"
-          placeholder="Ledger Name"
-          value={form.name}
-          onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-        />
-        <select
-          className="rounded border px-3 py-2 text-sm"
-          value={form.group_id}
-          onChange={(e) => setForm((p) => ({ ...p, group_id: Number(e.target.value) }))}
-        >
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
-        <input
-          className="rounded border px-3 py-2 text-sm"
-          placeholder="Opening Balance"
-          value={form.opening_balance}
-          onChange={(e) => setForm((p) => ({ ...p, opening_balance: e.target.value }))}
-        />
-        <select
-          className="rounded border px-3 py-2 text-sm"
-          value={form.normal_balance}
-          onChange={(e) => setForm((p) => ({ ...p, normal_balance: e.target.value as "debit" | "credit" }))}
-        >
-          <option value="debit">Debit</option>
-          <option value="credit">Credit</option>
-        </select>
-        <input
-          className="rounded border px-3 py-2 text-sm sm:col-span-2"
-          placeholder="Description"
-          value={form.description ?? ""}
-          onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-        />
-        <div className="flex items-center justify-between rounded border px-3 py-2 sm:col-span-2 lg:col-span-2">
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="coa-name">
+            Ledger name *
+          </label>
+          <input
+            id="coa-name"
+            className={fieldClass}
+            placeholder="Ledger name"
+            value={form.name}
+            onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+          />
+        </div>
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="coa-group">
+            Group *
+          </label>
+          <select
+            id="coa-group"
+            className={fieldClass}
+            value={form.group_id}
+            onChange={(e) => setForm((p) => ({ ...p, group_id: Number(e.target.value) }))}
+          >
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className={labelClass} htmlFor="coa-opening">
+              Opening balance
+            </label>
+            <input
+              id="coa-opening"
+              className={fieldClass}
+              placeholder="0"
+              value={form.opening_balance}
+              onChange={(e) => setForm((p) => ({ ...p, opening_balance: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className={labelClass} htmlFor="coa-normal">
+              Normal balance
+            </label>
+            <select
+              id="coa-normal"
+              className={fieldClass}
+              value={form.normal_balance}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, normal_balance: e.target.value as "debit" | "credit" }))
+              }
+            >
+              <option value="debit">Debit</option>
+              <option value="credit">Credit</option>
+            </select>
+          </div>
+        </div>
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="coa-description">
+            Description
+          </label>
+          <input
+            id="coa-description"
+            className={fieldClass}
+            placeholder="Description"
+            value={form.description ?? ""}
+            onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+          />
+        </div>
+        <div className="flex flex-wrap gap-4 rounded-lg border border-border px-3 py-2">
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={!!form.is_bank_account}
               onChange={(e) => setForm((p) => ({ ...p, is_bank_account: e.target.checked }))}
             />
-            Bank Account
+            Bank account
           </label>
-          <label className="flex items-center gap-2 text-sm" title="Enable Tally-style bill-wise tracking for Sundry Creditors / Debtors">
+          <label
+            className="flex items-center gap-2 text-sm"
+            title="Enable Tally-style bill-wise tracking for Sundry Creditors / Debtors"
+          >
             <input
               type="checkbox"
               checked={!!form.enable_bill_wise}
               onChange={(e) => setForm((p) => ({ ...p, enable_bill_wise: e.target.checked }))}
             />
-            Bill-Wise Tracking
+            Bill-wise tracking
           </label>
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={!!form.is_active} onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))} />
+            <input
+              type="checkbox"
+              checked={!!form.is_active}
+              onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))}
+            />
             Active
           </label>
         </div>
-        <div className="flex items-center gap-2 sm:col-span-2">
-          <button
-            type="button"
-            className="text-sm text-text-secondary underline"
-            onClick={() => setShowAdvanced((a) => !a)}
-          >
-            {showAdvanced ? "Hide advanced" : "Show advanced"}
-          </button>
-        </div>
+        <button
+          type="button"
+          className="text-sm text-text-secondary underline"
+          onClick={() => setShowAdvanced((a) => !a)}
+        >
+          {showAdvanced ? "Hide advanced" : "Show advanced"}
+        </button>
         {showAdvanced ? (
-          <>
-            <select
-              className="rounded border px-3 py-2 text-sm"
-              value={form.account_type ?? "posting"}
-              onChange={(e) => setForm((p) => ({ ...p, account_type: e.target.value as "posting" | "statistical" | "header" }))}
-            >
-              <option value="posting">Posting</option>
-              <option value="statistical">Statistical</option>
-              <option value="header">Header</option>
-            </select>
-            <input
-              className="rounded border px-3 py-2 text-sm"
-              placeholder="Reporting code"
-              value={form.reporting_code ?? ""}
-              onChange={(e) => setForm((p) => ({ ...p, reporting_code: e.target.value || undefined }))}
-            />
-            <input
-              className="rounded border px-3 py-2 text-sm"
-              type="number"
-              placeholder="Display order"
-              value={form.display_order ?? 0}
-              onChange={(e) => setForm((p) => ({ ...p, display_order: Number(e.target.value) || 0 }))}
-            />
-            {(form.account_type ?? "posting") === "statistical" ? (
-              <input
-                className="rounded border px-3 py-2 text-sm"
-                placeholder="Statistical unit (e.g. Count, SqFt)"
-                value={form.statistical_unit ?? ""}
-                onChange={(e) => setForm((p) => ({ ...p, statistical_unit: e.target.value || undefined }))}
-              />
-            ) : null}
-            <select
-              className="rounded border px-3 py-2 text-sm"
-              value={form.parent_account_id ?? ""}
-              onChange={(e) => setForm((p) => ({ ...p, parent_account_id: e.target.value ? Number(e.target.value) : null }))}
-            >
-              <option value="">No parent</option>
-              {rows.filter((a) => a.id !== editingId).map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.account_number} – {a.name}
-                </option>
-              ))}
-            </select>
-            <input
-              className="rounded border px-3 py-2 text-sm"
-              type="date"
-              placeholder="Last reviewed"
-              value={form.last_reviewed_at ?? ""}
-              onChange={(e) => setForm((p) => ({ ...p, last_reviewed_at: e.target.value || undefined }))}
-            />
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs text-text-muted">Cost nature (reporting / financier rollups)</label>
+          <div className="space-y-3 rounded-lg border border-border bg-surface-subtle/50 p-3">
+            <div className="space-y-1">
+              <label className={labelClass} htmlFor="coa-type">
+                Account type
+              </label>
               <select
-                className="w-full rounded border px-3 py-2 text-sm"
+                id="coa-type"
+                className={fieldClass}
+                value={form.account_type ?? "posting"}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    account_type: e.target.value as "posting" | "statistical" | "header",
+                  }))
+                }
+              >
+                <option value="posting">Posting</option>
+                <option value="statistical">Statistical</option>
+                <option value="header">Header</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className={labelClass} htmlFor="coa-reporting">
+                Reporting code
+              </label>
+              <input
+                id="coa-reporting"
+                className={fieldClass}
+                placeholder="Reporting code"
+                value={form.reporting_code ?? ""}
+                onChange={(e) => setForm((p) => ({ ...p, reporting_code: e.target.value || undefined }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className={labelClass} htmlFor="coa-order">
+                Display order
+              </label>
+              <input
+                id="coa-order"
+                className={fieldClass}
+                type="number"
+                value={form.display_order ?? 0}
+                onChange={(e) => setForm((p) => ({ ...p, display_order: Number(e.target.value) || 0 }))}
+              />
+            </div>
+            {(form.account_type ?? "posting") === "statistical" ? (
+              <div className="space-y-1">
+                <label className={labelClass} htmlFor="coa-stat-unit">
+                  Statistical unit
+                </label>
+                <input
+                  id="coa-stat-unit"
+                  className={fieldClass}
+                  placeholder="e.g. Count, SqFt"
+                  value={form.statistical_unit ?? ""}
+                  onChange={(e) => setForm((p) => ({ ...p, statistical_unit: e.target.value || undefined }))}
+                />
+              </div>
+            ) : null}
+            <div className="space-y-1">
+              <label className={labelClass} htmlFor="coa-parent">
+                Parent account
+              </label>
+              <select
+                id="coa-parent"
+                className={fieldClass}
+                value={form.parent_account_id ?? ""}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    parent_account_id: e.target.value ? Number(e.target.value) : null,
+                  }))
+                }
+              >
+                <option value="">No parent</option>
+                {rows
+                  .filter((a) => a.id !== editingId)
+                  .map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.account_number} – {a.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className={labelClass} htmlFor="coa-reviewed">
+                Last reviewed
+              </label>
+              <input
+                id="coa-reviewed"
+                className={fieldClass}
+                type="date"
+                value={form.last_reviewed_at ?? ""}
+                onChange={(e) => setForm((p) => ({ ...p, last_reviewed_at: e.target.value || undefined }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className={labelClass} htmlFor="coa-cost-nature">
+                Cost nature (reporting / financier rollups)
+              </label>
+              <select
+                id="coa-cost-nature"
+                className={fieldClass}
                 value={form.cost_nature ?? ""}
                 onChange={(e) =>
                   setForm((p) => ({
                     ...p,
-                    cost_nature: e.target.value ? (e.target.value as (typeof FINANCE_COST_NATURE_CODES)[number]) : null,
+                    cost_nature: e.target.value
+                      ? (e.target.value as (typeof FINANCE_COST_NATURE_CODES)[number])
+                      : null,
                   }))
                 }
               >
@@ -667,10 +975,10 @@ export function ChartOfAccountsPage() {
                 ))}
               </select>
             </div>
-          </>
+          </div>
         ) : null}
         {canActivateInterest ? (
-          <div className="sm:col-span-2 lg:col-span-4 space-y-3 rounded-lg border border-border bg-surface-subtle/60 p-3">
+          <div className="space-y-3 rounded-lg border border-border bg-surface-subtle/60 p-3">
             <label className="flex items-center gap-2 text-sm font-medium text-text-primary">
               <input
                 type="checkbox"
@@ -688,13 +996,14 @@ export function ChartOfAccountsPage() {
               Activate interest on this ledger
             </label>
             <p className="text-xs text-text-muted">
-              Optional. Draft journals are created automatically; you post them. Compound adds unpaid interest to the
-              balance (bank loans). Simple charges principal only (hand loans). First period is prorated by days.
+              Optional. Draft journals are created automatically; you post them. Compound adds unpaid interest to
+              the balance (bank loans). Simple charges principal only (hand loans). First period is prorated by
+              days.
             </p>
             {form.interest_enabled ? (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-3">
                 <select
-                  className="rounded border px-3 py-2 text-sm"
+                  className={fieldClass}
                   value={form.interest_basis ?? "simple"}
                   onChange={(e) =>
                     setForm((p) => ({ ...p, interest_basis: e.target.value as CoaInterestBasis }))
@@ -704,7 +1013,7 @@ export function ChartOfAccountsPage() {
                   <option value="compound">Compound (interest on unpaid interest)</option>
                 </select>
                 <select
-                  className="rounded border px-3 py-2 text-sm"
+                  className={fieldClass}
                   value={form.interest_method ?? "yearly_rate"}
                   onChange={(e) =>
                     setForm((p) => ({ ...p, interest_method: e.target.value as CoaInterestMethod }))
@@ -715,7 +1024,7 @@ export function ChartOfAccountsPage() {
                   <option value="yearly_fixed">Yearly fixed amount</option>
                 </select>
                 <select
-                  className="rounded border px-3 py-2 text-sm"
+                  className={fieldClass}
                   value={form.interest_frequency ?? "monthly"}
                   onChange={(e) =>
                     setForm((p) => ({ ...p, interest_frequency: e.target.value as CoaInterestFrequency }))
@@ -725,29 +1034,33 @@ export function ChartOfAccountsPage() {
                   <option value="quarterly">Quarterly accrual</option>
                 </select>
                 <input
-                  className="rounded border px-3 py-2 text-sm"
+                  className={fieldClass}
                   type="date"
                   value={form.interest_activation_date ?? ""}
-                  onChange={(e) => setForm((p) => ({ ...p, interest_activation_date: e.target.value || null }))}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, interest_activation_date: e.target.value || null }))
+                  }
                   title="Interest activation date"
                 />
                 {form.interest_method === "yearly_rate" ? (
                   <input
-                    className="rounded border px-3 py-2 text-sm"
+                    className={fieldClass}
                     placeholder="Yearly rate %"
                     value={form.interest_rate_yearly ?? ""}
-                    onChange={(e) => setForm((p) => ({ ...p, interest_rate_yearly: e.target.value || null }))}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, interest_rate_yearly: e.target.value || null }))
+                    }
                   />
                 ) : (
                   <input
-                    className="rounded border px-3 py-2 text-sm"
+                    className={fieldClass}
                     placeholder={form.interest_method === "monthly_fixed" ? "Monthly amount" : "Yearly amount"}
                     value={form.interest_amount ?? ""}
                     onChange={(e) => setForm((p) => ({ ...p, interest_amount: e.target.value || null }))}
                   />
                 )}
                 <select
-                  className="rounded border px-3 py-2 text-sm sm:col-span-2"
+                  className={fieldClass}
                   value={form.interest_counterpart_account_id ?? ""}
                   onChange={(e) =>
                     setForm((p) => ({
@@ -766,102 +1079,35 @@ export function ChartOfAccountsPage() {
                   ))}
                 </select>
                 {editingId ? (
-                  <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-4">
-                    <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => void previewInterest()}>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className={listPageToolbarButtonClass}
+                      onClick={() => void previewInterest()}
+                    >
                       Preview interest
                     </button>
-                    <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => void runInterest()}>
+                    <button
+                      type="button"
+                      className={listPageToolbarButtonClass}
+                      onClick={() => void runInterest()}
+                    >
                       Run interest accruals
                     </button>
                   </div>
                 ) : null}
                 {interestPreview ? (
-                  <pre className="sm:col-span-2 lg:col-span-4 whitespace-pre-wrap rounded border bg-surface-raised px-3 py-2 text-xs text-text-secondary">
+                  <pre className="whitespace-pre-wrap rounded border bg-surface-raised px-3 py-2 text-xs text-text-secondary">
                     {interestPreview}
                   </pre>
                 ) : null}
-                {interestRunMsg ? (
-                  <div className="sm:col-span-2 lg:col-span-4 text-xs text-text-secondary">{interestRunMsg}</div>
-                ) : null}
+                {interestRunMsg ? <div className="text-xs text-text-secondary">{interestRunMsg}</div> : null}
               </div>
             ) : null}
           </div>
         ) : null}
-        <div className="flex flex-wrap justify-end gap-2 sm:col-span-2 lg:col-span-1">
-          {editingId ? (
-            <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => setEditingId(null)}>
-              Cancel
-            </button>
-          ) : null}
-          <button
-            type="submit"
-            className="rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
-          >
-            {editingId ? "Update" : "Create"}
-          </button>
-        </div>
-      </form>
-
-      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
-
-      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
-        <table className="min-w-full text-sm">
-          <thead className="bg-surface-subtle text-left text-text-secondary">
-            <tr>
-              <th className="px-4 py-3">No</th>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Group</th>
-              <th className="px-4 py-3">Type</th>
-              <th className="px-4 py-3">Cost nature</th>
-              <th className="px-4 py-3">Normal</th>
-              <th className="px-4 py-3">Opening</th>
-              <th className="px-4 py-3">Balance</th>
-              <th className="px-4 py-3">Bill-Wise</th>
-              <th className="px-4 py-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td className="px-4 py-6 text-text-muted" colSpan={9}>
-                  Loading chart of accounts...
-                </td>
-              </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td className="px-4 py-6 text-text-muted" colSpan={9}>
-                  No ledger accounts found.
-                </td>
-              </tr>
-            ) : (
-              rows.map((r) => (
-                <tr key={r.id} className="border-t">
-                  <td className="px-4 py-3 font-medium">{r.account_number}</td>
-                  <td className="px-4 py-3">{r.name}</td>
-                  <td className="px-4 py-3">{groupMap.get(r.group_id) || "-"}</td>
-                  <td className="px-4 py-3">{r.account_type ?? "posting"}</td>
-                  <td className="px-4 py-3 text-text-muted">{r.cost_nature ?? "—"}</td>
-                  <td className="px-4 py-3 uppercase">{r.normal_balance}</td>
-                  <td className="px-4 py-3">{Number(r.opening_balance || 0).toLocaleString()}</td>
-                  <td className="px-4 py-3">{Number(r.balance || 0).toLocaleString()}</td>
-                  <td className="px-4 py-3">{r.enable_bill_wise ? <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">Yes</span> : "—"}</td>
-                  <td className="px-4 py-3">
-                    <RowActionsMenu
-                      rowId={r.id}
-                      openId={openActionsId}
-                      onOpenChange={setOpenActionsId}
-                      items={[
-                        { key: "edit", label: "Edit", onClick: () => startEdit(r) },
-                        { key: "delete", label: "Delete", danger: true, onClick: () => void remove(r.id) },
-                      ]}
-                    />
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+        </FormSection>
+      </FinanceFormDrawer>
     </div>
   );
 }

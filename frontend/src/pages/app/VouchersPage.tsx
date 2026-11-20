@@ -17,6 +17,8 @@ import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
+import { ScrollTableCard } from "@/components/finance/kit";
+import { listTableTheadClass } from "@/components/app/listPageLayout";
 import { VoucherActionReasonModal } from "@/components/vouchers/VoucherActionReasonModal";
 import { VoucherEntryAssistPanel } from "@/components/vouchers/VoucherEntryAssistPanel";
 import { formatDrCr, formatShortDate } from "@/components/vouchers/voucherAssistFormat";
@@ -1354,9 +1356,9 @@ export function VouchersPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <ScrollTableCard maxHeight="panel">
           <table className="min-w-full text-sm">
-            <thead className="bg-surface-subtle text-left">
+            <thead className={`${listTableTheadClass} text-left`}>
               <tr>
                 <th className="px-3 py-2">No</th>
                 <th className="px-3 py-2">Date</th>
@@ -1420,7 +1422,7 @@ export function VouchersPage() {
               )}
             </tbody>
           </table>
-        </div>
+        </ScrollTableCard>
         {!loading && totalRows > 0 ? (
           <DataTablePagination
             page={page}

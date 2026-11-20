@@ -51,6 +51,7 @@ import {
 import { ErpAiPhasesDashboardSection } from "@/components/erp-ai/ErpAiPhasesDashboardSection";
 import { FinancialHealthCard } from "@/components/dashboard/FinancialHealthCard";
 import { useDashboardHome } from "@/hooks/useDashboardHome";
+import { AuthorityInboxPanel } from "@/components/authority/AuthorityInboxPanel";
 
 const GlobalCustomerMapCard = lazy(() =>
   import("@/components/dashboard/GlobalCustomerMapCard").then((m) => ({
@@ -437,6 +438,7 @@ export function Dashboard() {
           />
 
           <OnboardingChecklist tenantId={me?.tenant_id} roleName={me?.role_name} />
+          <AuthorityInboxPanel variant="dashboard" />
           {needsAttentionStrip}
           <OwnerCostAlertStrip />
           {kpiCards}

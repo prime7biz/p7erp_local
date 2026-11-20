@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   api,
   type ChartOfAccountResponse,
@@ -7,7 +7,24 @@ import {
   type VoucherClassResponse,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
-import { logApiError } from "@/utils/logApiError";
+import {
+  listPageEmptyClass,
+  listPageErrorClass,
+  listPageFilterBarClass,
+  listPageRootClass,
+  listPageTableCardClass,
+  listPageToolbarButtonClass,
+  listPageToolbarInputClass,
+  listTableBaseClass,
+  listTableTdClass,
+  listTableTdPrimaryClass,
+  listTableThClass,
+  listTableTheadClass,
+  listTableTrClass,
+} from "@/components/app/listPageLayout";
+import { RowActionsMenu } from "@/components/app/RowActionsMenu";
+import { FinanceFormDrawer, FormSection } from "@/components/finance/kit";
+import { logApiError } from "@/utils/logApiError";
 import { getChartOfAccountsCached, getCostCentersCached } from "@/lib/masterData";
 import { useConfirm } from "@/components/app/useConfirm";
 
@@ -30,18 +47,25 @@ const DEFAULT_FORM = {
   is_active: true,
 };
 
-export function VoucherClassPage() {
+const fieldClass =
+  "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary focus:border-brand-primary focus:outline-none focus:ring-0";
+const labelClass = "mb-1 block text-xs font-medium text-text-muted";
+
+export function VoucherClassPage() {
   const confirm = useConfirm();
   const [rows, setRows] = useState<VoucherClassResponse[]>([]);
   const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
   const [costCenters, setCostCenters] = useState<CostCenterResponse[]>([]);
   const [voucherTypes, setVoucherTypes] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(DEFAULT_FORM);
   const [lines, setLines] = useState<VoucherClassLineTemplate[]>([{ ...EMPTY_LINE }]);
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
-  const actionsRef = useRef<HTMLDivElement | null>(null);
+  const [openActionsId, setOpenActionsId] = useState<number | string | null>(null);
+  const [search, setSearch] = useState("");
 
   async function load() {
     try {
@@ -66,24 +90,32 @@ export function VoucherClassPage() {
     void load();
   }, []);
 
-  useEffect(() => {
-    function onDoc(ev: MouseEvent) {
-      if (actionsRef.current && !actionsRef.current.contains(ev.target as Node)) {
-        setOpenActionsId(null);
-      }
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => r.name.toLowerCase().includes(q) || r.voucher_type.toLowerCase().includes(q));
+  }, [rows, search]);
 
   function resetForm() {
     setEditingId(null);
     setForm(DEFAULT_FORM);
     setLines([{ ...EMPTY_LINE }]);
+    setFormError(null);
+  }
+
+  function closeDrawer() {
+    setDrawerOpen(false);
+    resetForm();
+  }
+
+  function openAdd() {
+    resetForm();
+    setDrawerOpen(true);
   }
 
   function startEdit(row: VoucherClassResponse) {
     setEditingId(row.id);
+    setFormError(null);
     setForm({
       name: row.name,
       voucher_type: row.voucher_type,
@@ -97,6 +129,7 @@ export function VoucherClassPage() {
     });
     setLines(row.line_templates?.length ? [...row.line_templates] : [{ ...EMPTY_LINE }]);
     setOpenActionsId(null);
+    setDrawerOpen(true);
   }
 
   function buildBody() {
@@ -124,19 +157,22 @@ export function VoucherClassPage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    setFormError(null);
+    setSaving(true);
     try {
-      setError("");
       const body = buildBody();
       if (editingId) {
         await api.updateVoucherClass(editingId, body);
       } else {
         await api.createVoucherClass(body);
       }
-      resetForm();
+      closeDrawer();
       await load();
     } catch (err) {
       logApiError("VoucherClassPage.submit", err);
-      setError((err as Error).message);
+      setFormError((err as Error).message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -144,7 +180,7 @@ export function VoucherClassPage() {
     if (!(await confirm({ title: "Delete this voucher class?", danger: true }))) return;
     try {
       await api.deleteVoucherClass(id);
-      if (editingId === id) resetForm();
+      if (editingId === id) closeDrawer();
       await load();
     } catch (err) {
       logApiError("VoucherClassPage.delete", err);
@@ -155,84 +191,184 @@ export function VoucherClassPage() {
   const acctName = new Map(accounts.map((a) => [a.id, `${a.account_number} — ${a.name}`]));
 
   return (
-    <div className="space-y-4 p-4 md:p-6">
+    <div className={listPageRootClass}>
       <AppPageHeader
         title="Voucher Classes"
         description="Reusable templates with default ledger, narration, and line prefills."
       />
 
-      {error ? (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-      ) : null}
+      <div className={listPageFilterBarClass}>
+        <input
+          type="search"
+          aria-label="Search voucher classes"
+          placeholder="Search class name…"
+          className={listPageToolbarInputClass}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <button
+          type="button"
+          onClick={openAdd}
+          className="rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90 sm:ml-auto"
+        >
+          Add class
+        </button>
+      </div>
 
-      <form onSubmit={onSubmit} className="space-y-3 rounded-lg border border-gray-200 bg-white p-3">
-        <p className="text-sm font-medium text-gray-900">{editingId ? "Edit class" : "New class"}</p>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="text-xs text-gray-600">
-            Name
-            <input
-              className="mt-1 block w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-              value={form.name}
-              onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-              required
-            />
-          </label>
-          <label className="text-xs text-gray-600">
-            Voucher type
-            <select
-              className="mt-1 block w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-              value={form.voucher_type}
-              onChange={(e) => setForm((p) => ({ ...p, voucher_type: e.target.value }))}
-            >
-              {voucherTypes.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
+      {error ? <div className={listPageErrorClass}>{error}</div> : null}
+
+      <div className={listPageTableCardClass}>
+        <div className="max-h-[calc(100dvh-18rem)] overflow-auto">
+          <table className={`${listTableBaseClass} min-w-[48rem]`}>
+            <thead className={listTableTheadClass}>
+              <tr>
+                <th className={listTableThClass}>Name</th>
+                <th className={listTableThClass}>Type</th>
+                <th className={listTableThClass}>Default ledger</th>
+                <th className={listTableThClass}>Lines</th>
+                <th className={listTableThClass}>Flags</th>
+                <th className={listTableThClass}>Status</th>
+                <th className={listTableThClass}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRows.map((r) => (
+                <tr key={r.id} className={listTableTrClass}>
+                  <td className={listTableTdPrimaryClass}>{r.name}</td>
+                  <td className={listTableTdClass}>{r.voucher_type}</td>
+                  <td className={listTableTdClass}>
+                    {r.default_ledger_id ? acctName.get(r.default_ledger_id) ?? `#${r.default_ledger_id}` : "—"}
+                  </td>
+                  <td className={listTableTdClass}>{r.line_templates?.length ?? 0}</td>
+                  <td className={`${listTableTdClass} text-xs`}>
+                    {[r.auto_tax && "Tax", r.auto_round_off && "Round", r.auto_bill_allocation && "Bill"]
+                      .filter(Boolean)
+                      .join(", ") || "—"}
+                  </td>
+                  <td className={listTableTdClass}>{r.is_active ? "Active" : "Inactive"}</td>
+                  <td className={listTableTdClass}>
+                    <RowActionsMenu
+                      rowId={r.id}
+                      openId={openActionsId}
+                      onOpenChange={setOpenActionsId}
+                      menuPortal
+                      items={[
+                        { key: "edit", label: "Edit", onClick: () => startEdit(r) },
+                        { key: "delete", label: "Delete", danger: true, onClick: () => void remove(r.id) },
+                      ]}
+                    />
+                  </td>
+                </tr>
               ))}
-            </select>
-          </label>
-          <label className="text-xs text-gray-600">
-            Default ledger
-            <select
-              className="mt-1 block w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-              value={form.default_ledger_id}
-              onChange={(e) => setForm((p) => ({ ...p, default_ledger_id: e.target.value }))}
-            >
-              <option value="">None</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.account_number} — {a.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-xs text-gray-600">
-            Default cost center
-            <select
-              className="mt-1 block w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-              value={form.default_cost_center_id}
-              onChange={(e) => setForm((p) => ({ ...p, default_cost_center_id: e.target.value }))}
-            >
-              <option value="">None</option>
-              {costCenters.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.center_code} — {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-xs text-gray-600 lg:col-span-2">
-            Default narration
-            <input
-              className="mt-1 block w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-              value={form.default_narration}
-              onChange={(e) => setForm((p) => ({ ...p, default_narration: e.target.value }))}
-            />
-          </label>
+              {!filteredRows.length ? (
+                <tr>
+                  <td className={listPageEmptyClass} colSpan={7}>
+                    {rows.length === 0 ? "No voucher classes yet." : "No classes match your search."}
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
         </div>
-        <div className="flex flex-wrap gap-4 text-xs text-gray-700">
+        <div className="border-t border-border px-4 py-2 text-xs text-text-muted">
+          Showing {filteredRows.length} of {rows.length} class{rows.length === 1 ? "" : "es"}
+        </div>
+      </div>
+
+      <FinanceFormDrawer
+        open={drawerOpen}
+        title={editingId ? "Edit class" : "Add class"}
+        description="Reusable voucher template with optional line prefills."
+        onClose={closeDrawer}
+        onSubmit={(e) => void onSubmit(e)}
+        submitLabel={editingId ? "Update" : "Create"}
+        submitting={saving}
+        error={formError ?? undefined}
+      >
+        <FormSection title="Class details">
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="vc-name">
+            Name *
+          </label>
+          <input
+            id="vc-name"
+            className={fieldClass}
+            value={form.name}
+            onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+            required
+          />
+        </div>
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="vc-type">
+            Voucher type
+          </label>
+          <select
+            id="vc-type"
+            className={fieldClass}
+            value={form.voucher_type}
+            onChange={(e) => setForm((p) => ({ ...p, voucher_type: e.target.value }))}
+          >
+            {voucherTypes.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="vc-ledger">
+            Default ledger
+          </label>
+          <select
+            id="vc-ledger"
+            className={fieldClass}
+            value={form.default_ledger_id}
+            onChange={(e) => setForm((p) => ({ ...p, default_ledger_id: e.target.value }))}
+          >
+            <option value="">None</option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.account_number} — {a.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="vc-cc">
+            Default cost center
+          </label>
+          <select
+            id="vc-cc"
+            className={fieldClass}
+            value={form.default_cost_center_id}
+            onChange={(e) => setForm((p) => ({ ...p, default_cost_center_id: e.target.value }))}
+          >
+            <option value="">None</option>
+            {costCenters.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.center_code} — {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className={labelClass} htmlFor="vc-narration">
+            Default narration
+          </label>
+          <input
+            id="vc-narration"
+            className={fieldClass}
+            value={form.default_narration}
+            onChange={(e) => setForm((p) => ({ ...p, default_narration: e.target.value }))}
+          />
+        </div>
+        <div className="flex flex-wrap gap-4 text-sm">
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={form.auto_tax} onChange={(e) => setForm((p) => ({ ...p, auto_tax: e.target.checked }))} />
+            <input
+              type="checkbox"
+              checked={form.auto_tax}
+              onChange={(e) => setForm((p) => ({ ...p, auto_tax: e.target.checked }))}
+            />
             Auto tax
           </label>
           <label className="flex items-center gap-2">
@@ -252,17 +388,21 @@ export function VoucherClassPage() {
             Auto bill allocation
           </label>
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={form.is_active} onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))} />
+            <input
+              type="checkbox"
+              checked={form.is_active}
+              onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))}
+            />
             Active
           </label>
         </div>
 
         <div className="space-y-2">
-          <p className="text-xs font-medium text-gray-600">Line templates</p>
+          <p className="text-xs font-medium text-text-muted">Line templates</p>
           {lines.map((ln, idx) => (
-            <div key={idx} className="grid gap-2 sm:grid-cols-5">
+            <div key={idx} className="space-y-2 rounded-lg border border-border p-2">
               <select
-                className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm sm:col-span-2"
+                className={fieldClass}
                 value={ln.account_id || ""}
                 onChange={(e) => {
                   const next = [...lines];
@@ -279,35 +419,37 @@ export function VoucherClassPage() {
                   </option>
                 ))}
               </select>
-              <select
-                className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-                value={ln.entry_type}
-                onChange={(e) => {
-                  const next = [...lines];
-                  const cur = next[idx];
-                  if (!cur) return;
-                  next[idx] = { ...cur, entry_type: e.target.value as "DEBIT" | "CREDIT" };
-                  setLines(next);
-                }}
-              >
-                <option value="DEBIT">DEBIT</option>
-                <option value="CREDIT">CREDIT</option>
-              </select>
-              <input
-                className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-                placeholder="Amount"
-                value={ln.amount}
-                onChange={(e) => {
-                  const next = [...lines];
-                  const cur = next[idx];
-                  if (!cur) return;
-                  next[idx] = { ...cur, amount: e.target.value };
-                  setLines(next);
-                }}
-              />
-              <div className="flex gap-1">
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  className={fieldClass}
+                  value={ln.entry_type}
+                  onChange={(e) => {
+                    const next = [...lines];
+                    const cur = next[idx];
+                    if (!cur) return;
+                    next[idx] = { ...cur, entry_type: e.target.value as "DEBIT" | "CREDIT" };
+                    setLines(next);
+                  }}
+                >
+                  <option value="DEBIT">DEBIT</option>
+                  <option value="CREDIT">CREDIT</option>
+                </select>
                 <input
-                  className="min-w-0 flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                  className={fieldClass}
+                  placeholder="Amount"
+                  value={ln.amount}
+                  onChange={(e) => {
+                    const next = [...lines];
+                    const cur = next[idx];
+                    if (!cur) return;
+                    next[idx] = { ...cur, amount: e.target.value };
+                    setLines(next);
+                  }}
+                />
+              </div>
+              <div className="flex gap-2">
+                <input
+                  className={`${fieldClass} flex-1`}
                   placeholder="Notes"
                   value={ln.notes ?? ""}
                   onChange={(e) => {
@@ -320,105 +462,24 @@ export function VoucherClassPage() {
                 />
                 <button
                   type="button"
-                  className="rounded-lg border border-gray-300 px-2 text-xs text-red-600 hover:bg-red-50"
+                  className={listPageToolbarButtonClass}
                   onClick={() => setLines(lines.filter((_, i) => i !== idx))}
                 >
-                  ×
+                  Remove
                 </button>
               </div>
             </div>
           ))}
           <button
             type="button"
-            className="rounded-lg border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
+            className={listPageToolbarButtonClass}
             onClick={() => setLines([...lines, { ...EMPTY_LINE }])}
           >
             + Add line
           </button>
         </div>
-
-        <div className="flex gap-2">
-          <button type="submit" className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
-            {editingId ? "Update" : "Create"}
-          </button>
-          {editingId ? (
-            <button type="button" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50" onClick={resetForm}>
-              Cancel
-            </button>
-          ) : null}
-        </div>
-      </form>
-
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-        <table className="min-w-full text-left text-sm">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-            <tr>
-              <th className="px-3 py-2">Name</th>
-              <th className="px-3 py-2">Type</th>
-              <th className="px-3 py-2">Default ledger</th>
-              <th className="px-3 py-2">Lines</th>
-              <th className="px-3 py-2">Flags</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className="border-t border-gray-100">
-                <td className="px-3 py-2 font-medium">{r.name}</td>
-                <td className="px-3 py-2">{r.voucher_type}</td>
-                <td className="px-3 py-2 text-gray-600">
-                  {r.default_ledger_id ? acctName.get(r.default_ledger_id) ?? `#${r.default_ledger_id}` : "—"}
-                </td>
-                <td className="px-3 py-2">{r.line_templates?.length ?? 0}</td>
-                <td className="px-3 py-2 text-xs text-gray-600">
-                  {[r.auto_tax && "Tax", r.auto_round_off && "Round", r.auto_bill_allocation && "Bill"].filter(Boolean).join(", ") || "—"}
-                </td>
-                <td className="px-3 py-2">{r.is_active ? "Active" : "Inactive"}</td>
-                <td className="relative px-3 py-2">
-                  <div ref={openActionsId === r.id ? actionsRef : undefined} className="relative inline-block">
-                    <button
-                      type="button"
-                      className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      onClick={() => setOpenActionsId(openActionsId === r.id ? null : r.id)}
-                    >
-                      Actions
-                    </button>
-                    {openActionsId === r.id ? (
-                      <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                        <button
-                          type="button"
-                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                          onClick={() => startEdit(r)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
-                          onClick={() => {
-                            setOpenActionsId(null);
-                            void remove(r.id);
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {!rows.length ? (
-              <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-gray-500">
-                  No voucher classes yet.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+        </FormSection>
+      </FinanceFormDrawer>
     </div>
   );
 }

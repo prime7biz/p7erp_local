@@ -131,3 +131,21 @@ export async function openOrSaveBlob(blob: Blob, filename: string): Promise<Save
   }
   return saveBlob(blob, filename);
 }
+
+/**
+ * Prefer the OS share sheet (WhatsApp, Files, email, …) then fall back to `saveBlob`.
+ * Use on phone/tablet document actions instead of `window.print()`.
+ */
+export async function shareOrSaveBlob(blob: Blob, filename: string): Promise<SaveBlobResult> {
+  const nav = globalThis.navigator as NavigatorLike | undefined;
+  if (nav) {
+    const shared = await tryShare(blob, filename, nav);
+    if (shared) return shared;
+  }
+  return saveBlob(blob, filename);
+}
+
+/** True when the layout should offer Save PDF / Share and hide Print (phone width or mobile_ui_v2 phone). */
+export function preferShareOverPrint(isPhoneLayout: boolean): boolean {
+  return isPhoneLayout;
+}

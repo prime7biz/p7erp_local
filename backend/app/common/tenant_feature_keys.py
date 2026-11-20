@@ -225,6 +225,15 @@ MANPOWER_QUOTA_ENFORCEMENT_V1 = "manpower_quota_enforcement_v1"
 MANPOWER_FLOOR_SUGGESTED_V1 = "manpower_floor_suggested_v1"
 MANPOWER_SMV_PANEL_V1 = "manpower_smv_panel_v1"
 
+# Fixed-class user authority (Super Admin + Class 1-4). Strict, default OFF;
+# never add to DEFAULT_ON_FEATURE_FLAGS.
+USER_AUTHORITY_CLASSES_V1 = "user_authority_classes_v1"
+
+# Governed KPI engine (docs/kpi-platform/). Strict, default OFF; never add to DEFAULT_ON_FEATURE_FLAGS.
+KPI_ENGINE_V1 = "kpi_engine_v1"
+# Rule-based KPI predictions (needs kpi_engine_v1). Strict, default OFF.
+KPI_PREDICTIVE_V1 = "kpi_predictive_v1"
+
 # Flags that are on for every tenant (existing and new) unless explicitly set to False.
 # API payloads read by the frontend (`/auth/me`, `/settings/config`) fill these in as True when missing.
 DEFAULT_ON_FEATURE_FLAGS: tuple[str, ...] = (
@@ -401,6 +410,21 @@ def is_manpower_smv_panel_v1_enabled(feature_flags: Any) -> bool:
     return is_manpower_control_v1_enabled(feature_flags) and _flag_true(
         feature_flags, MANPOWER_SMV_PANEL_V1
     )
+
+
+def is_user_authority_classes_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: only explicit True enables fixed-class authority (Super + Class 1-4)."""
+    return _flag_true(feature_flags, USER_AUTHORITY_CLASSES_V1)
+
+
+def is_kpi_engine_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: governed KPI engine (docs/kpi-platform/)."""
+    return _flag_true(feature_flags, KPI_ENGINE_V1)
+
+
+def is_kpi_predictive_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: KPI predictions; requires kpi_engine_v1."""
+    return is_kpi_engine_v1_enabled(feature_flags) and _flag_true(feature_flags, KPI_PREDICTIVE_V1)
 
 
 def is_packing_list_cartons_enabled(feature_flags: Any) -> bool:

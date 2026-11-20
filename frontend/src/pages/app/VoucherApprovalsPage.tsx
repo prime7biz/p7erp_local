@@ -4,6 +4,8 @@ import { api, type VoucherResponse } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
+import { ScrollTableCard } from "@/components/finance/kit";
+import { listTableTheadClass } from "@/components/app/listPageLayout";
 import { useListPagination } from "@/hooks/useListPagination";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { VoucherActionReasonModal } from "@/components/vouchers/VoucherActionReasonModal";
@@ -291,9 +293,9 @@ export function VoucherApprovalsPage() {
         </button>
       </div>
 
-      <div className="print-card overflow-x-auto rounded-xl border border-border bg-surface-raised">
+      <ScrollTableCard className="print-card" maxHeight="main">
         <table className="min-w-full text-sm">
-          <thead className="bg-surface-subtle text-left">
+          <thead className={listTableTheadClass + " text-left"}>
             <tr>
               <th className="px-3 py-2">Voucher No</th>
               <th className="px-3 py-2">Date</th>
@@ -364,7 +366,7 @@ export function VoucherApprovalsPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </ScrollTableCard>
       {!loading && totalRows > 0 ? (
         <div className="no-print">
           <DataTablePagination

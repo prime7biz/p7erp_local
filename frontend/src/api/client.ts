@@ -21,6 +21,8 @@ import { salesApi } from "@/api/sales";
 import { commercialApi } from "@/api/commercial";
 import { aiApi } from "@/api/ai";
 import { platformApi } from "@/api/platform";
+import { authorityInboxApi } from "@/api/authorityInbox";
+import { authorityCutoverApi } from "@/api/authorityCutover";
 
 export * from "@/api/models";
 export { ApiError, clearAuth, getTenantId, getToken, setAuth } from "@/api/core";
@@ -38,6 +40,14 @@ export { salesApi } from "@/api/sales";
 export { commercialApi } from "@/api/commercial";
 export { aiApi } from "@/api/ai";
 export { platformApi } from "@/api/platform";
+export { authorityInboxApi } from "@/api/authorityInbox";
+export { authorityCutoverApi } from "@/api/authorityCutover";
+export type {
+  AuthorityCutoverProposal,
+  AuthorityCutoverDryRunResult,
+  AuthorityCutoverApplyResult,
+  AuthorityCutoverRestoreResult,
+} from "@/api/authorityCutover";
 
 export const api = {
   ...financeApi,
@@ -53,4 +63,6 @@ export const api = {
   ...commercialApi,
   ...aiApi,
   ...platformApi,
+  ...authorityInboxApi,
+  ...authorityCutoverApi,
 };

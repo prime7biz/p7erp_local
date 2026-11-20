@@ -2,6 +2,7 @@ import { AlertTriangle } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { ProfitabilityResponse, ProfitWarning } from "@/api/financeControl";
 import { amountText, marginText } from "@/components/finance/control/controlLogic";
+import { ScrollTableCard } from "@/components/finance/kit";
 import { ACCOUNT_GROUPS_SETUP_PATH } from "@/components/finance/statements/StatementBanners";
 import { formatIndian, subtractMoneyText } from "@/components/finance/statements/statementFormat";
 
@@ -92,9 +93,13 @@ export function ProfitDetail({ data }: { data: ProfitabilityResponse }) {
         </div>
       </section>
 
-      <section className="overflow-x-auto rounded-xl border border-border bg-surface-raised" aria-label="Budget versus actual">
+      <section aria-label="Budget versus actual">
+        <ScrollTableCard
+          maxHeight="panel"
+          footer="The quotation has no overhead or finance cost, so those two lines have no budget. Shared overhead is not split between orders yet."
+        >
         <table className="min-w-full text-sm">
-          <thead className="bg-surface-subtle">
+          <thead className="sticky top-0 z-10 bg-surface-subtle">
             <tr>
               <th className={`${th} text-left`}>Line</th>
               <th className={`${th} text-right`}>Budget (quotation)</th>
@@ -111,9 +116,7 @@ export function ProfitDetail({ data }: { data: ProfitabilityResponse }) {
             <Line label="Finance cost" actual={actual.finance_cost} />
           </tbody>
         </table>
-        <p className="border-t border-border-subtle px-3 py-2 text-xs text-text-muted">
-          The quotation has no overhead or finance cost, so those two lines have no budget. Shared overhead is not split between orders yet.
-        </p>
+        </ScrollTableCard>
       </section>
 
       <section className="rounded-xl border border-border bg-surface-raised p-4 text-sm" aria-label="Coverage">

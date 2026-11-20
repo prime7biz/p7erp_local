@@ -29,7 +29,6 @@ from app.models import (
   OrderAmendment,
   OrderFollowupAction,
   Quotation,
-  Role,
   SewingLineStyleConfig,
   StockMovement,
   Tenant,
@@ -192,10 +191,12 @@ def _to_order_response(
 
 
 async def _is_tenant_admin(user: User, db: AsyncSession) -> bool:
-  role = await db.get(Role, user.role_id)
-  if not role:
-    return False
-  return role.name.lower() in {"admin", "super_admin", "superadmin", "owner"}
+  """Admin role, or Class 1 / Super when user_authority_classes_v1 is ON."""
+  from app.common.authority.policy import is_tenant_admin_equivalent
+
+  tenant = await db.get(Tenant, user.tenant_id)
+  flags = tenant.feature_flags if tenant is not None else None
+  return await is_tenant_admin_equivalent(db, user, user.tenant_id, feature_flags=flags)
 
 
 async def _release_material_allocation_on_cancel(db: AsyncSession, tenant: Tenant, order: Order, user: User) -> None:
@@ -778,6 +779,45 @@ async def get_order(
   )
 
 
+@router.get("/{order_id}/pdf")
+async def order_pdf(
+  order_id: int,
+  tenant: Tenant = Depends(require_tenant),
+  user: User = Depends(get_current_user),
+  db: AsyncSession = Depends(get_db),
+):
+  """Server PDF for phone Save PDF / Share (tenant-scoped)."""
+  from fastapi.responses import Response
+  from app.modules.merch.doc_pdf import render_simple_doc_pdf
+
+  if user.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+  order = await db.get(Order, order_id)
+  if not order or order.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+  content = render_simple_doc_pdf(
+    tenant=tenant,
+    title="Sales Order",
+    lines=[
+      ("Code", order.order_code),
+      ("Status", order.status),
+      ("Pipeline", order.pipeline_status),
+      ("Style ref", order.style_ref),
+      ("Order date", order.order_date),
+      ("Delivery date", order.delivery_date),
+      ("Quantity", order.quantity),
+      ("Shipping term", order.shipping_term),
+      ("Remarks", (order.remarks or "")[:90]),
+    ],
+  )
+  filename = f"{order.order_code or f'order-{order.id}'}.pdf".replace("/", "-")
+  return Response(
+    content=content,
+    media_type="application/pdf",
+    headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+  )
+
+
 @router.get("/{order_id}/commercial-alignment", response_model=OrderCommercialAlignmentOut)
 async def get_order_commercial_alignment(
   order_id: int,
@@ -899,10 +939,33 @@ async def update_order(
     order.commission_value = body.commission_value
   if body.order_date is not None:
     order.order_date = body.order_date
+  _old_delivery_date = order.delivery_date
+  _old_quantity = order.quantity
   if body.delivery_date is not None:
     order.delivery_date = body.delivery_date
   if body.quantity is not None:
     order.quantity = body.quantity
+  # KPI engine C2: append-only commitment history when date/qty change (flag-gated; never fails the update).
+  if body.delivery_date is not None or body.quantity is not None:
+    try:
+      from app.common.tenant_feature_keys import is_kpi_engine_v1_enabled
+      from app.modules.kpi_engine.commitment_service import record_order_commitment_if_changed
+
+      if is_kpi_engine_v1_enabled(tenant.feature_flags):
+        async with db.begin_nested():
+          await record_order_commitment_if_changed(
+            db,
+            tenant_id=tenant.id,
+            order=order,
+            old_date=_old_delivery_date,
+            old_qty=_old_quantity,
+            user_id=getattr(user, "id", None),
+            reason="order_patch",
+          )
+    except Exception:
+      import logging
+
+      logging.getLogger(__name__).exception("order_commitment_revision_failed order_id=%s", order.id)
   if body.status is not None:
     order.status = validate_transition(
       ORDER_TRANSITIONS,

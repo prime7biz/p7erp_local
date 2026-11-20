@@ -68,13 +68,64 @@ async def create_staff_invitation(
     email: str,
     first_name: str | None,
     last_name: str | None,
-    role_id: int,
+    role_id: int | None,
+    authority_class: str | None = None,
+    module_grants: list[str] | None = None,
+    employee_id: int | None = None,
 ) -> tuple[StaffInvitation, str]:
+    from app.common.authority.policy import is_authority_classes_enabled_for_tenant
+    from app.common.authority.user_admin import (
+        ASSIGNABLE_CLASSES,
+        normalize_authority_class,
+        normalize_module_grants,
+        resolve_role_for_authority_class,
+    )
+
     em = email.strip().lower()
-    role_result = await db.execute(select(Role).where(Role.id == role_id, Role.tenant_id == tenant.id).limit(1))
-    role = role_result.scalar_one_or_none()
-    if not role:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Role not found for this tenant")
+    flag_on = is_authority_classes_enabled_for_tenant(tenant.feature_flags)
+    modules: list[str] | None = None
+    cls = normalize_authority_class(authority_class)
+    if flag_on:
+        if cls is None or cls not in ASSIGNABLE_CLASSES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="authority_class must be CLASS_1, CLASS_2, CLASS_3 or CLASS_4",
+            )
+        modules = normalize_module_grants(module_grants)
+        if not modules:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Select at least one module for this invitation",
+            )
+        # Ignore client role_id when authority classes are ON (no stealth admin role).
+        role = await resolve_role_for_authority_class(
+            db, tenant_id=tenant.id, authority_class=cls, role_id=None
+        )
+        if employee_id is not None:
+            from app.models.hr import Employee
+
+            emp = (
+                await db.execute(
+                    select(Employee).where(Employee.id == employee_id, Employee.tenant_id == tenant.id).limit(1)
+                )
+            ).scalar_one_or_none()
+            if emp is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
+            if not emp.is_active:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Employee is inactive")
+            if emp.user_id is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Employee is already linked to another user",
+                )
+    else:
+        if role_id is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="role_id is required")
+        role_result = await db.execute(select(Role).where(Role.id == role_id, Role.tenant_id == tenant.id).limit(1))
+        role = role_result.scalar_one_or_none()
+        if not role:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Role not found for this tenant")
+        employee_id = None
 
     existing_user = await db.execute(
         select(User).where(User.tenant_id == tenant.id, func.lower(User.email) == em).limit(1)
@@ -102,6 +153,9 @@ async def create_staff_invitation(
         first_name=(first_name or "").strip() or None,
         last_name=(last_name or "").strip() or None,
         role_id=role.id,
+        authority_class=cls if flag_on else None,
+        module_grants=modules if flag_on else None,
+        employee_id=employee_id if flag_on else None,
         token_hash=_hash_verifier(verifier),
         token_selector=selector,
         invited_by_user_id=invited_by.id,
@@ -196,6 +250,19 @@ async def accept_staff_invitation(
     db.add(user)
     await db.flush()
     await db.refresh(user)
+
+    from app.common.authority.user_admin import apply_authority_on_create
+
+    grants = matched.module_grants if isinstance(matched.module_grants, list) else None
+    await apply_authority_on_create(
+        db,
+        tenant_id=tenant.id,
+        user=user,
+        feature_flags=tenant.feature_flags,
+        authority_class=matched.authority_class,
+        module_grants=grants,
+        employee_id=matched.employee_id,
+    )
 
     matched.status = "accepted"
     matched.accepted_at = utc_now_naive()

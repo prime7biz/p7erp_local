@@ -5,11 +5,16 @@ import { trialBalanceHref, type AccountNature } from "@/lib/financeDrilldown";
 import { downloadCsv, downloadXlsx, printCurrentPage } from "@/lib/reportExport";
 import { todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import {
+  CONFIDENTIAL_REPORTS_DENIED,
+  useCanViewConfidentialReports,
+} from "@/hooks/useCanViewConfidentialReports";
 import { logApiError } from "@/utils/logApiError";
-import { useEmbeddedPage } from "@/components/app/embeddedPage";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { listPageFilterBarClass } from "@/components/app/listPageLayout";
 
 export function FinancialStatementsPage() {
-  const embedded = useEmbeddedPage();
+  const canViewConfidential = useCanViewConfidentialReports();
   const [asOfDate, setAsOfDate] = useState(todayLocalISO());
   const [groupId, setGroupId] = useState<number | "">("");
   const [groups, setGroups] = useState<AccountGroupResponse[]>([]);
@@ -21,6 +26,11 @@ export function FinancialStatementsPage() {
 
   const latest = useLatestRequest();
   const load = useCallback(async () => {
+    if (!canViewConfidential) {
+      setData(null);
+      setError(CONFIDENTIAL_REPORTS_DENIED);
+      return;
+    }
     const token = latest.begin();
     try {
       setError("");
@@ -29,9 +39,11 @@ export function FinancialStatementsPage() {
       setData(res);
     } catch (e) {
       if (!latest.isCurrent(token)) return;
-      setError((e as Error).message);
+      const status = (e as { status?: number }).status;
+      setError(status === 403 ? CONFIDENTIAL_REPORTS_DENIED : (e as Error).message);
+      setData(null);
     }
-  }, [latest, asOfDate, groupId, basis]);
+  }, [latest, asOfDate, groupId, basis, canViewConfidential]);
 
   async function loadGroups() {
     try {
@@ -105,20 +117,18 @@ export function FinancialStatementsPage() {
   }
 
   return (
-    <div className="space-y-6 print-report">
+    <div className="space-y-4 print-report">
       <div className="print-only mb-3 border-b border-border pb-2">
         <h1 className="text-lg font-semibold">Financial Statements</h1>
         <p className="text-xs text-text-muted">As of: {asOfDate}</p>
       </div>
-      <div className="no-print flex flex-wrap items-end gap-2">
-        <div className="mr-auto">
-      {!embedded && (
-        <>
-        <h1 className="text-2xl font-semibold text-text-primary">Financial Statements</h1>
-        <p className="text-sm text-text-muted">Profit & loss and balance sheet summary. Click a heading to see its accounts.</p>
-        </>
-      )}
-        </div>
+      <div className="no-print">
+        <AppPageHeader
+          title="Financial Statements"
+          description="Profit & loss and balance sheet summary. Click a heading to see its accounts."
+        />
+      </div>
+      <div className={`no-print ${listPageFilterBarClass}`}>
         <input type="date" className="rounded border px-3 py-2 text-sm" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} />
         <select className="rounded border px-3 py-2 text-sm" value={basis} onChange={(e) => setBasis(e.target.value as ReportBasis)} title="Income & expense period">
           <option value="fy">This financial year</option>

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type CustomerResponse, type SettingsConfigResponse } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { SecureImage } from "@/components/SecureImage";
+import { PrintPdfToolbarActions } from "@/components/print/PrintPdfToolbarActions";
 import { logApiError } from "@/utils/logApiError";
 import "@/styles/quotation-print.css";
 
@@ -98,13 +99,13 @@ export function CustomerPrintPage() {
           >
             Back to customer
           </Link>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-brand-primary-foreground hover:opacity-90"
-          >
-            Print / Save PDF
-          </button>
+          <PrintPdfToolbarActions
+            downloadPdf={() => api.downloadCustomerPdf(customer.id)}
+            filename={`${customer.customer_code || `customer-${customer.id}`}.pdf`}
+            logKey="CustomerPrintPage.pdf"
+            desktopClassName="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-brand-primary-foreground hover:opacity-90"
+            phoneClassName="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-brand-primary-foreground hover:opacity-90"
+          />
         </div>
       </div>
 

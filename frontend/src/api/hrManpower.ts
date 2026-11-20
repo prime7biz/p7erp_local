@@ -223,6 +223,9 @@ export type ManpowerOrganogram = {
   truncated: boolean;
   max_depth: number;
   max_nodes: number;
+  /** Echoed when the API returns them; used for root pagination UI. */
+  root_offset?: number;
+  root_limit?: number;
 };
 
 export type ManpowerAttendanceBridge = {

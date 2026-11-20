@@ -435,9 +435,15 @@ async def patch_bom_line(
                 status_code=400,
                 detail="Approved/frozen BOM: send bom_expected_unit_price only for a governed price update.",
             )
-        await assert_delegate_manager_or_permission(
-            db, user, tenant.id, permission_key=PERMISSION_BOM_PRICE_OVERRIDE
-        )
+        from app.common.authority.policy import is_manager_equivalent_for_module
+
+        # Flag ON: Class 1 with merch is manager-equivalent for BOM price override.
+        if not await is_manager_equivalent_for_module(
+            db, user, tenant.id, "merch", feature_flags=tenant.feature_flags
+        ):
+            await assert_delegate_manager_or_permission(
+                db, user, tenant.id, permission_key=PERMISSION_BOM_PRICE_OVERRIDE
+            )
         line.bom_expected_unit_price = patch_in["bom_expected_unit_price"]
         apply_calculations_to_line(line, int(oq))
         await db.commit()

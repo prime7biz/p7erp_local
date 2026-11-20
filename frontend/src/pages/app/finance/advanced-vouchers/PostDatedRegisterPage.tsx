@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { api, type PostDatedRegisterRow } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { RowActionsMenu } from "@/components/app/RowActionsMenu";
+import { listTableTheadClass } from "@/components/app/listPageLayout";
+import { ScrollTableCard, showingCountLabel } from "@/components/finance/kit";
 import { logApiError } from "@/utils/logApiError";
 
 export function PostDatedRegisterPage() {
@@ -9,6 +12,8 @@ export function PostDatedRegisterPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [activating, setActivating] = useState(false);
+  const [openActionsId, setOpenActionsId] = useState<string | number | null>(null);
+  const navigate = useNavigate();
 
   async function load() {
     try {
@@ -65,9 +70,9 @@ export function PostDatedRegisterPage() {
         <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">{success}</p>
       ) : null}
 
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+      <ScrollTableCard footer={showingCountLabel(rows.length, rows.length, "voucher")}>
         <table className="min-w-full text-left text-sm">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+          <thead className={`${listTableTheadClass} text-xs uppercase text-gray-500`}>
             <tr>
               <th className="px-3 py-2">Voucher #</th>
               <th className="px-3 py-2">Date</th>
@@ -75,7 +80,7 @@ export function PostDatedRegisterPage() {
               <th className="px-3 py-2">Days until active</th>
               <th className="px-3 py-2">Type</th>
               <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Edit</th>
+              <th className="px-3 py-2">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -100,12 +105,19 @@ export function PostDatedRegisterPage() {
                 <td className="px-3 py-2">{r.voucher_type}</td>
                 <td className="px-3 py-2">{r.status}</td>
                 <td className="px-3 py-2">
-                  <Link
-                    to={`/app/accounts/vouchers?edit=${r.id}`}
-                    className="text-xs text-blue-600 hover:underline"
-                  >
-                    Edit voucher
-                  </Link>
+                  <RowActionsMenu
+                    menuPortal
+                    rowId={r.id}
+                    openId={openActionsId}
+                    onOpenChange={setOpenActionsId}
+                    items={[
+                      {
+                        key: "edit",
+                        label: "Edit voucher",
+                        onClick: () => navigate(`/app/accounts/vouchers?edit=${r.id}`),
+                      },
+                    ]}
+                  />
                 </td>
               </tr>
             ))}
@@ -118,7 +130,7 @@ export function PostDatedRegisterPage() {
             ) : null}
           </tbody>
         </table>
-      </div>
+      </ScrollTableCard>
     </div>
   );
 }

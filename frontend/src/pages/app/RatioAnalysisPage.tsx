@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ScrollTableCard } from "@/components/finance/kit";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -195,7 +196,7 @@ export function RatioAnalysisPage() {
   }
 
   return (
-    <div className="space-y-6 print-report">
+    <div className="space-y-4 print-report">
       <div className="print-only mb-3 border-b border-border-strong pb-2">
         <h1 className="text-lg font-semibold">Ratio Analysis</h1>
         <p className="text-xs text-text-secondary">As of: {asOfDate}</p>
@@ -298,9 +299,9 @@ export function RatioAnalysisPage() {
       ) : null}
 
       {metricRows.length > 0 ? (
-        <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+        <ScrollTableCard maxHeight="main">
           <table className="min-w-full text-sm">
-            <thead className="bg-surface-subtle text-left">
+            <thead className="sticky top-0 z-10 bg-surface-subtle text-left">
               <tr>
                 <th className="px-3 py-2">Metric</th>
                 <th className="px-3 py-2">{asOfDate}</th>
@@ -326,7 +327,7 @@ export function RatioAnalysisPage() {
               })}
             </tbody>
           </table>
-        </div>
+        </ScrollTableCard>
       ) : null}
     </div>
   );

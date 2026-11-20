@@ -7,6 +7,7 @@ import { initialPeriod, rangeQuery } from "@/components/finance/statements/state
 import { StatementPageFrame } from "@/components/finance/statements/StatementPageFrame";
 import { StatementPeriodPicker, useFiscalStartMonth } from "@/components/finance/statements/StatementPeriodPicker";
 import { useProfitLossStatement, useStatementsEnabled } from "@/hooks/useFinanceStatements";
+import { useCanViewConfidentialReports } from "@/hooks/useCanViewConfidentialReports";
 import { todayLocalISO } from "@/lib/dates";
 
 function StockMemoTable({ opening, closing, status }: { opening: StockMemo; closing: StockMemo; status: string }) {
@@ -63,12 +64,13 @@ function ResultLine({ label, result }: { label: string; result: Result }) {
 /** Trading account then Profit & Loss account, each two-sided (debit left, credit right). */
 export function ProfitLossStatementPage() {
   const enabled = useStatementsEnabled();
+  const canViewConfidential = useCanViewConfidentialReports();
   const startMonth = useFiscalStartMonth();
   const [period, setPeriod] = useState(() => initialPeriod(startMonth, todayLocalISO()));
   const [drill, setDrill] = useState<DrillTarget | null>(null);
 
   const query = rangeQuery(period);
-  const resource = useProfitLossStatement(query, enabled);
+  const resource = useProfitLossStatement(query, enabled && canViewConfidential);
 
   const openDrill = (node: SheetNode) => {
     if (node.id == null) return;
@@ -83,6 +85,7 @@ export function ProfitLossStatementPage() {
         resource={resource}
         exportInfo={{ report: "profit-loss", query, fileBase: `profit-loss-${resource.data?.period.fiscal_year ?? "report"}` }}
         aiReport={{ report: "profit_loss", period: query }}
+        requiresConfidentialReports
         controls={<StatementPeriodPicker mode="range" value={period} onChange={setPeriod} />}
       >
         {(data) => (

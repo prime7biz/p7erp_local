@@ -1295,6 +1295,7 @@ export const tutorialHelpIndex: TutorialHelpEntry[] = [
     "relatedAppRoutes": [
       "/app/hr/manpower",
       "/app/hr/manpower/sanctioned",
+      "/app/hr/manpower/organogram",
       "/app/production/crew-daily",
       "/app/production/ie/line-balance"
     ]
@@ -1473,6 +1474,8 @@ export const tutorialHelpIndex: TutorialHelpEntry[] = [
     "title": "Set up account groups and ledgers (chart of accounts)",
     "summary": "Create account groups and ledgers, mark bank and bill-wise ledgers, import a chart of accounts from Excel, and add a missing ledger from inside a voucher.",
     "relatedAppRoutes": [
+      "/app/finance/setup?tab=chart-of-accounts",
+      "/app/finance/setup?tab=account-groups",
       "/app/accounts",
       "/app/accounts/groups",
       "/app/banking/accounts"
@@ -1655,7 +1658,9 @@ export const tutorialHelpIndex: TutorialHelpEntry[] = [
       "/app/accounts/reports/cash-flow",
       "/app/accounts/reports/group-summary",
       "/app/accounts/reports/ratio-analysis",
-      "/app/accounts/reports/voucher-analytics"
+      "/app/accounts/reports/voucher-analytics",
+      "/app/finance/statements/profit-loss",
+      "/app/finance/statements/balance-sheet"
     ]
   },
   {
@@ -1758,7 +1763,7 @@ export const tutorialHelpIndex: TutorialHelpEntry[] = [
   {
     "id": "wf-approvals",
     "title": "All Approvals: one inbox for everything waiting on you",
-    "summary": "What appears in Workflow → All Approvals (vouchers, POs, requisitions, BOMs, leave, payroll, payment runs, reconciliations, periods) and how to filter, open and act on it.",
+    "summary": "What appears in Workflow → All Approvals (vouchers, POs, requisitions, BOMs, leave, payroll, payment runs, reconciliations, periods) and how to filter, open and act on it. When fixed-class authority is on, the Authority inbox shows only items waiting for your class, including ledger/group change requests.",
     "relatedAppRoutes": [
       "/app/approvals",
       "/app/accounts/vouchers/approval-queue",
@@ -1895,6 +1900,15 @@ export const tutorialHelpIndex: TutorialHelpEntry[] = [
     ]
   },
   {
+    "id": "kpi-engine-cockpit",
+    "title": "KPI cockpit: governed factory and buying-office measures",
+    "summary": "Turn on kpi_engine_v1, open Operations → KPI cockpit, seed definitions, then read cards with status, freshness and evidence drill-down.",
+    "relatedAppRoutes": [
+      "/app/kpi",
+      "/app/settings/configuration"
+    ]
+  },
+  {
     "id": "settings-overview",
     "title": "Settings and administration (map)",
     "summary": "A map of every Settings screen: what it is for, who should use it, and which step-by-step guide to read next.",
@@ -1926,9 +1940,18 @@ export const tutorialHelpIndex: TutorialHelpEntry[] = [
     ]
   },
   {
+    "id": "settings-authority-cutover",
+    "title": "Authority cutover: Class 1–4 for one pilot company",
+    "summary": "Dry-run, review Super Admin / Class proposals, Apply, then turn on User authority classes. Shared Roles stay unchanged; restore rolls Class metadata back.",
+    "relatedAppRoutes": [
+      "/app/settings/config",
+      "/app/settings/users"
+    ]
+  },
+  {
     "id": "settings-users-invitations",
     "title": "Users and invitations: add, change and remove logins",
-    "summary": "Invite staff by email (they set their own password) or create a user directly, assign one role, and deactivate leavers instead of deleting them.",
+    "summary": "Invite staff by email or create a user directly; with authority classes ON assign Class 1–4 and modules (and optional employee link); deactivate leavers instead of deleting them.",
     "relatedAppRoutes": [
       "/app/settings/users",
       "/app/my-signature"

@@ -51,7 +51,7 @@ import {
 export function HrDepartmentsPage() {
   const navigate = useNavigate();
   const { me } = useAuth();
-  const canExport = canExportHrData(me?.role_name);
+  const canExport = canExportHrData(me);
   const [departments, setDepartments] = useState<HrDepartmentResponse[]>([]);
   const [designations, setDesignations] = useState<HrDesignationResponse[]>([]);
   // True when designations could not be loaded, so counts would be wrong (not zero).

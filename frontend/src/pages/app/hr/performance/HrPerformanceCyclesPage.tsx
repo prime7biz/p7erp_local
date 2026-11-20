@@ -146,7 +146,7 @@ export function HrPerformanceCyclesPage() {
         initialSort={{ key: "start", dir: "desc" }}
         statusOf={(r) => r.status}
         exportFileName="hr-performance-cycles"
-        canExport={canExportHrData(me?.role_name)}
+        canExport={canExportHrData(me)}
         rowActions={rowActions}
       />
 

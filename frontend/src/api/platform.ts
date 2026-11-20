@@ -28,6 +28,7 @@ import type {
   DataMigrationTemplatesResponse,
   GlobalSearchResponse,
   LemonSqueezyCheckoutResponse,
+  LinkableEmployeeRow,
   MySignature,
   NotificationList,
   OnboardingChecklist,
@@ -177,7 +178,10 @@ export const platformApi = {
     email: string;
     first_name?: string | null;
     last_name?: string | null;
-    role_id: number;
+    role_id?: number | null;
+    authority_class?: string | null;
+    module_grants?: string[] | null;
+    employee_id?: number | null;
   }): Promise<StaffInviteCreateResponse> {
     return request<StaffInviteCreateResponse>("/api/v1/settings/users/invite", {
       method: "POST",
@@ -185,9 +189,16 @@ export const platformApi = {
         email: data.email.trim(),
         first_name: data.first_name?.trim() || undefined,
         last_name: data.last_name?.trim() || undefined,
-        role_id: data.role_id,
+        role_id: data.role_id ?? undefined,
+        authority_class: data.authority_class ?? undefined,
+        module_grants: data.module_grants ?? undefined,
+        employee_id: data.employee_id ?? undefined,
       }),
     });
+  },
+  async settingsListLinkableEmployees(search?: string): Promise<LinkableEmployeeRow[]> {
+    const q = search?.trim() ? `?search=${encodeURIComponent(search.trim())}` : "";
+    return request<LinkableEmployeeRow[]>(`/api/v1/settings/users/linkable-employees${q}`);
   },
   async settingsListStaffInvitations(): Promise<StaffInviteRowResponse[]> {
     return request<StaffInviteRowResponse[]>("/api/v1/settings/users/invitations");

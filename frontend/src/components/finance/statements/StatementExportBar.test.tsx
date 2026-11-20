@@ -8,13 +8,21 @@ const h = vi.hoisted(() => ({
   me: {} as Record<string, unknown>,
   exportStatement: vi.fn(),
   saveBlob: vi.fn(),
+  shareOrSaveBlob: vi.fn(),
   printCurrentPage: vi.fn(),
+  phoneLayout: false,
 }));
 
 vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ me: h.me }) }));
 vi.mock("@/api/financeStatements", () => ({ financeStatementsApi: { exportStatement: h.exportStatement } }));
-vi.mock("@/lib/fileSave", () => ({ saveBlob: h.saveBlob }));
+vi.mock("@/lib/fileSave", () => ({
+  saveBlob: h.saveBlob,
+  shareOrSaveBlob: h.shareOrSaveBlob,
+  preferShareOverPrint: (phone: boolean) => phone,
+}));
 vi.mock("@/lib/reportExport", () => ({ printCurrentPage: h.printCurrentPage }));
+vi.mock("@/hooks/useMobileUiV2", () => ({ useMobileUiV2Phone: () => h.phoneLayout }));
+vi.mock("@/hooks/useInventoryListView", () => ({ useMediaQuery: () => h.phoneLayout }));
 
 import { StatementExportBar } from "./StatementExportBar";
 
@@ -24,8 +32,10 @@ function renderBar() {
 
 beforeEach(() => {
   h.me = { ...MEMBER_ME };
+  h.phoneLayout = false;
   h.exportStatement.mockReset();
   h.saveBlob.mockReset();
+  h.shareOrSaveBlob.mockReset();
   h.printCurrentPage.mockReset();
 });
 afterEach(cleanup);
@@ -78,9 +88,23 @@ describe("StatementExportBar", () => {
     expect(screen.getByRole("button", { name: "PDF" })).toBeEnabled();
   });
 
-  it("prints the page", () => {
+  it("prints the page on desktop", () => {
     renderBar();
     fireEvent.click(screen.getByRole("button", { name: "Print" }));
     expect(h.printCurrentPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides Print and offers Save PDF + Share on phone", async () => {
+    h.phoneLayout = true;
+    const blob = new Blob(["p"], { type: "application/pdf" });
+    h.exportStatement.mockResolvedValue(blob);
+    h.shareOrSaveBlob.mockResolvedValue("shared");
+    renderBar();
+    expect(screen.queryByRole("button", { name: "Print" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Save PDF" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Share" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Share" }));
+    await waitFor(() => expect(h.shareOrSaveBlob).toHaveBeenCalledWith(blob, "trial-balance-2026-27.pdf"));
+    expect(h.printCurrentPage).not.toHaveBeenCalled();
   });
 });

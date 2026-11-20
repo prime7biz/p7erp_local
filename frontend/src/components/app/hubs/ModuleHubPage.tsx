@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { EmbeddedPageProvider } from "@/components/app/EmbeddedPageContext";
 import { listPageRootClass } from "@/components/app/listPageLayout";
 import { hubHref } from "./hubNavigation";
-import { hubTabLabel, pickActiveHubTab, visibleHubTabs } from "./hubVisibility";
+import { hubTabLabel, pickActiveHubTab, visibleHubTabs, type HubVisibilityExtras } from "./hubVisibility";
 import type { Hub, HubAccessCheck, HubFeatureFlags, HubTab } from "./types";
 
 const lazyTabs = new Map<string, LazyExoticComponent<ComponentType>>();
@@ -32,6 +32,8 @@ export interface ModuleHubPageProps {
   hub: Hub;
   featureFlags: HubFeatureFlags;
   canAccess?: HubAccessCheck;
+  /** Extra nav filters (e.g. Class 1 P&L / Balance Sheet). */
+  visibilityExtras?: HubVisibilityExtras;
   /** Small links shown in the header (quick actions). Receives the open tab id. */
   headerActions?: (activeTabId: string | undefined) => ReactNode;
   /** Shown instead of a tab when no tab is visible. Default: a short "nothing to show" note. */
@@ -47,11 +49,14 @@ export function ModuleHubPage(props: ModuleHubPageProps) {
   return <ModuleHub key={props.hub.id} {...props} />;
 }
 
-function ModuleHub({ hub, featureFlags, canAccess, headerActions, renderEmpty }: ModuleHubPageProps) {
+function ModuleHub({ hub, featureFlags, canAccess, visibilityExtras, headerActions, renderEmpty }: ModuleHubPageProps) {
   const [params] = useSearchParams();
-  const tabs = useMemo(() => visibleHubTabs(hub, featureFlags, canAccess), [hub, featureFlags, canAccess]);
+  const tabs = useMemo(
+    () => visibleHubTabs(hub, featureFlags, canAccess, visibilityExtras),
+    [hub, featureFlags, canAccess, visibilityExtras],
+  );
   // An unknown, switched-off or not-permitted tab opens the first allowed tab.
-  const active = pickActiveHubTab(hub, params.get("tab"), featureFlags, canAccess);
+  const active = pickActiveHubTab(hub, params.get("tab"), featureFlags, canAccess, visibilityExtras);
   const ActivePage = active ? lazyTab(hub.id, active) : null;
   const Icon = hub.icon;
   const actions = headerActions?.(active?.id);

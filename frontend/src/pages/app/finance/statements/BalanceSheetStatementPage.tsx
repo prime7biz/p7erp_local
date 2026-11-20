@@ -7,17 +7,19 @@ import { fiscalYearStartOf } from "@/components/finance/statements/statementPeri
 import { StatementPageFrame } from "@/components/finance/statements/StatementPageFrame";
 import { StatementPeriodPicker, useFiscalStartMonth } from "@/components/finance/statements/StatementPeriodPicker";
 import { useBalanceSheetStatement, useStatementsEnabled } from "@/hooks/useFinanceStatements";
+import { useCanViewConfidentialReports } from "@/hooks/useCanViewConfidentialReports";
 import { todayLocalISO } from "@/lib/dates";
 
 /** Two-sided Balance Sheet: Liabilities left, Assets right (stacked on a phone). */
 export function BalanceSheetStatementPage() {
   const enabled = useStatementsEnabled();
+  const canViewConfidential = useCanViewConfidentialReports();
   const startMonth = useFiscalStartMonth();
   const [asOf, setAsOf] = useState(() => todayLocalISO());
   const [drill, setDrill] = useState<DrillTarget | null>(null);
 
   const query = { as_of_date: asOf };
-  const resource = useBalanceSheetStatement(query, enabled);
+  const resource = useBalanceSheetStatement(query, enabled && canViewConfidential);
 
   const openDrill = (node: SheetNode) => {
     if (node.id == null || isOpeningDifferenceRow(node)) return;
@@ -32,6 +34,7 @@ export function BalanceSheetStatementPage() {
         resource={resource}
         exportInfo={{ report: "balance-sheet", query, fileBase: `balance-sheet-${asOf}` }}
         aiReport={{ report: "balance_sheet", period: { to_date: asOf } }}
+        requiresConfidentialReports
         controls={<StatementPeriodPicker mode="as-of" value={asOf} onChange={setAsOf} />}
       >
         {(data) => (

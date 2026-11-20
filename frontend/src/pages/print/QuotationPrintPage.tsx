@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from "react-router-dom";
 import { api, type CustomerResponse, type InquiryResponse, type QuotationDetailResponse, type SettingsConfigResponse } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { SecureImage } from "@/components/SecureImage";
+import { PrintPdfToolbarActions } from "@/components/print/PrintPdfToolbarActions";
 import { logApiError } from "@/utils/logApiError";
 import { subtractMoney, sumMoneyBy } from "@/lib/money";
 import "@/styles/quotation-print.css";
@@ -178,13 +179,11 @@ export function QuotationPrintPage() {
           >
             Back to quotation
           </Link>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-brand-primary-foreground hover:bg-brand-primary/90"
-          >
-            Print / Save PDF
-          </button>
+          <PrintPdfToolbarActions
+            downloadPdf={() => api.downloadQuotationPdf(quotation.id)}
+            filename={`${quotation.quotation_code || `quotation-${quotation.id}`}.pdf`}
+            logKey="QuotationPrintPage.pdf"
+          />
         </div>
       </div>
       <div className="no-print mx-auto mb-3 w-full max-w-[210mm] rounded-xl border border-brand-primary/25 bg-brand-primary/10 p-3">

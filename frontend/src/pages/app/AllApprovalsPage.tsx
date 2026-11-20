@@ -23,6 +23,7 @@ import {
   type OpsApprovalRow,
   type OpsDocType,
 } from "./approvals/approvalSources";
+import { AuthorityInboxPanel } from "@/components/authority/AuthorityInboxPanel";
 
 type FinanceDocType = "VOUCHER" | "PAYMENT_RUN" | "BANK_RECONCILIATION" | "ACCOUNTING_PERIOD";
 type ApprovalDocType = "ALL" | FinanceDocType | OpsDocType;
@@ -334,6 +335,10 @@ export function AllApprovalsPage() {
       </div>
       {error ? <div className="no-print rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
       {success ? <div className="no-print rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
+
+      <div className="no-print">
+        <AuthorityInboxPanel variant="page" />
+      </div>
 
       <div className="no-print grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         <div className="rounded border bg-surface-raised p-2 text-sm">

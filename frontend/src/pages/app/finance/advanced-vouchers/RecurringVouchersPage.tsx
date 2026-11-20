@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -7,6 +7,15 @@ import {
   type RecurringVoucherResponse,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { RowActionsMenu } from "@/components/app/RowActionsMenu";
+import { listTableTheadClass } from "@/components/app/listPageLayout";
+import {
+  FinanceFormDrawer,
+  FinanceListToolbar,
+  FormSection,
+  ScrollTableCard,
+  showingCountLabel,
+} from "@/components/finance/kit";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
 import { useConfirm } from "@/components/app/useConfirm";
@@ -21,10 +30,11 @@ export function RecurringVouchersPage() {
   const [voucherTypes, setVoucherTypes] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  const [openActionsId, setOpenActionsId] = useState<string | number | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [formError, setFormError] = useState("");
   const [historyRows, setHistoryRows] = useState<RecurringVoucherHistoryRow[] | null>(null);
   const [historyTitle, setHistoryTitle] = useState("");
-  const actionsRef = useRef<HTMLDivElement | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -56,16 +66,6 @@ export function RecurringVouchersPage() {
     void load();
   }, []);
 
-  useEffect(() => {
-    function onDoc(ev: MouseEvent) {
-      if (actionsRef.current && !actionsRef.current.contains(ev.target as Node)) {
-        setOpenActionsId(null);
-      }
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
-
   function buildVoucherTemplate() {
     const voucherLines = lines
       .filter((l) => l.account_id && l.amount.trim())
@@ -85,6 +85,7 @@ export function RecurringVouchersPage() {
     e.preventDefault();
     try {
       setError("");
+      setFormError("");
       setSuccess("");
       await api.createRecurringVoucher({
         name: form.name.trim(),
@@ -97,11 +98,12 @@ export function RecurringVouchersPage() {
         is_active: true,
       });
       setForm((p) => ({ ...p, name: "", description: "" }));
+      setCreateOpen(false);
       setSuccess("Recurring template created.");
       await load();
     } catch (err) {
       logApiError("RecurringVouchersPage.create", err);
-      setError((err as Error).message);
+      setFormError((err as Error).message);
     }
   }
 
@@ -177,8 +179,27 @@ export function RecurringVouchersPage() {
         <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">{success}</p>
       ) : null}
 
-      <form onSubmit={onCreate} className="space-y-3 rounded-lg border border-gray-200 bg-white p-3">
-        <p className="text-sm font-medium text-gray-900">New template</p>
+      <FinanceListToolbar
+        primaryAction={{
+          label: "New template",
+          onClick: () => {
+            setFormError("");
+            setCreateOpen(true);
+          },
+        }}
+      />
+
+      <FinanceFormDrawer
+        open={createOpen}
+        size="xl"
+        title="New template"
+        description="Create a template that auto-generates vouchers on a schedule."
+        onClose={() => setCreateOpen(false)}
+        onSubmit={(e) => void onCreate(e)}
+        submitLabel="Create template"
+        error={formError}
+      >
+        <FormSection title="Schedule">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <label className="text-xs text-gray-600">
             Name
@@ -258,9 +279,10 @@ export function RecurringVouchersPage() {
             />
           </label>
         </div>
+        </FormSection>
 
+        <FormSection title="Voucher lines">
         <div className="space-y-2">
-          <p className="text-xs font-medium text-gray-600">Voucher lines</p>
           {lines.map((ln, idx) => (
             <div key={idx} className="grid gap-2 sm:grid-cols-5">
               <input
@@ -332,15 +354,12 @@ export function RecurringVouchersPage() {
             + Add line
           </button>
         </div>
+        </FormSection>
+      </FinanceFormDrawer>
 
-        <button type="submit" className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
-          Create template
-        </button>
-      </form>
-
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+      <ScrollTableCard footer={showingCountLabel(rows.length, rows.length, "template")}>
         <table className="min-w-full text-left text-sm">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+          <thead className={`${listTableTheadClass} text-xs uppercase text-gray-500`}>
             <tr>
               <th className="px-3 py-2">Name</th>
               <th className="px-3 py-2">Type</th>
@@ -358,48 +377,19 @@ export function RecurringVouchersPage() {
                 <td className="px-3 py-2">{r.frequency}</td>
                 <td className="px-3 py-2">{r.next_due_date}</td>
                 <td className="px-3 py-2">{r.is_active ? "Active" : "Disabled"}</td>
-                <td className="relative px-3 py-2">
-                  <div ref={openActionsId === r.id ? actionsRef : undefined} className="relative inline-block">
-                    <button
-                      type="button"
-                      className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      onClick={() => setOpenActionsId(openActionsId === r.id ? null : r.id)}
-                    >
-                      Actions
-                    </button>
-                    {openActionsId === r.id ? (
-                      <div className="absolute right-0 z-10 mt-1 w-40 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                        <button
-                          type="button"
-                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                          onClick={() => void toggleActive(r)}
-                        >
-                          {r.is_active ? "Disable" : "Enable"}
-                        </button>
-                        <button
-                          type="button"
-                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                          onClick={() => void generateNow(r.id)}
-                        >
-                          Generate now
-                        </button>
-                        <button
-                          type="button"
-                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                          onClick={() => void viewHistory(r)}
-                        >
-                          View history
-                        </button>
-                        <button
-                          type="button"
-                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
-                          onClick={() => void remove(r.id)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
+                <td className="px-3 py-2">
+                  <RowActionsMenu
+                    menuPortal
+                    rowId={r.id}
+                    openId={openActionsId}
+                    onOpenChange={setOpenActionsId}
+                    items={[
+                      { key: "toggle", label: r.is_active ? "Disable" : "Enable", onClick: () => void toggleActive(r) },
+                      { key: "generate", label: "Generate now", onClick: () => void generateNow(r.id) },
+                      { key: "history", label: "View history", onClick: () => void viewHistory(r) },
+                      { key: "delete", label: "Delete", danger: true, onClick: () => void remove(r.id) },
+                    ]}
+                  />
                 </td>
               </tr>
             ))}
@@ -412,7 +402,7 @@ export function RecurringVouchersPage() {
             ) : null}
           </tbody>
         </table>
-      </div>
+      </ScrollTableCard>
 
       {historyRows ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

@@ -106,8 +106,14 @@ export function ShellTopHeader({
   const newRef = useRef<HTMLDivElement>(null);
 
   const createActions = useMemo(
-    () => getCreateActions({ tenantType: me.tenant_type, roleName: me.role_name }),
-    [me.tenant_type, me.role_name],
+    () =>
+      getCreateActions({
+        tenantType: me.tenant_type,
+        roleName: me.role_name,
+        authorityClassesEnabled: me.feature_flags?.user_authority_classes_v1 === true,
+        moduleGrants: me.module_grants,
+      }),
+    [me.tenant_type, me.role_name, me.feature_flags?.user_authority_classes_v1, me.module_grants],
   );
 
   useEffect(() => {

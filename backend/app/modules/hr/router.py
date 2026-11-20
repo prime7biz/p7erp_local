@@ -15,7 +15,6 @@ from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.codegen import next_tenant_code
 from app.common.permissions import (
-    HR_SETUP_BYPASS_ROLES,
     PERMISSION_HR_COMPLIANCE_MANAGE,
     PERMISSION_HR_COMPLIANCE_VIEW,
     PERMISSION_HR_DOCUMENTS_GENERATE,
@@ -95,10 +94,9 @@ def _ensure_user_tenant(user: User, tenant: Tenant) -> None:
 
 
 async def _require_manager_or_admin(db: AsyncSession, user: User, tenant_id: int) -> None:
-    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
-    role_name = (role.name if role else "").strip().lower()
-    if role_name not in {"admin", "manager", "super_admin", "superadmin", "owner"}:
-        raise HTTPException(status_code=403, detail="Only manager/admin can perform this action")
+    from app.common.permissions import require_hr_manager_or_admin
+
+    await require_hr_manager_or_admin(db, user, tenant_id)
 
 
 async def _next_department_code(db: AsyncSession, tenant_id: int) -> str:
@@ -482,7 +480,9 @@ async def employee_access(
     _ensure_user_tenant(user, tenant)
     access = await employee_service.employee_field_access(db, user, tenant.id)
     role = await get_user_role_scoped_to_tenant(db, user, tenant.id)
-    manager = (role.name if role else "").strip().lower() in HR_SETUP_BYPASS_ROLES
+    from app.common.permissions import is_hr_manager_equivalent
+
+    manager = await is_hr_manager_equivalent(db, user, tenant.id)
 
     def granted(key: str) -> bool:
         return manager or internal_permission_granted(role=role, permission_key=key)

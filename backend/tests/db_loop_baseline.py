@@ -5,6 +5,9 @@ batching the queries or confirming the loop is a small bounded write validation)
 """
 
 BASELINE: dict[str, int] = {
+    'app/common/authority/cutover.py::apply_cutover': 1,
+    'app/common/authority/cutover.py::restore_cutover': 1,
+    'app/common/authority/user_admin.py::resolve_role_for_authority_class': 1,
     'app/common/username.py::generate_unique_username_for_tenant': 1,
     'app/external_access/admin/router.py::invite_customer_principal': 1,
     'app/external_access/admin/service.py::sync_principal_roles': 1,
@@ -124,6 +127,9 @@ BASELINE: dict[str, int] = {
     'app/modules/inventory/stock_hierarchy_router.py::godown_stock': 1,
     'app/modules/inventory/stock_hierarchy_router.py::list_stock_items': 1,
     'app/modules/inventory/stock_locks.py::lock_stock_items': 1,
+    'app/modules/kpi_engine/commitment_service.py::backfill_open_orders': 1,
+    'app/modules/kpi_engine/compute/service.py::_shipment_otif': 1,
+    'app/modules/kpi_engine/recalc_service.py::run_job': 2,
     'app/modules/logistics/router.py::update_packing_list': 1,
     'app/modules/manufacturing/codes.py::next_mfg_code': 1,
     'app/modules/manufacturing/costing_hooks_router.py::_calc_material_cost': 1,

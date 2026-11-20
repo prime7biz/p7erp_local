@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { isAppleMobileDevice, openOrSaveBlob, saveBlob } from "./fileSave";
+import { isAppleMobileDevice, openOrSaveBlob, preferShareOverPrint, saveBlob, shareOrSaveBlob } from "./fileSave";
 
 const IPHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1";
 const ANDROID_UA = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/126.0 Mobile Safari/537.36";
@@ -114,6 +114,33 @@ describe("openOrSaveBlob", () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     expect(await openOrSaveBlob(new Blob(["%PDF"], { type: "application/pdf" }), "slip.pdf")).toBe("downloaded");
     click.mockRestore();
+  });
+});
+
+describe("shareOrSaveBlob", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("uses the share sheet when the browser can share files", async () => {
+    const share = vi.fn(() => Promise.resolve());
+    stubNavigator({ canShare: () => true, share });
+    expect(await shareOrSaveBlob(new Blob(["%PDF"], { type: "application/pdf" }), "stmt.pdf")).toBe("shared");
+    expect(share).toHaveBeenCalled();
+  });
+
+  it("falls back to saveBlob when share is unavailable", async () => {
+    stubNavigator({});
+    URL.createObjectURL = vi.fn(() => "blob:x");
+    URL.revokeObjectURL = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    expect(await shareOrSaveBlob(new Blob(["x"]), "stmt.pdf")).toBe("downloaded");
+    click.mockRestore();
+  });
+
+  it("preferShareOverPrint is true only for phone layouts", () => {
+    expect(preferShareOverPrint(true)).toBe(true);
+    expect(preferShareOverPrint(false)).toBe(false);
   });
 });
 

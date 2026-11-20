@@ -5,21 +5,46 @@ import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { useSubmitGuard } from "@/hooks/useSubmitGuard";
-import { useEmbeddedPage } from "@/components/app/embeddedPage";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { RowActionsMenu } from "@/components/app/RowActionsMenu";
+import {
+  listPageErrorClass,
+  listPageRootClass,
+  listPageToolbarSelectClass,
+  listTableTdClass,
+  listTableThClass,
+  listTableTheadClass,
+  listTableTrClass,
+} from "@/components/app/listPageLayout";
+import {
+  FinanceFormDrawer,
+  FinanceListToolbar,
+  FormSection,
+  ScrollTableCard,
+  SummaryStrip,
+  showingCountLabel,
+} from "@/components/finance/kit";
+
+const FIELD = "w-full rounded border border-border-strong bg-surface-raised px-3 py-2 text-sm";
+const LABEL = "block text-xs font-medium text-text-muted";
 
 export function OutstandingBillsPage() {
-  const embedded = useEmbeddedPage();
   const actionGuard = useSubmitGuard();
   const [rows, setRows] = useState<OutstandingBillResponse[]>([]);
   const [aging, setAging] = useState<BillsAgingResponse | null>(null);
   const [billType, setBillType] = useState<"PAYABLE" | "RECEIVABLE">("RECEIVABLE");
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
-  const [settleMap, setSettleMap] = useState<Record<number, string>>({});
   const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
   const [success, setSuccess] = useState("");
   const [voucherToolId, setVoucherToolId] = useState("");
   const [autoPartyName, setAutoPartyName] = useState("");
+  const [openActionsId, setOpenActionsId] = useState<string | number | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [voucherOpen, setVoucherOpen] = useState(false);
+  const [settleBill, setSettleBill] = useState<OutstandingBillResponse | null>(null);
+  const [settleAmount, setSettleAmount] = useState("");
   const [form, setForm] = useState<OutstandingBillCreate>({
     bill_no: "",
     party_name: "",
@@ -66,38 +91,38 @@ export function OutstandingBillsPage() {
     await actionGuard.run(async () => {
       try {
         setSuccess("");
-        setError("");
+        setFormError("");
         if (!form.party_name.trim()) throw new Error("Party name is required");
         if (!form.bill_date || !form.due_date) throw new Error("Bill date and due date are required");
         if (Number(form.amount) <= 0) throw new Error("Amount must be greater than zero");
         await api.createOutstandingBill(form);
         setForm((p) => ({ ...p, bill_no: "", party_name: "", amount: "0", notes: "" }));
+        setCreateOpen(false);
         await load();
         setSuccess("Bill created successfully.");
       } catch (e) {
-        setError((e as Error).message);
+        setFormError((e as Error).message);
       }
     });
   }
 
-  async function settle(id: number) {
+  async function settle() {
+    if (!settleBill) return;
+    const id = settleBill.id;
     await actionGuard.run(async () => {
       try {
         setSuccess("");
-        setError("");
-        const amount = settleMap[id] || "0";
+        setFormError("");
+        const amount = settleAmount || "0";
         if (Number(amount) <= 0) throw new Error("Settle amount must be greater than zero");
         await api.settleOutstandingBill(id, amount);
-        setSettleMap((p) => {
-          const next = { ...p };
-          delete next[id];
-          return next;
-        });
+        setSettleBill(null);
+        setSettleAmount("");
         await load();
         setSuccess("Bill settlement applied.");
       } catch (e) {
         logApiError("OutstandingBillsPage.settle", e);
-        setError((e as Error).message);
+        setFormError((e as Error).message);
       }
     });
   }
@@ -105,19 +130,20 @@ export function OutstandingBillsPage() {
   async function runAutoCreateBillRefs() {
     const vid = Number(voucherToolId);
     if (!Number.isFinite(vid) || vid <= 0) {
-      setError("Enter a valid voucher ID for auto-create.");
+      setFormError("Enter a valid voucher ID for auto-create.");
       return;
     }
     await actionGuard.run(async () => {
       try {
         setSuccess("");
-        setError("");
+        setFormError("");
         const res = await api.autoCreateBillRefs(vid);
         await load();
+        setVoucherOpen(false);
         setSuccess(`Created ${res.bills_created} bill reference(s): ${res.bill_numbers.join(", ") || "—"}`);
       } catch (e) {
         logApiError("OutstandingBillsPage.autoCreateBillRefs", e);
-        setError((e as Error).message);
+        setFormError((e as Error).message);
       }
     });
   }
@@ -125,42 +151,41 @@ export function OutstandingBillsPage() {
   async function runAutoCreateBillFromVoucher() {
     const vid = Number(voucherToolId);
     if (!Number.isFinite(vid) || vid <= 0) {
-      setError("Enter a valid voucher ID.");
+      setFormError("Enter a valid voucher ID.");
       return;
     }
     if (!autoPartyName.trim()) {
-      setError("Party name is required for outstanding bill auto-create.");
+      setFormError("Party name is required for outstanding bill auto-create.");
       return;
     }
     await actionGuard.run(async () => {
       try {
         setSuccess("");
-        setError("");
+        setFormError("");
         await api.autoCreateBillFromVoucher(vid, {
           party_name: autoPartyName.trim(),
           bill_type: billType,
           due_in_days: 30,
         });
         await load();
+        setVoucherOpen(false);
         setSuccess("Outstanding bill created from voucher.");
       } catch (e) {
         logApiError("OutstandingBillsPage.autoCreateBillFromVoucher", e);
-        setError((e as Error).message);
+        setFormError((e as Error).message);
       }
     });
   }
 
+  const bucket = (key: string) => (aging?.buckets[key as keyof typeof aging.buckets] ?? 0).toLocaleString();
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-      {!embedded && (
-        <>
-          <h1 className="text-2xl font-semibold text-text-primary">Outstanding Bills</h1>
-        </>
-      )}
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="Outstanding Bills"
+        description="AP/AR bill tracking with aging buckets."
+        belowTitle={
           <p className="text-sm text-text-muted">
-            AP/AR bill tracking with aging buckets.{" "}
             <Link className="font-medium text-brand-primary hover:underline" to="/app/accounts/reports/ar-ap-aging">
               View full AR/AP aging report
             </Link>
@@ -169,136 +194,240 @@ export function OutstandingBillsPage() {
               Vouchers
             </Link>
           </p>
-        </div>
-        <select className="rounded border px-2 py-1 text-sm" value={billType} onChange={(e) => setBillType(e.target.value as "PAYABLE" | "RECEIVABLE")}>
-          <option value="RECEIVABLE">Receivable</option>
-          <option value="PAYABLE">Payable</option>
-        </select>
-      </div>
+        }
+      />
 
-      <div className="rounded-xl border border-border bg-surface-raised p-4">
-        <h2 className="text-sm font-semibold text-text-primary">From voucher</h2>
-        <p className="mt-1 text-xs text-text-muted">
-          Create structured bill references (allocation tracking) or a simple outstanding bill row from a posted voucher.
-        </p>
-        <div className="mt-3 flex flex-wrap items-end gap-2">
-          <div>
-            <label className="block text-xs text-text-muted">Voucher ID</label>
-            <input
-              className="w-32 rounded border px-2 py-1 text-sm"
-              value={voucherToolId}
-              onChange={(e) => setVoucherToolId(e.target.value)}
-              placeholder="e.g. 42"
-            />
-          </div>
-          <div className="min-w-[12rem]">
-            <label className="block text-xs text-text-muted">Party name (for outstanding bill)</label>
-            <input
-              className="w-full rounded border px-2 py-1 text-sm"
-              value={autoPartyName}
-              onChange={(e) => setAutoPartyName(e.target.value)}
-              placeholder="Matches customer/vendor name"
-            />
-          </div>
-          <button type="button" className="rounded border border-border-strong px-3 py-1.5 text-sm disabled:opacity-50" disabled={actionGuard.busy} onClick={() => void runAutoCreateBillRefs()}>
-            Auto-create bill references
+      <FinanceListToolbar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search bill no or party..."
+        filters={
+          <>
+            <select
+              className={listPageToolbarSelectClass}
+              aria-label="Bill type"
+              value={billType}
+              onChange={(e) => setBillType(e.target.value as "PAYABLE" | "RECEIVABLE")}
+            >
+              <option value="RECEIVABLE">Receivable</option>
+              <option value="PAYABLE">Payable</option>
+            </select>
+            <select
+              className={listPageToolbarSelectClass}
+              aria-label="Status"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="">All Status</option>
+              <option value="OPEN">OPEN</option>
+              <option value="PARTIAL">PARTIAL</option>
+              <option value="PAID">PAID</option>
+            </select>
+          </>
+        }
+        secondaryActions={
+          <button
+            type="button"
+            className="rounded-lg border border-border-strong px-3 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
+            onClick={() => {
+              setFormError("");
+              setVoucherOpen(true);
+            }}
+          >
+            From voucher
           </button>
-          <button type="button" className="rounded bg-brand-primary px-3 py-1.5 text-sm text-brand-primary-foreground disabled:opacity-50" disabled={actionGuard.busy} onClick={() => void runAutoCreateBillFromVoucher()}>
-            Auto-create outstanding bill
-          </button>
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <select
-          className="rounded border px-2 py-1 text-sm"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
-          <option value="">All Status</option>
-          <option value="OPEN">OPEN</option>
-          <option value="PARTIAL">PARTIAL</option>
-          <option value="PAID">PAID</option>
-        </select>
-        <input
-          className="w-full rounded border px-3 py-2 text-sm md:w-80"
-          placeholder="Search bill no or party..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+        }
+        primaryAction={{
+          label: "Add bill",
+          onClick: () => {
+            setFormError("");
+            setForm((p) => ({ ...p, bill_type: billType }));
+            setCreateOpen(true);
+          },
+        }}
+      />
 
       {aging ? (
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-          <div className="rounded border bg-surface-raised p-2 text-sm">Current: <b>{(aging.buckets.current ?? 0).toLocaleString()}</b></div>
-          <div className="rounded border bg-surface-raised p-2 text-sm">1-30: <b>{(aging.buckets["1_30"] ?? 0).toLocaleString()}</b></div>
-          <div className="rounded border bg-surface-raised p-2 text-sm">31-60: <b>{(aging.buckets["31_60"] ?? 0).toLocaleString()}</b></div>
-          <div className="rounded border bg-surface-raised p-2 text-sm">61-90: <b>{(aging.buckets["61_90"] ?? 0).toLocaleString()}</b></div>
-          <div className="rounded border bg-surface-raised p-2 text-sm">90+: <b>{(aging.buckets["90_plus"] ?? 0).toLocaleString()}</b></div>
+        <SummaryStrip
+          items={[
+            { key: "current", label: "Current", value: bucket("current") },
+            { key: "1_30", label: "1-30", value: bucket("1_30") },
+            { key: "31_60", label: "31-60", value: bucket("31_60"), tone: "warning" },
+            { key: "61_90", label: "61-90", value: bucket("61_90"), tone: "warning" },
+            { key: "90_plus", label: "90+", value: bucket("90_plus"), tone: "danger" },
+          ]}
+        />
+      ) : null}
+
+      {error ? <div className={listPageErrorClass}>{error}</div> : null}
+      {success ? (
+        <div className="rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">
+          {success}
         </div>
       ) : null}
 
-      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-border bg-surface-raised p-4 sm:grid-cols-2 lg:grid-cols-4">
-        <input className="rounded border px-3 py-2 text-sm" placeholder="Bill No (optional)" value={form.bill_no} onChange={(e) => setForm((p) => ({ ...p, bill_no: e.target.value }))} />
-        <input className="rounded border px-3 py-2 text-sm" placeholder="Party Name" value={form.party_name} onChange={(e) => setForm((p) => ({ ...p, party_name: e.target.value }))} />
-        <input type="date" className="rounded border px-3 py-2 text-sm" value={form.bill_date} onChange={(e) => setForm((p) => ({ ...p, bill_date: e.target.value }))} />
-        <input type="date" className="rounded border px-3 py-2 text-sm" value={form.due_date} onChange={(e) => setForm((p) => ({ ...p, due_date: e.target.value }))} />
-        <input className="rounded border px-3 py-2 text-sm" placeholder="Amount" value={form.amount} onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))} />
-        <input className="rounded border px-3 py-2 text-sm" placeholder="Paid Amount" value={form.paid_amount} onChange={(e) => setForm((p) => ({ ...p, paid_amount: e.target.value }))} />
-        <input className="rounded border px-3 py-2 text-sm" placeholder="Currency" value={form.currency} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value.toUpperCase() }))} />
-        <button
-          type="submit"
-          className="rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90 disabled:opacity-50"
-          disabled={actionGuard.busy}
-        >
-          {actionGuard.busy ? "Saving…" : "Create Bill"}
-        </button>
-      </form>
-
-      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
-      {success ? <div className="rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
-
-      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+      <ScrollTableCard footer={showingCountLabel(filteredRows.length, rows.length, "bill")}>
         <table className="min-w-full text-sm">
-          <thead className="bg-surface-subtle text-left">
+          <thead className={`${listTableTheadClass} text-left`}>
             <tr>
-              <th className="px-2 py-1">Bill</th>
-              <th className="px-2 py-1">Party</th>
-              <th className="px-2 py-1">Due</th>
-              <th className="px-2 py-1">Amount</th>
-              <th className="px-2 py-1">Paid</th>
-              <th className="px-2 py-1">Status</th>
-              <th className="px-2 py-1">Settle</th>
+              <th className={listTableThClass}>Bill</th>
+              <th className={listTableThClass}>Party</th>
+              <th className={listTableThClass}>Due</th>
+              <th className={listTableThClass}>Amount</th>
+              <th className={listTableThClass}>Paid</th>
+              <th className={listTableThClass}>Status</th>
+              <th className={listTableThClass}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {filteredRows.map((r) => (
-              <tr key={r.id} className="border-t">
-                <td className="px-2 py-1">{r.bill_no}</td>
-                <td className="px-2 py-1">{r.party_name}</td>
-                <td className="px-2 py-1">{r.due_date}</td>
-                <td className="px-2 py-1">{Number(r.amount).toLocaleString()}</td>
-                <td className="px-2 py-1">{Number(r.paid_amount).toLocaleString()}</td>
-                <td className="px-2 py-1">{r.status}</td>
-                <td className="px-2 py-1">
-                  <div className="flex flex-wrap gap-1">
-                    <input className="w-24 rounded border px-2 py-1 text-xs" value={settleMap[r.id] ?? ""} onChange={(e) => setSettleMap((p) => ({ ...p, [r.id]: e.target.value }))} />
-                    <button className="rounded border px-2 py-1 text-xs disabled:opacity-50" disabled={actionGuard.busy} onClick={() => void settle(r.id)}>
-                      Settle
-                    </button>
-                  </div>
+              <tr key={r.id} className={listTableTrClass}>
+                <td className={listTableTdClass}>{r.bill_no}</td>
+                <td className={listTableTdClass}>{r.party_name}</td>
+                <td className={listTableTdClass}>{r.due_date}</td>
+                <td className={listTableTdClass}>{Number(r.amount).toLocaleString()}</td>
+                <td className={listTableTdClass}>{Number(r.paid_amount).toLocaleString()}</td>
+                <td className={listTableTdClass}>{r.status}</td>
+                <td className={listTableTdClass}>
+                  <RowActionsMenu
+                    menuPortal
+                    rowId={r.id}
+                    openId={openActionsId}
+                    onOpenChange={setOpenActionsId}
+                    items={[
+                      {
+                        key: "settle",
+                        label: "Settle",
+                        onClick: () => {
+                          setFormError("");
+                          setSettleAmount("");
+                          setSettleBill(r);
+                        },
+                      },
+                    ]}
+                  />
                 </td>
               </tr>
             ))}
             {filteredRows.length === 0 ? (
-              <tr className="border-t">
-                <td className="px-2 py-2 text-text-muted" colSpan={7}>
+              <tr className={listTableTrClass}>
+                <td className="px-4 py-3 text-sm text-text-muted" colSpan={7}>
                   No bills found for the current filters.
                 </td>
               </tr>
             ) : null}
           </tbody>
         </table>
-      </div>
+      </ScrollTableCard>
+
+      <FinanceFormDrawer
+        open={createOpen}
+        title="Add bill"
+        description="Create an outstanding payable or receivable bill."
+        onClose={() => setCreateOpen(false)}
+        onSubmit={(e) => void submit(e)}
+        submitLabel="Create Bill"
+        submitting={actionGuard.busy}
+        error={formError}
+      >
+        <FormSection title="Bill details">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className={LABEL}>
+              Bill No (optional)
+              <input className={FIELD} value={form.bill_no} onChange={(e) => setForm((p) => ({ ...p, bill_no: e.target.value }))} />
+            </label>
+            <label className={LABEL}>
+              Party Name
+              <input className={FIELD} value={form.party_name} onChange={(e) => setForm((p) => ({ ...p, party_name: e.target.value }))} />
+            </label>
+            <label className={LABEL}>
+              Bill date
+              <input type="date" className={FIELD} value={form.bill_date} onChange={(e) => setForm((p) => ({ ...p, bill_date: e.target.value }))} />
+            </label>
+            <label className={LABEL}>
+              Due date
+              <input type="date" className={FIELD} value={form.due_date} onChange={(e) => setForm((p) => ({ ...p, due_date: e.target.value }))} />
+            </label>
+          </div>
+        </FormSection>
+        <FormSection title="Amounts">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className={LABEL}>
+              Amount
+              <input className={FIELD} value={form.amount} onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))} />
+            </label>
+            <label className={LABEL}>
+              Paid Amount
+              <input className={FIELD} value={form.paid_amount} onChange={(e) => setForm((p) => ({ ...p, paid_amount: e.target.value }))} />
+            </label>
+            <label className={LABEL}>
+              Currency
+              <input className={FIELD} value={form.currency} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value.toUpperCase() }))} />
+            </label>
+          </div>
+        </FormSection>
+      </FinanceFormDrawer>
+
+      <FinanceFormDrawer
+        open={voucherOpen}
+        mode="panel"
+        title="From voucher"
+        description="Create structured bill references (allocation tracking) or a simple outstanding bill row from a posted voucher."
+        onClose={() => setVoucherOpen(false)}
+        error={formError}
+        footer={
+          <>
+            <button
+              type="button"
+              className="rounded-lg border border-border-strong px-4 py-2 text-sm disabled:opacity-50"
+              disabled={actionGuard.busy}
+              onClick={() => void runAutoCreateBillRefs()}
+            >
+              Auto-create bill references
+            </button>
+            <button
+              type="button"
+              className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground disabled:opacity-50"
+              disabled={actionGuard.busy}
+              onClick={() => void runAutoCreateBillFromVoucher()}
+            >
+              Auto-create outstanding bill
+            </button>
+          </>
+        }
+      >
+        <FormSection title="Voucher">
+          <label className={LABEL}>
+            Voucher ID
+            <input className={FIELD} value={voucherToolId} onChange={(e) => setVoucherToolId(e.target.value)} placeholder="e.g. 42" />
+          </label>
+          <label className={LABEL}>
+            Party name (for outstanding bill)
+            <input className={FIELD} value={autoPartyName} onChange={(e) => setAutoPartyName(e.target.value)} placeholder="Matches customer/vendor name" />
+          </label>
+        </FormSection>
+      </FinanceFormDrawer>
+
+      <FinanceFormDrawer
+        open={settleBill != null}
+        title={settleBill ? `Settle bill ${settleBill.bill_no}` : "Settle bill"}
+        size="md"
+        onClose={() => setSettleBill(null)}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void settle();
+        }}
+        submitLabel="Settle"
+        submitting={actionGuard.busy}
+        error={formError}
+      >
+        <FormSection title="Settlement">
+          <label className={LABEL}>
+            Settle amount
+            <input className={FIELD} value={settleAmount} onChange={(e) => setSettleAmount(e.target.value)} />
+          </label>
+        </FormSection>
+      </FinanceFormDrawer>
     </div>
   );
 }

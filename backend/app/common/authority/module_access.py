@@ -32,8 +32,14 @@ async def assert_module_grant_for_permissions(
     permission_keys: tuple[str, ...],
     *,
     feature_flags: Any,
+    match_any: bool = False,
 ) -> None:
-    """When authority classes are ON, the user must hold every mapped module for the route keys.
+    """When authority classes are ON, require module grants for these permission keys.
+
+    ``match_any=False`` (default): the user must hold every mapped module.
+    ``match_any=True``: the user must hold at least one mapped module. This matches
+    ``require_any_internal_permission``, which accepts any one of its keys. A single
+    mapped key is the same either way.
 
     Super Admin bypasses. Keys that do not map to a known module are ignored here
     (legacy soft RBAC still applies separately).
@@ -49,7 +55,12 @@ async def assert_module_grant_for_permissions(
     if not needed:
         return
     modules = await load_user_module_codes(db, tenant_id=user.tenant_id, user_id=user.id)
-    missing = sorted(m for m in needed if not user_has_module(modules, m))
+    if match_any:
+        if any(user_has_module(modules, module_code) for module_code in needed):
+            return
+        missing = sorted(needed)
+    else:
+        missing = sorted(module_code for module_code in needed if not user_has_module(modules, module_code))
     if missing:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

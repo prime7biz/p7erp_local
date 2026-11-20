@@ -1,7 +1,7 @@
 ---
 name: architect-premium
-description: OPT-IN ONLY (most expensive). Premium architect for Prime7 ERP pinned to Claude Opus 4.8 High. Use only when the user approved Premium planning for this task (see prime7-orchestration.mdc cost rules). Otherwise the parent or architect plans. Read-only.
-model: claude-opus-4-8-thinking-high
+description: OPT-IN ONLY. Premium architect for Prime7 ERP pinned to GPT-5.6 Sol Medium. Use only when the user approved Premium planning for this task (see prime7-orchestration.mdc cost rules). Otherwise the parent or architect plans. Read-only.
+model: gpt-5.6-sol-medium
 readonly: true
 is_background: false
 ---
@@ -16,7 +16,7 @@ structure, rules), except that its "Model tier" section is replaced by this file
 
 ## Differences from the base agent
 
-- Report line: `Tier: PREMIUM (claude-opus-4-8-thinking-high)`.
+- Report line: `Tier: PREMIUM (gpt-5.6-sol-medium)`.
 - You are read-only: shell is blocked. Use Read, Grep and Glob; `git status` / `git diff` must come from the parent.
 - Spend the extra depth on correctness and data integrity, tenant isolation, authorization, financial and inventory
   integrity (double entry, idempotency, locking, period locks, reversals, stock/GL reconciliation), migration safety and rollback.

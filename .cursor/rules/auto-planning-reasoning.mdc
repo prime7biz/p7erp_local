@@ -18,9 +18,10 @@ migration strategy, or anything where getting it wrong is expensive. Small fixes
    write a short plan in the reply and continue.
 2. **Think properly, write briefly:** list the options, pick one with a clear reason, name risks and unknowns, and
    sequence the steps. Keep the written plan short.
-3. **Do not recommend premium models** for the main chat. Premium subagents follow the opt-in rules in
-   `prime7-orchestration.mdc`.
+3. **Do not recommend Opus or other top-tier premium models** for the main chat. Prefer Auto, GPT 5.6, Sonnet 5.5, or
+   Gemini. Premium subagents follow the fully opt-in rules in `prime7-orchestration.mdc` (never auto-launch Opus).
 
 ## Limits
 
-- Project rules cannot force Cursor's Auto router to pick a specific model; they guide behaviour only.
+- Project rules cannot force Cursor's Auto router to pick a specific model; they guide behaviour only. If Auto keeps
+  choosing an expensive model, pick GPT 5.6 / Sonnet 5.5 / Gemini in the chat model dropdown.

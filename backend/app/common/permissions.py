@@ -1195,6 +1195,11 @@ def require_any_internal_permission(*permission_keys: str):
 
     For screens shared by several modules (e.g. control tower). Same RBAC modes: off = no check,
     shadow = log only, enforce = 403.
+
+    When ``user_authority_classes_v1`` is ON, the caller needs the module grant for at least
+    one listed key, not every key. A one-key route still requires that module. In enforce
+    mode the grant is checked only against keys the role actually holds, so a grant for a
+    different module cannot stand in for a permission the role does not have.
     """
     keys = tuple(k for k in permission_keys if k)
     label = " | ".join(keys)
@@ -1217,12 +1222,29 @@ def require_any_internal_permission(*permission_keys: str):
         # Fixed-class authority: module grants are required even when soft RBAC is off.
         from app.common.authority.module_access import assert_module_grant_for_permissions
 
-        await assert_module_grant_for_permissions(db, user, keys, feature_flags=tenant_feature_flags)
+        role = None
+        module_keys = keys
+        if rbac_mode == RBAC_MODE_ENFORCE:
+            role = await get_user_role_for_tenant(db, user, user.tenant_id)
+            granted_keys = tuple(k for k in keys if internal_permission_granted(role=role, permission_key=k))
+            # No granted key: keep every route key so a missing module still fails closed.
+            # One or more granted keys: require a grant for one of those keys only.
+            if granted_keys:
+                module_keys = granted_keys
+
+        await assert_module_grant_for_permissions(
+            db,
+            user,
+            module_keys,
+            feature_flags=tenant_feature_flags,
+            match_any=True,
+        )
 
         if rbac_mode == RBAC_MODE_OFF:
             return
 
-        role = await get_user_role_for_tenant(db, user, user.tenant_id)
+        if role is None:
+            role = await get_user_role_for_tenant(db, user, user.tenant_id)
         granted = any(internal_permission_granted(role=role, permission_key=k) for k in keys)
         if granted:
             return

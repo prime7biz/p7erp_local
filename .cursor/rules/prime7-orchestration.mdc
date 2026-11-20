@@ -1,5 +1,5 @@
 ---
-description: Prime7 balanced (cost-aware) orchestration. Auto by default, Premium only on request or one automatic review for CRITICAL work. STANDARD / ADVANCED / CRITICAL modes, gates, subagent and correction limits. Always applied.
+description: Prime7 balanced (cost-aware) orchestration. Auto by default; Premium fully opt-in. Prefer cheaper models (GPT 5.6 / Sonnet 5.5 / Gemini). Never auto-launch Opus. STANDARD / ADVANCED / CRITICAL modes, gates, subagent and correction limits. Always applied.
 globs:
 alwaysApply: true
 ---
@@ -20,17 +20,19 @@ fields, its approval prompts and your dashboard spending limits.
 
 1. **Do the work in the parent chat.** Subagents start from zero and re-read files, so each one costs extra. Launch one
    only when it adds clear value (independent review, or a large search that would flood this chat).
-2. **Premium agents (`*-premium`) are opt-in.** Use one only when the user asks for it in this task ("use premium",
-   names the agent, or "Treat this as CRITICAL with premium review"), or under rule 3. Otherwise, if you think Premium is
-   justified, ask first with `AskQuestion` (name the agent and the one-line reason). Never start Premium silently.
-3. **One automatic Premium step:** for CRITICAL work only, run `security-auditor-premium` once on the final diff.
-   Everything else in CRITICAL work uses Auto agents unless the user approves more.
+2. **Premium agents (`*-premium`) are fully opt-in.** Use one only when the user asks for it in this task ("use premium",
+   names the agent, or "Treat this as CRITICAL with premium review"). Otherwise, if you think Premium is justified, ask
+   first with `AskQuestion` (name the agent and the one-line reason). Never start Premium silently.
+3. **Never auto-launch expensive Opus models.** Do not invoke `claude-opus-*` / `*-thinking-high` Opus pins, and do not
+   start `architect-premium` or `security-auditor-premium` unless the user explicitly approved Premium for this task.
+   Prefer Auto inherit agents, or (when the user opts into Premium) GPT 5.6 Sol, Claude Sonnet 5.5, or Gemini.
 4. **Budget per task without asking:** at most **3 subagent runs** in total, at most **1 Premium run**, and at most
    **2 correction rounds** per failed gate. Beyond that, report to the user and ask.
 5. **Keep context small:** prefer `Grep` and partial `Read` over reading whole large files; use `explore` with
    "quick" thoroughness; do not re-read files already in this chat; give subagents short, focused prompts.
 6. Run tests yourself with the Shell tool (Docker / npm). Use `test-runner` only when the run is long or noisy.
-7. Never use Max mode or Fast models on your own. Do not recommend pinning a premium model for the main chat.
+7. Never use Max mode or Fast models on your own. Do not recommend pinning Opus or other top-tier premium models for the
+   main chat; prefer Auto, GPT 5.6, Sonnet 5.5, or Gemini.
 
 ## Modes (classify at the start; say the mode in one line; if unsure, pick the higher)
 
@@ -41,8 +43,8 @@ fields, its approval prompts and your dashboard spending limits.
   parent runs tests, Auto `qa-engineer` reviews. Premium only with the user's OK.
 - **CRITICAL:** finance, accounting, inventory valuation, posting, tenant isolation, authorization, migrations. Plan in
   writing with evidence-backed acceptance criteria and regression tests, Auto `plan-auditor` verdict, implement, run the
-  focused plus neighbouring tests, then `security-auditor-premium` (the one automatic Premium step). Block completion
-  while critical defects remain.
+  focused plus neighbouring tests, then Auto `security-auditor` on the final diff. Premium security review only if the
+  user asks. Block completion while critical defects remain.
 
 ## Gates and limits
 
@@ -52,5 +54,5 @@ fields, its approval prompts and your dashboard spending limits.
 - Run at most **two** implementation agents at once, and only in separate Git worktrees with disjoint files.
 - Ask the user before destructive actions, production migrations or deploys, force pushes, or production data changes.
 - Never enable on-demand billing, raise spending limits or buy credits. If a Premium call fails, do not work around it;
-  for CRITICAL work, stop and report.
+  report and ask.
 - Name every Premium agent used (and why) in the final report. Never claim a subagent ran without a Task result.

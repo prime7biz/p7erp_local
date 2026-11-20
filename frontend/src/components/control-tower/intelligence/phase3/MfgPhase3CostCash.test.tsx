@@ -500,7 +500,10 @@ describe("Planning settings: Cost & cash timing", () => {
     mp.putPlanningSettings.mockRejectedValue(new ApiError("Forbidden", 403));
     const user = userEvent.setup();
     withRouter(<TentativeDemandTab phase3On canViewFinance />);
-    expect(((await screen.findByLabelText("Cost per minute override")) as HTMLInputElement).value).toBe("3.0000");
+    // The field is filled from settings in an effect, so the input can appear empty for one paint.
+    await waitFor(() =>
+      expect((screen.getByLabelText("Cost per minute override") as HTMLInputElement).value).toBe("3.0000"),
+    );
     await user.click(screen.getByRole("button", { name: "Save settings" }));
     expect(await screen.findByText(/not allowed to change the money settings/)).toBeTruthy();
   });

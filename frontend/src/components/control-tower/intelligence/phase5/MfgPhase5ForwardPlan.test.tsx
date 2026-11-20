@@ -265,8 +265,10 @@ describe("Scheduler settings", () => {
     const user = userEvent.setup();
     mp.putPlanningSettings.mockResolvedValue({});
     render(<ForwardPlanTab flags={ALL_ON} canViewFinance={false} canPropose canEditSettings storageKey={null} />);
-    const frozen = await screen.findByLabelText(/Frozen zone \(days\)/);
-    expect((frozen as HTMLInputElement).value).toBe("14");
+    await waitFor(() =>
+      expect((screen.getByLabelText(/Frozen zone \(days\)/) as HTMLInputElement).value).toBe("14"),
+    );
+    const frozen = screen.getByLabelText(/Frozen zone \(days\)/);
     expect(screen.queryByLabelText(/Inquiry confidence/)).toBeNull();
     await user.clear(frozen);
     await user.type(frozen, "70");

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useMemo, useState, type FormEvent } from "react";
 
 import { api } from "@/api/client";
 import {
@@ -444,7 +444,25 @@ export function PlanningSettingsCard({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
+  const [loaded, setLoaded] = useState<PlanningSettings | null>(null);
   const s = resource.data;
+  // Copy server values during render so the first paint already shows them.
+  // A later effect left the inputs blank for one frame and CI saved too early.
+  if (s !== loaded) {
+    setLoaded(s);
+    if (s) {
+      setInq(s.stage_probability.INQUIRY ?? "");
+      setQuo(s.stage_probability.QUOTATION ?? "");
+      setExpiry(String(s.tentative_default_expiry_days));
+      setBuffer(String(s.receipt_buffer_days));
+      setDocDays(s.export_document_days != null ? String(s.export_document_days) : "");
+      setUsanceDays(s.export_usance_days != null ? String(s.export_usance_days) : "");
+      setBtbDays(s.btb_usance_days != null ? String(s.btb_usance_days) : "");
+      setCpm(s.cpm_override ?? "");
+      setFrozenDays(s.frozen_horizon_days != null ? String(s.frozen_horizon_days) : "");
+      setChangeoverPct(s.changeover_loss_pct != null ? String(s.changeover_loss_pct) : "");
+    }
+  }
   // The backend returns the Phase 3 keys only while a Phase 3 flag is on.
   const showPhase3 = phase3On && s != null && s.export_document_days !== undefined;
   // Changing them needs planning approve AND the finance gate (the backend answers 403 otherwise).
@@ -452,20 +470,6 @@ export function PlanningSettingsCard({
   // Phase 5 keys come back only while mfg_advanced_planning_v1 is on.
   const showPhase5 = s != null && s.frozen_horizon_days !== undefined;
   const canEditPhase5 = showPhase5 && canEdit;
-
-  useEffect(() => {
-    if (!s) return;
-    setInq(s.stage_probability.INQUIRY ?? "");
-    setQuo(s.stage_probability.QUOTATION ?? "");
-    setExpiry(String(s.tentative_default_expiry_days));
-    setBuffer(String(s.receipt_buffer_days));
-    setDocDays(s.export_document_days != null ? String(s.export_document_days) : "");
-    setUsanceDays(s.export_usance_days != null ? String(s.export_usance_days) : "");
-    setBtbDays(s.btb_usance_days != null ? String(s.btb_usance_days) : "");
-    setCpm(s.cpm_override ?? "");
-    setFrozenDays(s.frozen_horizon_days != null ? String(s.frozen_horizon_days) : "");
-    setChangeoverPct(s.changeover_loss_pct != null ? String(s.changeover_loss_pct) : "");
-  }, [s]);
 
   const save = async (e: FormEvent) => {
     e.preventDefault();

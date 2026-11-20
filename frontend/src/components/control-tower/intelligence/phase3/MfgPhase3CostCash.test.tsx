@@ -478,6 +478,7 @@ describe("Planning settings: Cost & cash timing", () => {
     withRouter(<CostCashTab flags={{ cost: false, cash: true }} integratedOn={false} canEditSettings canViewFinance />);
     const box = await screen.findByTestId("mfg-settings-phase3");
     expect(screen.queryByLabelText("Default expiry (days)")).toBeNull();
+    await waitFor(() => expect((within(box).getByLabelText("Export document days") as HTMLInputElement).value).toBe("7"));
     const doc = within(box).getByLabelText("Export document days");
     await user.clear(doc);
     await user.type(doc, "10");

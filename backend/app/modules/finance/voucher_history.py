@@ -101,6 +101,10 @@ async def record_voucher_event(
     reason: str | None = None,
     changes: dict[str, Any] | None = None,
 ) -> None:
+    """Append-only voucher history row in ``audit_logs`` (also shown on User Activity).
+
+    Do not add a second ``log_action`` for the same transition — this is the single activity event.
+    """
     payload = {
         "summary": summary,
         "from_status": from_status,

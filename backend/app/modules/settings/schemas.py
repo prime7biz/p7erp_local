@@ -138,9 +138,14 @@ class SettingsAuditLogRow(BaseModel):
     id: int
     tenant_id: int
     user_id: int | None
+    username: str | None = None
+    full_name: str | None = None
     action: str
     resource: str | None
     details: str | None
+    ip_address: str | None = None
+    user_agent: str | None = None
+    location: str | None = None
     created_at: datetime
 
 
@@ -149,6 +154,39 @@ class SettingsAuditLogListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class UserLoginSessionRow(BaseModel):
+    id: int
+    tenant_id: int
+    user_id: int
+    username: str | None = None
+    full_name: str | None = None
+    session_id: str
+    login_at: datetime
+    last_seen_at: datetime
+    logout_at: datetime | None = None
+    ended_reason: str | None = None
+    ip_address: str | None = None
+    user_agent: str | None = None
+    device_label: str | None = None
+    location: str | None = None
+    is_active: bool
+    duration_seconds: int
+    is_current: bool = False
+
+
+class UserLoginSessionListResponse(BaseModel):
+    items: list[UserLoginSessionRow]
+    total: int
+    limit: int
+    offset: int
+
+
+class SignOutOtherSessionsResponse(BaseModel):
+    access_token: str
+    tenant_id: int
+    closed_count: int
 
 
 class SettingsPricingResponse(BaseModel):

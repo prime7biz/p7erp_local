@@ -34,6 +34,7 @@ from app.models import (
   Tenant,
   User,
 )
+from app.modules.audit.service import log_action_best_effort
 from app.modules.orders.order_ai_router import router as order_ai_subrouter
 from app.modules.orders.order_ai_schemas import OrderAiIndicatorsOut
 from app.modules.orders.pipeline_service import (
@@ -598,6 +599,14 @@ async def create_order(
   await db.refresh(order)
   await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=order.id)
   await db.refresh(order)
+  await log_action_best_effort(
+    db,
+    tenant_id=tenant.id,
+    action="ORDER_CREATED",
+    user_id=user.id,
+    resource=f"order:{order.id}",
+    details=f"Created order {order.order_code} status={order.status}",
+  )
   return _to_order_response(order, tenant=tenant)
 
 
@@ -988,6 +997,14 @@ async def update_order(
   )
   await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=order.id)
   await db.refresh(order)
+  await log_action_best_effort(
+    db,
+    tenant_id=tenant.id,
+    action="ORDER_UPDATED",
+    user_id=user.id,
+    resource=f"order:{order.id}",
+    details=f"Updated order {order.order_code} status={order.status}",
+  )
   return _to_order_response(order, tenant=tenant)
 
 
@@ -1005,8 +1022,17 @@ async def delete_order(
   if not order or order.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
   await ensure_order_deletable(db, tenant.id, order_id)
+  code = order.order_code
   await db.delete(order)
   await db.flush()
+  await log_action_best_effort(
+    db,
+    tenant_id=tenant.id,
+    action="ORDER_DELETED",
+    user_id=user.id,
+    resource=f"order:{order_id}",
+    details=f"Deleted order {code}",
+  )
 
 
 @router.post("/from-quotation/{quotation_id}", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
@@ -1077,7 +1103,14 @@ async def create_order_from_quotation(
   await db.refresh(order)
   await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=order.id)
   await db.refresh(order)
-
+  await log_action_best_effort(
+    db,
+    tenant_id=tenant.id,
+    action="ORDER_CREATED",
+    user_id=user.id,
+    resource=f"order:{order.id}",
+    details=f"Created order {order.order_code} from quotation {quotation_id} status={order.status}",
+  )
   return _to_order_response(order, tenant=tenant)
 
 
@@ -1165,6 +1198,7 @@ async def update_order_status(
   order = await db.get(Order, order_id)
   if not order or order.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+  previous_status = order.status
   pipeline_forced = False
   if body.force_pipeline_status:
     if not await _is_tenant_admin(user, db):
@@ -1193,6 +1227,14 @@ async def update_order_status(
   if not pipeline_forced:
     await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=order_id)
   await db.refresh(order)
+  await log_action_best_effort(
+    db,
+    tenant_id=tenant.id,
+    action="ORDER_STATUS_CHANGED",
+    user_id=user.id,
+    resource=f"order:{order.id}",
+    details=f"Order {order.order_code} {previous_status} → {order.status}",
+  )
   return _to_order_response(order, tenant=tenant)
 
 

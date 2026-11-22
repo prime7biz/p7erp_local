@@ -31,6 +31,7 @@ from app.modules.finance.enhanced_cash_flow_service import (
     scenario_analysis,
     sensitivity_analysis,
 )
+from app.modules.audit.service import log_report_activity
 from app.modules.finance.fund_flow_service import generate_fund_flow
 from app.modules.finance.ratio_analysis_service import calculate_ratios, ratio_trend
 
@@ -72,7 +73,15 @@ async def fund_flow_report(
         from_date = date(to_date.year, 1, 1)
     if from_date > to_date:
         raise HTTPException(status_code=400, detail="from_date must be <= to_date")
-    return await generate_fund_flow(db, tenant.id, from_date=from_date, to_date=to_date)
+    result = await generate_fund_flow(db, tenant.id, from_date=from_date, to_date=to_date)
+    await log_report_activity(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        report_name="mis-fund-flow",
+        filters_summary=f"{from_date}..{to_date}",
+    )
+    return result
 
 
 @router.get("/finance/reports/ratio-analysis")
@@ -85,7 +94,16 @@ async def ratio_analysis_report(
     _ensure_tenant(user, tenant)
     _require_mis(tenant)
     await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_MIS_REPORT_VIEW)
-    return await calculate_ratios(db, tenant.id, as_of_date=as_of_date or today_local())
+    as_of = as_of_date or today_local()
+    result = await calculate_ratios(db, tenant.id, as_of_date=as_of)
+    await log_report_activity(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        report_name="mis-ratio-analysis",
+        filters_summary=f"as_of={as_of}",
+    )
+    return result
 
 
 @router.get("/finance/reports/ratio-analysis/trend")
@@ -116,7 +134,15 @@ async def comparative_bs(
 
     await assert_pnl_balance_sheet_allowed(db, user, feature_flags=tenant.feature_flags)
     await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_MIS_REPORT_VIEW)
-    return await generate_comparative_balance_sheet(db, tenant.id, year1=year1, year2=year2)
+    result = await generate_comparative_balance_sheet(db, tenant.id, year1=year1, year2=year2)
+    await log_report_activity(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        report_name="mis-comparative-balance-sheet",
+        filters_summary=f"years={year1},{year2}",
+    )
+    return result
 
 
 @router.get("/finance/reports/comparative-pl")
@@ -134,7 +160,15 @@ async def comparative_pl(
 
     await assert_pnl_balance_sheet_allowed(db, user, feature_flags=tenant.feature_flags)
     await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_MIS_REPORT_VIEW)
-    return await generate_comparative_pl(db, tenant.id, year1=year1, year2=year2)
+    result = await generate_comparative_pl(db, tenant.id, year1=year1, year2=year2)
+    await log_report_activity(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        report_name="mis-comparative-pl",
+        filters_summary=f"years={year1},{year2}",
+    )
+    return result
 
 
 # Spec path with & is awkward in URLs — keep alias
@@ -242,4 +276,11 @@ async def mis_export_meta(
     _ensure_tenant(user, tenant)
     _require_mis(tenant)
     await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_MIS_REPORT_EXPORT)
+    await log_report_activity(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        report_name=f"mis-{report_type}",
+        exported=True,
+    )
     return {"ok": True, "report_type": report_type, "format": "use_client_csv_pdf"}

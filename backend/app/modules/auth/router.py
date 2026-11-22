@@ -16,6 +16,7 @@ from app.common.auth import (
     verify_password,
     verify_password_constant_time,
 )
+from app.common.client_ip import client_ip_from_request
 from app.common.login_lockout import (
     clear_staff_failed_login,
     enforce_login_rate_limit,
@@ -36,7 +37,17 @@ from app.database import get_db
 from app.models import Tenant, User, Role
 from app.modules.auth.me_schema import MeResponse
 from app.modules.auth.legal_acceptance import CURRENT_LEGAL_ACCEPTANCE_VERSION
-from app.modules.audit.service import log_action
+from app.modules.audit.service import log_action, log_action_best_effort
+from app.modules.auth.session_service import (
+    ENDED_LOGOUT,
+    ENDED_PASSWORD_RESET,
+    close_open_sessions,
+    close_session_by_sid,
+    create_login_session,
+    device_label_from_ua,
+    new_device_alerts_enabled,
+    new_session_id,
+)
 from app.common.username import generate_unique_username_for_tenant
 from app.external_access.feature_flags import (
     is_customer_portal_enabled,
@@ -69,6 +80,14 @@ async def _send_email_quietly(label: str, user_id: int, send_fn, **kwargs) -> No
         await send_fn(**kwargs)
     except Exception as exc:
         logger.warning("%s email failed for user_id=%s: %s", label, user_id, exc)
+
+
+def _request_ip_ua(request: Request | None) -> tuple[str | None, str | None]:
+    if request is None:
+        return None, None
+    ip = client_ip_from_request(request)
+    ua = (request.headers.get("user-agent") or "").strip() or None
+    return (ip or None), ua
 
 
 def _create_password_reset_token(*, user: User, expires_at: datetime) -> str:
@@ -183,6 +202,7 @@ async def resolve_tenant_public(
 @router.post("/login", response_model=TokenResponse)
 async def login(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     """Login: company_code (or companyCode) + username + password. Accepts raw JSON; no Pydantic body to avoid 422."""
@@ -265,20 +285,76 @@ async def login(
     user_result = await db.execute(user_query.limit(1))
     user = user_result.scalar_one_or_none()
     password_ok = await verify_password_constant_time(password, user.password_hash if user else None)
+    ip_address, user_agent = _request_ip_ua(request)
     if not user:
+        # Tenant is known; log an anonymous failed attempt without revealing whether the user exists.
+        await log_action_best_effort(
+            db,
+            tenant_id=tenant.id,
+            action="LOGIN_FAILED",
+            user_id=None,
+            resource="auth",
+            details="Unknown username or email",
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    if staff_lock_active(user) or await staff_ip_lock_active(user, request):
+    account_locked = staff_lock_active(user)
+    ip_locked = await staff_ip_lock_active(user, request)
+    if account_locked or ip_locked:
         # Only reveal the lock to someone who already proved the password.
         if password_ok:
+            await log_action_best_effort(
+                db,
+                tenant_id=user.tenant_id,
+                action="LOGIN_BLOCKED_IP" if (ip_locked and not account_locked) else "LOGIN_LOCKED",
+                user_id=user.id,
+                resource="auth",
+                details="Login blocked while account or IP lock is active",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Account temporarily locked due to failed login attempts",
             )
+        await log_action_best_effort(
+            db,
+            tenant_id=user.tenant_id,
+            action="LOGIN_FAILED",
+            user_id=user.id,
+            resource="auth",
+            details=f"Wrong password while locked (attempts={int(user.failed_login_count or 0)})",
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     if not password_ok:
         await record_staff_failed_login(db, user, request)
+        became_locked = user.locked_at is not None
+        await log_action_best_effort(
+            db,
+            tenant_id=user.tenant_id,
+            action="LOGIN_FAILED",
+            user_id=user.id,
+            resource="auth",
+            details=f"Wrong password (attempts={int(user.failed_login_count or 0)})",
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+        if became_locked:
+            await log_action_best_effort(
+                db,
+                tenant_id=user.tenant_id,
+                action="LOGIN_LOCKED",
+                user_id=user.id,
+                resource="auth",
+                details=f"Account locked after {int(user.failed_login_count or 0)} failed attempts",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
         await db.commit()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
@@ -299,14 +375,58 @@ async def login(
             detail="Admin accounts must use the Tenant admin login option",
         )
 
+    # Lock the user row so concurrent logins cannot race session version / session rows.
+    locked = await db.execute(select(User).where(User.id == user.id).with_for_update())
+    user = locked.scalar_one()
     user.last_login = datetime.utcnow()
     session_version: int | None = None
-    if is_single_session_enforced(tenant.feature_flags):
+    single_session = is_single_session_enforced(tenant.feature_flags)
+    if single_session:
         user.auth_session_version = int(user.auth_session_version or 0) + 1
         session_version = user.auth_session_version
+    sid = new_session_id()
     await db.flush()
-    await log_action(db, tenant_id=user.tenant_id, action="LOGIN", user_id=user.id, resource="auth")
-    token = create_access_token(subject=user.id, session_version=session_version, tenant_id=tenant.id)
+    _session_row, new_device_alert = await create_login_session(
+        db,
+        tenant_id=user.tenant_id,
+        user_id=user.id,
+        session_id=sid,
+        session_version=session_version,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        supersede_others=single_session,
+    )
+    await log_action_best_effort(
+        db,
+        tenant_id=user.tenant_id,
+        action="LOGIN",
+        user_id=user.id,
+        resource="auth",
+        details="Staff login",
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
+    if new_device_alert and new_device_alerts_enabled():
+        from app.common.email_service import send_new_login_alert_email
+        from app.common.geoip_lookup import lookup_ip_location
+
+        background_tasks.add_task(
+            _send_email_quietly,
+            "New login alert",
+            user.id,
+            send_new_login_alert_email,
+            to_email=user.email,
+            recipient_name=user.first_name or user.username or user.email,
+            ip_address=ip_address,
+            device_label=device_label_from_ua(user_agent),
+            location=lookup_ip_location(ip_address),
+        )
+    token = create_access_token(
+        subject=user.id,
+        session_version=session_version,
+        tenant_id=tenant.id,
+        session_id=sid,
+    )
     return TokenResponse(access_token=token, tenant_id=tenant.id)
 
 
@@ -325,7 +445,24 @@ async def logout(
     if getattr(request.state, "impersonator_admin_id", None) is None:
         user.auth_session_version = int(user.auth_session_version or 0) + 1
         await db.flush()
-        await log_action(db, tenant_id=user.tenant_id, action="LOGOUT", user_id=user.id, resource="auth")
+        ip_address, user_agent = _request_ip_ua(request)
+        await close_session_by_sid(
+            db,
+            tenant_id=user.tenant_id,
+            user_id=user.id,
+            session_id=getattr(request.state, "auth_session_id", None),
+            reason=ENDED_LOGOUT,
+        )
+        await log_action_best_effort(
+            db,
+            tenant_id=user.tenant_id,
+            action="LOGOUT",
+            user_id=user.id,
+            resource="auth",
+            details="Staff logout",
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -366,11 +503,29 @@ async def accept_staff_invite_public(
     except Exception as exc:
         logger.warning("Staff invite accept audit failed: %s", exc)
     session_version: int | None = None
-    if is_single_session_enforced(tenant.feature_flags):
+    single_session = is_single_session_enforced(tenant.feature_flags)
+    if single_session:
         user.auth_session_version = int(user.auth_session_version or 0) + 1
         session_version = user.auth_session_version
         await db.flush()
-    token = create_access_token(subject=user.id, session_version=session_version, tenant_id=tenant.id)
+    sid = new_session_id()
+    ip_address, user_agent = _request_ip_ua(request)
+    await create_login_session(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        session_id=sid,
+        session_version=session_version,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        supersede_others=single_session,
+    )  # invite accept: first login baseline, ignore new-device flag
+    token = create_access_token(
+        subject=user.id,
+        session_version=session_version,
+        tenant_id=tenant.id,
+        session_id=sid,
+    )
     return TokenResponse(access_token=token, tenant_id=tenant.id)
 
 
@@ -596,6 +751,12 @@ async def reset_password(
     user.password_reset_token_hash = None
     user.password_reset_expires_at = None
     await db.flush()
+    await close_open_sessions(
+        db,
+        tenant_id=user.tenant_id,
+        user_id=user.id,
+        reason=ENDED_PASSWORD_RESET,
+    )
     if tenant:
         await log_action(
             db,

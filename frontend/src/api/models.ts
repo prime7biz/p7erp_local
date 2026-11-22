@@ -438,6 +438,39 @@ export interface SettingsAuditLogListResponse {
   offset: number;
 }
 
+export interface UserLoginSessionResponse {
+  id: number;
+  tenant_id: number;
+  user_id: number;
+  username?: string | null;
+  full_name?: string | null;
+  session_id: string;
+  login_at: string;
+  last_seen_at: string;
+  logout_at: string | null;
+  ended_reason: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  device_label: string | null;
+  location?: string | null;
+  is_active: boolean;
+  duration_seconds: number;
+  is_current: boolean;
+}
+
+export interface UserLoginSessionListResponse {
+  items: UserLoginSessionResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface SignOutOtherSessionsResponse {
+  access_token: string;
+  tenant_id: number;
+  closed_count: number;
+}
+
 export interface HrDepartmentResponse {
   id: number;
   tenant_id: number;
@@ -3142,9 +3175,14 @@ export interface AuditLogResponse {
   id: number;
   tenant_id: number;
   user_id: number | null;
+  username?: string | null;
+  full_name?: string | null;
   action: string;
   resource: string | null;
   details: string | null;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  location?: string | null;
   created_at: string;
 }
 

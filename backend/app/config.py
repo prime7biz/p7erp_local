@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     # While single-session is enforced, staff tokens without the `sv` claim are refused. Set an ISO
     # date/time (UTC) here to keep accepting them until then, e.g. "2026-12-01T00:00:00".
     legacy_token_without_sv_grace_until: str = ""
+    # true: write staff login session rows (user_login_sessions) for User Activity duration/IP UI.
+    # JWT ``sid`` is issued either way so enabling later stays compatible. Default off for safe live.
+    user_session_tracking_enabled: bool = False
+    # Idle open sessions older than this many minutes are closed by the expire Celery job.
+    user_session_idle_expire_minutes: int = 1440
+    # Optional MaxMind GeoLite2 City .mmdb path for User Activity location labels (needs geoip2 package).
+    geoip_city_db_path: str = ""
+    # When session tracking is on, alert the user on login from a new IP or device (in-app + email).
+    user_session_new_device_alerts: bool = True
     # true: alert scans / weekly AI reports / platform maintenance run as loops inside each API
     # process (advisory-locked so one runs). false: the Celery beat service schedules them.
     inprocess_schedulers_enabled: bool = True

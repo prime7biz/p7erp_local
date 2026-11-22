@@ -3,13 +3,13 @@ from functools import lru_cache
 import logging
 from types import SimpleNamespace
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
-from sqlalchemy import desc, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.pagination import MAX_PAGE_SIZE
-from app.common.auth import get_current_user, hash_password
+from app.common.auth import create_access_token, get_current_user, hash_password
 from app.common.email_service import send_staff_welcome_email
 from app.common.plan_enforcer import assert_can_add_user
 from app.common.permissions import (
@@ -79,7 +79,16 @@ HR_BD_MANAGED_FLAG_KEYS: tuple[str, ...] = (
 )
 from app.database import get_db
 from app.models import AuditLog, BackupJob, CommissionMode, Role, Tenant, User
+from app.modules.audit.query import list_tenant_audit_logs
 from app.modules.audit.service import log_action
+from app.modules.auth.session_query import list_login_sessions
+from app.modules.auth.session_service import (
+    ENDED_SIGNED_OUT_BY_USER,
+    close_open_sessions,
+    create_login_session,
+    new_session_id,
+    session_tracking_enabled,
+)
 from app.modules.settings import backup_status
 from app.external_access.admin.router import router as external_access_admin_router
 from app.modules.staff_invite.router import router as staff_invite_router
@@ -87,7 +96,8 @@ from app.modules.settings.schemas import (
     BackupHistoryRow,
     BackupStatusResponse,
     SettingsAuditLogListResponse,
-    SettingsAuditLogRow,
+    SignOutOtherSessionsResponse,
+    UserLoginSessionListResponse,
     SettingsChequeTemplatesListResponse,
     SettingsChequeTemplateRow,
     SettingsConfigResponse,
@@ -1028,6 +1038,14 @@ async def sign_out_settings_user_devices(
         )
     target.auth_session_version = int(target.auth_session_version or 0) + 1
     await db.flush()
+    from app.modules.auth.session_service import ENDED_SIGNED_OUT_BY_ADMIN, close_open_sessions
+
+    await close_open_sessions(
+        db,
+        tenant_id=tenant.id,
+        user_id=target.id,
+        reason=ENDED_SIGNED_OUT_BY_ADMIN,
+    )
     await db.refresh(target)
     role = await _get_tenant_role(db, tenant.id, target.role_id)
     await log_action(
@@ -1102,7 +1120,7 @@ async def list_settings_audit_logs(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    limit: int = Query(default=50, ge=1, le=500),
+    limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     action: str | None = Query(default=None),
     resource: str | None = Query(default=None),
@@ -1110,52 +1128,178 @@ async def list_settings_audit_logs(
     search: str | None = Query(default=None),
     created_from: datetime | None = Query(default=None),
     created_to: datetime | None = Query(default=None),
+    category: str | None = Query(default=None, description="auth | data | approval | report"),
+    ip_address: str | None = Query(default=None),
 ):
+    """Tenant-admin User Activity list. Technical API_REQUEST / API_ERROR rows are never returned."""
     _ensure_user_tenant(user, tenant)
     await ensure_user_is_tenant_admin(db, user, tenant.id)
-
-    filters = [AuditLog.tenant_id == tenant.id]
-    if action:
-        filters.append(AuditLog.action == action)
-    if resource:
-        filters.append(AuditLog.resource == resource)
-    if user_id is not None:
-        filters.append(AuditLog.user_id == user_id)
-    if search:
-        filters.append(func.lower(func.coalesce(AuditLog.details, "")).like(f"%{search.lower()}%"))
-    if created_from:
-        filters.append(AuditLog.created_at >= created_from)
-    if created_to:
-        filters.append(AuditLog.created_at <= created_to)
-
-    total_result = await db.execute(select(func.count()).select_from(AuditLog).where(*filters))
-    total = total_result.scalar() or 0
-
-    result = await db.execute(
-        select(AuditLog)
-        .where(*filters)
-        .order_by(desc(AuditLog.created_at))
-        .limit(limit)
-        .offset(offset)
-    )
-    rows = result.scalars().all()
-    return SettingsAuditLogListResponse(
-        items=[
-            SettingsAuditLogRow(
-                id=r.id,
-                tenant_id=r.tenant_id,
-                user_id=r.user_id,
-                action=r.action,
-                resource=r.resource,
-                details=r.details,
-                created_at=r.created_at,
-            )
-            for r in rows
-        ],
-        total=total,
+    return await list_tenant_audit_logs(
+        db,
+        tenant_id=tenant.id,
         limit=limit,
         offset=offset,
+        action=action,
+        resource=resource,
+        user_id=user_id,
+        search=search,
+        created_from=created_from,
+        created_to=created_to,
+        category=category,
+        ip_address=ip_address,
     )
+
+
+@router.get("/my-activity", response_model=SettingsAuditLogListResponse)
+async def list_my_activity_logs(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
+    action: str | None = Query(default=None),
+    resource: str | None = Query(default=None),
+    search: str | None = Query(default=None),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
+    category: str | None = Query(default=None, description="auth | data | approval | report"),
+    ip_address: str | None = Query(default=None),
+):
+    """Any signed-in staff user can see only their own business activity rows."""
+    _ensure_user_tenant(user, tenant)
+    return await list_tenant_audit_logs(
+        db,
+        tenant_id=tenant.id,
+        limit=limit,
+        offset=offset,
+        action=action,
+        resource=resource,
+        user_id=user.id,
+        search=search,
+        created_from=created_from,
+        created_to=created_to,
+        category=category,
+        ip_address=ip_address,
+    )
+
+
+@router.get("/user-sessions", response_model=UserLoginSessionListResponse)
+async def list_settings_user_sessions(
+    request: Request,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
+    user_id: int | None = Query(default=None),
+    active_only: bool = Query(default=False),
+):
+    """Tenant-admin list of login sessions (empty while USER_SESSION_TRACKING_ENABLED is off)."""
+    _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
+    return await list_login_sessions(
+        db,
+        tenant_id=tenant.id,
+        limit=limit,
+        offset=offset,
+        user_id=user_id,
+        active_only=active_only,
+        current_session_id=getattr(request.state, "auth_session_id", None),
+    )
+
+
+@router.get("/my-sessions", response_model=UserLoginSessionListResponse)
+async def list_my_sessions(
+    request: Request,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
+    active_only: bool = Query(default=False),
+):
+    """Signed-in user sees only their own login sessions."""
+    _ensure_user_tenant(user, tenant)
+    return await list_login_sessions(
+        db,
+        tenant_id=tenant.id,
+        limit=limit,
+        offset=offset,
+        user_id=user.id,
+        active_only=active_only,
+        current_session_id=getattr(request.state, "auth_session_id", None),
+    )
+
+
+@router.post("/my-sessions/sign-out-others", response_model=SignOutOtherSessionsResponse)
+async def sign_out_my_other_sessions(
+    request: Request,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """End every other device session for the signed-in user and return a fresh token for this browser."""
+    _ensure_user_tenant(user, tenant)
+    if getattr(request.state, "impersonator_admin_id", None) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot sign out devices while support is signed in as you",
+        )
+    current_sid = getattr(request.state, "auth_session_id", None)
+    # Bump version so other JWTs stop working (when single-session enforcement checks sv).
+    user.auth_session_version = int(user.auth_session_version or 0) + 1
+    new_sv = int(user.auth_session_version)
+    await db.flush()
+    closed = await close_open_sessions(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        reason=ENDED_SIGNED_OUT_BY_USER,
+        except_session_id=current_sid,
+    )
+    # Keep this browser on a tracked session with the new version.
+    sid = current_sid or new_session_id()
+    if session_tracking_enabled():
+        if current_sid:
+            from sqlalchemy import update
+            from app.models.user_login_session import UserLoginSession
+
+            await db.execute(
+                update(UserLoginSession)
+                .where(
+                    UserLoginSession.tenant_id == tenant.id,
+                    UserLoginSession.user_id == user.id,
+                    UserLoginSession.session_id == current_sid,
+                    UserLoginSession.logout_at.is_(None),
+                )
+                .values(session_version=new_sv)
+            )
+        else:
+            await create_login_session(
+                db,
+                tenant_id=tenant.id,
+                user_id=user.id,
+                session_id=sid,
+                session_version=new_sv,
+                ip_address=None,
+                user_agent=request.headers.get("user-agent"),
+                supersede_others=False,
+            )  # keep current browser session after sign-out-others; ignore new-device flag
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="SETTINGS_USER_SIGN_OUT_DEVICES",
+        resource="settings.user",
+        details=f"User signed out other devices (closed={closed})",
+    )
+    token = create_access_token(
+        subject=user.id,
+        session_version=new_sv if is_single_session_enforced(tenant.feature_flags) else None,
+        tenant_id=tenant.id,
+        session_id=sid,
+    )
+    return SignOutOtherSessionsResponse(access_token=token, tenant_id=tenant.id, closed_count=closed)
 
 
 async def _backup_status_response(db: AsyncSession, tenant_id: int) -> BackupStatusResponse:

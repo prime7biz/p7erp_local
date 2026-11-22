@@ -25,6 +25,7 @@ from app.models.platform_admin import (
 )
 from app.models.tenant import CommissionMode, Tenant, TenantType
 from app.models.user import User, Role
+from app.models.user_login_session import UserLoginSession
 from app.models.user_authority import UserModuleGrant
 from app.models.authority_change_request import AuthorityChangeAction, AuthorityChangeRequest
 from app.models.authority_cutover import AuthorityCutoverSnapshot
@@ -485,6 +486,7 @@ __all__ = [
     "TenantType",
     "CommissionMode",
     "User",
+    "UserLoginSession",
     "UserModuleGrant",
     "AuthorityChangeRequest",
     "AuthorityChangeAction",

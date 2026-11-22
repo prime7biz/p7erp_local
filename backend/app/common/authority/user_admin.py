@@ -18,6 +18,7 @@ from app.common.authority.constants import (
     AUTHORITY_SUPER,
 )
 from app.common.authority.policy import bump_auth_session_version, is_authority_classes_enabled_for_tenant
+from app.modules.auth.session_service import ENDED_AUTHORITY_CHANGED, close_open_sessions
 from app.models import Role, User
 from app.models.hr import Designation, Employee
 from app.models.user_authority import UserModuleGrant
@@ -301,6 +302,12 @@ async def apply_authority_on_update(
             changed = True
     if changed:
         bump_auth_session_version(user)
+        await close_open_sessions(
+            db,
+            tenant_id=tenant_id,
+            user_id=user.id,
+            reason=ENDED_AUTHORITY_CHANGED,
+        )
     return changed
 
 

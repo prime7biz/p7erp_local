@@ -49,6 +49,7 @@ from app.workers import mfg_predictive_worker as _mfg_predictive_worker  # noqa:
 from app.workers import mgmt_performance_worker as _mgmt_performance_worker  # noqa: E402, F401
 from app.workers import coa_interest_worker as _coa_interest_worker  # noqa: E402, F401
 from app.workers import kpi_daily_worker as _kpi_daily_worker  # noqa: E402, F401
+from app.workers import user_activity_worker as _user_activity_worker  # noqa: E402, F401
 from celery.schedules import crontab as _crontab  # noqa: E402
 
 # Optional beat schedule (enabled when a beat worker is running).
@@ -113,6 +114,11 @@ celery_app.conf.beat_schedule = {
     "kpi-daily-aggregate": {
         "task": "kpi.daily_aggregate",
         "schedule": _crontab(minute=0, hour=21),
+    },
+    # User Activity: close idle login sessions hourly (no-op while USER_SESSION_TRACKING_ENABLED is false).
+    "user-activity-expire-sessions": {
+        "task": "user_activity.expire_sessions",
+        "schedule": 60 * 60,
     },
 }
 

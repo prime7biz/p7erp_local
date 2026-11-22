@@ -55,12 +55,14 @@ import type {
   SettingsRoleUpdate,
   SettingsUserCreate,
   SettingsUserUpdate,
+  SignOutOtherSessionsResponse,
   StaffInviteCreateResponse,
   StaffInviteRowResponse,
   TenantInventoryPatch,
   TenantOverviewReport,
   TenantResponse,
   TenantType,
+  UserLoginSessionListResponse,
   UserWithRoleResponse,
 } from "@/api/models";
 
@@ -241,6 +243,8 @@ export const platformApi = {
     search?: string;
     created_from?: string;
     created_to?: string;
+    category?: string;
+    ip_address?: string;
   }): Promise<SettingsAuditLogListResponse> {
     const q = new URLSearchParams();
     if (params?.limit != null) q.set("limit", String(params.limit));
@@ -251,8 +255,65 @@ export const platformApi = {
     if (params?.search) q.set("search", params.search);
     if (params?.created_from) q.set("created_from", params.created_from);
     if (params?.created_to) q.set("created_to", params.created_to);
+    if (params?.category) q.set("category", params.category);
+    if (params?.ip_address) q.set("ip_address", params.ip_address);
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<SettingsAuditLogListResponse>(`/api/v1/settings/audit${suffix}`);
+  },
+  async settingsListUserSessions(params?: {
+    limit?: number;
+    offset?: number;
+    user_id?: number;
+    active_only?: boolean;
+  }): Promise<UserLoginSessionListResponse> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    if (params?.user_id != null) q.set("user_id", String(params.user_id));
+    if (params?.active_only) q.set("active_only", "true");
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<UserLoginSessionListResponse>(`/api/v1/settings/user-sessions${suffix}`);
+  },
+  async settingsListMySessions(params?: {
+    limit?: number;
+    offset?: number;
+    active_only?: boolean;
+  }): Promise<UserLoginSessionListResponse> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    if (params?.active_only) q.set("active_only", "true");
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<UserLoginSessionListResponse>(`/api/v1/settings/my-sessions${suffix}`);
+  },
+  async settingsSignOutOtherSessions(): Promise<SignOutOtherSessionsResponse> {
+    return request<SignOutOtherSessionsResponse>("/api/v1/settings/my-sessions/sign-out-others", {
+      method: "POST",
+    });
+  },
+  async settingsListMyActivity(params?: {
+    limit?: number;
+    offset?: number;
+    action?: string;
+    resource?: string;
+    search?: string;
+    created_from?: string;
+    created_to?: string;
+    category?: string;
+    ip_address?: string;
+  }): Promise<SettingsAuditLogListResponse> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    if (params?.action) q.set("action", params.action);
+    if (params?.resource) q.set("resource", params.resource);
+    if (params?.search) q.set("search", params.search);
+    if (params?.created_from) q.set("created_from", params.created_from);
+    if (params?.created_to) q.set("created_to", params.created_to);
+    if (params?.category) q.set("category", params.category);
+    if (params?.ip_address) q.set("ip_address", params.ip_address);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<SettingsAuditLogListResponse>(`/api/v1/settings/my-activity${suffix}`);
   },
   async listAuditLogs(params?: { limit?: number; offset?: number }): Promise<AuditLogResponse[]> {
     const q = new URLSearchParams();

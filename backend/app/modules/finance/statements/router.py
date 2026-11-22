@@ -32,7 +32,7 @@ from app.database import get_db
 from app.models import Tenant, User
 from app.models.finance import AccountGroup
 from app.models.inventory import StockGroup
-from app.modules.audit.service import log_action
+from app.modules.audit.service import log_action, log_report_activity
 from app.modules.finance.fiscal_year import fiscal_year_bounds, fy_start_month
 from app.modules.finance.statements.balance_sheet_service import build_balance_sheet
 from app.modules.finance.statements.classification_service import (
@@ -134,7 +134,15 @@ async def trial_balance(
 ):
     await _report_gate(db, tenant, user)
     start, end = _fiscal_range(tenant, from_date, to_date, fiscal_year)
-    return await build_trial_balance(db, tenant, from_date=start, to_date=end, include_zero=include_zero)
+    result = await build_trial_balance(db, tenant, from_date=start, to_date=end, include_zero=include_zero)
+    await log_report_activity(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        report_name="trial-balance",
+        filters_summary=f"{start}..{end}",
+    )
+    return result
 
 
 @router.get("/statements/balance-sheet", response_model=BalanceSheetResponse)
@@ -152,7 +160,16 @@ async def balance_sheet(
         raise HTTPException(status_code=422, detail="Use either fiscal_year or as_of_date, not both")
     if fiscal_year is not None:
         as_of_date = fiscal_year_bounds(date(fiscal_year, fy_start_month(tenant.feature_flags), 1), fy_start_month(tenant.feature_flags))[1]
-    return await build_balance_sheet(db, tenant, as_of_date=as_of_date or today_local(tenant), include_zero=include_zero)
+    as_of = as_of_date or today_local(tenant)
+    result = await build_balance_sheet(db, tenant, as_of_date=as_of, include_zero=include_zero)
+    await log_report_activity(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        report_name="balance-sheet",
+        filters_summary=f"as_of={as_of}",
+    )
+    return result
 
 
 @router.get("/statements/profit-loss", response_model=ProfitLossResponse)
@@ -168,7 +185,15 @@ async def profit_loss(
     await _report_gate(db, tenant, user)
     await _pnl_bs_gate(db, tenant, user)
     start, end = _fiscal_range(tenant, from_date, to_date, fiscal_year)
-    return await build_profit_loss(db, tenant, from_date=start, to_date=end, include_zero=include_zero)
+    result = await build_profit_loss(db, tenant, from_date=start, to_date=end, include_zero=include_zero)
+    await log_report_activity(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        report_name="profit-loss",
+        filters_summary=f"{start}..{end}",
+    )
+    return result
 
 
 # ---- reports: monthly flows, ratios, stock control (second half) ---------------------------------------
@@ -180,7 +205,15 @@ async def cash_flow_monthly(
     db: AsyncSession = Depends(get_db),
 ):
     await _report_gate(db, tenant, user)
-    return await build_cash_flow(db, tenant, fiscal_year=fiscal_year, today=today_local(tenant))
+    result = await build_cash_flow(db, tenant, fiscal_year=fiscal_year, today=today_local(tenant))
+    await log_report_activity(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        report_name="cash-flow-monthly",
+        filters_summary=f"fy={fiscal_year}" if fiscal_year else None,
+    )
+    return result
 
 
 @router.get("/statements/funds-flow-monthly", response_model=FundsFlowResponse)
@@ -191,7 +224,15 @@ async def funds_flow_monthly(
     db: AsyncSession = Depends(get_db),
 ):
     await _report_gate(db, tenant, user)
-    return await build_funds_flow(db, tenant, fiscal_year=fiscal_year, today=today_local(tenant))
+    result = await build_funds_flow(db, tenant, fiscal_year=fiscal_year, today=today_local(tenant))
+    await log_report_activity(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        report_name="funds-flow-monthly",
+        filters_summary=f"fy={fiscal_year}" if fiscal_year else None,
+    )
+    return result
 
 
 def _ratio_range(
@@ -216,7 +257,15 @@ async def ratio_analysis(
 ):
     await _report_gate(db, tenant, user)
     start, end = _ratio_range(tenant, from_date, to_date, as_of_date, fiscal_year)
-    return await build_ratio_analysis(db, tenant, from_date=start, to_date=end)
+    result = await build_ratio_analysis(db, tenant, from_date=start, to_date=end)
+    await log_report_activity(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        report_name="ratio-analysis",
+        filters_summary=f"{start}..{end}",
+    )
+    return result
 
 
 @router.get("/statements/stock-gl-reconciliation", response_model=StockGlResponse)
@@ -324,6 +373,14 @@ async def export_statement(
         data = await build_ratio_analysis(db, tenant, from_date=start, to_date=end)
     table = build_table(report, data)
     content = render_xlsx(table) if format == "xlsx" else render_pdf(table)
+    await log_report_activity(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        report_name=report,
+        exported=True,
+        filters_summary=f"format={format}",
+    )
     return Response(
         content=content,
         media_type=_EXPORT_TYPES[format],

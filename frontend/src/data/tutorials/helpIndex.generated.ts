@@ -2014,8 +2014,8 @@ export const tutorialHelpIndex: TutorialHelpEntry[] = [
   },
   {
     "id": "settings-activity-logs",
-    "title": "Activity logs: see who changed what",
-    "summary": "Filter the audit trail by action code or text to find settings and data changes.",
+    "title": "User Activity: see who did what",
+    "summary": "Review business actions, sessions, and sign-ins by user and IP. Export CSV; sign out other devices.",
     "relatedAppRoutes": [
       "/app/settings/activity-logs",
       "/app/settings/audit",

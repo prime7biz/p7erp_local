@@ -958,7 +958,7 @@ export const menuSections: MenuSection[] = [
       { icon: Shield, label: "Roles", href: `${PREFIX}/settings/roles` },
       { icon: Building2, label: "Tenant", href: `${PREFIX}/settings/tenant` },
       { icon: DollarSign, label: "Pricing", href: `${PREFIX}/settings/pricing` },
-      { icon: Activity, label: "Activity Logs", href: `${PREFIX}/settings/activity-logs` },
+      { icon: Activity, label: "User Activity", href: `${PREFIX}/settings/activity-logs` },
       { icon: ExternalLink, label: "External access", href: `${PREFIX}/settings/external-access` },
       { icon: DollarSign, label: "Currency", href: `${PREFIX}/settings/currency` },
       { icon: HardDrive, label: "Backup & Restore", href: `${PREFIX}/settings/backup` },

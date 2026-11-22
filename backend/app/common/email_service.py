@@ -549,3 +549,48 @@ async def send_password_changed_notification_email(
         subject="Prime7 ERP: password changed",
         body=_build_password_changed_html(recipient_name=recipient_name or ""),
     )
+
+
+def _build_new_login_alert_html(
+    *,
+    recipient_name: str,
+    ip_address: str | None,
+    device_label: str | None,
+    location: str | None,
+) -> str:
+    safe_name = (recipient_name or "there").strip() or "there"
+    bits = []
+    if device_label:
+        bits.append(f"<li><strong>Device:</strong> {device_label}</li>")
+    if ip_address:
+        bits.append(f"<li><strong>IP:</strong> {ip_address}</li>")
+    if location:
+        bits.append(f"<li><strong>Location:</strong> {location}</li>")
+    detail = "".join(bits) or "<li>Details were not available</li>"
+    return (
+        f"<p>Hello {safe_name},</p>"
+        "<p>A sign-in to your Prime7 ERP account used a device or IP we have not seen for you before.</p>"
+        f"<ul>{detail}</ul>"
+        "<p>If this was you, you can ignore this message. If not, change your password and ask your "
+        "administrator to sign out other devices.</p>"
+    )
+
+
+async def send_new_login_alert_email(
+    *,
+    to_email: str,
+    recipient_name: str | None,
+    ip_address: str | None = None,
+    device_label: str | None = None,
+    location: str | None = None,
+) -> None:
+    await _send_html_email(
+        to_email=to_email,
+        subject="Prime7 ERP: new sign-in detected",
+        body=_build_new_login_alert_html(
+            recipient_name=recipient_name or "",
+            ip_address=ip_address,
+            device_label=device_label,
+            location=location,
+        ),
+    )

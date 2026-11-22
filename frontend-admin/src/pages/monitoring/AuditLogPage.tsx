@@ -7,6 +7,8 @@ import { formatDateTime } from "@/utils/format";
 import { useToast } from "@/context/ToastContext";
 import { useAdminAuth } from "@/context/AdminAuthContext";
 
+type Preset = "all" | "api" | "auth" | "errors";
+
 function statusBadge(status: number | null) {
   if (status == null) return <span className="text-slate-400">—</span>;
   const ok = status >= 200 && status < 300;
@@ -24,6 +26,13 @@ function statusBadge(status: number | null) {
   );
 }
 
+function presetAction(preset: Preset): string {
+  if (preset === "api") return "API_REQUEST";
+  if (preset === "auth") return "LOGIN";
+  if (preset === "errors") return "API_ERROR";
+  return "";
+}
+
 export function AuditLogPage() {
   const { showToast } = useToast();
   const { can } = useAdminAuth();
@@ -32,7 +41,11 @@ export function AuditLogPage() {
   const [err, setErr] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [tenantId, setTenantId] = useState("");
+  const [userId, setUserId] = useState("");
   const [action, setAction] = useState("");
+  const [preset, setPreset] = useState<Preset>("all");
+
+  const effectiveAction = action.trim() || presetAction(preset) || undefined;
 
   const load = useCallback(() => {
     setLoading(true);
@@ -41,12 +54,13 @@ export function AuditLogPage() {
       page,
       page_size: 50,
       tenant_id: tenantId ? parseInt(tenantId, 10) : undefined,
-      action: action || undefined,
+      user_id: userId ? parseInt(userId, 10) : undefined,
+      action: effectiveAction,
     })
       .then(setData)
       .catch((e: unknown) => setErr(e instanceof Error ? e.message : "Failed to load"))
       .finally(() => setLoading(false));
-  }, [page, tenantId, action]);
+  }, [page, tenantId, userId, effectiveAction]);
 
   useEffect(() => {
     load();
@@ -57,11 +71,18 @@ export function AuditLogPage() {
   const pageSize = data?.page_size ?? 50;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
+  const applyPreset = (next: Preset) => {
+    setPage(1);
+    setPreset(next);
+    // Clear free-text action so the preset takes effect.
+    setAction("");
+  };
+
   return (
     <div>
       <PageHeader
         title="Audit log"
-        description="Cross-tenant API and activity audit (recent first)."
+        description="Cross-tenant API and activity audit (recent first). Use the API requests preset for technical traffic."
         actions={
           can("monitoring.audit_export") ? (
             <button
@@ -85,6 +106,30 @@ export function AuditLogPage() {
       />
       {err && <p className="text-sm text-red-600 mb-4">{err}</p>}
 
+      <div className="mb-3 flex flex-wrap gap-2">
+        {(
+          [
+            ["all", "All events"],
+            ["api", "API requests"],
+            ["auth", "Login events"],
+            ["errors", "API errors"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => applyPreset(id)}
+            className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
+              preset === id && !action.trim()
+                ? "border-slate-800 bg-slate-800 text-white"
+                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <FilterBar>
         <input
           className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm w-32"
@@ -96,8 +141,17 @@ export function AuditLogPage() {
           }}
         />
         <input
+          className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm w-32"
+          placeholder="User ID"
+          value={userId}
+          onChange={(e) => {
+            setPage(1);
+            setUserId(e.target.value);
+          }}
+        />
+        <input
           className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm flex-1 max-w-xs"
-          placeholder="Action contains"
+          placeholder="Action contains (overrides preset)"
           value={action}
           onChange={(e) => {
             setPage(1);
@@ -119,8 +173,8 @@ export function AuditLogPage() {
           >
             Previous
           </button>
-          <span className="text-sm text-slate-600 tabular-nums">
-            Page {page} of {totalPages}
+          <span className="text-sm text-slate-600">
+            Page {page} / {totalPages}
           </span>
           <button
             type="button"
@@ -133,56 +187,51 @@ export function AuditLogPage() {
         </div>
       </div>
 
-      <div className="overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-3 py-3 whitespace-nowrap">ID</th>
-              <th className="px-3 py-3 whitespace-nowrap">Tenant</th>
-              <th className="px-3 py-3 whitespace-nowrap">User</th>
-              <th className="px-3 py-3">Action</th>
-              <th className="px-3 py-3 min-w-[12rem]">Path</th>
-              <th className="px-3 py-3 whitespace-nowrap">Status</th>
-              <th className="px-3 py-3 whitespace-nowrap">ms</th>
-              <th className="px-3 py-3 whitespace-nowrap">Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && items.length === 0 ? (
+      {loading && !data ? (
+        <p className="text-sm text-slate-500">Loading…</p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+          <table className="min-w-full text-left text-sm">
+            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-slate-500">
-                  Loading…
-                </td>
+                <th className="px-3 py-2">Time</th>
+                <th className="px-3 py-2">Tenant</th>
+                <th className="px-3 py-2">User</th>
+                <th className="px-3 py-2">Action</th>
+                <th className="px-3 py-2">Path</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">ms</th>
+                <th className="px-3 py-2">IP</th>
               </tr>
-            ) : items.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-slate-500">
-                  No audit entries.
-                </td>
-              </tr>
-            ) : (
-              items.map((row) => (
-                <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50/80 align-top">
-                  <td className="px-3 py-2.5 tabular-nums text-slate-600">{row.id}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-slate-700">{row.tenant_id ?? "—"}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-slate-700">{row.user_id ?? "—"}</td>
-                  <td className="px-3 py-2.5 text-slate-800 max-w-[10rem] truncate" title={row.action}>
-                    {row.action}
-                  </td>
-                  <td className="px-3 py-2.5 text-slate-600 font-mono text-xs break-all max-w-md">
-                    {row.request_path ?? "—"}
-                  </td>
-                  <td className="px-3 py-2.5">{statusBadge(row.response_status)}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-slate-600">{row.duration_ms ?? "—"}</td>
-                  <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap text-xs">
-                    {formatDateTime(row.created_at)}
+            </thead>
+            <tbody>
+              {items.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-3 py-6 text-slate-500">
+                    No rows for these filters.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : (
+                items.map((row: AuditLogItem) => (
+                  <tr key={row.id} className="border-b border-slate-100 align-top">
+                    <td className="whitespace-nowrap px-3 py-2">{formatDateTime(row.created_at)}</td>
+                    <td className="px-3 py-2 font-mono text-xs">{row.tenant_id}</td>
+                    <td className="px-3 py-2 font-mono text-xs">{row.user_id ?? "—"}</td>
+                    <td className="px-3 py-2">
+                      <div className="font-medium text-slate-800">{row.action}</div>
+                      <div className="text-xs text-slate-500">{row.resource ?? ""}</div>
+                    </td>
+                    <td className="max-w-xs break-all px-3 py-2 font-mono text-xs">{row.request_path ?? "—"}</td>
+                    <td className="px-3 py-2">{statusBadge(row.response_status)}</td>
+                    <td className="px-3 py-2 font-mono text-xs">{row.duration_ms ?? "—"}</td>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{row.ip_address ?? "—"}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

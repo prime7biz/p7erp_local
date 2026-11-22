@@ -902,47 +902,67 @@ The status shows **Completed** only after the server backup really finishes and 
     },
     {
       id: "settings-activity-logs",
-      title: "Activity logs: see who changed what",
-      summary: "Filter the audit trail by action code or text to find settings and data changes.",
+      title: "User Activity: see who did what",
+      summary: "Review business actions, sessions, and sign-ins by user and IP. Export CSV; sign out other devices.",
       content: `## Overview
 
-**Settings → Activity Logs** (\`/app/settings/activity-logs\`; the **Audit** tab shows the same list) records actions in the system with **Time**, **Action**, **Resource** and **Details**. Admins and auditors use it to answer *"who changed this setting?"*.
+**Settings → User Activity** (\`/app/settings/activity-logs\`; **User Activity** under Audit is the same page) has two tabs:
+
+- **Activity** — **Time**, **User**, **Action**, **Resource**, **Details**, **IP**, and **Location** (when available). Technical API request rows are hidden. A **via Support** badge means a platform admin was signed in as that user.
+- **Sessions** — who is signed in, device, IP, location, and how long. Use **Sign out other devices** to keep only this browser signed in.
+
+Admins see **All users**; everyone can open **My activity** / **My sessions** for their own rows.
 
 ## Before you start
 
-- Settings access.
+- Tenant admin for the full company list; any signed-in user for **My activity**.
+- Session rows appear after the server turns on session tracking and you sign in again.
 
 ## Steps
 
-1. Open **Settings → Activity Logs**.
-2. Type an action code in **Filter by action (e.g. SETTINGS_USER_UPDATE)** — for example \`SETTINGS_USER_UPDATE\` for user changes.
-3. Optional: type words in **Search details**.
-4. Click **Apply filters**.
-5. Use **Previous** / **Next** at the bottom; the line *Showing N of M logs* tells you how many matched.
+1. Open **Settings → User Activity**.
+2. Choose **All users** (admins) or **My activity**.
+3. On **Activity**, optional filters: category (Sign-in & security / Data / Approvals / Reports), user, action code, details search, IP, date range — then **Apply filters**.
+4. Open the **Sessions** tab to review devices; click **Sign out other devices** if you see a session that is not yours.
+5. Use **Export CSV** when an auditor needs a file (up to 500 matching rows for the current tab).
+6. Use **Previous** / **Next** at the bottom.
 
 ## What happens next
 
-Nothing changes — this page is read-only.
+Activity is read-only. Signing out other devices ends those sessions immediately; this browser stays signed in. A new device or IP may send you an in-app alert (and email when mail is configured).
 
 ## Tips
 
-- Without a filter you see many \`API_REQUEST\` rows (every screen load). Always filter by an action code.
-- Portal logins and portal admin actions are in a separate log: **External access → View external audit log**.
+- Look for **Wrong password attempt** and **Account locked** under Sign-in & security.
+- Portal logins stay in **External access → View external audit log**.
+- Location shows **Private network** for office/LAN addresses; city names need a GeoIP database on the server.
 
 ## Common problems
 
-- **Only API_REQUEST rows** → add an action filter.
-- **Nothing found** → the action code must match exactly (upper case, underscores).`,
-      tags: ["settings", "audit", "activity log", "history", "who changed"],
-      keywords: ["audit trail", "log", "change history", "track changes", "SETTINGS_USER_UPDATE"],
-      estimatedMinutes: 2,
-      lastUpdated: "2026-11-06",
+- **Nothing found** → widen the date range or clear the category filter.
+- **No sessions** → ask an admin to enable session tracking on the server, then sign out and sign in again.
+- **Action code not found** → codes are upper case with underscores (for example \`LOGIN_FAILED\`).`,
+      tags: ["settings", "audit", "activity log", "history", "who changed", "login", "ip", "sessions"],
+      keywords: [
+        "audit trail",
+        "log",
+        "change history",
+        "track changes",
+        "LOGIN_FAILED",
+        "user activity",
+        "export csv",
+        "sessions",
+        "sign out devices",
+        "location",
+      ],
+      estimatedMinutes: 4,
+      lastUpdated: "2026-11-22",
       coverImage: "/tutorials/screens/settings-activity-logs.jpg",
       images: [
         {
           src: "/tutorials/screens/settings-activity-logs.jpg",
-          alt: "Activity logs page with filter by action, search details and Apply filters, above a table of log rows",
-          caption: "Filter by an action code to cut out API_REQUEST noise.",
+          alt: "User Activity page with Activity and Sessions tabs, filters, and IP/location columns",
+          caption: "Use Activity for who did what, and Sessions for devices and sign-out.",
         },
       ],
       relatedAppRoutes: ["/app/settings/activity-logs", "/app/settings/audit", "/app/settings/external-access/audit"],

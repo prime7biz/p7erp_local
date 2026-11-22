@@ -66,6 +66,7 @@ def create_access_token(
     *,
     session_version: int | None = None,
     tenant_id: int | None = None,
+    session_id: str | None = None,
     impersonator_admin_id: int | None = None,
     impersonation_session_id: int | None = None,
 ) -> str:
@@ -76,6 +77,8 @@ def create_access_token(
         to_encode["sv"] = int(session_version)
     if tenant_id is not None:
         to_encode["tid"] = int(tenant_id)
+    if session_id:
+        to_encode["sid"] = str(session_id)
     if impersonator_admin_id is not None:
         to_encode["imp"] = int(impersonator_admin_id)
         to_encode["isid"] = int(impersonation_session_id or 0)
@@ -208,6 +211,9 @@ async def get_current_user(
     # Reused later in the same request (require_tenant, request audit log) to avoid repeat queries.
     request.state.auth_user_id = user.id
     request.state.auth_user_tenant_id = user.tenant_id
+    from app.modules.auth.session_service import parse_session_id, touch_session_last_seen
+
+    request.state.auth_session_id = parse_session_id(payload.get("sid"))
 
     tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
     tenant = tenant_result.scalar_one_or_none()
@@ -241,6 +247,13 @@ async def get_current_user(
                     "message": "Session has been replaced by a newer login",
                 },
             )
+    # Telemetry only — never blocks auth if the touch fails.
+    await touch_session_last_seen(
+        db,
+        tenant_id=user.tenant_id,
+        user_id=user.id,
+        session_id=getattr(request.state, "auth_session_id", None),
+    )
     return user
 
 

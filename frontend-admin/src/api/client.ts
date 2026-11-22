@@ -536,6 +536,7 @@ export async function getMonitoringAudit(params: {
   page?: number;
   page_size?: number;
   tenant_id?: number;
+  user_id?: number;
   action?: string;
   date_from?: string;
   date_to?: string;
@@ -545,6 +546,7 @@ export async function getMonitoringAudit(params: {
   if (params.page != null) q.set("page", String(params.page));
   if (params.page_size != null) q.set("page_size", String(params.page_size));
   if (params.tenant_id != null) q.set("tenant_id", String(params.tenant_id));
+  if (params.user_id != null) q.set("user_id", String(params.user_id));
   if (params.action) q.set("action", params.action);
   if (params.date_from) q.set("date_from", params.date_from);
   if (params.date_to) q.set("date_to", params.date_to);

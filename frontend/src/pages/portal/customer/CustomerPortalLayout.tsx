@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 import { PortalPageSkeleton } from "@/components/external-access/PortalSkeletons";
 import { PortalErrorState } from "@/components/external-access/PortalErrorState";
 import { redirectToUnifiedLogin } from "@/utils/portalAuthRedirect";
+import { PORTAL_QUOTATIONS_FLAG } from "@/api/customerPortalQuotations";
 
-const nav = [
+const nav: Array<{ to: string; label: string; end?: boolean; flag?: string }> = [
   { to: "/portal/customer", label: "Dashboard", end: true },
   { to: "/portal/customer/orders", label: "Orders" },
+  { to: "/portal/customer/quotations", label: "Quotations", flag: PORTAL_QUOTATIONS_FLAG },
   { to: "/portal/customer/approvals", label: "Approvals" },
   { to: "/portal/customer/shipments", label: "Shipments" },
   { to: "/portal/customer/notes", label: "Notes" },
@@ -44,7 +46,9 @@ export function CustomerPortalLayout() {
           </div>
         </div>
         <nav className="mx-auto max-w-6xl border-t border-border px-4 py-2 flex flex-wrap gap-2">
-          {nav.map(({ to, label, end }) => (
+          {nav
+            .filter((n) => !n.flag || (me?.feature_flags as Record<string, unknown> | undefined)?.[n.flag] === true)
+            .map(({ to, label, end }) => (
             <NavLink
               key={to}
               to={to}

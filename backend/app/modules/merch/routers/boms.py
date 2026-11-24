@@ -44,6 +44,7 @@ from app.modules.merch.permissions import (
     require_merch_permission,
 )
 from app.common.tenant import require_tenant
+from app.modules.audit.service import log_action_best_effort
 from app.modules.orders.pipeline_service import auto_advance_order_pipeline
 from app.modules.merch.webhooks import dispatch_merch_event
 
@@ -560,6 +561,14 @@ async def submit_order_bom(
     if not bom or bom.tenant_id != tenant.id or not bom.order_id:
         raise HTTPException(status_code=404, detail="BOM not found")
     await wf_svc.submit_bom(db, bom, user.id)
+    await log_action_best_effort(
+        db,
+        tenant_id=tenant.id,
+        action="BOM_SUBMITTED",
+        user_id=user.id,
+        resource=f"bom:{bom.id}",
+        details=f"Submitted BOM #{bom.id} for order {bom.order_id}",
+    )
     await db.commit()
     await db.refresh(bom)
     return await _load_bom_detail(db, tenant, bom)
@@ -578,6 +587,14 @@ async def approve_order_bom(
     if not bom or bom.tenant_id != tenant.id or not bom.order_id:
         raise HTTPException(status_code=404, detail="BOM not found")
     await wf_svc.approve_bom(db, bom, user.id)
+    await log_action_best_effort(
+        db,
+        tenant_id=tenant.id,
+        action="BOM_APPROVED",
+        user_id=user.id,
+        resource=f"bom:{bom.id}",
+        details=f"Approved BOM #{bom.id} for order {bom.order_id}",
+    )
     await db.commit()
     await db.refresh(bom)
     await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=bom.order_id)
@@ -599,6 +616,14 @@ async def reject_order_bom(
     if not bom or bom.tenant_id != tenant.id or not bom.order_id:
         raise HTTPException(status_code=404, detail="BOM not found")
     await wf_svc.reject_bom(db, bom, user.id, body.comment)
+    await log_action_best_effort(
+        db,
+        tenant_id=tenant.id,
+        action="BOM_REJECTED",
+        user_id=user.id,
+        resource=f"bom:{bom.id}",
+        details=f"Rejected BOM #{bom.id} for order {bom.order_id}",
+    )
     await db.commit()
     await db.refresh(bom)
     return await _load_bom_detail(db, tenant, bom)
@@ -617,6 +642,14 @@ async def freeze_order_bom(
     if not bom or bom.tenant_id != tenant.id or not bom.order_id:
         raise HTTPException(status_code=404, detail="BOM not found")
     await wf_svc.freeze_bom(db, bom, user.id)
+    await log_action_best_effort(
+        db,
+        tenant_id=tenant.id,
+        action="BOM_FROZEN",
+        user_id=user.id,
+        resource=f"bom:{bom.id}",
+        details=f"Froze BOM #{bom.id} for order {bom.order_id}",
+    )
     await db.commit()
     await db.refresh(bom)
     await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=bom.order_id)

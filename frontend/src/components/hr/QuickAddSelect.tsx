@@ -2,9 +2,11 @@
  * Select with an inline "+" button that opens the HR quick-add modal.
  * The created record is passed to `onCreated` (so the parent can add it to its
  * option list) and then auto-selected through `onChange`.
+ * Uses LocalSearchSelect so typing narrows by full text (e.g. "operator").
  */
-import { useId, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { Plus } from "lucide-react";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import { erpControlFocusClass } from "@/components/app/listPageLayout";
 import { cn } from "@/lib/utils";
 import { HrMasterQuickAddModal, type HrQuickAddRecord } from "./HrMasterQuickAddModal";
@@ -52,6 +54,10 @@ export function QuickAddSelect({
   const selectId = useId();
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const kindLabel = HR_MASTER_LABELS[kind];
+  const localOptions = useMemo(
+    () => options.map((o) => ({ value: o.id, label: o.label })),
+    [options],
+  );
 
   const closeModal = () => {
     setModalOpen(false);
@@ -65,21 +71,18 @@ export function QuickAddSelect({
         {label}
       </label>
       <div className="flex items-stretch gap-2">
-        <select
+        <LocalSearchSelect
           id={selectId}
-          className={cn("min-w-0 flex-1 rounded border border-border-strong px-3 py-2 text-sm", erpControlFocusClass)}
-          value={value ?? ""}
-          onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
+          className="min-w-0 flex-1"
+          value={value}
+          options={localOptions}
+          onChange={(next) => onChange(next === "" ? null : Number(next))}
+          placeholder={emptyLabel}
           required={required}
           disabled={disabled}
-        >
-          <option value="">{emptyLabel}</option>
-          {options.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+          aria-label={label}
+          allowClear={!required}
+        />
         {allowQuickAdd && (
           <button
             ref={addButtonRef}

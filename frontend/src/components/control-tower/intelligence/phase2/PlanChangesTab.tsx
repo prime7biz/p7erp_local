@@ -284,7 +284,7 @@ export function PlanChangesTab({ orderOptions, fourEyes, canPropose = true }: Pr
         <div className="flex flex-wrap items-end gap-3">
           <TextField id="mfg-plan-from" label="From" type="date" value={from} onChange={setFrom} />
           <TextField id="mfg-plan-to" label="To" type="date" value={to} onChange={setTo} />
-          <SelectField id="mfg-plan-line" label="Sewing line" value={lineFilter} onChange={setLineFilter} options={lineOptions} placeholder="All lines" />
+          <SelectField id="mfg-plan-line" label="Sewing line" searchable value={lineFilter} onChange={setLineFilter} options={lineOptions} placeholder="All lines" />
           {canPropose ? (
             <button
               type="button"
@@ -501,6 +501,7 @@ export function PlanChangesTab({ orderOptions, fourEyes, canPropose = true }: Pr
           id="mfg-new-order"
           label="Order"
           required
+          searchable
           value={createDraft.order_id}
           onChange={(v) => setCreateDraft((d) => ({ ...d, order_id: v }))}
           options={orderOptions.map((o) => ({ value: String(o.order_id), label: `${o.order_code}${o.customer_name ? ` · ${o.customer_name}` : ""}` }))}
@@ -553,7 +554,7 @@ function BookingFields({
 }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <SelectField id={`${idPrefix}-line`} label="Sewing line" required value={value.line_id} onChange={(v) => onChange({ line_id: v })} options={lineOptions} />
+      <SelectField id={`${idPrefix}-line`} label="Sewing line" required searchable value={value.line_id} onChange={(v) => onChange({ line_id: v })} options={lineOptions} />
       <SelectField
         id={`${idPrefix}-status`}
         label="Booking status"

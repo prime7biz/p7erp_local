@@ -185,6 +185,10 @@ class Employee(Base):
     section_id: Mapped[int | None] = mapped_column(
         ForeignKey("hr_sections.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # Migration 317: ESS self-service gate (nullable; app treats NULL as False).
+    ess_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False, index=True)
+    # Migration 317 / Phase 4 reminders: optional contract end date.
+    contract_end_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

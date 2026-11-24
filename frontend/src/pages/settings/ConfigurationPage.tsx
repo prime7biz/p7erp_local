@@ -323,6 +323,157 @@ export function ConfigurationPage() {
           </label>
         </div>
 
+        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-2" hidden={!showTier("more")}>
+          <p className="text-xs font-medium text-text-primary">Production Control Center (advanced)</p>
+          {(
+            [
+              [
+                "prod_control_center_v1",
+                "Production Control Center hub (order readiness, floor board, finishing funnel)",
+              ],
+              ["tna_auto_plan_v1", "Calendar-aware TNA re-plan + critical-path slip warnings"],
+              ["mfg_machine_match_v1", "OB vs line machine-content similarity + swap board"],
+              ["cutting_loss_control_v1", "CAD/marker process-loss & 3-way consumption variance"],
+              ["floor_live_monitor_v1", "Live hourly sewing + DHU / RFT floor board"],
+              ["finishing_stage_wip_v1", "Finishing & packing stage-by-stage WIP ledger"],
+            ] as const
+          ).map(([key, label]) => (
+            <label key={key} className="flex items-start gap-3 text-sm text-text-secondary">
+              <input
+                type="checkbox"
+                className="mt-1 rounded border-border-strong"
+                checked={featureFlags[key] === true}
+                onChange={(e) =>
+                  setFeatureFlags((prev) => ({
+                    ...prev,
+                    [key]: e.target.checked,
+                  }))
+                }
+              />
+              <span>
+                <span className="font-medium text-text-primary">{label}</span>
+                <span className="mt-0.5 block text-xs text-text-muted">
+                  {key === "mfg_machine_match_v1" ? (
+                    <>
+                      Off by default. Read-only match APIs work when this flag is on{" "}
+                      <strong>and</strong> either <strong>Production Control Center</strong>{" "}
+                      (<code className="text-[10px]">prod_control_center_v1</code>) or Manufacturing
+                      Intelligence + Integrated Planning are on. Plan-swap still needs Integrated
+                      Planning.
+                    </>
+                  ) : (
+                    <>Off by default. Turn on only after local smoke tests for this tenant.</>
+                  )}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface-subtle p-3" hidden={!showTier("more")}>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.inbound_job_work_v1 === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  inbound_job_work_v1: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Enable Inbound Job Work (CMT)</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                When checked, Manufacturing shows <strong>Inbound Job Work</strong> for contracts where another factory
+                supplies materials and you charge one CM rate on delivered pieces. Materials stay quantity-only (no stock
+                valuation). Off by default.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface-subtle p-3" hidden={!showTier("more")}>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.inquiry_workbench_v1 === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  inquiry_workbench_v1: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Enable Inquiry Workbench</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                When checked, Sales → Inquiries uses the 5-step workbench (product specs, technical files, readiness
+                checklist, related records). Classic inquiry screens stay available when this is off. Off by default.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface-subtle p-3" hidden={!showTier("more")}>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.material_control_hub_v1 === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  material_control_hub_v1: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Enable Material Control hub</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                When checked, Inventory shows <strong>Material Control</strong> with today&apos;s action queue, style
+                control sheet, and lot genealogy. Read-only hub for Phase 1. Off by default.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-2" hidden={!showTier("more")}>
+          <p className="text-xs font-medium text-text-primary">Raw material control (advanced)</p>
+          {(
+            [
+              ["material_inbound_v2", "Style tags, Reuse-Before-Buy & BTB soft warn (Phase 2A)"],
+              ["material_alloc_ud_v1", "FIFO-layer allocation & UD event ledger (Phase 2B)"],
+              ["material_conversion_v1", "Leftover return + Gate/Challan class chain (Phase 4)"],
+              ["material_physical_v1", "Physical count + job-work bond transfer + principal claim (Phase 5)"],
+              ["material_returns_v1", "RTV / exchange documents (Phase 6)"],
+              ["material_budget_plan_v1", "Budget plan, leak watchlist & rolls/shade (Phase 7)"],
+              ["material_landed_cost_v1", "Landed cost lite onto GRN FIFO layers (Phase 7 sub)"],
+              [
+                "material_commitment_block_v1",
+                "Hard BTB/MSC commitment blocks (Phase 8 — use only after live sign-off)",
+              ],
+            ] as const
+          ).map(([key, label]) => (
+            <label key={key} className="flex items-start gap-3 text-sm text-text-secondary">
+              <input
+                type="checkbox"
+                className="mt-1 rounded border-border-strong"
+                checked={featureFlags[key] === true}
+                onChange={(e) =>
+                  setFeatureFlags((prev) => ({
+                    ...prev,
+                    [key]: e.target.checked,
+                  }))
+                }
+              />
+              <span className="text-xs">{label}</span>
+            </label>
+          ))}
+        </div>
+
         <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3" hidden={!showTier("more")}>
           <label className="flex items-start gap-3 text-sm text-text-secondary">
             <input
@@ -892,6 +1043,64 @@ export function ConfigurationPage() {
             </span>
           </label>
           <AuthorityCutoverPanel />
+          <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-text-muted">HR class requests (needs authority classes)</p>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.hr_delegation_v1 === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  hr_delegation_v1: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">HR approval delegation</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Time-boxed Class 1 / Class 2 stand-ins for recommend or approve. Off by default.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.hr_reminders_v1 === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  hr_reminders_v1: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">HR probation / contract reminders</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Daily alerts and draft confirmation suggestions. Never auto-submits. Off by default.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.hr_analytics_v1 === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  hr_analytics_v1: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">HR analytics</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Headcount, attrition, leave and pending-approval age (max 366-day window). Off by default.
+              </span>
+            </span>
+          </label>
         </div>
 
         <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3" hidden={!showTier("more")}>

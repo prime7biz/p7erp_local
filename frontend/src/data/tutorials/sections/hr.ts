@@ -34,12 +34,13 @@ The **HR** section of the sidebar holds everything about your people: who works 
 
 ## Steps — where everything is
 
-The HR sidebar has six groups with 16 links. Most links open **one page with tabs along the top** — click a tab to switch screens. The open tab is part of the web address, so you can bookmark it or send the link to a colleague. Old links and bookmarks still work and open the matching tab. Press **Ctrl+K** and type a tab name (for example "Payslips") to jump straight to it.
+The HR sidebar has six groups with about 17–18 links (one extra **HR Requests** link when User authority classes is on). Most links open **one page with tabs along the top** — click a tab to switch screens. The open tab is part of the web address, so you can bookmark it or send the link to a colleague. Old links and bookmarks still work and open the matching tab. Press **Ctrl+K** and type a tab name (for example "Payslips") to jump straight to it.
 
 1. **Main**
    - **HR Dashboard** (\`/app/hr\`) — clickable cards for employees, today's attendance, pending leave, payroll queue and open hiring, a **Needs your attention** list and quick links.
    - **Employees** (\`/app/hr/employees\`) — the employee list and records. The **AI onboarding** button (when the OCR flags are on) scans a CV or NID.
-   - **My HR** (\`/app/hr/my\`) — tabs **Profile**, **Attendance**, **Leave**, **Payslips**, **Tickets** (for every employee).
+   - **My HR** (\`/app/hr/my\`) — tabs **Profile**, **Attendance**, **Leave**, **Payslips**, **Tickets**, and **My requests** (when authority classes are on).
+   - **HR Requests** (\`/app/hr/requests\`) — voucher-style Class 2 recommend / Class 1 approve requests (when authority classes are on). See **HR Class requests**.
 2. **Daily work**
    - **Attendance** (\`/app/hr/attendance\`) — tabs **Daily entry**, **Manual IN / OUT**, **Regularizations**, **Overtime**, **Summary**.
    - **Leave** (\`/app/hr/leave\`) — tabs **Requests**, **Approvals**, **Balances**, **Calendar**.
@@ -117,7 +118,7 @@ Warning letters, memos, show-cause letters and unauthorised-absence cases are ha
         "tabs",
         "hub",
       ],
-      lastUpdated: "2026-11-10",
+      lastUpdated: "2026-11-23",
       coverImage: "/tutorials/screens/hr.jpg",
       infographics: [
         {
@@ -263,7 +264,7 @@ HR officers usually do this once, then add new items when the factory grows.
 1. Open **HR → HR Setup → Designations** (\`/app/hr/designations\`).
 2. Click **+ Add designation**. If you filtered the list by a department first, that department is already chosen.
 3. Type the **Designation name** (required — the screen marks required fields with two stars). The code (for example **DESG-0001**) is assigned automatically.
-4. Choose the department in the drop-down (or leave **No department** if the title is used everywhere). If the department is missing, click **+** next to the drop-down, type its name and click **Create** — it is added and selected without leaving the form.
+4. Choose the department in the drop-down (or leave **No department** if the title is used everywhere). **Type to filter** — for example \`operator\` narrows to Junior Operator and Senior Operator. If the department is missing, click **+** next to the drop-down, type its name and click **Create** — it is added and selected without leaving the form.
 5. Click **Save**.
 
 ### C. Add a section or line
@@ -309,8 +310,8 @@ Managers and admins can remove a department or section that is no longer used:
 - **Delete is refused** → tick **Move linked records to Undefined**, or move people first, or just untick **Active**.
 - **Employee shows Undefined** → their department or section was deleted; pick a new one on the Employment & Salary tab.`,
       tags: ["HR", "departments", "designations", "sections", "lines", "setup"],
-      keywords: ["department", "designation", "job title", "position", "post", "padobi", "line", "floor", "unit", "section", "org chart", "quick add", "auto code", "job description", "undefined", "delete department"],
-      lastUpdated: "2026-11-15",
+      keywords: ["department", "designation", "job title", "position", "post", "padobi", "line", "floor", "unit", "section", "org chart", "quick add", "auto code", "job description", "undefined", "delete department", "type to filter"],
+      lastUpdated: "2026-11-22",
       coverImage: "/tutorials/screens/hr-designations.jpg",
       infographics: [
         {
@@ -1388,6 +1389,64 @@ Open **HR → Leave → Calendar** (\`/app/hr/leave/calendar\`), set **Year** an
       relatedAppRoutes: ["/app/hr/leave/requests", "/app/hr/leave/approvals", "/app/hr/leave/calendar"],
       relatedArticleIds: ["hr-leave-setup", "hr-ess", "hr-settings-weekend", "hr-daily-attendance", "hr-pay-monthly-run", "hr-overview", "wf-approvals"],
     },
+
+    {
+      id: "hr-class-requests",
+      title: "HR Class requests (voucher-style approvals)",
+      summary:
+        "When User authority classes is on, Class 3/4 enter HR changes, Class 2 recommends, and a different Class 1 approves — including new employee login (ESS or ERP).",
+      featured: true,
+      estimatedMinutes: 7,
+      content: `## Overview
+
+**HR Requests** is a voucher-style inbox for people changes. It is only used when **Settings → Configuration → User authority classes** is ON.
+
+**Who does what**
+- **Class 3 / Class 4:** enter a request (cannot recommend or approve).
+- **Class 2:** enter, recommend, return or reject. A Class 2 entry is auto-recommended; a different Class 1 still approves.
+- **Class 1:** enter, approve or reject. A Class 1 entry still needs a Class 2 recommendation and a **different** Class 1 approval.
+- **Super Admin:** unrestricted (every step is audited).
+
+Nobody except Super Admin may recommend or approve a request about **their own** employee record.
+
+## Before you start
+
+- Turn on **User authority classes** and finish the cutover for the company.
+- Give HR entry users Class 3/4 with the **hr** module; recommenders Class 2 + **hr**; approvers Class 1 + **hr**. Pay changes also need **hr.payroll.manage**. NID / bank fields need **hr.identity.manage**.
+- Optional switches (same Configuration page): **HR approval delegation**, **HR probation / contract reminders**, **HR analytics**.
+
+## Steps
+
+1. Open **HR → HR Requests** (\`/app/hr/requests\`).
+2. Choose **New request**, pick the **Kind** (new employee, leave, increment, promotion, correction, resignation, discontinue, …).
+3. For **New employee**, set **System access**:
+   - **None** — employee record only.
+   - **ESS only** — My HR login (\`ess\` module).
+   - **ERP user** — Class + ERP modules (Class 1 / Settings grants need Super Admin).
+4. Enter a **Reason** and the JSON **Payload**, then **Submit request**.
+5. Class 2 opens **Waiting for me** and clicks **Recommend** (or Return / Reject).
+6. Class 1 opens **Waiting for me** and clicks **Approve**. The system applies the change (or shows **Failed** with **Retry apply**).
+
+Employees with ESS can open **My HR → My requests** to follow their own leave / correction / resignation requests.
+
+## Tips
+
+- Direct Create / Edit / Approve on employees, leave and separations returns **409** while the flag is on — use HR Requests instead.
+- If your company has only one Class 1 with HR, that person's own requests can only be approved by Super Admin.
+`,
+      tags: ["HR", "approvals", "authority", "ESS", "Class 1", "Class 2"],
+      keywords: [
+        "hr requests",
+        "class approve",
+        "recommend",
+        "new employee invite",
+        "ESS only",
+        "authority classes",
+      ],
+      lastUpdated: "2026-11-23",
+      relatedAppRoutes: ["/app/hr/requests", "/app/hr/class-requests", "/app/hr/my"],
+      relatedArticleIds: ["hr-overview", "hr-ess", "hr-add-employee", "hr-leave-request-approval", "hr-employee-exit"],
+    },
     {
       id: "hr-ess",
       title: "Employee Self-Service: my profile, attendance, leave, payslips and tickets",
@@ -1403,8 +1462,11 @@ Open **HR → Leave → Calendar** (\`/app/hr/leave/calendar\`), set **Year** an
 - **My Leave** — apply for leave and follow the status.
 - **My Payslips** — your payslips by **Payroll month** (October salary shows as October even if paid in November), with **Gross**, **Deduction**, **Net** and **Status**. Click **Download PDF** on a row to save the payslip.
 - **My Tickets** — send a **Query**, **Complaint** or **Request** to HR.
+- **My requests** — when **User authority classes** is on, your leave / correction / resignation vouchers.
 
 **My Leave**, **My Attendance** and **My Payslips** have an **English / বাংলা** switch at the top right.
+
+When authority classes are on, profile edits that change identity fields go through a **correction request** instead of a direct save.
 
 ## Before you start
 

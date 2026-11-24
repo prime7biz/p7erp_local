@@ -1,13 +1,16 @@
 import { type ChangeEvent, type Ref, type RefObject, type SetStateAction } from "react";
-import { Building2, Mail, MapPin, Upload } from "lucide-react";
+import { Building2, ClipboardList, Mail, MapPin, Upload } from "lucide-react";
 import { FormCitySelect, FormCountrySelect } from "@/components/customers/CustomerLocationFields";
 import {
   CUSTOMER_FORM_BASE_INPUT,
+  CUSTOMER_TYPE_OPTIONS,
   type CustomerFormState,
 } from "@/components/customers/customerFormShared";
 import { citiesForCountry } from "@/data/formLocations";
 import { cn } from "@/lib/utils";
 import type { FieldConfidence } from "@/types/extraction";
+
+const INCOTERM_OPTIONS = ["EXW", "FOB", "CIF", "CFR", "DDP", "DAP", "FCA"] as const;
 
 export type CustomerFormFieldsProps = {
   /** Active currency codes from costing master (fallback to USD-only if empty) */
@@ -28,6 +31,10 @@ export type CustomerFormFieldsProps = {
   companyLogoDisplayUrl: string | null | undefined;
   logoUploading: boolean;
   onLogoPick: (e: ChangeEvent<HTMLInputElement>) => void;
+  /** Soft duplicate check when leaving Legal Entity Name */
+  onLegalEntityNameBlur?: () => void;
+  /** Soft duplicate check when leaving Contact Email */
+  onContactEmailBlur?: () => void;
 };
 
 export function CustomerFormFields({
@@ -43,6 +50,8 @@ export function CustomerFormFields({
   companyLogoDisplayUrl,
   logoUploading,
   onLogoPick,
+  onLegalEntityNameBlur,
+  onContactEmailBlur,
 }: CustomerFormFieldsProps) {
   const currencySelectOptions =
     currencyOptions.length > 0
@@ -63,6 +72,7 @@ export function CustomerFormFields({
               type="text"
               value={form.legalEntityName}
               onChange={(e) => patchForm({ legalEntityName: e.target.value })}
+              onBlur={() => onLegalEntityNameBlur?.()}
               placeholder="e.g. Acme Corp Industries Ltd."
               className={cn(CUSTOMER_FORM_BASE_INPUT, autofillBorder(autofilled.legalEntityName))}
               required
@@ -105,9 +115,20 @@ export function CustomerFormFields({
               onChange={(e) => patchForm({ customerType: e.target.value })}
               className={cn(CUSTOMER_FORM_BASE_INPUT, autofillBorder(autofilled.customerType))}
             >
-              <option value="enterprise">Enterprise</option>
-              <option value="sme">SME</option>
-              <option value="startup">Startup</option>
+              {CUSTOMER_TYPE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+              {["enterprise", "sme", "startup"].includes(form.customerType) ? (
+                <option value={form.customerType}>
+                  {form.customerType === "enterprise"
+                    ? "Enterprise (legacy)"
+                    : form.customerType === "sme"
+                      ? "SME (legacy)"
+                      : "Startup (legacy)"}
+                </option>
+              ) : null}
             </select>
           </div>
           <div>
@@ -192,14 +213,19 @@ export function CustomerFormFields({
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <label className="mb-1 block text-sm font-medium text-text-secondary">Primary Contact Name **</label>
+            <label className="mb-1 block text-sm font-medium text-text-secondary">
+              Primary Contact Name <span className="font-normal text-text-muted">(recommended)</span>
+            </label>
             <input
               type="text"
               value={form.primaryContactName}
               onChange={(e) => patchForm({ primaryContactName: e.target.value })}
               placeholder="Full name of person in charge"
-              className={cn(CUSTOMER_FORM_BASE_INPUT, autofillBorder(autofilled.primaryContactName))}
-              required
+              className={cn(
+                CUSTOMER_FORM_BASE_INPUT,
+                !form.primaryContactName.trim() && "border-status-warning/50 bg-status-warning-subtle/30",
+                autofillBorder(autofilled.primaryContactName),
+              )}
             />
           </div>
           <div>
@@ -213,14 +239,20 @@ export function CustomerFormFields({
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-text-secondary">Email Address **</label>
+            <label className="mb-1 block text-sm font-medium text-text-secondary">
+              Email Address <span className="font-normal text-text-muted">(recommended)</span>
+            </label>
             <input
               type="email"
               value={form.contactEmail}
               onChange={(e) => patchForm({ contactEmail: e.target.value })}
+              onBlur={() => onContactEmailBlur?.()}
               placeholder="contact@company.com"
-              className={cn(CUSTOMER_FORM_BASE_INPUT, autofillBorder(autofilled.contactEmail))}
-              required
+              className={cn(
+                CUSTOMER_FORM_BASE_INPUT,
+                !form.contactEmail.trim() && "border-status-warning/50 bg-status-warning-subtle/30",
+                autofillBorder(autofilled.contactEmail),
+              )}
             />
           </div>
           <div>
@@ -264,24 +296,33 @@ export function CustomerFormFields({
           <div className="space-y-3 rounded-lg border border-border p-4">
             <h3 className="text-sm font-semibold text-text-primary">Billing Address</h3>
             <div>
-              <label className="mb-1 block text-sm font-medium text-text-secondary">Street Address **</label>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">
+                Street Address <span className="font-normal text-text-muted">(recommended)</span>
+              </label>
               <input
                 type="text"
                 value={form.billingAddressLine1}
                 onChange={(e) => patchForm({ billingAddressLine1: e.target.value })}
-                className={cn(CUSTOMER_FORM_BASE_INPUT, autofillBorder(autofilled.billingAddressLine1))}
-                required
+                className={cn(
+                  CUSTOMER_FORM_BASE_INPUT,
+                  !form.billingAddressLine1.trim() && "border-status-warning/50 bg-status-warning-subtle/30",
+                  autofillBorder(autofilled.billingAddressLine1),
+                )}
               />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-sm font-medium text-text-secondary">City **</label>
+                <label className="mb-1 block text-sm font-medium text-text-secondary">
+                  City <span className="font-normal text-text-muted">(recommended)</span>
+                </label>
                 <FormCitySelect
                   country={form.billingCountry}
                   value={form.billingCity}
                   onChange={(next) => patchForm({ billingCity: next })}
-                  className={autofillBorder(autofilled.billingCity)}
-                  required
+                  className={cn(
+                    !form.billingCity.trim() && "border-status-warning/50 bg-status-warning-subtle/30",
+                    autofillBorder(autofilled.billingCity),
+                  )}
                 />
               </div>
               <div>
@@ -295,7 +336,9 @@ export function CustomerFormFields({
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-text-secondary">Country **</label>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">
+                Country <span className="font-normal text-text-muted">(recommended)</span>
+              </label>
               <FormCountrySelect
                 value={form.billingCountry}
                 onChange={(next) =>
@@ -305,7 +348,6 @@ export function CustomerFormFields({
                     return { ...prev, billingCountry: next, billingCity: keep ? prev.billingCity : "" };
                   })
                 }
-                required
               />
             </div>
           </div>
@@ -324,7 +366,7 @@ export function CustomerFormFields({
               </label>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-text-secondary">Street Address **</label>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">Street Address</label>
               <input
                 type="text"
                 value={shippingValues.shippingAddressLine1}
@@ -339,14 +381,13 @@ export function CustomerFormFields({
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-sm font-medium text-text-secondary">City **</label>
+                <label className="mb-1 block text-sm font-medium text-text-secondary">City</label>
                 <FormCitySelect
                   country={shippingValues.shippingCountry}
                   value={shippingValues.shippingCity}
                   onChange={(next) => patchForm({ shippingCity: next })}
                   disabled={form.sameAsBilling}
                   className={autofillBorder(autofilled.shippingCity)}
-                  required={!form.sameAsBilling}
                 />
               </div>
               <div>
@@ -365,7 +406,7 @@ export function CustomerFormFields({
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-text-secondary">Country **</label>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">Country</label>
               <FormCountrySelect
                 value={shippingValues.shippingCountry}
                 onChange={(next) => {
@@ -379,9 +420,105 @@ export function CustomerFormFields({
                 }}
                 disabled={form.sameAsBilling}
                 className={autofillBorder(autofilled.shippingCountry)}
-                required={!form.sameAsBilling}
               />
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-border bg-surface-raised p-5">
+        <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-status-warning">
+          <ClipboardList className="h-4 w-4" />
+          Commercial defaults
+        </div>
+        <p className="mb-4 text-xs text-text-muted">
+          Optional. Used as hints on new quotations and orders — not hard credit control.
+        </p>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-text-secondary">Payment terms</label>
+            <input
+              type="text"
+              value={form.paymentTerms}
+              onChange={(e) => patchForm({ paymentTerms: e.target.value })}
+              placeholder="e.g. Net 30, LC at sight"
+              className={cn(CUSTOMER_FORM_BASE_INPUT, autofillBorder(autofilled.paymentTerms))}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-text-secondary">Default Incoterm</label>
+            <select
+              value={form.defaultIncoterm}
+              onChange={(e) => patchForm({ defaultIncoterm: e.target.value })}
+              className={cn(CUSTOMER_FORM_BASE_INPUT, autofillBorder(autofilled.defaultIncoterm))}
+            >
+              <option value="">— Select —</option>
+              {INCOTERM_OPTIONS.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+              {form.defaultIncoterm &&
+              !(INCOTERM_OPTIONS as readonly string[]).includes(form.defaultIncoterm) ? (
+                <option value={form.defaultIncoterm}>{form.defaultIncoterm}</option>
+              ) : null}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-text-secondary">Typical lead time (days)</label>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={form.typicalLeadTimeDays}
+              onChange={(e) => patchForm({ typicalLeadTimeDays: e.target.value })}
+              placeholder="e.g. 45"
+              className={cn(CUSTOMER_FORM_BASE_INPUT, autofillBorder(autofilled.typicalLeadTimeDays))}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-text-secondary">Industry segment</label>
+            <input
+              type="text"
+              value={form.industrySegment}
+              onChange={(e) => patchForm({ industrySegment: e.target.value })}
+              placeholder="e.g. Knitwear, Denim"
+              className={cn(CUSTOMER_FORM_BASE_INPUT, autofillBorder(autofilled.industrySegment))}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-text-secondary">Compliance level</label>
+            <input
+              type="text"
+              value={form.complianceLevel}
+              onChange={(e) => patchForm({ complianceLevel: e.target.value })}
+              placeholder="e.g. Standard, High"
+              className={cn(CUSTOMER_FORM_BASE_INPUT, autofillBorder(autofilled.complianceLevel))}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-text-secondary">
+              Credit limit <span className="font-normal text-text-muted">(informational)</span>
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={form.creditLimit}
+              onChange={(e) => patchForm({ creditLimit: e.target.value })}
+              placeholder="e.g. 100000.00"
+              className={cn(CUSTOMER_FORM_BASE_INPUT, autofillBorder(autofilled.creditLimit))}
+            />
+            <p className="mt-1 text-xs text-text-muted">Stored for reference only — not enforced on orders.</p>
+          </div>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-text-secondary">Notes</label>
+            <textarea
+              value={form.notes}
+              onChange={(e) => patchForm({ notes: e.target.value })}
+              rows={3}
+              placeholder="Internal notes about this customer"
+              className={cn(CUSTOMER_FORM_BASE_INPUT, autofillBorder(autofilled.notes))}
+            />
           </div>
         </div>
       </section>

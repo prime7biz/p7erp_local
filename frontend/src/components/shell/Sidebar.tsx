@@ -25,6 +25,9 @@ export type SidebarProps = {
   hasPermission: (key: string) => boolean;
   /** When false, Finance confidential report tabs are hidden from hub visibility. */
   canViewConfidentialReports?: boolean;
+  /** Fixed-class authority: filter sidebar by module grants even when soft RBAC is off. */
+  authorityClassesEnabled?: boolean;
+  moduleGrants?: string[] | null;
   compact?: boolean;
 };
 
@@ -40,6 +43,8 @@ export function Sidebar({
   featureFlags,
   hasPermission,
   canViewConfidentialReports,
+  authorityClassesEnabled,
+  moduleGrants,
   compact = false,
 }: SidebarProps) {
   const location = useLocation();
@@ -65,8 +70,18 @@ export function Sidebar({
         featureFlags,
         hasPermission,
         canViewConfidentialReports,
+        authorityClassesEnabled,
+        moduleGrants,
       }),
-    [tenantType, enabledOptionalProductionUnits, featureFlags, hasPermission, canViewConfidentialReports],
+    [
+      tenantType,
+      enabledOptionalProductionUnits,
+      featureFlags,
+      hasPermission,
+      canViewConfidentialReports,
+      authorityClassesEnabled,
+      moduleGrants,
+    ],
   );
 
   useEffect(() => {

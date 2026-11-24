@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "@/api/client";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
+import { fetchCustomerPage, hydrateCustomer } from "@/lib/remoteSelectFetchers";
 
 type Tab = "overview" | "plans" | "rates" | "workOrders";
 
@@ -70,7 +72,7 @@ export function ProductionKnittingPage() {
   const [woFabric, setWoFabric] = useState("");
   const [woYplan, setWoYplan] = useState("");
   const [woGplan, setWoGplan] = useState("");
-  const [woCust, setWoCust] = useState("");
+  const [woCust, setWoCust] = useState<number | "">("");
   const [woVendor, setWoVendor] = useState("");
   const [woMachine, setWoMachine] = useState("");
   const [linkDc, setLinkDc] = useState("");
@@ -196,7 +198,7 @@ export function ProductionKnittingPage() {
         fabric_type_code: woFabric.trim() || null,
         planned_yarn_qty: woYplan || undefined,
         planned_greige_qty: woGplan || undefined,
-        customer_id: woSrc === "jobwork_customer" && woCust ? Number(woCust) : undefined,
+        customer_id: woSrc === "jobwork_customer" && typeof woCust === "number" ? woCust : undefined,
         vendor_id: woSrc === "subcontract" && woVendor ? Number(woVendor) : undefined,
         machine_id: woMachine ? Number(woMachine) : undefined,
       });
@@ -417,7 +419,15 @@ export function ProductionKnittingPage() {
                 onChange={(e) => setWoGplan(e.target.value)}
               />
               {woSrc === "jobwork_customer" ? (
-                <input className="rounded-md border px-2 py-1 w-28" placeholder="Customer ID" value={woCust} onChange={(e) => setWoCust(e.target.value)} />
+                <RemoteSearchSelect
+                  className="min-w-[14rem] rounded-md border px-2 py-1 text-sm"
+                  placeholder="Search customer…"
+                  value={woCust}
+                  onChange={(next) => setWoCust(typeof next === "number" && next > 0 ? next : "")}
+                  fetchPage={fetchCustomerPage}
+                  hydrateById={hydrateCustomer}
+                  allowClear
+                />
               ) : null}
               {woSrc === "subcontract" ? (
                 <input className="rounded-md border px-2 py-1 w-28" placeholder="Vendor ID" value={woVendor} onChange={(e) => setWoVendor(e.target.value)} />

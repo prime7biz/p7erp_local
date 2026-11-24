@@ -416,8 +416,10 @@ export function UsersPage() {
           disabled={disabled}
           className="text-xs text-primary underline disabled:opacity-50"
           onClick={() => {
-            if (target === "form") setForm((p) => ({ ...p, module_grants: [...availableModules] }));
-            else setInviteForm((p) => ({ ...p, module_grants: [...availableModules] }));
+            // Select all ERP modules — exclude `ess` (ESS is opt-in separately from ERP staffing).
+            const erpOnly = availableModules.filter((m) => String(m).toLowerCase() !== "ess");
+            if (target === "form") setForm((p) => ({ ...p, module_grants: [...erpOnly] }));
+            else setInviteForm((p) => ({ ...p, module_grants: [...erpOnly] }));
           }}
         >
           Select all

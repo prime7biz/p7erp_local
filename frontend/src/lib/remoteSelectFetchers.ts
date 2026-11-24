@@ -4,13 +4,16 @@ import {
   type ChartOfAccountResponse,
   type CostCenterResponse,
   type CustomerResponse,
+  type InquiryResponse,
   type InventoryItemResponse,
   type OrderResponse,
   type PartyLedgerResponse,
   type StockItemListRow,
+  type StyleResponse,
   type TradeCaseRow,
   type VendorResponse,
 } from "@/api/client";
+import { merchApi } from "@/api/merch";
 import type { RemoteSelectOption } from "@/hooks/useRemotePaginatedSearch";
 import { logApiError } from "@/utils/logApiError";
 
@@ -18,16 +21,18 @@ function customerLabel(c: CustomerResponse): string {
   return `${c.customer_code} · ${c.name}`;
 }
 
-/** Paginated customers for RemoteSearchSelect (server search). */
+/** Paginated customers for RemoteSearchSelect (server search). Optional status e.g. "active". */
 export async function fetchCustomerPage(
   query: string,
   page: number,
   pageSize: number,
+  status?: string,
 ): Promise<{ options: RemoteSelectOption<CustomerResponse>[]; total: number }> {
   const res = await api.listCustomersPaginated({
     q: query || undefined,
     page,
     page_size: pageSize,
+    status: status || undefined,
   });
   return {
     options: res.items.map((c) => ({
@@ -37,6 +42,15 @@ export async function fetchCustomerPage(
     })),
     total: res.total,
   };
+}
+
+/** Active customers only — use when creating Inquiry / Quotation / Order. */
+export function fetchActiveCustomerPage(
+  query: string,
+  page: number,
+  pageSize: number,
+): Promise<{ options: RemoteSelectOption<CustomerResponse>[]; total: number }> {
+  return fetchCustomerPage(query, page, pageSize, "active");
 }
 
 export async function hydrateCustomer(
@@ -144,6 +158,74 @@ export async function hydrateOrder(id: number): Promise<RemoteSelectOption<Order
     };
   } catch (e) {
     logApiError("remoteSelectFetchers.hydrateOrder", e);
+    return null;
+  }
+}
+
+function inquiryLabel(inq: InquiryResponse): string {
+  const styleBit = inq.style_name || inq.style_ref;
+  return `${inq.inquiry_code}${styleBit ? ` · ${styleBit}` : ""}`;
+}
+
+/** Paginated inquiries for RemoteSearchSelect (server search). */
+export async function fetchInquiryPage(
+  query: string,
+  page: number,
+  pageSize: number,
+): Promise<{ options: RemoteSelectOption<InquiryResponse>[]; total: number }> {
+  const res = await api.listInquiriesPaginated({
+    search: query || undefined,
+    page,
+    page_size: pageSize,
+  });
+  return {
+    options: res.items.map((inq) => ({
+      value: inq.id,
+      label: inquiryLabel(inq),
+      meta: inq,
+    })),
+    total: res.total,
+  };
+}
+
+export async function hydrateInquiry(id: number): Promise<RemoteSelectOption<InquiryResponse> | null> {
+  try {
+    const inq = await api.getInquiry(id);
+    return { value: inq.id, label: inquiryLabel(inq), meta: inq };
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateInquiry", e);
+    return null;
+  }
+}
+
+function styleLabel(s: StyleResponse): string {
+  return `${s.style_code} · ${s.name}`;
+}
+
+/** Paginated styles for RemoteSearchSelect (server search via merch styles API). */
+export async function fetchStylePage(
+  query: string,
+  page: number,
+  pageSize: number,
+): Promise<{ options: RemoteSelectOption<StyleResponse>[]; total: number }> {
+  const res = await merchApi.listStylesWithTotal({
+    search: query || undefined,
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+  });
+  return {
+    options: res.rows.map((s) => ({ value: s.id, label: styleLabel(s), meta: s })),
+    // Server may omit total; assume another page when this page is full.
+    total: res.total ?? (page - 1) * pageSize + res.rows.length + (res.rows.length === pageSize ? 1 : 0),
+  };
+}
+
+export async function hydrateStyle(id: number): Promise<RemoteSelectOption<StyleResponse> | null> {
+  try {
+    const s = await merchApi.getStyle(id);
+    return { value: s.id, label: styleLabel(s), meta: s };
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateStyle", e);
     return null;
   }
 }

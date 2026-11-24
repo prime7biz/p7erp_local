@@ -65,7 +65,7 @@ This page is for **everyone on their first day** — merchandisers, store keeper
 1. **Get access.** Open the invitation link from your email and click **Activate account**, or ask your admin for your company code and password. See *How to sign in*.
 2. **Sign in** at \`/login\` with **Company Code**, **Login as** (**Staff**, or **Tenant admin** for admin accounts), **Email** and **Password**, then click **Sign In**.
 3. **Set your signature.** Click your name (top right) → **My Signature**. Type your **Designation** and upload a signature image. It prints on every document you approve.
-4. **Learn the screen** (about 10 minutes): the **sidebar** on the left, **Search** (**Ctrl+K**), the **+ New** menu, the **bell** and the **Actions** button on every list row. See *Find your way*.
+4. **Learn the screen** (about 10 minutes): the **sidebar** on the left, **Search** (**Ctrl+K**), the **+ New** menu, the **bell** and the **Actions** button on every list row. See *Find your way*. On long drop-downs (ledgers, items, designations, warehouses) **type to filter**: typing \`operator\` shows every option that contains that word (for example Junior Operator and Senior Operator).
 5. **Every morning, open the Dashboard** (\`/app\`). Look at **Needs attention** first: pending approvals, overdue TNA tasks, critical alerts and late orders. Click a tile to open that list.
 6. **Do your work** from your module in the sidebar (or from **Favorites** at the top of the sidebar). Create new records with **+ New**; open, edit or print existing ones with **Actions**.
 7. **Approve and follow up.** The **bell** shows your notifications. **Workflow → All Approvals** lists everything waiting for your decision.
@@ -92,8 +92,8 @@ Open any record and look for its *Linked records* / *Document flow* area to jump
 - **I was signed out suddenly** → someone used your login on another device, or your session expired. See *Signed out: "signed in on another device"*.
 - **A page shows "no access"** → your role does not include that module. Ask your admin to update your role in **Settings → Roles**.`,
       tags: ["overview", "getting started", "first day", "workflow", "beginner"],
-      keywords: ["start", "new user", "how to use", "introduction", "orientation", "basics", "training", "onboarding", "ki vabe", "shuru"],
-      lastUpdated: "2026-11-06",
+      keywords: ["start", "new user", "how to use", "introduction", "orientation", "basics", "training", "onboarding", "ki vabe", "shuru", "dropdown", "type to filter"],
+      lastUpdated: "2026-11-22",
       relatedAppRoutes: ["/app", "/app/tutorials", "/app/my-signature", "/app/approvals"],
       relatedArticleIds: [
         "gs-login",
@@ -1186,7 +1186,7 @@ At the bottom: **Showing 1 to 20 of 54**, **Per page** (10, 20, 50 or 100), **Pr
 - **A column I added is gone on another PC** → column choices are saved per browser; save a **View** to carry them everywhere.`,
       tags: ["table", "list", "export", "excel", "csv", "saved views", "bulk", "columns", "pagination"],
       keywords: ["filter", "density", "select all", "share view", "download", "xlsx", "per page", "next page", "sort"],
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-22",
       relatedAppRoutes: ["/app/customers", "/app/orders", "/app/inventory/purchase-orders"],
       relatedArticleIds: ["gs-row-actions", "gs-global-search-and-new-menu"],
     },

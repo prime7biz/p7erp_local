@@ -27,6 +27,7 @@ from app.modules.finance.auto_posting_service import (
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import Tenant, User
+from app.modules.audit.service import log_action_best_effort
 from app.models.commercial import (
     BtbLc,
     BtbLcAccounting,
@@ -157,6 +158,7 @@ def _master_contract_to_response(
         btb_utilized_amount=utilized_amount,
         currency=r.currency,
         buyer_name=r.buyer_name,
+        customer_id=getattr(r, "customer_id", None),
         bank_name=r.bank_name,
         expiry_date=r.expiry_date.isoformat() if r.expiry_date else None,
         cost_center_id=r.cost_center_id,
@@ -176,6 +178,7 @@ def _export_case_to_response(r: ExportCase) -> ExportCaseResponse:
         status=r.status,
         case_date=r.case_date.isoformat() if r.case_date else None,
         amount=float(r.amount) if r.amount is not None else None,
+        customer_id=getattr(r, "customer_id", None),
         trade_case_id=r.trade_case_id,
         order_id=r.order_id,
         export_license_number=getattr(r, "export_license_number", None),
@@ -340,6 +343,7 @@ def _proforma_invoice_to_response(pi: ProformaInvoice) -> ProformaInvoiceRespons
         invoice_date=pi.invoice_date.isoformat() if pi.invoice_date else None,
         amount=float(pi.amount) if pi.amount is not None else None,
         order_ids=order_ids,
+        customer_id=getattr(pi, "customer_id", None),
         buyer_name=pi.buyer_name,
         buyer_address=pi.buyer_address,
         buyer_bank_details=pi.buyer_bank_details,
@@ -554,6 +558,63 @@ async def get_export_case(
     return _export_case_to_response(row)
 
 
+async def _resolve_export_case_customer_id(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    customer_id: int | None,
+    order_id: int | None,
+    trade_case_id: int | None,
+) -> int | None:
+    if customer_id is not None:
+        await ensure_owned(db, Customer, customer_id, tenant_id, "Customer", status_code=404)
+        return int(customer_id)
+    if order_id is not None:
+        order = await db.get(Order, order_id)
+        if order and order.tenant_id == tenant_id and order.customer_id:
+            return int(order.customer_id)
+    if trade_case_id is not None:
+        tc = await db.get(TradeCase, trade_case_id)
+        if tc and tc.tenant_id == tenant_id and tc.customer_id:
+            return int(tc.customer_id)
+    return None
+
+
+async def _resolve_export_pi_customer_id(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    direction: str,
+    customer_id: int | None,
+    order_ids: list[int],
+) -> int | None:
+    if direction == "IMPORT":
+        if customer_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="customer_id is not allowed on IMPORT proforma invoices",
+            )
+        return None
+    if customer_id is not None:
+        await ensure_owned(db, Customer, customer_id, tenant_id, "Customer", status_code=404)
+        return int(customer_id)
+    if not order_ids:
+        return None
+    cust_rows = (
+        await db.execute(
+            select(Order.customer_id).where(
+                Order.tenant_id == tenant_id,
+                Order.id.in_(order_ids),
+                Order.customer_id.is_not(None),
+            )
+        )
+    ).all()
+    distinct = {int(r[0]) for r in cust_rows if r[0] is not None}
+    if len(distinct) == 1:
+        return next(iter(distinct))
+    return None
+
+
 @router.post(
     "/export-cases",
     response_model=ExportCaseResponse,
@@ -583,6 +644,13 @@ async def create_export_case(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order not found")
         order_delivery = order.delivery_date
     await ensure_owned(db, TradeCase, body.trade_case_id, tenant.id, "Trade case")
+    resolved_customer_id = await _resolve_export_case_customer_id(
+        db,
+        tenant_id=tenant.id,
+        customer_id=body.customer_id,
+        order_id=body.order_id,
+        trade_case_id=body.trade_case_id,
+    )
     _validate_export_case_dates(
         expected=body.expected_shipment_date,
         actual=body.actual_shipment_date,
@@ -594,6 +662,7 @@ async def create_export_case(
         status=body.status or "DRAFT",
         case_date=body.case_date,
         amount=body.amount,
+        customer_id=resolved_customer_id,
         trade_case_id=body.trade_case_id,
         order_id=body.order_id,
         export_license_number=body.export_license_number,
@@ -605,6 +674,15 @@ async def create_export_case(
         customs_agent=body.customs_agent,
     )
     db.add(row)
+    await db.flush()
+    await log_action_best_effort(
+        db,
+        tenant_id=tenant.id,
+        action="EXPORT_CASE_CREATED",
+        user_id=user.id,
+        resource=f"export_case:{row.id}",
+        details=f"Created export case {row.reference} status={row.status}",
+    )
     await db.commit()
     await db.refresh(row)
     return _export_case_to_response(row)
@@ -653,6 +731,23 @@ async def update_export_case(
     await ensure_owned(db, TradeCase, data.get("trade_case_id"), tenant.id, "Trade case")
     for key, value in data.items():
         setattr(row, key, value)
+    # Re-resolve buyer FK from explicit customer_id / order / trade case after updates.
+    row.customer_id = await _resolve_export_case_customer_id(
+        db,
+        tenant_id=tenant.id,
+        customer_id=data.get("customer_id", row.customer_id),
+        order_id=row.order_id,
+        trade_case_id=row.trade_case_id,
+    )
+    await db.flush()
+    await log_action_best_effort(
+        db,
+        tenant_id=tenant.id,
+        action="EXPORT_CASE_UPDATED",
+        user_id=user.id,
+        resource=f"export_case:{row.id}",
+        details=f"Updated export case {row.reference} status={row.status}",
+    )
     await db.commit()
     await db.refresh(row)
     return _export_case_to_response(row)
@@ -754,6 +849,7 @@ async def create_master_contract(
     if user.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
     await ensure_owned(db, CostCenter, body.cost_center_id, tenant.id, "Cost center")
+    await ensure_owned(db, Customer, body.customer_id, tenant.id, "Customer", status_code=404)
     row = MasterContract(
         tenant_id=tenant.id,
         cost_center_id=body.cost_center_id,
@@ -767,6 +863,7 @@ async def create_master_contract(
         amount=body.amount,
         currency=body.currency,
         buyer_name=body.buyer_name,
+        customer_id=body.customer_id,
         bank_name=body.bank_name,
         expiry_date=body.expiry_date,
     )
@@ -778,6 +875,14 @@ async def create_master_contract(
     if body.order_id:
         await _link_order_to_master_contract(db, tenant=tenant, master_contract_id=row.id, order_id=body.order_id)
         await db.flush()
+    await log_action_best_effort(
+        db,
+        tenant_id=tenant.id,
+        action="MASTER_CONTRACT_CREATED",
+        user_id=user.id,
+        resource=f"master_contract:{row.id}",
+        details=f"Created master contract {row.reference} status={row.status}",
+    )
     return _master_contract_to_response(
         row,
         linked_order_id=body.order_id
@@ -805,6 +910,10 @@ async def update_master_contract(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Master contract not found")
     updates = body.model_dump(exclude_unset=True)
     await ensure_owned(db, CostCenter, updates.get("cost_center_id"), tenant.id, "Cost center")
+    if "customer_id" in updates:
+        await ensure_owned(
+            db, Customer, updates.get("customer_id"), tenant.id, "Customer", status_code=404
+        )
     link_requested = "order_id" in updates
     link_order_id = updates.pop("order_id", None) if link_requested else None
     if "contract_type" in updates and updates["contract_type"] is not None:
@@ -828,6 +937,20 @@ async def update_master_contract(
         await _link_order_to_master_contract(db, tenant=tenant, master_contract_id=row.id, order_id=int(link_order_id))
         await db.flush()
     await db.refresh(row)
+    action = "MASTER_CONTRACT_STATUS_CHANGED" if new_status != prev_status else "MASTER_CONTRACT_UPDATED"
+    details = (
+        f"Master contract {row.reference} {prev_status} → {new_status}"
+        if new_status != prev_status
+        else f"Updated master contract {row.reference} status={row.status}"
+    )
+    await log_action_best_effort(
+        db,
+        tenant_id=tenant.id,
+        action=action,
+        user_id=user.id,
+        resource=f"master_contract:{row.id}",
+        details=details,
+    )
     lid = await _linked_order_id_for_master_contract(db, tenant_id=tenant.id, master_contract_id=row.id)
     return _master_contract_to_response(row, linked_order_id=lid)
 
@@ -960,6 +1083,13 @@ async def create_proforma_invoice(
         vendor = await db.get(Vendor, body.vendor_id)
         if not vendor or vendor.tenant_id != tenant.id:
             raise HTTPException(status_code=400, detail="Vendor not found")
+    resolved_customer_id = await _resolve_export_pi_customer_id(
+        db,
+        tenant_id=tenant.id,
+        direction=direction,
+        customer_id=body.customer_id,
+        order_ids=list(body.order_ids or []),
+    )
     await _validate_proforma_import_rules(
         db,
         tenant_id=tenant.id,
@@ -985,6 +1115,7 @@ async def create_proforma_invoice(
         status=body.status or "DRAFT",
         invoice_date=body.invoice_date,
         amount=body.amount,
+        customer_id=resolved_customer_id,
         buyer_name=body.buyer_name,
         buyer_address=body.buyer_address,
         buyer_bank_details=body.buyer_bank_details,
@@ -1032,6 +1163,14 @@ async def create_proforma_invoice(
     row = result.scalar_one()
     await _sync_order_pipeline_from_proforma(db, tenant_id=tenant.id, pi=row)
     await db.flush()
+    await log_action_best_effort(
+        db,
+        tenant_id=tenant.id,
+        action="PROFORMA_CREATED",
+        user_id=user.id,
+        resource=f"proforma_invoice:{row.id}",
+        details=f"Created proforma {row.reference} status={row.status}",
+    )
     return _proforma_invoice_to_response(row)
 
 
@@ -1067,6 +1206,8 @@ async def update_proforma_invoice(
         )
     update_data = body.model_dump(exclude_unset=True)
     order_ids = update_data.pop("order_ids", None)
+    customer_id_provided = "customer_id" in update_data
+    customer_id_value = update_data.pop("customer_id", None) if customer_id_provided else None
     if "direction" in update_data and update_data["direction"] is not None:
         update_data["direction"] = str(update_data["direction"]).strip().upper()
         if update_data["direction"] not in {"EXPORT", "IMPORT"}:
@@ -1131,6 +1272,31 @@ async def update_proforma_invoice(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="At least one order is required for EXPORT proforma",
+        )
+    linked_oids = _order_ids_from_pi(row)
+    pi_direction = (row.direction or "EXPORT").strip().upper()
+    if pi_direction == "IMPORT":
+        if customer_id_provided and customer_id_value is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="customer_id is not allowed on IMPORT proforma invoices",
+            )
+        row.customer_id = None
+    elif customer_id_provided:
+        row.customer_id = await _resolve_export_pi_customer_id(
+            db,
+            tenant_id=tenant.id,
+            direction=pi_direction,
+            customer_id=customer_id_value,
+            order_ids=linked_oids,
+        )
+    elif row.customer_id is None:
+        row.customer_id = await _resolve_export_pi_customer_id(
+            db,
+            tenant_id=tenant.id,
+            direction=pi_direction,
+            customer_id=None,
+            order_ids=linked_oids,
         )
     await _sync_order_pipeline_from_proforma(db, tenant_id=tenant.id, pi=row)
     await db.flush()
@@ -1323,8 +1489,17 @@ async def delete_proforma_invoice(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only draft proforma invoices can be deleted",
         )
+    pi_label = row.reference or str(row.id)
     await db.delete(row)
     await db.flush()
+    await log_action_best_effort(
+        db,
+        tenant_id=tenant.id,
+        action="PROFORMA_DELETED",
+        user_id=user.id,
+        resource=f"proforma_invoice:{invoice_id}",
+        details=f"Deleted draft proforma {pi_label}",
+    )
 
 
 @router.post(
@@ -2168,6 +2343,14 @@ async def create_btb_lc(
     if row.master_contract_id is not None:
         await _recompute_master_contract_utilization(db, row.master_contract_id, tenant.id)
     await db.refresh(row)
+    await log_action_best_effort(
+        db,
+        tenant_id=tenant.id,
+        action="BTB_LC_CREATED",
+        user_id=user.id,
+        resource=f"btb_lc:{row.id}",
+        details=f"Created BTB LC {row.reference} status={row.status}",
+    )
     master_cost_center_id = contract.cost_center_id if contract else None
     acc_result = await db.execute(
         select(BtbLcAccounting).where(

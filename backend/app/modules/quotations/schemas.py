@@ -177,6 +177,9 @@ class QuotationDetailResponse(BaseModel):
   quotation_code: str
   style_ref: str | None
   style_id: int | None
+  style_name: str | None = None
+  style_image_url: str | None = None
+  verification_id: str | None = None
   customer_intermediary_id: int | None
   shipping_term: str | None
   commission_mode: str | None

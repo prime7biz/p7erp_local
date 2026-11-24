@@ -13,6 +13,9 @@ import {
   type WastageThresholdRuleResponse,
   type CustomerResponse,
 } from "@/api/client";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
+import { fetchStylePage, hydrateStyle } from "@/lib/remoteSelectFetchers";
 import { saveBlob } from "@/lib/fileSave";
 
 const PREFIX = "/app";
@@ -479,25 +482,25 @@ export function WastageReportPage() {
             value={orderId}
             onChange={(e) => setOrderId(e.target.value)}
           />
-          <input
-            type="number"
-            placeholder="Style ID"
-            className="rounded border border-border-strong px-2 py-1.5 text-sm w-24"
-            value={styleId}
-            onChange={(e) => setStyleId(e.target.value)}
+          <RemoteSearchSelect
+            className="min-w-[10rem]"
+            value={styleId.trim() ? Number(styleId) : ""}
+            onChange={(next) => setStyleId(next === "" ? "" : String(next))}
+            fetchPage={fetchStylePage}
+            hydrateById={hydrateStyle}
+            placeholder="All styles"
+            aria-label="Style filter"
+            allowClear
           />
-          <select
-            className="rounded border border-border-strong px-2 py-1.5 text-sm min-w-[140px]"
-            value={buyerId}
-            onChange={(e) => setBuyerId(e.target.value)}
-          >
-            <option value="">All buyers</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <LocalSearchSelect
+            className="min-w-[140px]"
+            value={buyerId.trim() ? Number(buyerId) : ""}
+            options={customers.map((c) => ({ value: c.id, label: c.name }))}
+            onChange={(next) => setBuyerId(next === "" ? "" : String(next))}
+            placeholder="All buyers"
+            aria-label="Buyer filter"
+            allowClear
+          />
           <input
             type="date"
             className="rounded border border-border-strong px-2 py-1.5 text-sm"

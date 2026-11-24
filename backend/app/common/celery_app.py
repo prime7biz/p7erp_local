@@ -50,6 +50,7 @@ from app.workers import mgmt_performance_worker as _mgmt_performance_worker  # n
 from app.workers import coa_interest_worker as _coa_interest_worker  # noqa: E402, F401
 from app.workers import kpi_daily_worker as _kpi_daily_worker  # noqa: E402, F401
 from app.workers import user_activity_worker as _user_activity_worker  # noqa: E402, F401
+from app.workers import hr_class_worker as _hr_class_worker  # noqa: E402, F401
 from celery.schedules import crontab as _crontab  # noqa: E402
 
 # Optional beat schedule (enabled when a beat worker is running).
@@ -92,6 +93,16 @@ celery_app.conf.beat_schedule = {
         "task": "hr.medical_certificate_expiry",
         "schedule": 60 * 60 * 24,
     },
+    # HR class authority: shut off ESS / linked login after exit (tenants with authority flag off are skipped).
+    "hr-exit-access-shutoff": {
+        "task": "hr.exit_access_shutoff",
+        "schedule": 60 * 60 * 24,
+    },
+    # HR reminders: DRAFT CONFIRMATION suggestions only when hr_reminders_v1 is on.
+    "hr-reminders-daily": {
+        "task": "hr.reminders_daily",
+        "schedule": _crontab(minute=15, hour=2),
+    },
     "finance-weekly-mis-report": {
         "task": "finance.weekly_mis_report",
         "schedule": 60 * 60 * 24 * 7,
@@ -119,6 +130,11 @@ celery_app.conf.beat_schedule = {
     "user-activity-expire-sessions": {
         "task": "user_activity.expire_sessions",
         "schedule": 60 * 60,
+    },
+    # User Activity: purge old API_REQUEST/API_ERROR rows daily (dry-run until AUDIT_API_PURGE_DRY_RUN=false).
+    "user-activity-purge-api-audit": {
+        "task": "user_activity.purge_api_audit_logs",
+        "schedule": _crontab(minute=20, hour=3),
     },
 }
 

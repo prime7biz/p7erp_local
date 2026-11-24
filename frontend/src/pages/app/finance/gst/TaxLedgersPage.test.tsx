@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -48,10 +49,13 @@ describe("TaxLedgersPage", () => {
     await screen.findByText("Showing 1 of 1 tax ledger");
     expect(screen.queryByRole("dialog")).toBeNull();
 
+    const user = userEvent.setup();
     fireEvent.click(screen.getByRole("button", { name: "Add tax ledger" }));
     expect(screen.getByRole("dialog", { name: "Add tax ledger" })).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText(/Account/), { target: { value: "10" } });
+    const accountInput = screen.getByRole("combobox", { name: "Tax ledger account" });
+    await user.click(accountInput);
+    await user.click(within(screen.getByRole("listbox")).getByRole("option", { name: /CGST Payable/ }));
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
     await waitFor(() =>

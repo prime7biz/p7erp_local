@@ -2,12 +2,14 @@
 from fastapi import APIRouter, Depends
 from app.common.permissions import require_internal_permission
 
+from app.modules.production.control_center_router import router as control_center_router
 from app.modules.production.costing_router import router as costing_router
 from app.modules.production.crew_router import router as crew_router
 from app.modules.production.cutting_router import router as cutting_router
 from app.modules.production.dashboard_router import router as dashboard_router
 from app.modules.production.dept_router import router as dept_router
 from app.modules.production.dyeing_router import router as dyeing_router
+from app.modules.production.finishing_router import router as finishing_router
 from app.modules.production.hourly_router import router as hourly_router
 from app.modules.production.ie_router import router as ie_router
 from app.modules.production.knitting_router import router as knitting_router
@@ -18,7 +20,6 @@ from app.modules.production.quality_router import router as quality_router
 from app.modules.production.roster_router import router as roster_router
 from app.modules.production.settings_router import router as settings_router
 from app.modules.production.skills_router import router as skills_router
-from app.modules.production.scan_router import router as scan_router
 from app.modules.production.scan_router import router as scan_router
 
 router = APIRouter()
@@ -36,7 +37,8 @@ router.include_router(ie_router, dependencies=_production_access_dependency)
 router.include_router(planning_router, dependencies=_production_access_dependency)
 router.include_router(hourly_router, dependencies=_production_access_dependency)
 router.include_router(cutting_router, dependencies=_production_access_dependency)
-router.include_router(scan_router, dependencies=_production_access_dependency)
+router.include_router(finishing_router, dependencies=_production_access_dependency)
+router.include_router(control_center_router, dependencies=_production_access_dependency)
 router.include_router(scan_router, dependencies=_production_access_dependency)
 router.include_router(costing_router, dependencies=_production_access_dependency)
 router.include_router(knitting_router, dependencies=_production_access_dependency)

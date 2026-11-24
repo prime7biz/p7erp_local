@@ -3,6 +3,7 @@
  * `highlight` adds a temporary brand ring to fields the AI just filled in.
  */
 import { useId, type ReactNode } from "react";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import { erpControlFocusClass, mobileFieldClass } from "@/components/app/listPageLayout";
 import { useMobileUiV2, useMobileUiV2Phone } from "@/hooks/useMobileUiV2";
 import { cn } from "@/lib/utils";
@@ -171,38 +172,60 @@ type SelectFieldProps = {
   masked?: boolean;
   highlight?: boolean;
   className?: string;
+  /** Type-to-narrow for master/entity lists. Leave false for Gender, status, etc. */
+  searchable?: boolean;
 };
 
 export function SelectField({
-  label, value, onChange, options, emptyLabel = "Select…", allowEmpty = true, hint, required, disabled, masked, highlight, className,
+  label, value, onChange, options, emptyLabel = "Select…", allowEmpty = true, hint, required, disabled, masked, highlight, className, searchable = false,
 }: SelectFieldProps) {
   const mobileV2 = useMobileUiV2();
   return (
     <FieldShell label={label} hint={hint} masked={masked} required={required && !masked} className={className}>
-      {(id, describedBy) => (
-        <select
-          id={id}
-          className={cn(
-            inputClass,
-            erpControlFocusClass,
-            mobileV2 && mobileFieldClass,
-            required && !masked && !disabled && requiredFieldClass,
-            highlight && "ring-2 ring-brand-primary/50",
-          )}
-          required={required}
-          value={masked ? "" : value}
-          onChange={(e) => onChange(e.target.value)}
-          disabled={disabled || masked}
-          aria-describedby={describedBy}
-        >
-          {(allowEmpty || !value) && <option value="">{emptyLabel}</option>}
-          {options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      )}
+      {(id, describedBy) =>
+        searchable && !masked ? (
+          <LocalSearchSelect
+            id={id}
+            className={cn(
+              mobileV2 && mobileFieldClass,
+              required && !disabled && requiredFieldClass,
+              highlight && "ring-2 ring-brand-primary/50",
+            )}
+            value={value}
+            options={[...options]}
+            onChange={(next) => onChange(next === "" ? "" : String(next))}
+            placeholder={emptyLabel}
+            required={required}
+            disabled={disabled}
+            allowClear={allowEmpty}
+            aria-label={label}
+            aria-describedby={describedBy}
+          />
+        ) : (
+          <select
+            id={id}
+            className={cn(
+              inputClass,
+              erpControlFocusClass,
+              mobileV2 && mobileFieldClass,
+              required && !masked && !disabled && requiredFieldClass,
+              highlight && "ring-2 ring-brand-primary/50",
+            )}
+            required={required}
+            value={masked ? "" : value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={disabled || masked}
+            aria-describedby={describedBy}
+          >
+            {(allowEmpty || !value) && <option value="">{emptyLabel}</option>}
+            {options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        )
+      }
     </FieldShell>
   );
 }

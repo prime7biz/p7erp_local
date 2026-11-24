@@ -294,3 +294,17 @@ async def create_cut_ticket(
     await db.commit()
     await db.refresh(row)
     return {"id": row.id}
+
+
+@router.get("/orders/{order_id}/consumption-variance")
+async def cutting_consumption_variance(
+    order_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """3-way BOM vs CAD vs actual + process-loss buckets (flag ``cutting_loss_control_v1``)."""
+    _ensure(user, tenant)
+    from app.modules.production.cutting_control_service import order_consumption_variance
+
+    return await order_consumption_variance(db, tenant=tenant, order_id=order_id)

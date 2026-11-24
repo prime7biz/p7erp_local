@@ -99,6 +99,8 @@ MFG_PREDICTIVE_TOOL_NAMES = frozenset({"mfg_delivery_forecast", "mfg_bottlenecks
 SEARCH_KIND_GATES: dict[str, Gate] = {
     "customer": GATE_ORDERS,
     "order": GATE_ORDERS,
+    "quotation": GATE_ORDERS,
+    "inquiry": GATE_ORDERS,
     "purchase_order": GATE_INVENTORY,
     "item": GATE_INVENTORY,
     "vendor": GATE_INVENTORY,
@@ -109,6 +111,8 @@ RECORD_TYPE_GATES: dict[str, Gate] = {
     "order": GATE_ORDERS,
     "customer": GATE_ORDERS,
     "style": GATE_ORDERS,
+    "inquiry": GATE_ORDERS,
+    "quotation": GATE_ORDERS,
     "voucher": GATE_FINANCE,
     "employee": GATE_HR,
 }
@@ -256,6 +260,36 @@ async def _production_issues(ctx: AgentContext, args: dict[str, Any]) -> dict[st
     from app.modules.ai_tool.tools import search_production_issues
 
     return await search_production_issues(ctx.db, tenant_id=ctx.tenant.id, prompt=_focus(args) or "production issues")
+
+
+async def _prod_control_floor_board(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    """Read-only live floor efficiency / DHU (flag ``floor_live_monitor_v1``)."""
+    from datetime import date as date_cls
+
+    from app.common.business_date import today_local
+    from app.common.tenant_feature_keys import is_floor_live_monitor_v1_enabled
+    from app.modules.production.floor_monitor_service import live_board
+
+    if not is_floor_live_monitor_v1_enabled(ctx.tenant.feature_flags):
+        return {
+            "summary": "Live floor board is off for this company (floor_live_monitor_v1).",
+            "data": {"enabled": False},
+        }
+    raw = (args.get("production_date") or "").strip()
+    d = date_cls.fromisoformat(raw) if raw else today_local(ctx.tenant)
+    board = await live_board(ctx.db, tenant=ctx.tenant, production_date=d)
+    lines = board.get("lines") or []
+    low = [ln for ln in lines if float(ln.get("efficiency_pct") or 0) < 50]
+    high_dhu = [ln for ln in lines if float(ln.get("dhu_pct") or 0) > 5]
+    return {
+        "summary": (
+            f"Floor board for {d.isoformat()}: {len(lines)} lines; "
+            f"{len(low)} below 50% efficiency; {len(high_dhu)} with DHU over 5%."
+        ),
+        "data": board,
+        "citations": [{"label": "Production Control Center", "href": "/app/production/control-center"}],
+    }
+
 
 
 async def _late_vendors(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
@@ -581,6 +615,105 @@ async def _mfg_supplier_lateness(ctx: AgentContext, args: dict[str, Any]) -> dic
 _NO_ARGS: dict[str, Any] = {"type": "object", "properties": {}, "additionalProperties": False}
 
 
+MAX_QUOTATION_RESULTS = 10
+
+
+def _quotation_row(q: Any, customer_name: str | None, *, with_costs: bool) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "id": q.id,
+        "quotation_code": q.quotation_code,
+        "version_no": q.version_no,
+        "status": q.status,
+        "is_current": q.superseded_at is None,
+        "style_ref": q.style_ref,
+        "customer_name": customer_name,
+        "quantity": q.projected_quantity,
+        "currency": q.currency,
+        "quoted_price": None if q.quoted_price is None else format(q.quoted_price, "f"),
+        "total_amount": None if q.total_amount is None else format(q.total_amount, "f"),
+        "valid_until": q.valid_until.isoformat() if q.valid_until else None,
+        "href": f"/app/quotations/{q.id}",
+    }
+    if with_costs:
+        row["total_cost"] = None if q.total_cost is None else format(q.total_cost, "f")
+        row["cost_per_piece"] = None if q.cost_per_piece is None else format(q.cost_per_piece, "f")
+        row["profit_percentage"] = None if q.profit_percentage is None else format(q.profit_percentage, "f")
+    return row
+
+
+async def _search_quotations(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    from sqlalchemy import select
+
+    from app.models import Customer
+    from app.models.merch import Quotation
+
+    query = _focus(args, "query")
+    if len(query) < 2:
+        return {"summary": "Give at least 2 characters to search for.", "data": {"items": []}}
+    like = "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    stmt = (
+        select(Quotation, Customer.name)
+        .join(Customer, (Customer.id == Quotation.customer_id) & (Customer.tenant_id == ctx.tenant.id), isouter=True)
+        .where(
+            Quotation.tenant_id == ctx.tenant.id,
+            Quotation.superseded_at.is_(None),
+            (Quotation.quotation_code.ilike(like, escape="\\"))
+            | (Quotation.style_ref.ilike(like, escape="\\"))
+            | (Customer.name.ilike(like, escape="\\")),
+        )
+        .order_by(Quotation.id.desc())
+        .limit(MAX_QUOTATION_RESULTS)
+    )
+    status_filter = str(args.get("status") or "").strip().upper()
+    if status_filter:
+        stmt = stmt.where(Quotation.status == status_filter[:32])
+    from app.modules.mfg_intelligence.finance_gate import may_view_mfg_finance
+
+    with_costs = (await gate_allowed(ctx, "search_quotations", GATE_FINANCE)) and await may_view_mfg_finance(
+        ctx.db, ctx.user, ctx.tenant
+    )
+    rows = (await ctx.db.execute(stmt)).all()
+    items = [_quotation_row(q, cname, with_costs=with_costs) for q, cname in rows]
+    return {
+        "summary": f"Found {len(items)} current quotation(s).",
+        "data": {"items": items, "costs_included": with_costs},
+        "citations": [{"label": f"Quotation {i['quotation_code']}", "href": i["href"], "record_type": "quotation"} for i in items],
+    }
+
+
+async def _get_quotation_summary(ctx: AgentContext, args: dict[str, Any]) -> dict[str, Any]:
+    from sqlalchemy import select
+
+    from app.models import Customer
+    from app.models.merch import Quotation
+
+    not_found = {"summary": "Quotation not found.", "data": {}}
+    try:
+        quotation_id = int(args.get("quotation_id"))
+    except (TypeError, ValueError):
+        return {"summary": "quotation_id must be a number.", "data": {}}
+    row = (
+        await ctx.db.execute(
+            select(Quotation, Customer.name)
+            .join(Customer, (Customer.id == Quotation.customer_id) & (Customer.tenant_id == ctx.tenant.id), isouter=True)
+            .where(Quotation.id == quotation_id, Quotation.tenant_id == ctx.tenant.id)
+        )
+    ).first()
+    if row is None:
+        return not_found
+    from app.modules.mfg_intelligence.finance_gate import may_view_mfg_finance
+
+    with_costs = (await gate_allowed(ctx, "get_quotation_summary", GATE_FINANCE)) and await may_view_mfg_finance(
+        ctx.db, ctx.user, ctx.tenant
+    )
+    item = _quotation_row(row[0], row[1], with_costs=with_costs)
+    return {
+        "summary": f"Quotation {item['quotation_code']} v{item['version_no']} is {item['status']}.",
+        "data": {**item, "costs_included": with_costs},
+        "citations": [{"label": f"Quotation {item['quotation_code']}", "href": item["href"], "record_type": "quotation"}],
+    }
+
+
 def _focus_schema(description: str) -> dict[str, Any]:
     return {
         "type": "object",
@@ -614,6 +747,29 @@ AGENT_TOOLS: dict[str, AgentTool] = {
             ),
             GATE_DASHBOARD,
             _search_records,
+        ),
+        AgentTool(
+            "search_quotations",
+            "Find current (not superseded) quotations by code, style reference or buyer name. Returns at most 10 "
+            "with status, quantity and quoted price; cost and margin only when the user may see finance figures.",
+            _query_schema(
+                "Quotation code, style reference or buyer name.",
+                {"status": {"type": "string", "description": "Optional status such as SENT or APPROVED."}},
+            ),
+            GATE_ORDERS,
+            _search_quotations,
+        ),
+        AgentTool(
+            "get_quotation_summary",
+            "Headline facts of one quotation by id (version, status, quantity, quoted price, validity).",
+            {
+                "type": "object",
+                "properties": {"quotation_id": {"type": "integer", "minimum": 1}},
+                "required": ["quotation_id"],
+                "additionalProperties": False,
+            },
+            GATE_ORDERS,
+            _get_quotation_summary,
         ),
         AgentTool(
             "get_record_summary",
@@ -673,6 +829,22 @@ AGENT_TOOLS: dict[str, AgentTool] = {
             _NO_ARGS,
             GATE_PRODUCTION,
             _production_summary,
+        ),
+        AgentTool(
+            "prod_control_floor_board",
+            "Live sewing-line floor board: efficiency %, DHU %, RFT %, manpower and hourly good qty (read-only).",
+            {
+                "type": "object",
+                "properties": {
+                    "production_date": {
+                        "type": "string",
+                        "description": "YYYY-MM-DD, optional (defaults to today).",
+                    },
+                },
+                "additionalProperties": False,
+            },
+            GATE_PRODUCTION,
+            _prod_control_floor_board,
         ),
         AgentTool(
             "search_production_issues",

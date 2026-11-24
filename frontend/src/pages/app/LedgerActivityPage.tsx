@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { ScrollTableCard } from "@/components/finance/kit";
 import { Link, useSearchParams } from "react-router-dom";
-import { api, type ChartOfAccountResponse, type LedgerActivityResponse } from "@/api/client";
+import { api, type LedgerActivityResponse } from "@/api/client";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { dateParam, idParam, voucherHref } from "@/lib/financeDrilldown";
 import { downloadCsv, downloadXlsx, printCurrentPage } from "@/lib/reportExport";
 import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { fetchChartAccountPage, hydrateChartAccount } from "@/lib/remoteSelectFetchers";
 import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 export function LedgerActivityPage() {
   const embedded = useEmbeddedPage();
   const [searchParams] = useSearchParams();
   const [compactView, setCompactView] = useState(false);
-  const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(() => idParam(searchParams.get("account_id")));
   const [fromDate, setFromDate] = useState(() =>
     dateParam(searchParams.get("from"), startOfMonthLocalISO()),
@@ -23,25 +24,6 @@ export function LedgerActivityPage() {
   const [success, setSuccess] = useState("");
 
   const latest = useLatestRequest();
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadAccounts() {
-      try {
-        const rows = await api.listChartOfAccounts();
-        if (cancelled) return;
-        setAccounts(rows);
-        const firstAccount = rows[0];
-        if (firstAccount) setSelectedAccountId((current) => current || firstAccount.id);
-      } catch (e) {
-        if (!cancelled) setError((e as Error).message);
-      }
-    }
-    void loadAccounts();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const loadReport = useCallback(async () => {
     if (!selectedAccountId) return;
@@ -119,13 +101,16 @@ export function LedgerActivityPage() {
       {success ? <div className="no-print rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
 
       <div className="no-print grid gap-2 rounded-xl border border-border bg-surface-raised p-3 sm:grid-cols-2 lg:grid-cols-5">
-        <select className="rounded border px-3 py-2 text-sm sm:col-span-2 lg:col-span-2" value={selectedAccountId ?? ""} onChange={(e) => setSelectedAccountId(Number(e.target.value))}>
-          {accounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.account_number} - {a.name}
-            </option>
-          ))}
-        </select>
+        <RemoteSearchSelect
+          className="sm:col-span-2 lg:col-span-2"
+          value={selectedAccountId ?? ""}
+          onChange={(next) => setSelectedAccountId(next === "" ? null : next)}
+          fetchPage={fetchChartAccountPage}
+          hydrateById={hydrateChartAccount}
+          placeholder="Select account…"
+          allowClear={false}
+          aria-label="Ledger account"
+        />
         <input type="date" className="rounded border px-3 py-2 text-sm" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
         <input type="date" className="rounded border px-3 py-2 text-sm" value={toDate} onChange={(e) => setToDate(e.target.value)} />
         <button className="rounded border px-3 py-2 text-sm" onClick={() => void loadReport()}>

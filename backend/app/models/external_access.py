@@ -200,3 +200,33 @@ class ExternalInvitation(Base):
     )
     payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ExternalQuotationResponse(Base):
+    """Buyer answer to a SENT quotation from the customer portal (migration 337)."""
+
+    __tablename__ = "external_quotation_responses"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "external_principal_id", "request_id", name="uq_ext_quotation_resp_request"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    quotation_id: Mapped[int] = mapped_column(
+        ForeignKey("quotations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    external_principal_id: Mapped[int] = mapped_column(
+        ForeignKey("external_principals.id", ondelete="CASCADE"), nullable=False
+    )
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id", ondelete="CASCADE"), nullable=False)
+    response_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    request_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )

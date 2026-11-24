@@ -15,7 +15,7 @@ export function CostBreakdownCard({ currency, total, rows }: CostBreakdownCardPr
         {rows.map((row) => {
           const value = toSafeNumber(row.value);
           const percentage = (value / percentBase) * 100;
-          const width = Math.max(6, percentage);
+          const width = Math.min(100, Math.max(0, percentage));
           return (
             <div key={row.label}>
               <div className="mb-1 flex items-center justify-between text-sm">
@@ -25,7 +25,7 @@ export function CostBreakdownCard({ currency, total, rows }: CostBreakdownCardPr
                 </span>
               </div>
               <div className="h-2 rounded-full bg-surface-subtle">
-                <div className="h-2 rounded-full bg-brand-primary" style={{ width: `${Math.min(width, 100)}%` }} />
+                <div className="h-2 rounded-full bg-brand-primary" style={{ width: `${width}%` }} />
               </div>
             </div>
           );

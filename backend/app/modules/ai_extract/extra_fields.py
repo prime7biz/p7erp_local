@@ -57,6 +57,12 @@ CUSTOMER_TARGETS: frozenset[str] = frozenset(
         "shippingCity",
         "shippingPostalCode",
         "shippingCountry",
+        "preferredCurrency",
+        "paymentTerms",
+        "defaultIncoterm",
+        "typicalLeadTimeDays",
+        "industrySegment",
+        "complianceLevel",
     }
 )
 
@@ -137,6 +143,22 @@ _CUSTOMER_SYNONYMS: dict[str, tuple[str, ...]] = {
     "shippingCity": ("shipping city", "delivery city"),
     "shippingPostalCode": ("shipping postal code", "delivery postal code"),
     "shippingCountry": ("shipping country", "delivery country"),
+    "preferredCurrency": ("currency", "preferred currency", "buyer currency", "payment currency"),
+    "paymentTerms": (
+        "payment terms", "payment term", "terms of payment", "lc terms", "credit terms",
+    ),
+    "defaultIncoterm": (
+        "incoterm", "incoterms", "shipping term", "delivery term", "trade term", "fob", "cif", "cfr",
+    ),
+    "typicalLeadTimeDays": (
+        "lead time", "lead time days", "typical lead time", "production lead time", "delivery lead time",
+    ),
+    "industrySegment": (
+        "industry", "industry segment", "segment", "product segment", "knit", "woven", "sweater",
+    ),
+    "complianceLevel": (
+        "compliance", "compliance level", "audit", "bsci", "wrap", "sedex", "oeko-tex", "gots",
+    ),
 }
 
 _INQUIRY_SYNONYMS: dict[str, tuple[str, ...]] = {

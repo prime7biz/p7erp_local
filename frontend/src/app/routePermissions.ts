@@ -6,6 +6,7 @@ export const ROUTE_PERMISSION = {
   finance: "finance.access",
   facility: "facility.access",
   hr: "hr.access",
+  ess: "ess.access",
   reports: "reports.access",
   ai: "ai.access",
   settings: "settings.access",

@@ -17,19 +17,22 @@ MANIFEST: dict[str, dict[str, str]] = {
         'vendor_proforma_invoice_id': 'handler-calls-ensure_owned',
     },
     'PATCH /api/v1/commercial/export-cases/{case_id}': {
-        'order_id': 'handler-calls-ensure_owned',
-        'trade_case_id': 'handler-calls-ensure_owned',
+        'customer_id': 'reviewed: _resolve_export_case_customer_id -> ensure_owned Customer before the FK is assigned, commercial/router.py:735 -> :570',
+        'order_id': 'reviewed: db.get Order + tenant check, commercial/router.py:724-726 (create commercial/router.py:642-644)',
+        'trade_case_id': 'reviewed: ensure_owned TradeCase, commercial/router.py:731 (create :646)',
     },
     'PATCH /api/v1/commercial/master-contracts/{contract_id}': {
-        'cost_center_id': 'handler-calls-ensure_owned',
+        'cost_center_id': 'reviewed: ensure_owned CostCenter, commercial/router.py:912 (create :851)',
+        'customer_id': 'reviewed: ensure_owned Customer, commercial/router.py:913-916',
         'order_id': 'handler-calls-ensure_owned',
     },
     'PATCH /api/v1/commercial/proforma-invoices/{invoice_id}': {
-        'master_contract_id': 'handler-calls-ensure_owned',
-        'order_ids': 'handler-calls-ensure_owned',
-        'purchase_order_id': 'handler-calls-ensure_owned',
-        'shipper_bank_account_id': 'handler-calls-ensure_owned',
-        'vendor_id': 'handler-calls-ensure_owned',
+        'customer_id': 'reviewed: _resolve_export_pi_customer_id -> ensure_owned Customer before the FK is assigned (IMPORT: refused or nulled), commercial/router.py:1279-1292 -> :599',
+        'master_contract_id': 'reviewed: db.get MasterContract + tenant check, commercial/router.py:1219-1222 (create :1102-1105)',
+        'order_ids': 'reviewed: Order query filtered by tenant_id, count must match, commercial/router.py:1235-1244 (create :1070-1081)',
+        'purchase_order_id': 'reviewed: db.get PurchaseOrder + tenant check, commercial/router.py:1223-1226 (create: _validate_proforma_import_rules :295-297, refused for EXPORT :269)',
+        'shipper_bank_account_id': 'reviewed: ensure_owned BankAccount, commercial/router.py:1227 (create :1106)',
+        'vendor_id': 'reviewed: db.get Vendor + tenant check, commercial/router.py:1215-1218 (create :1082-1085)',
     },
     'PATCH /api/v1/facility/facilities/{facility_id}': {
         'gl_interest_expense_account_id': 'unreviewed',
@@ -67,6 +70,9 @@ MANIFEST: dict[str, dict[str, str]] = {
     },
     'PATCH /api/v1/hr/attendance/rosters/{roster_id}': {
         'shift_id': 'unreviewed',
+    },
+    'PATCH /api/v1/hr/class-requests/{request_pk}': {
+        'employee_id': 'reviewed: ensure_owned Employee',
     },
     'PATCH /api/v1/hr/compliance/employees/{employee_id}/medical-records/{record_id}': {
         'document_id': 'unreviewed',
@@ -111,8 +117,8 @@ MANIFEST: dict[str, dict[str, str]] = {
         'parent_section_id': 'unreviewed',
     },
     'PATCH /api/v1/inquiries/{inquiry_id}': {
-        'customer_intermediary_id': 'unreviewed',
-        'style_id': 'unreviewed',
+        'customer_intermediary_id': 'reviewed: ensure_owned via _validate_customer_intermediary (404)',
+        'style_id': 'handler-calls-ensure_owned',
     },
     'PATCH /api/v1/inventory/item-subcategories/{subcategory_id}': {
         'category_id': 'unreviewed',
@@ -310,6 +316,7 @@ MANIFEST: dict[str, dict[str, str]] = {
         'payment_account_id': 'unreviewed',
     },
     'POST /api/v1/commercial/export-cases': {
+        'customer_id': 'reviewed: _resolve_export_case_customer_id -> ensure_owned Customer, commercial/router.py:647 -> :570',
         'order_id': 'handler-calls-ensure_owned',
         'trade_case_id': 'handler-calls-ensure_owned',
     },
@@ -319,9 +326,11 @@ MANIFEST: dict[str, dict[str, str]] = {
     },
     'POST /api/v1/commercial/master-contracts': {
         'cost_center_id': 'handler-calls-ensure_owned',
+        'customer_id': 'reviewed: ensure_owned Customer, commercial/router.py:852',
         'order_id': 'handler-calls-ensure_owned',
     },
     'POST /api/v1/commercial/proforma-invoices': {
+        'customer_id': 'reviewed: _resolve_export_pi_customer_id -> ensure_owned Customer, commercial/router.py:1086 -> :599',
         'master_contract_id': 'handler-calls-ensure_owned',
         'order_ids': 'handler-calls-ensure_owned',
         'purchase_order_id': 'handler-calls-ensure_owned',
@@ -441,6 +450,9 @@ MANIFEST: dict[str, dict[str, str]] = {
         'bill_reference_id': 'handler-calls-ensure_owned',
         'voucher_id': 'handler-calls-ensure_owned',
         'voucher_line_id': 'handler-calls-ensure_owned',
+    },
+    'POST /api/v1/finance/bills': {
+        'customer_id': 'reviewed: ensure_owned Customer, finance/router.py:4442',
     },
     'POST /api/v1/finance/bills/{bill_id}/allocate': {
         'voucher_id': 'unreviewed',
@@ -579,6 +591,15 @@ MANIFEST: dict[str, dict[str, str]] = {
     'POST /api/v1/hr/cases': {
         'employee_id': 'unreviewed',
     },
+    'POST /api/v1/hr/class-requests': {
+        'employee_id': 'reviewed: ensure_owned Employee',
+    },
+    'POST /api/v1/hr/class-requests/delegations': {
+        'delegate_user_id': 'reviewed: ensure_owned User (tenant)',
+    },
+    'POST /api/v1/hr/class-requests/preview': {
+        'employee_id': 'reviewed: ensure_owned Employee',
+    },
     'POST /api/v1/hr/compensation/preview': {
         'bd_wage_rate_id': 'unreviewed',
         'employee_id': 'unreviewed',
@@ -611,6 +632,9 @@ MANIFEST: dict[str, dict[str, str]] = {
     },
     'POST /api/v1/hr/ess/my-leave-requests': {
         'leave_type_id': 'handler-calls-ensure_owned',
+    },
+    'POST /api/v1/hr/ess/submit-leave': {
+        'leave_type_id': 'reviewed: tenant-scoped leave type / ESS binder',
     },
     'POST /api/v1/hr/gate-passes': {
         'employee_id': 'unreviewed',
@@ -724,9 +748,9 @@ MANIFEST: dict[str, dict[str, str]] = {
         'employee_id': 'unreviewed',
     },
     'POST /api/v1/inquiries': {
-        'customer_id': 'unreviewed',
-        'customer_intermediary_id': 'unreviewed',
-        'style_id': 'unreviewed',
+        'customer_id': 'handler-calls-ensure_owned',
+        'customer_intermediary_id': 'reviewed: ensure_owned via _validate_customer_intermediary (404)',
+        'style_id': 'handler-calls-ensure_owned',
     },
     'POST /api/v1/inquiries/ai/dedupe': {
         'exclude_inquiry_id': 'unreviewed',
@@ -789,6 +813,7 @@ MANIFEST: dict[str, dict[str, str]] = {
         'warehouse_id': 'unreviewed',
     },
     'POST /api/v1/inventory/delivery-challans': {
+        'customer_id': 'reviewed: ensure_owned Customer before the challan is added, inventory/router.py:4685',
         'items[].item_id': 'unreviewed',
         'items[].warehouse_id': 'unreviewed',
         'order_ids': 'unreviewed',
@@ -875,13 +900,16 @@ MANIFEST: dict[str, dict[str, str]] = {
     'POST /api/v1/inventory/production-material-issues': {
         'bom_id': 'unreviewed',
         'lines[].bom_line_id': 'unreviewed',
+        'lines[].roll_id': 'reviewed: consume_roll loads the roll with tenant_id filter (material_control/roll_service.py:235) before the PMI row is added, inventory/router.py:5444-5453; ignored when the budget-plan flag is off',
         'order_id': 'unreviewed',
         'warehouse_id': 'unreviewed',
     },
     'POST /api/v1/inventory/purchase-orders': {
         'btb_lc_id': 'unreviewed',
+        'items[].colorway_id': 'reviewed: resolve_style_colorway per line before the PO is added, inventory/router.py:2994 -> material_control/style_tagging.py:25-27',
         'items[].item_id': 'unreviewed',
         'items[].source_order_id': 'unreviewed',
+        'items[].style_id': 'reviewed: resolve_style_colorway per line before the PO is added, inventory/router.py:2994 -> material_control/style_tagging.py:23',
         'items[].warehouse_id': 'unreviewed',
         'source_bom_id': 'unreviewed',
         'source_order_id': 'unreviewed',
@@ -966,6 +994,37 @@ MANIFEST: dict[str, dict[str, str]] = {
         'items[].item_id': 'unreviewed',
         'to_warehouse_id': 'unreviewed',
     },
+    'POST /api/v1/job-work/contracts': {
+        'customer_id': 'reviewed: ensure_owned Customer',
+        'deliverables[].colorway_id': 'reviewed: resolve_style_colorway, job_work/contract_service.py:127-129 -> style_tagging.py:25-27',
+        'deliverables[].order_id': 'reviewed: ensure_owned Order, job_work/contract_service.py:130-131',
+        'deliverables[].style_id': 'reviewed: resolve_style_colorway, job_work/contract_service.py:127-129 -> style_tagging.py:23',
+        'final_customer_id': 'reviewed: ensure_owned Customer, job_work/contract_service.py:132-133',
+        'master_contract_id': 'reviewed: ensure_owned MasterContract, job_work/contract_service.py:134-135',
+        'materials[].colorway_id': 'reviewed: resolve_style_colorway, job_work/contract_service.py:125 -> style_tagging.py:25-27',
+        'materials[].item_id': 'reviewed: ensure_owned Item',
+        'materials[].style_id': 'reviewed: resolve_style_colorway, job_work/contract_service.py:125 -> style_tagging.py:23',
+        'proforma_invoice_id': 'reviewed: ensure_owned ProformaInvoice, job_work/contract_service.py:136-137',
+    },
+    'POST /api/v1/job-work/contracts/{contract_id}/deliveries': {
+        'lines[].deliverable_id': 'reviewed: tenant-scoped JobWorkDeliverable loader',
+    },
+    'POST /api/v1/job-work/contracts/{contract_id}/materials/consume': {
+        'material_id': 'reviewed: tenant+contract JobWorkMaterial loader',
+    },
+    'POST /api/v1/job-work/contracts/{contract_id}/materials/receive': {
+        'material_id': 'reviewed: tenant+contract JobWorkMaterial loader',
+    },
+    'POST /api/v1/job-work/contracts/{contract_id}/materials/return': {
+        'material_id': 'reviewed: tenant+contract JobWorkMaterial loader',
+    },
+    'POST /api/v1/job-work/contracts/{contract_id}/produce': {
+        'lines[].deliverable_id': 'reviewed: tenant-scoped JobWorkDeliverable loader',
+    },
+    'POST /api/v1/job-work/contracts/{contract_id}/receipts': {
+        'bill_id': 'reviewed: tenant+contract JobWorkBill loader',
+        'cash_or_bank_account_id': 'reviewed: ensure_owned ChartOfAccount',
+    },
     'POST /api/v1/logistics/containers': {
         'packing_list_id': 'unreviewed',
         'shipment_id': 'unreviewed',
@@ -1040,6 +1099,76 @@ MANIFEST: dict[str, dict[str, str]] = {
         'item_id': 'unreviewed',
         'order_id': 'unreviewed',
         'template_id': 'unreviewed',
+    },
+    'POST /api/v1/material-control/allocations': {
+        'colorway_id': 'reviewed: ensure_owned StyleColorway + belongs-to-style check via resolve_style_colorway, allocation_service.py:104 -> style_tagging.py:25-27',
+        'cost_layer_id': 'reviewed: tenant-filtered select with_for_update, material_control/allocation_service.py:85-96',
+        'order_id': 'reviewed: ensure_owned Order, material_control/allocation_service.py:103',
+        'style_id': 'reviewed: ensure_owned GarmentStyle via resolve_style_colorway, allocation_service.py:104 -> style_tagging.py:23',
+    },
+    'POST /api/v1/material-control/bond-transfers': {
+        'contract_id': 'reviewed: ensure_owned JobWorkContract, material_control/bond_transfer_service.py:67',
+        'lines[].material_id': 'reviewed: ensure_owned JobWorkMaterial + belongs-to-contract check, material_control/bond_transfer_service.py:102-107',
+    },
+    'POST /api/v1/material-control/draft-dn-from-grn-reject': {
+        'grn_id': 'reviewed: ensure_owned GoodsReceiving, material_control/qc_guard.py draft_dn_from_grn_reject',
+        'grn_item_id': 'reviewed: ensure_owned GoodsReceivingItem + goods_receiving_id match, material_control/qc_guard.py',
+        'original_bill_id': 'reviewed: db.get PartyLedgerBill + tenant and party-ledger match, finance/advanced_voucher_service.py:293-295',
+        'party_ledger_id': 'reviewed: db.get PartyLedger + tenant check before any write, finance/advanced_voucher_service.py:290-292 (called from material_control/qc_guard.py:130)',
+        'revenue_or_purchase_account_id': 'reviewed: db.get ChartOfAccount + tenant check, finance/advanced_voucher_service.py:303-306',
+    },
+    'POST /api/v1/material-control/landed-costs': {
+        'goods_receiving_id': 'reviewed: ensure_owned GoodsReceiving, material_control/landed_cost_service.py:77',
+    },
+    'POST /api/v1/material-control/landed-costs/{doc_id}/allocate': {
+        'credit_account_id': 'reviewed: ensure_owned ChartOfAccount before any posting, material_control/landed_cost_service.py:207',
+    },
+    'POST /api/v1/material-control/leftover-returns': {
+        'cost_layer_id': 'reviewed: ensure_owned InventoryCostLayer + item match, material_control/leftover_return_service.py:80-85',
+        'item_id': 'reviewed: ensure_owned Item, material_control/leftover_return_service.py:72',
+        'order_id': 'reviewed: ensure_owned Order, material_control/leftover_return_service.py:74',
+        'style_id': 'reviewed: ensure_owned GarmentStyle, material_control/leftover_return_service.py:75',
+        'warehouse_id': 'reviewed: ensure_owned Warehouse, material_control/leftover_return_service.py:73',
+    },
+    'POST /api/v1/material-control/principal-claims': {
+        'contract_id': 'reviewed: ensure_owned JobWorkContract, material_control/principal_claim_service.py:67',
+        'customer_id': 'reviewed: ensure_owned Customer, material_control/principal_claim_service.py:66',
+    },
+    'POST /api/v1/material-control/qc-hold-check': {
+        'item_id': 'reviewed: ensure_owned Item, material_control/qc_guard.py:41',
+        'warehouse_id': 'reviewed: ensure_owned Warehouse, material_control/qc_guard.py:43',
+    },
+    'POST /api/v1/material-control/rolls': {
+        'colorway_id': 'reviewed: ensure_owned StyleColorway, material_control/roll_service.py:80',
+        'cost_layer_id': 'reviewed: ensure_owned InventoryCostLayer, material_control/roll_service.py:81',
+        'grn_item_id': 'reviewed: ensure_owned GoodsReceivingItem + item match, material_control/roll_service.py:84-89',
+        'item_id': 'reviewed: ensure_owned Item, material_control/roll_service.py:77',
+        'style_id': 'reviewed: ensure_owned GarmentStyle, material_control/roll_service.py:79',
+        'warehouse_id': 'reviewed: ensure_owned Warehouse, material_control/roll_service.py:78',
+    },
+    'POST /api/v1/material-control/rolls/assert-shade': {
+        'item_id': 'reviewed: read-only check; MaterialRoll query filtered by tenant_id, material_control/roll_service.py:184-190 (a foreign id matches no roll)',
+        'warehouse_id': 'reviewed: read-only check; MaterialRoll query filtered by tenant_id, material_control/roll_service.py:184-190 (a foreign id matches no roll)',
+    },
+    'POST /api/v1/material-control/rtv': {
+        'lines[].item_id': 'reviewed: ensure_owned Item per line, material_control/rtv_service.py:106',
+        'original_bill_id': 'reviewed: create_note_voucher: PartyLedgerBill tenant + ledger match, finance/advanced_voucher_service.py:293-295',
+        'party_ledger_id': 'reviewed: only used via create_note_voucher (material_control/rtv_service.py:149-161): db.get PartyLedger + tenant check, finance/advanced_voucher_service.py:290-292',
+        'revenue_or_purchase_account_id': 'reviewed: create_note_voucher: ChartOfAccount tenant check, finance/advanced_voucher_service.py:303-306',
+        'vendor_id': 'reviewed: ensure_owned Vendor, material_control/rtv_service.py:73',
+        'warehouse_id': 'reviewed: ensure_owned Warehouse, material_control/rtv_service.py:74',
+    },
+    'POST /api/v1/material-control/ud-events': {
+        'btb_lc_id': 'reviewed: ensure_owned BtbLc, material_control/ud_event_service.py:67',
+        'colorway_id': 'reviewed: ensure_owned StyleColorway via resolve_style_colorway, material_control/ud_event_service.py:70 -> style_tagging.py:25-27',
+        'master_contract_id': 'reviewed: ensure_owned MasterContract, material_control/ud_event_service.py:66',
+        'order_id': 'reviewed: ensure_owned Order, material_control/ud_event_service.py:69',
+        'purchase_order_id': 'reviewed: ensure_owned PurchaseOrder, material_control/ud_event_service.py:68',
+        'reversal_of_event_id': 'reviewed: ensure_owned UdMaterialUtilizationEvent, material_control/ud_event_service.py:73-81',
+        'source_document_id': 'reviewed: source_document_type allowlist (PO) + ensure_owned PurchaseOrder, material_control/ud_event_service.py',
+        'source_line_id': 'reviewed: ensure_owned PurchaseOrderItem + purchase_order_id match, material_control/ud_event_service.py',
+        'style_id': 'reviewed: ensure_owned GarmentStyle via resolve_style_colorway, material_control/ud_event_service.py:70 -> style_tagging.py:23',
+        'ud_entitlement_id': 'reviewed: ensure_owned UdEntitlement, material_control/ud_event_service.py:65',
     },
     'POST /api/v1/merch/alerts/{alert_id}/assign': {
         'assigned_to_id': 'unreviewed',
@@ -1286,6 +1415,20 @@ MANIFEST: dict[str, dict[str, str]] = {
         'machine_id': 'handler-calls-ensure_owned',
         'order_id': 'handler-calls-ensure_owned',
         'recipe_id': 'handler-calls-ensure_owned',
+    },
+    'POST /api/v1/production/finishing/entries': {
+        'order_id': 'reviewed: ensure_owned Order, production/finishing_service.py:71 (before the entry is added at :104)',
+        'sewing_line_id': 'reviewed: ensure_owned SewingLine, production/finishing_service.py:73 (before the entry is added at :104)',
+        'shift_id': 'reviewed: ensure_owned ProductionShift, production/finishing_service.py:74 (before the entry is added at :104)',
+        'style_id': 'reviewed: ensure_owned GarmentStyle, production/finishing_service.py:72 (before the entry is added at :104)',
+    },
+    'POST /api/v1/production/hourly/bulk-upsert': {
+        'entries[].line_id': 'reviewed: ensure_owned SewingLine per entry; bulk_upsert_hourly calls upsert_hourly (production/hourly_router.py:238) whose checks are at production/hourly_router.py:90',
+        'entries[].line_style_config_id': 'reviewed: ensure_owned SewingLineStyleConfig per entry; bulk_upsert_hourly calls upsert_hourly (production/hourly_router.py:238) whose checks are at production/hourly_router.py:92',
+        'entries[].machine_id': 'reviewed: ensure_owned DepartmentMachine per entry; bulk_upsert_hourly calls upsert_hourly (production/hourly_router.py:238) whose checks are at production/hourly_router.py:91',
+        'entries[].order_id': 'reviewed: ensure_owned Order per entry; bulk_upsert_hourly calls upsert_hourly (production/hourly_router.py:238) whose checks are at production/hourly_router.py:93',
+        'entries[].shift_id': 'reviewed: ensure_owned ProductionShift per entry; bulk_upsert_hourly calls upsert_hourly (production/hourly_router.py:238) whose checks are at production/hourly_router.py:95',
+        'entries[].style_id': 'reviewed: ensure_owned GarmentStyle per entry; bulk_upsert_hourly calls upsert_hourly (production/hourly_router.py:238) whose checks are at production/hourly_router.py:94',
     },
     'POST /api/v1/production/hourly/upsert': {
         'line_id': 'handler-calls-ensure_owned',
@@ -1558,6 +1701,17 @@ MANIFEST: dict[str, dict[str, str]] = {
         'source_order_id': 'unreviewed',
         'vendor_id': 'unreviewed',
         'warehouse_id': 'unreviewed',
+    },
+    'PUT /api/v1/job-work/contracts/{contract_id}': {
+        'deliverables[].colorway_id': 'reviewed: accepted by ContractUpdate but never read or stored by update_contract (job_work/contract_service.py:220-339), so no foreign key is written (replacement rows at :285-294 / :313-321 omit it)',
+        'deliverables[].order_id': 'reviewed: accepted by ContractUpdate but never read or stored by update_contract (job_work/contract_service.py:220-339), so no foreign key is written (replacement rows at :285-294 / :313-321 omit it)',
+        'deliverables[].style_id': 'reviewed: accepted by ContractUpdate but never read or stored by update_contract (job_work/contract_service.py:220-339), so no foreign key is written (replacement rows at :285-294 / :313-321 omit it)',
+        'final_customer_id': 'reviewed: accepted by ContractUpdate but never read or stored by update_contract (job_work/contract_service.py:220-339), so no foreign key is written',
+        'master_contract_id': 'reviewed: accepted by ContractUpdate but never read or stored by update_contract (job_work/contract_service.py:220-339), so no foreign key is written',
+        'materials[].colorway_id': 'reviewed: accepted by ContractUpdate but never read or stored by update_contract (job_work/contract_service.py:220-339), so no foreign key is written (replacement rows at :285-294 / :313-321 omit it)',
+        'materials[].item_id': 'reviewed: ensure_owned Item',
+        'materials[].style_id': 'reviewed: accepted by ContractUpdate but never read or stored by update_contract (job_work/contract_service.py:220-339), so no foreign key is written (replacement rows at :285-294 / :313-321 omit it)',
+        'proforma_invoice_id': 'reviewed: accepted by ContractUpdate but never read or stored by update_contract (job_work/contract_service.py:220-339), so no foreign key is written',
     },
     'PUT /api/v1/procurement/requisitions/{pr_id}': {
         'lines[].item_id': 'unreviewed',

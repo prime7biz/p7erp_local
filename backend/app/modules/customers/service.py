@@ -3,19 +3,26 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation
 
 from fastapi import HTTPException, status
-from sqlalchemy import Float, and_, case, cast, exists, func, literal, or_, select
+from sqlalchemy import Float, and_, case, cast, exists, func, literal, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from app.common.codegen import next_tenant_code
 from app.common.delete_guards import ensure_customer_deletable
+from app.common.document_history import record_doc_event
+from app.common.orm_numeric import decimal_to_money_response
+from app.common.ownership import ensure_owned
 from app.common.pagination import MAX_PAGE_SIZE
-from app.models import Customer, Tenant, User
+from app.models import Customer, CustomerContact, Tenant, User
 from app.models.finance import OutstandingBill
 from app.models.merch import Inquiry, Order, Quotation
 from app.modules.customers.schemas import (
+    CustomerContactCreate,
+    CustomerContactResponse,
+    CustomerContactUpdate,
     CustomerCreate,
     CustomerFacetsResponse,
     CustomerHealthResponse,
@@ -24,7 +31,12 @@ from app.modules.customers.schemas import (
     CustomerRelatedResponse,
     CustomerResponse,
     CustomerUpdate,
+    DuplicateCheckMatch,
+    DuplicateCheckResponse,
 )
+
+# Keep SQL incomplete_only divisor and profile_completeness_score() in sync.
+PROFILE_COMPLETENESS_FIELD_COUNT = 15
 
 
 def ensure_user_tenant(user: User, tenant: Tenant) -> None:
@@ -39,7 +51,37 @@ def clean_optional(value: str | None) -> str | None:
     return cleaned or None
 
 
+def parse_credit_limit(value: str | None) -> Decimal | None:
+    """Parse informational credit_limit; reject negative / NaN / Infinity / non-numeric."""
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    try:
+        dec = Decimal(raw.replace(",", "").replace(" ", ""))
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="credit_limit must be a valid decimal number",
+        ) from exc
+    if not dec.is_finite():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="credit_limit must be a finite number",
+        )
+    if dec < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="credit_limit cannot be negative",
+        )
+    return dec
+
+
 def customer_to_response(customer: Customer) -> CustomerResponse:
+    credit = None
+    if customer.credit_limit is not None:
+        credit = decimal_to_money_response(customer.credit_limit)
     return CustomerResponse(
         id=customer.id,
         tenant_id=customer.tenant_id,
@@ -72,8 +114,34 @@ def customer_to_response(customer: Customer) -> CustomerResponse:
         shipping_country=customer.shipping_country,
         same_as_billing=customer.same_as_billing,
         preferred_currency=customer.preferred_currency,
+        payment_terms=customer.payment_terms,
+        default_incoterm=customer.default_incoterm,
+        typical_lead_time_days=customer.typical_lead_time_days,
+        industry_segment=customer.industry_segment,
+        compliance_level=customer.compliance_level,
+        credit_limit=credit,
+        notes=customer.notes,
         created_at=customer.created_at.isoformat(),
         updated_at=customer.updated_at.isoformat(),
+    )
+
+
+def contact_to_response(row: CustomerContact) -> CustomerContactResponse:
+    return CustomerContactResponse(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        customer_id=row.customer_id,
+        name=row.name,
+        designation=row.designation,
+        department=row.department,
+        email=row.email,
+        phone=row.phone,
+        whatsapp=row.whatsapp,
+        is_primary=bool(row.is_primary),
+        is_active=bool(row.is_active),
+        notes=row.notes,
+        created_at=row.created_at.isoformat() if row.created_at else "",
+        updated_at=row.updated_at.isoformat() if row.updated_at else "",
     )
 
 
@@ -156,6 +224,8 @@ def apply_customer_ai_list_filters(
         t_pname = case((_has_text(Customer.primary_contact_name), 1), else_=0)
         t_des = case((_has_text(Customer.designation), 1), else_=0)
         t_logo = case((_has_text(Customer.company_logo_url), 1), else_=0)
+        t_curr = case((_has_text(Customer.preferred_currency), 1), else_=0)
+        t_pay = case((_has_text(Customer.payment_terms), 1), else_=0)
         filled_sum = (
             t_legal
             + t_trade
@@ -170,8 +240,13 @@ def apply_customer_ai_list_filters(
             + t_pname
             + t_des
             + t_logo
+            + t_curr
+            + t_pay
         )
-        completeness_pct = cast(filled_sum, Float) * literal(100.0) / literal(12.0)
+        # Keep in sync with profile_completeness_score() / PROFILE_COMPLETENESS_FIELD_COUNT.
+        completeness_pct = (
+            cast(filled_sum, Float) * literal(100.0) / literal(float(PROFILE_COMPLETENESS_FIELD_COUNT))
+        )
         stmt = stmt.where(completeness_pct < literal(70.0))
 
     if stale_only:
@@ -246,8 +321,11 @@ def profile_completeness_score(c: Customer) -> int:
         filled(c.primary_contact_name),
         filled(c.designation),
         filled(c.company_logo_url),
+        filled(c.preferred_currency),
+        filled(c.payment_terms),
     ]
-    return int(round(100 * sum(1 for x in keys if x) / len(keys)))
+    assert len(keys) == PROFILE_COMPLETENESS_FIELD_COUNT
+    return int(round(100 * sum(1 for x in keys if x) / PROFILE_COMPLETENESS_FIELD_COUNT))
 
 
 async def list_customers_paginated(
@@ -585,6 +663,7 @@ async def get_health(
     *,
     tenant_id: int,
     customer_id: int,
+    include_receivables: bool = True,
 ) -> CustomerHealthResponse | None:
     r = await db.execute(
         select(Customer).where(Customer.id == customer_id, Customer.tenant_id == tenant_id)
@@ -629,14 +708,20 @@ async def get_health(
 
     last_at = await _last_activity_at(db, tenant_id, customer_id)
 
-    party_names = [
-        n.strip()
-        for n in (c.name, c.legal_entity_name, c.trade_name)
-        if n and str(n).strip()
-    ]
     recv_cnt = 0
-    if party_names:
-        conds = [func.lower(OutstandingBill.party_name) == nm.lower() for nm in party_names]
+    if include_receivables:
+        party_names = [
+            n.strip()
+            for n in (c.name, c.legal_entity_name, c.trade_name)
+            if n and str(n).strip()
+        ]
+        name_conds = [func.lower(OutstandingBill.party_name) == nm.lower() for nm in party_names]
+        recv_match = OutstandingBill.customer_id == customer_id
+        if name_conds:
+            recv_match = or_(
+                recv_match,
+                and_(OutstandingBill.customer_id.is_(None), or_(*name_conds)),
+            )
         recv_cnt = int(
             (
                 await db.execute(
@@ -646,12 +731,37 @@ async def get_health(
                         OutstandingBill.tenant_id == tenant_id,
                         OutstandingBill.bill_type == "RECEIVABLE",
                         OutstandingBill.status == "OPEN",
-                        or_(*conds),
+                        recv_match,
                     )
                 )
             ).scalar()
             or 0
         )
+
+        # Party ledger open bills (when feature is on) count toward the same health signal.
+        from app.common.tenant_feature_keys import is_party_ledger_enabled
+        from app.models.party_ledger import PartyLedger, PartyLedgerBill
+        from app.models.tenant import Tenant as TenantModel
+
+        tenant_row = await db.get(TenantModel, tenant_id)
+        if tenant_row is not None and is_party_ledger_enabled(tenant_row.feature_flags):
+            pl_open = int(
+                (
+                    await db.execute(
+                        select(func.count())
+                        .select_from(PartyLedgerBill)
+                        .join(PartyLedger, PartyLedger.id == PartyLedgerBill.party_ledger_id)
+                        .where(
+                            PartyLedgerBill.tenant_id == tenant_id,
+                            PartyLedger.tenant_id == tenant_id,
+                            PartyLedger.customer_id == customer_id,
+                            PartyLedgerBill.status.in_(("PENDING", "PARTIAL", "OVERDUE")),
+                        )
+                    )
+                ).scalar()
+                or 0
+            )
+            recv_cnt = max(recv_cnt, pl_open)
 
     is_active = (c.status or "active").lower() == "active"
     dup_risk = await _duplicate_risk_score(db, tenant_id, c)
@@ -680,7 +790,13 @@ async def next_customer_code(db: AsyncSession, tenant_id: int) -> str:
     )
 
 
-async def create_customer(db: AsyncSession, tenant: Tenant, body: CustomerCreate) -> CustomerResponse:
+async def create_customer(
+    db: AsyncSession,
+    tenant: Tenant,
+    body: CustomerCreate,
+    *,
+    user_id: int | None = None,
+) -> CustomerResponse:
     code = await next_customer_code(db, tenant.id)
     name = body.name.strip()
     billing_address_line1 = clean_optional(body.billing_address_line1)
@@ -730,10 +846,28 @@ async def create_customer(db: AsyncSession, tenant: Tenant, body: CustomerCreate
         shipping_country=shipping_country,
         same_as_billing=same_as_billing,
         preferred_currency=clean_optional(body.preferred_currency),
+        payment_terms=clean_optional(body.payment_terms),
+        default_incoterm=clean_optional(body.default_incoterm),
+        typical_lead_time_days=body.typical_lead_time_days,
+        industry_segment=clean_optional(body.industry_segment),
+        compliance_level=clean_optional(body.compliance_level),
+        credit_limit=parse_credit_limit(body.credit_limit),
+        notes=clean_optional(body.notes),
     )
     db.add(customer)
     await db.flush()
     await db.refresh(customer)
+    await record_doc_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user_id,
+        doc_type="customer",
+        doc_id=customer.id,
+        event="created",
+        summary=f"Created customer {customer.customer_code}",
+        to_status=customer.status,
+        extra={"customer_code": customer.customer_code, "name": customer.name},
+    )
     return customer_to_response(customer)
 
 
@@ -742,6 +876,8 @@ async def update_customer(
     tenant: Tenant,
     customer_id: int,
     body: CustomerUpdate,
+    *,
+    user_id: int | None = None,
 ) -> CustomerResponse | None:
     result = await db.execute(
         select(Customer).where(
@@ -814,6 +950,20 @@ async def update_customer(
             customer.shipping_country = customer.billing_country
     if body.preferred_currency is not None:
         customer.preferred_currency = clean_optional(body.preferred_currency)
+    if body.payment_terms is not None:
+        customer.payment_terms = clean_optional(body.payment_terms)
+    if body.default_incoterm is not None:
+        customer.default_incoterm = clean_optional(body.default_incoterm)
+    if body.typical_lead_time_days is not None:
+        customer.typical_lead_time_days = body.typical_lead_time_days
+    if body.industry_segment is not None:
+        customer.industry_segment = clean_optional(body.industry_segment)
+    if body.compliance_level is not None:
+        customer.compliance_level = clean_optional(body.compliance_level)
+    if body.credit_limit is not None:
+        customer.credit_limit = parse_credit_limit(body.credit_limit)
+    if body.notes is not None:
+        customer.notes = clean_optional(body.notes)
 
     if customer.legal_entity_name is None and customer.name:
         customer.legal_entity_name = customer.name
@@ -826,10 +976,27 @@ async def update_customer(
 
     await db.flush()
     await db.refresh(customer)
+    await record_doc_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user_id,
+        doc_type="customer",
+        doc_id=customer.id,
+        event="updated",
+        summary=f"Updated customer {customer.customer_code}",
+        to_status=customer.status,
+        extra={"customer_code": customer.customer_code, "name": customer.name},
+    )
     return customer_to_response(customer)
 
 
-async def delete_customer(db: AsyncSession, tenant: Tenant, customer_id: int) -> bool:
+async def delete_customer(
+    db: AsyncSession,
+    tenant: Tenant,
+    customer_id: int,
+    *,
+    user_id: int | None = None,
+) -> bool:
     result = await db.execute(
         select(Customer).where(
             Customer.id == customer_id,
@@ -840,6 +1007,19 @@ async def delete_customer(db: AsyncSession, tenant: Tenant, customer_id: int) ->
     if not customer:
         return False
     await ensure_customer_deletable(db, tenant.id, customer_id)
+    code = customer.customer_code
+    name = customer.name
+    await record_doc_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user_id,
+        doc_type="customer",
+        doc_id=customer.id,
+        event="deleted",
+        summary=f"Deleted customer {code}",
+        from_status=customer.status,
+        extra={"customer_code": code, "name": name},
+    )
     await db.delete(customer)
     await db.flush()
     return True
@@ -847,3 +1027,239 @@ async def delete_customer(db: AsyncSession, tenant: Tenant, customer_id: int) ->
 
 def max_page_size() -> int:
     return MAX_PAGE_SIZE
+
+
+def _strong_contains_or_exact(col, needle: str):
+    """Case-insensitive exact match, or contains when needle length >= 3."""
+    exact = func.lower(func.coalesce(col, "")) == needle
+    if len(needle) < 3:
+        return exact
+    return or_(exact, func.lower(func.coalesce(col, "")).like(f"%{needle}%"))
+
+
+async def duplicate_check(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    name: str | None = None,
+    email: str | None = None,
+    exclude_id: int | None = None,
+) -> DuplicateCheckResponse:
+    """Read-only soft duplicate hint (no AI / audit writes). Caps at 5 rows."""
+    name_q = (name or "").strip().lower()
+    email_q = (email or "").strip().lower()
+    if not name_q and not email_q:
+        return DuplicateCheckResponse(matches=[])
+
+    clauses = []
+    if name_q:
+        clauses.append(
+            or_(
+                _strong_contains_or_exact(Customer.name, name_q),
+                _strong_contains_or_exact(Customer.legal_entity_name, name_q),
+                _strong_contains_or_exact(Customer.trade_name, name_q),
+            )
+        )
+    if email_q:
+        clauses.append(
+            or_(
+                _strong_contains_or_exact(Customer.contact_email, email_q),
+                _strong_contains_or_exact(Customer.email, email_q),
+            )
+        )
+
+    stmt = select(Customer).where(Customer.tenant_id == tenant_id, or_(*clauses))
+    if exclude_id is not None:
+        stmt = stmt.where(Customer.id != exclude_id)
+    stmt = stmt.order_by(Customer.id.asc()).limit(5)
+    rows = (await db.execute(stmt)).scalars().all()
+    return DuplicateCheckResponse(
+        matches=[
+            DuplicateCheckMatch(
+                id=c.id,
+                customer_code=c.customer_code,
+                name=c.name,
+                contact_email=c.contact_email,
+                email=c.email,
+            )
+            for c in rows
+        ]
+    )
+
+
+async def _clear_other_primaries(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    customer_id: int,
+    keep_contact_id: int | None = None,
+) -> None:
+    stmt = (
+        update(CustomerContact)
+        .where(
+            CustomerContact.tenant_id == tenant_id,
+            CustomerContact.customer_id == customer_id,
+            CustomerContact.is_primary.is_(True),
+        )
+        .values(is_primary=False, updated_at=datetime.utcnow())
+    )
+    if keep_contact_id is not None:
+        stmt = stmt.where(CustomerContact.id != keep_contact_id)
+    await db.execute(stmt)
+
+
+def _sync_customer_primary_fields(customer: Customer, contact: CustomerContact) -> None:
+    customer.primary_contact_name = contact.name
+    customer.designation = contact.designation
+    customer.contact_email = contact.email
+    customer.contact_phone = contact.phone
+    customer.updated_at = datetime.utcnow()
+
+
+async def list_contacts(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    customer_id: int,
+) -> list[CustomerContactResponse]:
+    await ensure_owned(db, Customer, customer_id, tenant_id, "Customer", status_code=404)
+    r = await db.execute(
+        select(CustomerContact)
+        .where(
+            CustomerContact.tenant_id == tenant_id,
+            CustomerContact.customer_id == customer_id,
+        )
+        .order_by(CustomerContact.is_primary.desc(), CustomerContact.id.asc())
+    )
+    return [contact_to_response(row) for row in r.scalars().all()]
+
+
+async def create_contact(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    customer_id: int,
+    body: CustomerContactCreate,
+) -> CustomerContactResponse:
+    customer = await ensure_owned(db, Customer, customer_id, tenant_id, "Customer", status_code=404)
+    assert customer is not None
+
+    make_primary = bool(body.is_primary)
+    if make_primary:
+        locked = (
+            await db.execute(
+                select(Customer)
+                .where(Customer.id == customer_id, Customer.tenant_id == tenant_id)
+                .with_for_update()
+            )
+        ).scalar_one()
+        await _clear_other_primaries(db, tenant_id=tenant_id, customer_id=customer_id)
+        customer = locked
+
+    contact = CustomerContact(
+        tenant_id=tenant_id,
+        customer_id=customer_id,
+        name=body.name.strip(),
+        designation=clean_optional(body.designation),
+        department=clean_optional(body.department),
+        email=clean_optional(body.email),
+        phone=clean_optional(body.phone),
+        whatsapp=clean_optional(body.whatsapp),
+        is_primary=make_primary,
+        is_active=bool(body.is_active),
+        notes=clean_optional(body.notes),
+    )
+    db.add(contact)
+    await db.flush()
+    if make_primary:
+        _sync_customer_primary_fields(customer, contact)
+        await db.flush()
+    await db.refresh(contact)
+    return contact_to_response(contact)
+
+
+async def update_contact(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    customer_id: int,
+    contact_id: int,
+    body: CustomerContactUpdate,
+) -> CustomerContactResponse | None:
+    customer = await ensure_owned(db, Customer, customer_id, tenant_id, "Customer", status_code=404)
+    assert customer is not None
+    contact = await ensure_owned(
+        db, CustomerContact, contact_id, tenant_id, "Customer contact", status_code=404
+    )
+    if contact is None or contact.customer_id != customer_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer contact not found")
+
+    becoming_primary = body.is_primary is True and not contact.is_primary
+    staying_primary = contact.is_primary and body.is_primary is not False
+    sync_fields = (
+        body.name is not None
+        or body.designation is not None
+        or body.email is not None
+        or body.phone is not None
+    )
+    if becoming_primary or (staying_primary and sync_fields):
+        customer = (
+            await db.execute(
+                select(Customer)
+                .where(Customer.id == customer_id, Customer.tenant_id == tenant_id)
+                .with_for_update()
+            )
+        ).scalar_one()
+
+    if becoming_primary:
+        await _clear_other_primaries(
+            db, tenant_id=tenant_id, customer_id=customer_id, keep_contact_id=contact.id
+        )
+        contact.is_primary = True
+
+    if body.name is not None:
+        contact.name = body.name.strip()
+    if body.designation is not None:
+        contact.designation = clean_optional(body.designation)
+    if body.department is not None:
+        contact.department = clean_optional(body.department)
+    if body.email is not None:
+        contact.email = clean_optional(body.email)
+    if body.phone is not None:
+        contact.phone = clean_optional(body.phone)
+    if body.whatsapp is not None:
+        contact.whatsapp = clean_optional(body.whatsapp)
+    if body.is_active is not None:
+        contact.is_active = bool(body.is_active)
+    if body.notes is not None:
+        contact.notes = clean_optional(body.notes)
+    if body.is_primary is False:
+        contact.is_primary = False
+
+    contact.updated_at = datetime.utcnow()
+    await db.flush()
+
+    if contact.is_primary and contact.is_active:
+        _sync_customer_primary_fields(customer, contact)
+        await db.flush()
+
+    await db.refresh(contact)
+    return contact_to_response(contact)
+
+
+async def delete_contact(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    customer_id: int,
+    contact_id: int,
+) -> bool:
+    await ensure_owned(db, Customer, customer_id, tenant_id, "Customer", status_code=404)
+    contact = await ensure_owned(
+        db, CustomerContact, contact_id, tenant_id, "Customer contact", status_code=404
+    )
+    if contact is None or contact.customer_id != customer_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer contact not found")
+    await db.delete(contact)
+    await db.flush()
+    return True

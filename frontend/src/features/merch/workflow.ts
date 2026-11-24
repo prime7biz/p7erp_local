@@ -145,6 +145,25 @@ export function canConvertInquiryToQuotation(currentStatus: string | undefined):
   return getNextStatuses(INQUIRY_TRANSITIONS, currentStatus, "DRAFT").includes("CONVERTED");
 }
 
+/** Terminal inquiry statuses — no further workflow edits. */
+export function isInquiryTerminal(currentStatus: string | undefined): boolean {
+  const s = normalizeStatus(currentStatus, "DRAFT");
+  return s === "CONVERTED" || s === "LOST" || s === "CANCELLED";
+}
+
+/** Draft and Submitted inquiries can still be edited in the workbench. */
+export function canEditInquiry(currentStatus: string | undefined): boolean {
+  return !isInquiryTerminal(currentStatus);
+}
+
+export function canMarkInquiryLost(currentStatus: string | undefined): boolean {
+  return getNextStatuses(INQUIRY_TRANSITIONS, currentStatus, "DRAFT").includes("LOST");
+}
+
+export function canCancelInquiry(currentStatus: string | undefined): boolean {
+  return getNextStatuses(INQUIRY_TRANSITIONS, currentStatus, "DRAFT").includes("CANCELLED");
+}
+
 export function canConvertQuotationToOrder(currentStatus: string | undefined): boolean {
   return getNextStatuses(QUOTATION_TRANSITIONS, currentStatus, "DRAFT").includes("CONVERTED");
 }

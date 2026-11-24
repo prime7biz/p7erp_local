@@ -9,6 +9,7 @@ import { useConfirm } from "@/components/app/useConfirm";
 import { DataGrid, type GridColumn } from "@/components/app/data-grid/DataGrid";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
 import { useListPagination } from "@/hooks/useListPagination";
+import { useMobileUiV2 } from "@/hooks/useMobileUiV2";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
 import { logApiError } from "@/utils/logApiError";
 import { tenantKey } from "@/lib/queryKeys";
@@ -67,6 +68,7 @@ function DupRiskCell({ score }: { score?: number | null }) {
 
 export function CustomersPage() {
   const { pageSize, setPageSize } = useListPagination();
+  const mobileV2 = useMobileUiV2();
   const queryClient = useQueryClient();
   const confirm = useConfirm();
   const [openActionsId, setOpenActionsId] = useState<string | number | null>(null);
@@ -576,6 +578,7 @@ export function CustomersPage() {
         <DataGrid
           tableKey="customers.list"
           exportName="customers"
+          mobileCards={mobileV2}
           columns={columns}
           rows={customers}
           getRowId={(c) => c.id}

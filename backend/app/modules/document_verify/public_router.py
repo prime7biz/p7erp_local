@@ -17,7 +17,11 @@ from app.common.rls import bind_session_bypass, bind_session_tenant
 from app.database import get_db, rls_request_scope, safe_async_session_rollback
 from app.models.commercial import ProformaInvoice
 from app.models.tenant import Tenant
-from app.modules.document_verify.schemas import PublicDocumentVerification, PublicProformaVerification
+from app.modules.document_verify.schemas import (
+    PublicDocumentVerification,
+    PublicProformaVerification,
+    QuotationPublicVerification,
+)
 from app.modules.document_verify.service import verify_document_publicly
 
 logger = logging.getLogger(__name__)
@@ -71,13 +75,13 @@ async def verify_proforma_public(
     )
 
 
-@router.get("/document/{verification_id}", response_model=PublicDocumentVerification)
+@router.get("/document/{verification_id}", response_model=PublicDocumentVerification | QuotationPublicVerification)
 async def verify_document_public(
     verification_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
     _rls_scope: None = Depends(rls_request_scope),
-) -> PublicDocumentVerification:
+) -> PublicDocumentVerification | QuotationPublicVerification:
     await _rate_limit(request)
     try:
         result = await verify_document_publicly(db, verification_id)

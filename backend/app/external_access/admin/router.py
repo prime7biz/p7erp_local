@@ -49,6 +49,7 @@ from app.external_access.audit import log_external_action
 from app.external_access.constants import (
     FF_CUSTOMER_NOTES_ENABLED,
     FF_CUSTOMER_PORTAL_ENABLED,
+    FF_CUSTOMER_PORTAL_QUOTATIONS_ENABLED,
     FF_EXTERNAL_PORTAL_DOCUMENT_DOWNLOADS_ENABLED,
     FF_FINANCIER_FINANCIAL_SUMMARY_ENABLED,
     FF_FINANCIER_PORTAL_ENABLED,
@@ -140,12 +141,15 @@ async def _overview_response(db: AsyncSession, tenant: Tenant) -> ExternalAccess
             ExternalPrincipal.principal_type == PRINCIPAL_SUPPLIER,
         )
     )
+    from app.common.tenant_feature_keys import is_customer_portal_quotations_enabled
+
     return ExternalAccessOverviewResponse(
         supplier_portal_enabled=is_supplier_portal_enabled(tenant),
         supplier_principal_count=int(c4 or 0),
         customer_portal_enabled=is_customer_portal_enabled(tenant),
         financier_portal_enabled=is_financier_portal_enabled(tenant),
         customer_notes_enabled=is_customer_notes_enabled(tenant),
+        customer_portal_quotations_enabled=is_customer_portal_quotations_enabled(tenant.feature_flags),
         financier_financial_summary_enabled=is_financier_financial_summary_enabled(tenant),
         financier_projection_enabled=is_financier_projection_enabled(tenant),
         external_portal_document_downloads_enabled=is_external_document_download_enabled(tenant),
@@ -180,6 +184,7 @@ async def external_access_feature_flags_patch(
         FF_CUSTOMER_PORTAL_ENABLED: body.customer_portal_enabled,
         FF_FINANCIER_PORTAL_ENABLED: body.financier_portal_enabled,
         FF_CUSTOMER_NOTES_ENABLED: body.customer_notes_enabled,
+        FF_CUSTOMER_PORTAL_QUOTATIONS_ENABLED: body.customer_portal_quotations_enabled,
         FF_FINANCIER_FINANCIAL_SUMMARY_ENABLED: body.financier_financial_summary_enabled,
         FF_FINANCIER_PROJECTION_ENABLED: body.financier_projection_enabled,
         FF_EXTERNAL_PORTAL_DOCUMENT_DOWNLOADS_ENABLED: body.external_portal_document_downloads_enabled,

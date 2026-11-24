@@ -11,7 +11,16 @@ from fastapi import HTTPException, UploadFile, status
 from app.config import get_settings
 
 # Allowed module subfolders under MEDIA_ROOT / {tenant_id} /
-ALLOWED_MODULES = frozenset({"customer_logos", "style_pictures", "trade_docs", "hr_documents", "user_signatures"})
+ALLOWED_MODULES = frozenset(
+    {
+        "customer_logos",
+        "style_pictures",
+        "trade_docs",
+        "hr_documents",
+        "user_signatures",
+        "inquiry_tech_files",
+    }
+)
 
 # image modules: strict image MIME only
 _IMAGE_MIME_TO_EXT: dict[str, str] = {
@@ -42,12 +51,26 @@ _TRADE_MIME_TO_EXT: dict[str, str] = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
 }
 
+# Inquiry technical packs: trade subset (no gif / plain text / legacy .doc)
+_INQUIRY_TECH_MIME_TO_EXT: dict[str, str] = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/webp": ".webp",
+    "application/pdf": ".pdf",
+    "text/csv": ".csv",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "application/vnd.ms-excel": ".xls",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+}
+
 _MODULE_MAX_BYTES: dict[str, int] = {
     "customer_logos": 2 * 1024 * 1024,
     "style_pictures": 2 * 1024 * 1024,
     "trade_docs": 25 * 1024 * 1024,
     "hr_documents": 10 * 1024 * 1024,
     "user_signatures": 2 * 1024 * 1024,
+    "inquiry_tech_files": 10 * 1024 * 1024,
 }
 
 _MODULE_MIME: dict[str, dict[str, str]] = {
@@ -56,6 +79,7 @@ _MODULE_MIME: dict[str, dict[str, str]] = {
     "trade_docs": _TRADE_MIME_TO_EXT,
     "hr_documents": _TRADE_MIME_TO_EXT,
     "user_signatures": _SIGNATURE_MIME_TO_EXT,
+    "inquiry_tech_files": _INQUIRY_TECH_MIME_TO_EXT,
 }
 
 _FILENAME_SAFE = re.compile(r"^[a-zA-Z0-9._-]+$")

@@ -20,6 +20,8 @@ export interface HubTab {
   load: () => HubPageModule;
   /** Shown only when `feature_flags[key] === true` (strict, for default-OFF flags). */
   requiresFeatureFlag?: string;
+  /** Shown when any listed flag is exactly `true` (OR). Ignored when `requiresFeatureFlag` is set. */
+  requiresAnyFeatureFlag?: string[];
   /** Hidden only when `feature_flags[key] === false` (for default-ON flags such as `mis_reports_enabled`). */
   hideWhenFeatureFlagFalse?: string;
   /** Different tab label while `feature_flags[flag] === true` (e.g. "Trial Balance" becomes "Trial Balance (Classic)"). */

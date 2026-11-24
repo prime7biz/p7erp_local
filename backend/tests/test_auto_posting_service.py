@@ -10,18 +10,35 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from app.models import Tenant, VoucherLine
+from app.models.finance import AccountingSystemMapping
 from app.modules.finance.auto_posting_service import (
+    SYSTEM_BTB_OPENING_DEBIT,
     AutoPostingLine,
     create_system_voucher,
     create_system_voucher_from_mapping,
 )
 
 
+async def _seeded_tenant(session) -> Tenant | None:
+    """A tenant that has the system COA mapping. Test tenants kept as residue may not have it, and an
+    unordered 'first tenant' lookup would then pick one of them."""
+    r = await session.execute(
+        select(Tenant)
+        .join(AccountingSystemMapping, AccountingSystemMapping.tenant_id == Tenant.id)
+        .where(
+            AccountingSystemMapping.mapping_key == SYSTEM_BTB_OPENING_DEBIT,
+            AccountingSystemMapping.ledger_id.is_not(None),
+        )
+        .order_by(Tenant.id)
+        .limit(1)
+    )
+    return r.scalars().first()
+
+
 @pytest.mark.asyncio
 async def test_create_system_voucher_from_mapping_draft(db_session_integration):
     session = db_session_integration
-    r = await session.execute(select(Tenant).limit(1))
-    tenant = r.scalars().first()
+    tenant = await _seeded_tenant(session)
     if tenant is None:
         pytest.skip("No tenant in database")
 
@@ -58,8 +75,7 @@ async def test_create_system_voucher_from_mapping_draft(db_session_integration):
 @pytest.mark.asyncio
 async def test_create_system_voucher_unbalanced_raises(db_session_integration):
     session = db_session_integration
-    r = await session.execute(select(Tenant).limit(1))
-    tenant = r.scalars().first()
+    tenant = await _seeded_tenant(session)
     if tenant is None:
         pytest.skip("No tenant in database")
 
@@ -93,8 +109,7 @@ async def test_create_system_voucher_unbalanced_raises(db_session_integration):
 @pytest.mark.asyncio
 async def test_create_system_voucher_missing_mapping_raises(db_session_integration):
     session = db_session_integration
-    r = await session.execute(select(Tenant).limit(1))
-    tenant = r.scalars().first()
+    tenant = await _seeded_tenant(session)
     if tenant is None:
         pytest.skip("No tenant in database")
 
@@ -123,8 +138,7 @@ async def test_create_system_voucher_missing_mapping_raises(db_session_integrati
 async def test_create_system_voucher_auto_post_requires_open_period(db_session_integration):
     """auto_post=True needs an open accounting period; otherwise 400."""
     session = db_session_integration
-    r = await session.execute(select(Tenant).limit(1))
-    tenant = r.scalars().first()
+    tenant = await _seeded_tenant(session)
     if tenant is None:
         pytest.skip("No tenant in database")
 

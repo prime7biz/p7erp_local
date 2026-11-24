@@ -36,6 +36,15 @@ class InquiryAiInquiryOut(BaseModel):
     commission_value: float | None
     status: str
     notes: str | None
+    inquiry_type: str | None = None
+    brand: str | None = None
+    season_year: str | None = None
+    material_composition: str | None = None
+    size_range: str | None = None
+    color_options: list[str] | None = None
+    country_of_origin: str | None = None
+    special_requirements: str | None = None
+    contact_person: str | None = None
     created_at: datetime
     updated_at: datetime
 

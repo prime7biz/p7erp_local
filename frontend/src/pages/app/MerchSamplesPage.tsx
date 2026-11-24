@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   api,
   type MerchSampleCreate,
   type MerchSampleOut,
   type OrderResponse,
   type StyleResponse,
-  type InquiryResponse,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
+import { fetchInquiryPage, hydrateInquiry } from "@/lib/remoteSelectFetchers";
 import { logApiError } from "@/utils/logApiError";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 
@@ -39,10 +40,10 @@ const STATUS_TABS: { key: string; label: string }[] = [
 ];
 
 export function MerchSamplesPage() {
+  const [searchParams] = useSearchParams();
   const [rows, setRows] = useState<MerchSampleOut[]>([]);
   const [styles, setStyles] = useState<StyleResponse[]>([]);
   const [orders, setOrders] = useState<OrderResponse[]>([]);
-  const [inquiries, setInquiries] = useState<InquiryResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -103,11 +104,22 @@ export function MerchSamplesPage() {
       .listOrders({ limit: 300, offset: 0 })
       .then((o) => setOrders(o))
       .catch((e) => logApiError("MerchSamplesPage.listOrders", e));
-    void api
-      .listInquiries({ limit: 300, offset: 0 })
-      .then((i) => setInquiries(i))
-      .catch((e) => logApiError("MerchSamplesPage.listInquiries", e));
   }, []);
+
+  // Deep link from inquiry detail: /app/merchandising/samples?inquiry_id=&style_id=
+  useEffect(() => {
+    const inqRaw = searchParams.get("inquiry_id");
+    const styleRaw = searchParams.get("style_id");
+    const inquiryId = inqRaw ? Number(inqRaw) : NaN;
+    const styleId = styleRaw ? Number(styleRaw) : NaN;
+    if (!Number.isFinite(inquiryId) && !Number.isFinite(styleId)) return;
+    setShowNew(true);
+    setForm((f) => ({
+      ...f,
+      inquiry_id: Number.isFinite(inquiryId) && inquiryId > 0 ? inquiryId : f.inquiry_id,
+      style_id: Number.isFinite(styleId) && styleId > 0 ? styleId : f.style_id,
+    }));
+  }, [searchParams]);
 
   const createSample = async () => {
     if (!form.style_id) {
@@ -371,24 +383,22 @@ export function MerchSamplesPage() {
                 />
               </label>
               <label className="block">
-                <span className="text-xs text-text-muted">Inquiry (optional)</span>
-                <select
-                  className="mt-1 w-full rounded border border-border px-2 py-1.5"
-                  value={form.inquiry_id ?? ""}
-                  onChange={(e) =>
+                <span className="mb-1 block text-xs text-text-muted">Inquiry (optional)</span>
+                <RemoteSearchSelect
+                  value={form.inquiry_id ?? null}
+                  onChange={(id) =>
                     setForm((f) => ({
                       ...f,
-                      inquiry_id: e.target.value === "" ? undefined : Number(e.target.value),
+                      inquiry_id: id === "" ? undefined : Number(id),
                     }))
                   }
-                >
-                  <option value="">—</option>
-                  {inquiries.map((q) => (
-                    <option key={q.id} value={q.id}>
-                      {q.inquiry_code}
-                    </option>
-                  ))}
-                </select>
+                  fetchPage={fetchInquiryPage}
+                  hydrateById={hydrateInquiry}
+                  placeholder="Search inquiry…"
+                  allowClear
+                  menuPortal
+                  aria-label="Inquiry"
+                />
               </label>
               <label className="block">
                 <span className="text-xs text-text-muted">Order (optional)</span>

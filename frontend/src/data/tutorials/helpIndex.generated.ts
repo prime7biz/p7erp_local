@@ -478,12 +478,21 @@ export const tutorialHelpIndex: TutorialHelpEntry[] = [
     "summary": "See every Inventory screen on one page and how a requisition becomes a PO, a GRN, stock, a material issue and finally a delivery challan and gate pass.",
     "relatedAppRoutes": [
       "/app/inventory",
+      "/app/inventory/material-control",
       "/app/inventory/purchase-orders",
       "/app/inventory/goods-receiving",
       "/app/inventory/stock-summary",
       "/app/inventory/delivery-challans",
       "/app/inventory/enhanced-gate-passes",
       "/app/procurement/requisitions"
+    ]
+  },
+  {
+    "id": "inv-material-control-hub",
+    "title": "Material Control hub (optional)",
+    "summary": "Style-first Material Control hub: today's actions, style sheet, allocation, leftover, bond/claim/RTV, watchlist, rolls/shade, and landed cost — each behind its own switch.",
+    "relatedAppRoutes": [
+      "/app/inventory/material-control"
     ]
   },
   {
@@ -879,6 +888,25 @@ export const tutorialHelpIndex: TutorialHelpEntry[] = [
     ]
   },
   {
+    "id": "mfg-production-control-center",
+    "title": "Production Control Center: TNA, machine match, cutting loss, live floor, finishing",
+    "summary": "One hub for order readiness and TNA slip warnings, OB vs line machine matching, cutting process-loss variance, live hourly sewing/quality board, and finishing-to-pack funnel.",
+    "relatedAppRoutes": [
+      "/app/production/control-center",
+      "/app/settings/config"
+    ]
+  },
+  {
+    "id": "mfg-inbound-job-work",
+    "title": "Inbound Job Work (CMT): customer materials, produce, deliver, bill CM",
+    "summary": "When another factory sends free materials for cutting/sewing/finishing, track the contract, zero-value materials, delivery, one CM rate bill, cash/bank receipt, then close.",
+    "relatedAppRoutes": [
+      "/app/production/job-work",
+      "/app/production/job-work/new",
+      "/app/settings/config"
+    ]
+  },
+  {
     "id": "mfg-efficiency-reports",
     "title": "Measure production: overview KPIs, efficiency report, WIP and Cost & CM",
     "summary": "Read today's output and efficiency per line, downtime and OEE-like figures, WIP journal vouchers and CM analysis.",
@@ -1195,6 +1223,16 @@ export const tutorialHelpIndex: TutorialHelpEntry[] = [
       "/app/hr/leave/requests",
       "/app/hr/leave/approvals",
       "/app/hr/leave/calendar"
+    ]
+  },
+  {
+    "id": "hr-class-requests",
+    "title": "HR Class requests (voucher-style approvals)",
+    "summary": "When User authority classes is on, Class 3/4 enter HR changes, Class 2 recommends, and a different Class 1 approves — including new employee login (ESS or ERP).",
+    "relatedAppRoutes": [
+      "/app/hr/requests",
+      "/app/hr/class-requests",
+      "/app/hr/my"
     ]
   },
   {

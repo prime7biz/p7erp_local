@@ -53,10 +53,15 @@ from app.modules.global_search.router import router as global_search_router
 from app.modules.notifications.router import router as notifications_router
 from app.modules.onboarding.router import router as onboarding_router
 from app.modules.production.router import router as production_router
+from app.modules.job_work.router import router as job_work_router
+from app.modules.material_control.router import router as material_control_router
+from app.modules.material_control.allocation_router import router as material_control_ops_router
 from app.modules.hr.router import router as hr_router
 from app.modules.hr.compensation_router import router as hr_compensation_router
 from app.modules.hr.onboarding_router import router as hr_onboarding_router
 from app.modules.hr_change_requests.router import router as hr_change_requests_router
+from app.modules.hr_class_requests.router import ess_router as hr_class_ess_router
+from app.modules.hr_class_requests.router import router as hr_class_requests_router
 from app.modules.authority_inbox.router import router as authority_inbox_router
 from app.modules.hr_manpower.router import router as hr_manpower_router
 from app.modules.hr_attendance.router import router as hr_attendance_router
@@ -371,6 +376,8 @@ app.include_router(mrp_idt_router, prefix=settings.api_v1_prefix, dependencies=_
 app.include_router(grn_qc_router, prefix=settings.api_v1_prefix, dependencies=_inventory_access)
 app.include_router(inventory_analytics_router, prefix=settings.api_v1_prefix, dependencies=_inventory_access)
 app.include_router(serial_kit_consignment_router, prefix=settings.api_v1_prefix, dependencies=_inventory_access)
+app.include_router(material_control_router, prefix=settings.api_v1_prefix, dependencies=_inventory_access)
+app.include_router(material_control_ops_router, prefix=settings.api_v1_prefix, dependencies=_inventory_access)
 app.include_router(finance_router, prefix=settings.api_v1_prefix)
 app.include_router(party_ledger_router, prefix=settings.api_v1_prefix, dependencies=_finance_access)
 app.include_router(gst_tax_router, prefix=settings.api_v1_prefix, dependencies=_finance_access)
@@ -387,6 +394,11 @@ app.include_router(
 app.include_router(facility_router, prefix=settings.api_v1_prefix)
 app.include_router(manufacturing_router, prefix=settings.api_v1_prefix)
 app.include_router(production_router, prefix=settings.api_v1_prefix)
+app.include_router(
+    job_work_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("production.access"))],
+)
 app.include_router(
     hr_router,
     prefix=settings.api_v1_prefix,
@@ -406,6 +418,16 @@ app.include_router(
     hr_change_requests_router,
     prefix=settings.api_v1_prefix,
     dependencies=[Depends(require_internal_permission("hr.access"))],
+)
+app.include_router(
+    hr_class_requests_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("hr.access"))],
+)
+app.include_router(
+    hr_class_ess_router,
+    prefix=settings.api_v1_prefix,
+    # ESS endpoints enforce require_ess_access() per-route (ess or hr + linked employee).
 )
 app.include_router(
     hr_manpower_router,

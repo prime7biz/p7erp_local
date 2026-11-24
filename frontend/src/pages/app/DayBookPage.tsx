@@ -1,14 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollTableCard } from "@/components/finance/kit";
 import { Link, useNavigate } from "react-router-dom";
-import { api, type AccountGroupResponse, type ChartOfAccountResponse, type DayBookResponse } from "@/api/client";
+import { api, type AccountGroupResponse, type DayBookResponse } from "@/api/client";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
 import { voucherHref } from "@/lib/financeDrilldown";
 import { downloadCsv, downloadXlsx, printCurrentPage } from "@/lib/reportExport";
 import { startOfMonthLocalISO, todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
-import { getChartOfAccountsCached, getAccountGroupsCached } from "@/lib/masterData";
+import { getAccountGroupsCached } from "@/lib/masterData";
+import { fetchChartAccountPage, hydrateChartAccount } from "@/lib/remoteSelectFetchers";
 import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 const CTL =
@@ -30,7 +33,6 @@ export function DayBookPage() {
   const [partyName, setPartyName] = useState("");
   const [voucherTypes, setVoucherTypes] = useState<string[]>([]);
   const [groups, setGroups] = useState<AccountGroupResponse[]>([]);
-  const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
   const [compactView, setCompactView] = useState(false);
   const [data, setData] = useState<DayBookResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,22 +66,24 @@ export function DayBookPage() {
 
   async function loadMeta() {
     try {
-      const [types, accountGroups, chartAccounts] = await Promise.all([
+      const [types, accountGroups] = await Promise.all([
         api.getVoucherTypesMeta(),
         getAccountGroupsCached(),
-        getChartOfAccountsCached({ active_only: true }),
       ]);
       setVoucherTypes(types);
       setGroups(accountGroups);
-      setAccounts(chartAccounts);
     } catch (e) {
       logApiError("DayBookPage.loadMeta", e);
       // Keep day book usable even if metadata call fails.
       setVoucherTypes([]);
       setGroups([]);
-      setAccounts([]);
     }
   }
+
+  const groupSelectOptions = useMemo(
+    () => groups.map((g) => ({ value: g.id, label: `${g.code} - ${g.name}` })),
+    [groups],
+  );
 
   useEffect(() => {
     void loadMeta();
@@ -152,22 +156,25 @@ export function DayBookPage() {
               </option>
             ))}
           </select>
-          <select className={CTL} value={groupId} onChange={(e) => setGroupId(e.target.value ? Number(e.target.value) : "")}>
-            <option value="">All Groups</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.code} - {g.name}
-              </option>
-            ))}
-          </select>
-          <select className={CTL} value={accountId} onChange={(e) => setAccountId(e.target.value ? Number(e.target.value) : "")}>
-            <option value="">All Accounts</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.account_number} - {a.name}
-              </option>
-            ))}
-          </select>
+          <LocalSearchSelect
+            className="min-w-[12rem]"
+            value={groupId}
+            options={groupSelectOptions}
+            onChange={(next) => setGroupId(next === "" ? "" : Number(next))}
+            placeholder="All groups"
+            allowClear
+            aria-label="Filter by group"
+          />
+          <RemoteSearchSelect
+            className="min-w-[14rem]"
+            value={accountId}
+            onChange={(next) => setAccountId(next === "" ? "" : next)}
+            fetchPage={fetchChartAccountPage}
+            hydrateById={hydrateChartAccount}
+            placeholder="All accounts"
+            allowClear
+            aria-label="Filter by account"
+          />
           <input
             className={CTL}
             placeholder="Party/Ref contains..."

@@ -537,6 +537,7 @@ export function SalaryTab({
                   <SelectField
                     label="Salary structure"
                     required
+                    searchable
                     value={salary.structure_id ? String(salary.structure_id) : ""}
                     onChange={(v) => onSalaryChange({ structure_id: v ? Number(v) : null })}
                     options={structureOptions}
@@ -551,6 +552,7 @@ export function SalaryTab({
                   />
                   <SelectField
                     label="Bangladesh wage grade"
+                    searchable
                     value={salary.bd_wage_rate_id ? String(salary.bd_wage_rate_id) : ""}
                     onChange={(v) => onSalaryChange({ bd_wage_rate_id: v ? Number(v) : null })}
                     options={gradeOptions}

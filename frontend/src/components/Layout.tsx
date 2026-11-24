@@ -64,19 +64,22 @@ export function Layout() {
   const paletteRoutes = useMemo(() => {
     if (!me) return [];
     const canViewConfidentialReports = me.can_view_pnl_balance_sheet !== false;
+    const authorityOn = me.authority_classes_enabled === true;
     const filtered = filterVisibleMenuSections(menuSections, {
       tenantType: me.tenant_type,
       enabledOptionalProductionUnits: enabledOptionalUnits,
       featureFlags: me.feature_flags,
       hasPermission,
       canViewConfidentialReports,
+      authorityClassesEnabled: authorityOn,
+      moduleGrants: me.module_grants,
     });
     const rows = flattenMenuRoutes(filtered);
     // HR pages live as tabs inside hubs; list each tab so it stays searchable in the palette.
     const withHr = filtered.some((s) => s.section === "HR") ? [...rows, ...hrTabPaletteRoutes(me.feature_flags)] : rows;
     // Same for Finance when the hubs are switched on (finance_hubs_v2).
     if (!isFinanceHubsV2Enabled(me.feature_flags) || !filtered.some((s) => s.section === "Finance")) return withHr;
-    const canAccess = (key: string) => isMenuPermissionAllowed(key, me.feature_flags, hasPermission);
+    const canAccess = (key: string) => isMenuPermissionAllowed(key, me.feature_flags, hasPermission, authorityOn);
     return [...withHr, ...financeTabPaletteRoutes(me.feature_flags, canAccess, { canViewConfidentialReports })];
   }, [me, enabledOptionalUnits, hasPermission]);
 
@@ -132,6 +135,8 @@ export function Layout() {
           featureFlags={me.feature_flags}
           hasPermission={hasPermission}
           canViewConfidentialReports={me.can_view_pnl_balance_sheet !== false}
+          authorityClassesEnabled={me.authority_classes_enabled === true}
+          moduleGrants={me.module_grants}
           compact={appShellV2}
         />
       </div>
@@ -188,6 +193,8 @@ export function Layout() {
         featureFlags={me.feature_flags}
         hasPermission={hasPermission}
         canViewConfidentialReports={me.can_view_pnl_balance_sheet !== false}
+        authorityClassesEnabled={me.authority_classes_enabled === true}
+        moduleGrants={me.module_grants}
       />
     </div>
   );

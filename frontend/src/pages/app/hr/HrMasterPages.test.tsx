@@ -105,18 +105,19 @@ describe("HrDesignationsPage", () => {
     expect(await screen.findByText("Operator")).toBeTruthy();
     expect(screen.getByText("Helper")).toBeTruthy();
     expect(screen.queryByText("Driver")).toBeNull();
-    expect((screen.getByRole("combobox", { name: "Department" }) as HTMLSelectElement).value).toBe("1");
+    expect((screen.getByRole("combobox", { name: "Department" }) as HTMLInputElement).value).toBe("DEPT-1 - Sewing");
   });
 
   it("follows the address: the drop-down updates it and a plain sidebar link clears the filter", async () => {
     const user = userEvent.setup();
     renderAt("/app/hr/designations");
     await screen.findByText("Driver");
-    await user.selectOptions(screen.getByRole("combobox", { name: "Department" }), "1");
+    await user.click(screen.getByRole("combobox", { name: "Department" }));
+    await user.click(screen.getByRole("option", { name: "DEPT-1 - Sewing" }));
     expect(screen.queryByText("Driver")).toBeNull();
     await user.click(screen.getByRole("link", { name: "Sidebar designations" }));
     expect(await screen.findByText("Driver")).toBeTruthy();
-    expect((screen.getByRole("combobox", { name: "Department" }) as HTMLSelectElement).value).toBe("");
+    expect((screen.getByRole("combobox", { name: "Department" }) as HTMLInputElement).value).toBe("");
   });
 
   it("falls back to all designations for an unknown department id", async () => {

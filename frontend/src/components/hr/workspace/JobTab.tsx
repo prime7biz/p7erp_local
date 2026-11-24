@@ -148,6 +148,7 @@ export function JobTab({
         />
         <SelectField
           label="Reporting manager"
+          searchable
           value={form.reporting_manager_id ? String(form.reporting_manager_id) : ""}
           onChange={(v) => setField("reporting_manager_id", v ? Number(v) : null)}
           options={managers.map((m) => ({ value: String(m.id), label: `${m.employee_code} — ${m.first_name} ${m.last_name ?? ""}`.trim() }))}

@@ -9,26 +9,38 @@ from sqlalchemy.types import String
 
 from app.models import (
     Bom,
+    CommercialInvoice,
+    CommissionEntry,
+    CommissionRule,
+    CommissionStatement,
     CrewRosterWeekly,
     CurrencyExchangeRate,
     CustomerIntermediary,
+    DeliveryChallan,
     DeliveryChallanOrder,
+    ExportCase,
     ExternalCustomerAccess,
+    FollowupActionTemplate,
     GarmentStyle,
     GoodsReceiving,
     Inquiry,
     InquiryEvent,
+    JobWorkContract,
     KnittingWorkOrder,
     LineCrewDaily,
     LineCrewSheetHeader,
     LineCrewTemplate,
     ManufacturingWorkOrder,
+    MasterContract,
     MerchSampleRequest,
     MfgMaterialSupplyPegging,
     MfgTentativeLineBooking,
     Order,
     OrderAmendment,
     OrderFollowupAction,
+    OutstandingBill,
+    PartyLedger,
+    PrincipalMaterialClaim,
     ProcessOrder,
     ProcessOrderCostLine,
     ProductionCrewRole,
@@ -49,6 +61,7 @@ from app.models import (
     UnitCrewDaily,
     UnitCrewTemplate,
     VendorBill,
+    WastageThresholdRule,
 )
 
 
@@ -125,6 +138,124 @@ async def ensure_customer_deletable(db: AsyncSession, tenant_id: int, customer_i
         "knitting work orders",
         KnittingWorkOrder,
         KnittingWorkOrder.customer_id == customer_id,
+    )
+    await _append_count(
+        db,
+        tenant_id,
+        reasons,
+        "commercial invoices",
+        CommercialInvoice,
+        CommercialInvoice.customer_id == customer_id,
+    )
+    await _append_count(
+        db,
+        tenant_id,
+        reasons,
+        "party ledgers",
+        PartyLedger,
+        PartyLedger.customer_id == customer_id,
+    )
+    await _append_count(
+        db,
+        tenant_id,
+        reasons,
+        "job work contracts",
+        JobWorkContract,
+        or_(
+            JobWorkContract.customer_id == customer_id,
+            JobWorkContract.final_customer_id == customer_id,
+        ),
+    )
+    await _append_count(
+        db,
+        tenant_id,
+        reasons,
+        "principal material claims",
+        PrincipalMaterialClaim,
+        PrincipalMaterialClaim.customer_id == customer_id,
+    )
+    await _append_count(
+        db,
+        tenant_id,
+        reasons,
+        "commission rules",
+        CommissionRule,
+        CommissionRule.customer_id == customer_id,
+    )
+    await _append_count(
+        db,
+        tenant_id,
+        reasons,
+        "commission entries",
+        CommissionEntry,
+        CommissionEntry.counterparty_type == "CUSTOMER",
+        CommissionEntry.counterparty_id == customer_id,
+    )
+    await _append_count(
+        db,
+        tenant_id,
+        reasons,
+        "commission statements",
+        CommissionStatement,
+        CommissionStatement.counterparty_type == "CUSTOMER",
+        CommissionStatement.counterparty_id == customer_id,
+    )
+    await _append_count(
+        db,
+        tenant_id,
+        reasons,
+        "follow-up action templates",
+        FollowupActionTemplate,
+        FollowupActionTemplate.buyer_id == customer_id,
+    )
+    await _append_count(
+        db,
+        tenant_id,
+        reasons,
+        "buyer wastage rules",
+        WastageThresholdRule,
+        WastageThresholdRule.scope_type == "buyer",
+        WastageThresholdRule.scope_id == customer_id,
+    )
+    await _append_count(
+        db,
+        tenant_id,
+        reasons,
+        "master contracts",
+        MasterContract,
+        MasterContract.customer_id == customer_id,
+    )
+    await _append_count(
+        db,
+        tenant_id,
+        reasons,
+        "proforma invoices",
+        ProformaInvoice,
+        ProformaInvoice.customer_id == customer_id,
+    )
+    await _append_count(
+        db,
+        tenant_id,
+        reasons,
+        "export cases",
+        ExportCase,
+        ExportCase.customer_id == customer_id,
+    )
+    await _append_count(
+        db,
+        tenant_id,
+        reasons,
+        "delivery challans",
+        DeliveryChallan,
+        DeliveryChallan.customer_id == customer_id,
+    )
+    await _append_count(
+        db,
+        tenant_id,
+        reasons,
+        "outstanding bills",
+        OutstandingBill,
+        OutstandingBill.customer_id == customer_id,
     )
     order_ids = select(Order.id).where(Order.tenant_id == tenant_id, Order.customer_id == customer_id)
     await _append_count(

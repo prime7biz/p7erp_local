@@ -12,6 +12,7 @@ import {
   CalendarClock,
   CircleDollarSign,
   ClipboardCheck,
+  ClipboardList,
   DoorOpen,
   Gavel,
   Gift,
@@ -59,6 +60,8 @@ const pages = {
   myLeave: () => import("@/pages/app/hr/ess/HrMyLeavePage").then((m) => ({ default: m.HrMyLeavePage })),
   myPayslips: () => import("@/pages/app/hr/ess/HrMyPayslipsPage").then((m) => ({ default: m.HrMyPayslipsPage })),
   myTickets: () => import("@/pages/app/hr/ess/HrEssTicketsPage").then((m) => ({ default: m.HrEssTicketsPage })),
+  classRequests: () =>
+    import("@/pages/app/hr/requests/HrClassRequestsPage").then((m) => ({ default: m.HrClassRequestsPage })),
   attendanceEntries: () =>
     import("@/pages/app/hr/attendance/HrAttendanceEntryPage").then((m) => ({ default: m.HrAttendanceEntryPage })),
   attendanceManual: () =>
@@ -185,6 +188,30 @@ export const HR_HUBS = [
       { id: "leave", label: "Leave", legacyPath: "hr/ess/leave", load: pages.myLeave },
       { id: "payslips", label: "Payslips", legacyPath: "hr/ess/payslips", load: pages.myPayslips },
       { id: "tickets", label: "Tickets", legacyPath: "hr/ess/tickets", load: pages.myTickets },
+      {
+        id: "my-requests",
+        label: "My requests",
+        legacyPath: "hr/ess/my-requests",
+        load: pages.classRequests,
+        requiresFeatureFlag: "user_authority_classes_v1",
+      },
+    ],
+  },
+  {
+    id: "requests",
+    path: "hr/requests",
+    label: "HR Requests",
+    description: "Voucher-style new employee, leave, salary and exit requests (Class 2 recommend, Class 1 approve).",
+    icon: ClipboardList,
+    audience: "staff",
+    tabs: [
+      {
+        id: "inbox",
+        label: "Requests & approvals",
+        legacyPath: "hr/class-requests",
+        load: pages.classRequests,
+        // Hub itself is gated in the sidebar; keep one always-visible tab so hub contract tests pass.
+      },
     ],
   },
   {

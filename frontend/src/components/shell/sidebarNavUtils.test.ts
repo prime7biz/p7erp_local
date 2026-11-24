@@ -31,6 +31,43 @@ describe("filterVisibleMenuSections", () => {
     expect(sectionNames(visible)).toContain("Settings");
   });
 
+  it("with authority classes ON, ESS-only users see only My HR under HR", () => {
+    const hasPermission = (key: string) => key === "ess.access" || key.startsWith("ess.");
+    const visible = filterVisibleMenuSections(menuSections, {
+      tenantType: "both",
+      enabledOptionalProductionUnits: [],
+      featureFlags: {},
+      hasPermission,
+      authorityClassesEnabled: true,
+      moduleGrants: ["ess"],
+    });
+    expect(sectionNames(visible)).toContain("HR");
+    expect(sectionNames(visible)).not.toContain("Finance");
+    expect(sectionNames(visible)).not.toContain("Settings");
+    expect(sectionNames(visible)).not.toContain("Inventory");
+    const hr = visible.find((s) => s.section === "HR");
+    const hrHrefs = [
+      ...(hr?.items.map((i) => i.href) ?? []),
+      ...((hr?.subsections ?? []).flatMap((sub) => sub.items.map((i) => i.href)) ?? []),
+    ];
+    expect(hrHrefs).toEqual(["/app/hr/my"]);
+  });
+
+  it("with authority classes ON and soft RBAC off, module grants still hide sections", () => {
+    const hasPermission = (key: string) => key.startsWith("hr.");
+    const visible = filterVisibleMenuSections(menuSections, {
+      tenantType: "both",
+      enabledOptionalProductionUnits: [],
+      featureFlags: {},
+      hasPermission,
+      authorityClassesEnabled: true,
+      moduleGrants: ["hr"],
+    });
+    expect(sectionNames(visible)).toContain("HR");
+    expect(sectionNames(visible)).not.toContain("Finance");
+    expect(sectionNames(visible)).not.toContain("Settings");
+  });
+
   it("hides a section whose permission is denied while RBAC is enforced", () => {
     const visible = filterVisibleMenuSections(menuSections, {
       tenantType: "both",

@@ -417,6 +417,11 @@ class HourlyEntryUpsert(BaseModel):
     remarks: str | None = None
 
 
+class HourlyBulkUpsert(BaseModel):
+    request_id: str | None = Field(None, min_length=8, max_length=64)
+    entries: list[HourlyEntryUpsert] = Field(..., min_length=1, max_length=200)
+
+
 # --- Cutting ---
 class MarkerPlanCreate(BaseModel):
     order_id: int | None = None

@@ -5,9 +5,13 @@
  */
 import type { ProfitEntityKind } from "@/api/financeControl";
 import { commercialApi } from "@/api/commercial";
-import { merchApi } from "@/api/merch";
 import type { RemoteSelectOption } from "@/hooks/useRemotePaginatedSearch";
-import { fetchCustomerPage, hydrateCustomer } from "@/lib/remoteSelectFetchers";
+import {
+  fetchCustomerPage,
+  fetchStylePage,
+  hydrateCustomer,
+  hydrateStyle,
+} from "@/lib/remoteSelectFetchers";
 import { logApiError } from "@/utils/logApiError";
 
 export type EntityPickKind = Exclude<ProfitEntityKind, "orders">;
@@ -20,28 +24,7 @@ export const ENTITY_KINDS: { kind: EntityPickKind; label: string; placeholder: s
 
 type Page = Promise<{ options: RemoteSelectOption[]; total: number }>;
 
-export async function fetchStylePage(query: string, page: number, pageSize: number): Page {
-  const res = await merchApi.listStylesWithTotal({
-    search: query || undefined,
-    limit: pageSize,
-    offset: (page - 1) * pageSize,
-  });
-  return {
-    options: res.rows.map((s) => ({ value: s.id, label: `${s.style_code} · ${s.name}`, meta: s })),
-    // The server may not send a total; then assume one more page when this page is full.
-    total: res.total ?? (page - 1) * pageSize + res.rows.length + (res.rows.length === pageSize ? 1 : 0),
-  };
-}
-
-export async function hydrateStyle(id: number): Promise<RemoteSelectOption | null> {
-  try {
-    const s = await merchApi.getStyle(id);
-    return { value: s.id, label: `${s.style_code} · ${s.name}`, meta: s };
-  } catch (e) {
-    logApiError("entityFetchers.hydrateStyle", e);
-    return null;
-  }
-}
+export { fetchStylePage, hydrateStyle };
 
 function contractLabel(c: { reference?: string; buyer_name?: string | null; contract_type?: string }): string {
   const type = c.contract_type === "EXPORT_LC" ? "LC" : c.contract_type === "SALES_CONTRACT" ? "Contract" : "";

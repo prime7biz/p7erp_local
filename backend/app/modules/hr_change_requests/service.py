@@ -29,6 +29,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.authz import get_user_role_scoped_to_tenant
+from app.common.authority.hr_policy import assert_hr_request_required
 from app.common.pagination import MAX_PAGE_SIZE
 from app.common.permissions import (
     PERMISSION_HR_EMPLOYEE_CHANGE_TIER1,
@@ -144,10 +145,13 @@ async def current_values(db: AsyncSession, tenant_id: int, row: Employee, kind: 
 # --- apply ------------------------------------------------------------------------------------------
 
 
-async def _apply(
+async def apply_part(
     db: AsyncSession, *, tenant: Tenant, actor: User, audit_user_id: int, row: Employee, kind: str, body: BaseModel
 ) -> None:
-    """Write the change through the same functions the direct endpoints use. Raises HTTPException if refused."""
+    """Write the change through the same functions the direct endpoints use. Raises HTTPException if refused.
+
+    Public for HR class-request INCREMENT / PROMOTION / CORRECTION apply.
+    """
     if kind == "INFO":
         payload = _body_values(kind, body)
         await employee_update_service.apply_employee_update(
@@ -207,11 +211,13 @@ async def _apply(
     )
 
 
-async def _dry_run(db: AsyncSession, *, tenant: Tenant, actor: User, row: Employee, kind: str, body: BaseModel) -> None:
+async def dry_run_part(
+    db: AsyncSession, *, tenant: Tenant, actor: User, row: Employee, kind: str, body: BaseModel
+) -> None:
     """Run the full apply inside a savepoint and always undo it: a bad request fails now, not at Tier 2."""
     savepoint = await db.begin_nested()
     try:
-        await _apply(db, tenant=tenant, actor=actor, audit_user_id=actor.id, row=row, kind=kind, body=body)
+        await apply_part(db, tenant=tenant, actor=actor, audit_user_id=actor.id, row=row, kind=kind, body=body)
         await db.flush()
     except IntegrityError as exc:
         await savepoint.rollback()
@@ -220,6 +226,11 @@ async def _dry_run(db: AsyncSession, *, tenant: Tenant, actor: User, row: Employ
         await savepoint.rollback()
         raise
     await savepoint.rollback()
+
+
+# Back-compat aliases for in-module callers.
+_apply = apply_part
+_dry_run = dry_run_part
 
 
 # --- permissions ------------------------------------------------------------------------------------
@@ -297,6 +308,8 @@ async def submit(
     request_id: str,
 ) -> tuple[HrEmployeeChangeRequest, bool]:
     """Returns (request, created). A retry with the same ``request_id`` returns the stored request."""
+    # Fixed-class authority replaces Tier1/Tier2 with HR class vouchers.
+    await assert_hr_request_required(db, user, tenant)
     _require_flag(tenant)
     existing = (
         await db.execute(
@@ -364,6 +377,7 @@ async def submit(
 async def decide(
     db: AsyncSession, *, tenant: Tenant, user: User, request_pk: int, tier: int, decision: str, note: str | None
 ) -> HrEmployeeChangeRequest:
+    await assert_hr_request_required(db, user, tenant)
     _require_flag(tenant)
     decision = (decision or "").strip().upper()
     if decision not in ("APPROVE", "REJECT"):
@@ -467,6 +481,7 @@ async def _apply_approved(db: AsyncSession, *, tenant: Tenant, approver: User, r
 
 
 async def cancel(db: AsyncSession, *, tenant: Tenant, user: User, request_pk: int) -> HrEmployeeChangeRequest:
+    await assert_hr_request_required(db, user, tenant)
     req = await _request_locked(db, tenant.id, request_pk)
     if req.status == "CANCELLED":
         return req

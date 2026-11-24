@@ -91,7 +91,10 @@ async def start_onboarding(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+
     _ensure_tenant(user, tenant)
+    await assert_hr_request_required(db, user, tenant)
     run = await svc.start_onboarding(db, tenant=tenant, user=user, body=body)
     return await _run_out(db, tenant, user, run)
 
@@ -125,7 +128,10 @@ async def resume_onboarding(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+
     _ensure_tenant(user, tenant)
+    await assert_hr_request_required(db, user, tenant)
     run = await svc.continue_onboarding(db, tenant=tenant, user=user, request_id=request_id, steps=body)
     return await _run_out(db, tenant, user, run)
 

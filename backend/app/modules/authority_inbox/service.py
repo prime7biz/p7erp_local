@@ -460,7 +460,15 @@ async def build_inbox(
     if not enabled:
         return {
             "authority_classes_enabled": False,
-            "counts": {"verify": 0, "recommend": 0, "approve": 0, "class1_pending": 0, "change_requests": 0},
+            "counts": {
+                "verify": 0,
+                "recommend": 0,
+                "approve": 0,
+                "class1_pending": 0,
+                "change_requests": 0,
+                "hr_class_recommend": 0,
+                "hr_class_approve": 0,
+            },
             "waiting_for_me": [],
             "my_requests": [],
         }
@@ -469,7 +477,15 @@ async def build_inbox(
     modules = await load_user_module_codes(db, tenant_id=tenant_id, user_id=user.id)
     has_finance = bool(getattr(user, "is_tenant_super_admin", False)) or user_has_module(modules, "finance")
     waiting: list[dict[str, Any]] = []
-    counts = {"verify": 0, "recommend": 0, "approve": 0, "class1_pending": 0, "change_requests": 0}
+    counts = {
+        "verify": 0,
+        "recommend": 0,
+        "approve": 0,
+        "class1_pending": 0,
+        "change_requests": 0,
+        "hr_class_recommend": 0,
+        "hr_class_approve": 0,
+    }
 
     if has_finance:
         if cls in {AUTHORITY_CLASS_3, AUTHORITY_CLASS_1, AUTHORITY_SUPER}:
@@ -671,6 +687,74 @@ async def build_inbox(
             }
         )
 
+    # HR class requests (voucher-style)
+    counts["hr_class_recommend"] = 0
+    counts["hr_class_approve"] = 0
+    has_hr = bool(getattr(user, "is_tenant_super_admin", False)) or user_has_module(modules, "hr")
+    if has_hr:
+        from app.models.hr_class_request import HrClassRequest
+        from app.modules.hr_class_requests.masking import mask_mapping
+
+        if cls in {AUTHORITY_CLASS_2, AUTHORITY_SUPER}:
+            hr_rec = (
+                await db.execute(
+                    select(HrClassRequest)
+                    .where(
+                        HrClassRequest.tenant_id == tenant_id,
+                        HrClassRequest.status == "SUBMITTED",
+                        or_(HrClassRequest.entered_by.is_(None), HrClassRequest.entered_by != user.id),
+                    )
+                    .order_by(HrClassRequest.id.desc())
+                    .limit(limit)
+                )
+            ).scalars().all()
+            counts["hr_class_recommend"] = len(hr_rec)
+            for r in hr_rec:
+                waiting.append(
+                    {
+                        "kind": "hr_class_recommend",
+                        "id": r.id,
+                        "number": r.request_no,
+                        "date": r.created_at.date().isoformat() if r.created_at else "",
+                        "status": r.status,
+                        "hr_kind": r.kind,
+                        "href": f"/app/hr/requests?id={r.id}",
+                        "actions": ["recommend", "return", "reject"],
+                        "payload": mask_mapping(r.payload or {}, can_view_pay=False, can_view_identity=False),
+                        "reason": r.reason,
+                    }
+                )
+        if cls in {AUTHORITY_CLASS_1, AUTHORITY_SUPER}:
+            hr_appr = (
+                await db.execute(
+                    select(HrClassRequest)
+                    .where(
+                        HrClassRequest.tenant_id == tenant_id,
+                        HrClassRequest.status.in_(("RECOMMENDED", "APPROVED", "FAILED")),
+                        or_(HrClassRequest.entered_by.is_(None), HrClassRequest.entered_by != user.id),
+                        or_(HrClassRequest.recommended_by.is_(None), HrClassRequest.recommended_by != user.id),
+                    )
+                    .order_by(HrClassRequest.id.desc())
+                    .limit(limit)
+                )
+            ).scalars().all()
+            counts["hr_class_approve"] = len(hr_appr)
+            for r in hr_appr:
+                waiting.append(
+                    {
+                        "kind": "hr_class_approve",
+                        "id": r.id,
+                        "number": r.request_no,
+                        "date": r.created_at.date().isoformat() if r.created_at else "",
+                        "status": r.status,
+                        "hr_kind": r.kind,
+                        "href": f"/app/hr/requests?id={r.id}",
+                        "actions": ["approve", "return", "reject", "retry"] if r.status in {"APPROVED", "FAILED"} else ["approve", "return", "reject"],
+                        "payload": mask_mapping(r.payload or {}, can_view_pay=False, can_view_identity=False),
+                        "reason": r.reason,
+                    }
+                )
+
     mine = await list_change_requests(
         db, tenant_id=tenant_id, user=user, feature_flags=feature_flags, scope="mine", limit=limit
     )
@@ -702,4 +786,12 @@ async def count_waiting_for_user(
         return 0
     inbox = await build_inbox(db, tenant_id=tenant_id, user=user, feature_flags=feature_flags, limit=200)
     c = inbox["counts"]
-    return int(c.get("verify", 0) + c.get("recommend", 0) + c.get("approve", 0) + c.get("class1_pending", 0) + c.get("change_requests", 0))
+    return int(
+        c.get("verify", 0)
+        + c.get("recommend", 0)
+        + c.get("approve", 0)
+        + c.get("class1_pending", 0)
+        + c.get("change_requests", 0)
+        + c.get("hr_class_recommend", 0)
+        + c.get("hr_class_approve", 0)
+    )

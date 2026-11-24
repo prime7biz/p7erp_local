@@ -55,6 +55,31 @@ def _guard(user: User, tenant: Tenant) -> None:
     require_integrated_enabled(tenant)
 
 
+def _machine_match_guard(user: User, tenant: Tenant) -> None:
+    """Read-only machine-match GETs: allow Control Center OR integrated planning parents.
+
+    Requires ``mfg_machine_match_v1`` and either ``prod_control_center_v1`` or the usual
+    ``manufacturing_intelligence_v1`` + ``mfg_integrated_planning_v1`` pair. Write routes
+    (plan-swap) still use ``_guard``.
+    """
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    from app.common.tenant_feature_keys import (
+        is_manufacturing_intelligence_v1_enabled,
+        is_mfg_machine_match_v1_enabled,
+        is_prod_control_center_v1_enabled,
+    )
+    from app.modules.mfg_intelligence.flags import integrated_planning_on
+
+    if not is_mfg_machine_match_v1_enabled(tenant.feature_flags):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if is_prod_control_center_v1_enabled(tenant.feature_flags):
+        return
+    if is_manufacturing_intelligence_v1_enabled(tenant.feature_flags) and integrated_planning_on(tenant):
+        return
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+
 async def _employee_out(db: AsyncSession, tenant_id: int, row: Any) -> dict[str, Any]:
     return (await las.employee_assignments_out(db, tenant_id, [row]))[0]
 
@@ -346,4 +371,69 @@ async def put_style_standard_smv(
         await db.commit()
     out = await _smv_out_with_name(db, tenant.id, style)
     out["changed"] = changed
+    return out
+
+
+# ------------------------------------------------------------------ machine match / plan-swap (flag mfg_machine_match_v1)
+
+
+@router.get("/machine-match/lines")
+async def machine_match_rank_lines(
+    order_id: int = Query(..., ge=1),
+    on_date: date | None = Query(None),
+    factory_unit: str | None = Query(None, max_length=64),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Rank active sewing lines by OB machine-content similarity for an order (read-only)."""
+    _machine_match_guard(user, tenant)
+    from app.common.business_date import today_local
+    from app.modules.mfg_intelligence import machine_match_service as mms
+
+    d = on_date or today_local(tenant)
+    items = await mms.rank_lines_for_order(
+        db, tenant=tenant, order_id=order_id, on_date=d, factory_unit=factory_unit
+    )
+    return {"order_id": order_id, "on_date": d.isoformat(), "items": items}
+
+
+@router.get("/lines/{line_id}/machine-gap")
+async def machine_gap(
+    line_id: int,
+    order_id: int = Query(..., ge=1),
+    on_date: date | None = Query(None),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _machine_match_guard(user, tenant)
+    from app.common.business_date import today_local
+    from app.modules.mfg_intelligence import machine_match_service as mms
+
+    d = on_date or today_local(tenant)
+    return await mms.machine_gap_for_line(
+        db, tenant=tenant, line_id=line_id, order_id=order_id, on_date=d
+    )
+
+
+@router.post("/machine-assignments/plan-swap", dependencies=[_WRITE], status_code=201)
+async def machine_plan_swap(
+    body: dict[str, Any],
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Move machines onto a target line (idempotent request_id)."""
+    _guard(user, tenant)
+    from app.common.tenant_feature_keys import is_mfg_machine_match_v1_enabled
+    from app.modules.production.machine_swap_service import MachineSwapPlanIn, plan_swap
+
+    if not is_mfg_machine_match_v1_enabled(tenant.feature_flags):
+        raise HTTPException(status_code=404, detail="Not found")
+    parsed = MachineSwapPlanIn.model_validate(body)
+    out = await plan_swap(db, tenant=tenant, user=user, body=parsed)
+    await db.commit()
+    status_code = 200 if out.get("replay") else 201
+    # FastAPI status_code is fixed; return replay flag for clients.
     return out

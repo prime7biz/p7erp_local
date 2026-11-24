@@ -96,6 +96,11 @@ const preview = (p: Partial<HrCompensationPreview>): HrCompensationPreview => ({
 });
 const openEdit = { ...emptySalaryForm(), enabled: true };
 
+async function pickOption(user: ReturnType<typeof userEvent.setup>, label: string, optionName: string | RegExp) {
+  await user.click(screen.getByLabelText(label));
+  await user.click(screen.getByRole("option", { name: optionName }));
+}
+
 describe("Employment & Salary: salary set-up", () => {
   it("create: salary set-up is optional and the start date follows the joining date", async () => {
     const user = userEvent.setup();
@@ -120,8 +125,8 @@ describe("Employment & Salary: salary set-up", () => {
     const user = userEvent.setup();
     previewHrCompensation.mockResolvedValue(preview({ basic: "7050.0000", gross: "12500.0000" }));
     render(<Harness initialSalary={{ ...emptySalaryForm(), enabled: true }} />);
-    await user.selectOptions(screen.getByLabelText("Salary structure *"), "4");
-    await user.selectOptions(screen.getByLabelText("Bangladesh wage grade"), "9");
+    await pickOption(user, "Salary structure *", /BD-W-G4/);
+    await pickOption(user, "Bangladesh wage grade", /W-G4/);
     expect(screen.getByText("7050 (grade minimum)")).toBeTruthy();
     expect(screen.queryByLabelText(/basic salary \*/i)).toBeNull();
     await waitFor(() =>
@@ -135,7 +140,7 @@ describe("Employment & Salary: salary set-up", () => {
     const user = userEvent.setup();
     previewHrCompensation.mockResolvedValue(preview({ minimum_basic: null, minimum_gross: null, basic: "20000.0000", gross: "30000.0000" }));
     render(<Harness initialSalary={{ ...emptySalaryForm(), enabled: true }} />);
-    await user.selectOptions(screen.getByLabelText("Salary structure *"), "4");
+    await pickOption(user, "Salary structure *", /BD-W-G4/);
     expect(screen.getByText(/Enter the basic salary/)).toBeTruthy();
     expect(screen.queryByLabelText("Override standard basic salary")).toBeNull();
     await user.type(screen.getByLabelText("Basic salary *"), "20000");
@@ -151,8 +156,8 @@ describe("Employment & Salary: salary set-up", () => {
       preview({ basic: "5000.0000", gross: "9000.0000", meets_minimum: false, message: "Basic 5000.00 is below the W-G4 minimum basic 7050" }),
     );
     render(<Harness mode="edit" onSave={onSave} initialSalary={openEdit} />);
-    await user.selectOptions(screen.getByLabelText("Salary structure *"), "4");
-    await user.selectOptions(screen.getByLabelText("Bangladesh wage grade"), "9");
+    await pickOption(user, "Salary structure *", /BD-W-G4/);
+    await pickOption(user, "Bangladesh wage grade", /W-G4/);
     await user.click(screen.getByLabelText("Override standard basic salary"));
     await user.type(screen.getByLabelText("Employee basic salary *"), "5000");
     const save = screen.getByRole("button", { name: "Save new salary" }) as HTMLButtonElement;
@@ -186,7 +191,7 @@ describe("Employment & Salary: salary set-up", () => {
     const user = userEvent.setup();
     previewHrCompensation.mockRejectedValue(new Error("Server unavailable"));
     render(<Harness mode="edit" initialSalary={{ ...openEdit, effective_from: "2026-12-01" }} />);
-    await user.selectOptions(screen.getByLabelText("Salary structure *"), "4");
+    await pickOption(user, "Salary structure *", /BD-W-G4/);
     await user.type(screen.getByLabelText("Basic salary *"), "20000");
     expect(await screen.findByText(/Could not check the salary: Server unavailable/)).toBeTruthy();
     expect((screen.getByRole("button", { name: "Save new salary" }) as HTMLButtonElement).disabled).toBe(true);
@@ -234,8 +239,8 @@ describe("Employment & Salary: salary set-up", () => {
     const user = userEvent.setup();
     previewHrCompensation.mockResolvedValue(preview({ basic: "7050.0000", gross: "11975.0000" }));
     render(<Harness options={WITH_LINES} initialSalary={{ ...emptySalaryForm(), enabled: true }} />);
-    await user.selectOptions(screen.getByLabelText("Salary structure *"), "4");
-    await user.selectOptions(screen.getByLabelText("Bangladesh wage grade"), "9");
+    await pickOption(user, "Salary structure *", /BD-W-G4/);
+    await pickOption(user, "Bangladesh wage grade", /W-G4/);
     expect(screen.getByText("Legal minimum")).toBeTruthy();
     expect(screen.getByText("House rent")).toBeTruthy();
     expect(screen.getByText("3525")).toBeTruthy(); // 50% of the grade basic 7050

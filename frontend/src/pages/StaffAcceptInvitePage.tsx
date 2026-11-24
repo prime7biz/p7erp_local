@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, setAuth } from "@/api/client";
+import { authApi } from "@/api/auth";
 import { useAuth } from "@/context/AuthContext";
 import { PasswordFieldInput } from "@/components/auth/PasswordFieldInput";
 import { AlertCircle, ArrowLeft } from "lucide-react";
@@ -44,7 +45,13 @@ export function StaffAcceptInvitePage() {
       const tid = res.tenant_id ?? 0;
       setAuth(res.access_token, tid);
       await refetch();
-      navigate("/app", { replace: true });
+      const me = await authApi.me();
+      const grants = (me.module_grants || []).map((g) => String(g).toLowerCase());
+      const onlyEss =
+        me.authority_classes_enabled === true &&
+        grants.includes("ess") &&
+        grants.every((g) => g === "ess");
+      navigate(onlyEss ? "/app/hr/my" : "/app", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not accept invitation");
     } finally {

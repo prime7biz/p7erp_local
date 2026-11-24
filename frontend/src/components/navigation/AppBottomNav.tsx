@@ -97,6 +97,8 @@ export function AppBottomNav({
   featureFlags,
   hasPermission,
   canViewConfidentialReports,
+  authorityClassesEnabled,
+  moduleGrants,
 }: {
   tenantType: TenantType;
   /** From Production setup; gates optional units (knitting, dyeing, …) in the mobile “More” menu. */
@@ -105,6 +107,8 @@ export function AppBottomNav({
   hasPermission: (key: string) => boolean;
   /** When false, Finance confidential report tabs stay out of mobile search. */
   canViewConfidentialReports?: boolean;
+  authorityClassesEnabled?: boolean;
+  moduleGrants?: string[] | null;
 }) {
   const location = useLocation();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
@@ -128,8 +132,18 @@ export function AppBottomNav({
         featureFlags,
         hasPermission,
         canViewConfidentialReports,
+        authorityClassesEnabled,
+        moduleGrants,
       }),
-    [tenantType, enabledOptionalProductionUnits, featureFlags, hasPermission, canViewConfidentialReports],
+    [
+      tenantType,
+      enabledOptionalProductionUnits,
+      featureFlags,
+      hasPermission,
+      canViewConfidentialReports,
+      authorityClassesEnabled,
+      moduleGrants,
+    ],
   );
 
   const financeHubsOn = isFinanceHubsV2Enabled(featureFlags);
@@ -140,13 +154,13 @@ export function AppBottomNav({
       : bottomNavItems.filter(
           (item) =>
             isVisible(tenantType, item.visibleFor) &&
-            isMenuPermissionAllowed(item.permissionKey, featureFlags, hasPermission),
+            isMenuPermissionAllowed(item.permissionKey, featureFlags, hasPermission, authorityClassesEnabled),
         );
     if (!financeHubsOn) return picked;
     // finance_hubs_v2: the Finance tab opens the first Finance hub the user may see.
     const firstHub = permittedSections.find((s) => s.section === "Finance")?.items[0]?.href;
     return firstHub ? picked.map((tab) => (tab.key === "finance" ? { ...tab, href: firstHub } : tab)) : picked;
-  }, [mobileV2, financeHubsOn, permittedSections, tenantType, featureFlags, hasPermission]);
+  }, [mobileV2, financeHubsOn, permittedSections, tenantType, featureFlags, hasPermission, authorityClassesEnabled]);
 
   /** Sections listed in the More menu (mobile_ui_v2 leaves out Reports, AI Tools and Settings). */
   const filteredSections = useMemo(
@@ -180,13 +194,22 @@ export function AppBottomNav({
   const financeTabMatches = useMemo<DrawerLink[]>(() => {
     const q = drawerSearch.trim().toLowerCase();
     if (!q || !financeHubsOn || !visibleSectionNames.has("Finance")) return [];
-    const canAccess = (key: string) => isMenuPermissionAllowed(key, featureFlags, hasPermission);
+    const canAccess = (key: string) =>
+      isMenuPermissionAllowed(key, featureFlags, hasPermission, authorityClassesEnabled);
     const extras =
       canViewConfidentialReports === undefined ? undefined : { canViewConfidentialReports };
     return financeTabPaletteRoutes(featureFlags, canAccess, extras)
       .filter((r) => r.label.toLowerCase().includes(q))
       .map((r) => ({ href: r.href, label: `${r.label} · ${r.section.replace(/^Finance · /, "")}`, icon: r.icon }));
-  }, [drawerSearch, financeHubsOn, featureFlags, hasPermission, canViewConfidentialReports, visibleSectionNames]);
+  }, [
+    drawerSearch,
+    financeHubsOn,
+    featureFlags,
+    hasPermission,
+    canViewConfidentialReports,
+    visibleSectionNames,
+    authorityClassesEnabled,
+  ]);
 
   useEffect(() => {
     setIsMoreOpen(false);

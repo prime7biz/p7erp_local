@@ -13,7 +13,11 @@ interface AuthState {
 }
 
 const AuthContext = createContext<
-  AuthState & { logout: () => Promise<void>; refetch: () => Promise<void>; hasPermission: (key: string) => boolean }
+  AuthState & {
+    logout: () => Promise<void>;
+    refetch: () => Promise<MeResponse | null>;
+    hasPermission: (key: string) => boolean;
+  }
  | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -21,19 +25,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refetch = useCallback(async () => {
+  const refetch = useCallback(async (): Promise<MeResponse | null> => {
     const tid = localStorage.getItem("p7_tenant_id");
     const token = localStorage.getItem("p7_token");
     if (!tid || !token) {
       setMe(null);
       setLoading(false);
-      return;
+      return null;
     }
     setLoading(true);
     setError(null);
     try {
       const data = await authApi.me();
       setMe(data);
+      return data;
     } catch (e) {
       setMe(null);
       if (e instanceof ApiError && e.status === 401) {
@@ -47,6 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             : "Could not reach the server. Please try again.",
         );
       }
+      return null;
     } finally {
       setLoading(false);
     }
@@ -81,14 +87,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const hasPermission = useCallback(
     (key: string) => {
       if (!me) return false;
-      if ((me.role_name || "").toLowerCase() === "admin") return true;
-      // When fixed-class authority is ON, Super Admin / Class 1 are admin-equivalent in the UI.
-      if (
-        me.authority_classes_enabled &&
-        (me.is_tenant_super_admin || (me.authority_class || "").toUpperCase() === "CLASS_1")
-      ) {
+      // When fixed-class authority is ON, never trust legacy role names — only Super Admin /
+      // module grants. ESS-only users must not see every ERP section when soft RBAC is off.
+      if (me.authority_classes_enabled) {
+        if (me.is_tenant_super_admin) return true;
+        const grants = new Set((me.module_grants || []).map((g) => String(g).toLowerCase()));
+        const mod = key.split(".")[0]?.toLowerCase();
+        if (mod === "ess") {
+          return grants.has("ess") || grants.has("hr");
+        }
+        if (!mod || !grants.has(mod)) return false;
+        // Module grant is enough for menu/route visibility; role JSON may still refine later.
         return true;
       }
+      if ((me.role_name || "").toLowerCase() === "admin") return true;
       const p = me.role_permissions || {};
       if (p["*"] === true) return true;
       const mod = key.split(".")[0];

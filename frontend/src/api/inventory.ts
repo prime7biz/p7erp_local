@@ -845,6 +845,16 @@ export const inventoryApi = {
       body: JSON.stringify(data),
     });
   },
+  async classRecommendDeliveryChallan(id: number): Promise<DeliveryChallanResponse> {
+    return request<DeliveryChallanResponse>(`/api/v1/inventory/delivery-challans/${id}/class-recommend`, {
+      method: "POST",
+    });
+  },
+  async classApproveDeliveryChallan(id: number): Promise<DeliveryChallanResponse> {
+    return request<DeliveryChallanResponse>(`/api/v1/inventory/delivery-challans/${id}/class-approve`, {
+      method: "POST",
+    });
+  },
   async updateDeliveryChallanStatus(id: number, status: string): Promise<DeliveryChallanResponse> {
     return request<DeliveryChallanResponse>(`/api/v1/inventory/delivery-challans/${id}/status`, {
       method: "POST",
@@ -922,6 +932,16 @@ export const inventoryApi = {
     return request<EnhancedGatePassResponse>(`/api/v1/inventory/enhanced-gate-passes/${id}/status`, {
       method: "POST",
       body: JSON.stringify(data),
+    });
+  },
+  async classRecommendGatePass(id: number): Promise<EnhancedGatePassResponse> {
+    return request<EnhancedGatePassResponse>(`/api/v1/inventory/enhanced-gate-passes/${id}/class-recommend`, {
+      method: "POST",
+    });
+  },
+  async classApproveGatePass(id: number): Promise<EnhancedGatePassResponse> {
+    return request<EnhancedGatePassResponse>(`/api/v1/inventory/enhanced-gate-passes/${id}/class-approve`, {
+      method: "POST",
     });
   },
   async class1ApproveGatePass(id: number): Promise<EnhancedGatePassResponse> {

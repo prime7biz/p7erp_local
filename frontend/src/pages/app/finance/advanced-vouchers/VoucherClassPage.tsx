@@ -7,6 +7,7 @@ import {
   type VoucherClassResponse,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import {
   listPageEmptyClass,
   listPageErrorClass,
@@ -189,6 +190,14 @@ export function VoucherClassPage() {
   }
 
   const acctName = new Map(accounts.map((a) => [a.id, `${a.account_number} — ${a.name}`]));
+  const accountOptions = useMemo(
+    () => accounts.map((a) => ({ value: a.id, label: `${a.account_number} — ${a.name}` })),
+    [accounts],
+  );
+  const costCenterOptions = useMemo(
+    () => costCenters.map((c) => ({ value: c.id, label: `${c.center_code} — ${c.name}` })),
+    [costCenters],
+  );
 
   return (
     <div className={listPageRootClass}>
@@ -319,37 +328,33 @@ export function VoucherClassPage() {
           <label className={labelClass} htmlFor="vc-ledger">
             Default ledger
           </label>
-          <select
+          <LocalSearchSelect
             id="vc-ledger"
-            className={fieldClass}
-            value={form.default_ledger_id}
-            onChange={(e) => setForm((p) => ({ ...p, default_ledger_id: e.target.value }))}
-          >
-            <option value="">None</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.account_number} — {a.name}
-              </option>
-            ))}
-          </select>
+            value={form.default_ledger_id ? Number(form.default_ledger_id) : ""}
+            options={accountOptions}
+            onChange={(next) =>
+              setForm((p) => ({ ...p, default_ledger_id: next === "" ? "" : String(next) }))
+            }
+            placeholder="None"
+            allowClear
+            aria-label="Default ledger"
+          />
         </div>
         <div className="space-y-1">
           <label className={labelClass} htmlFor="vc-cc">
             Default cost center
           </label>
-          <select
+          <LocalSearchSelect
             id="vc-cc"
-            className={fieldClass}
-            value={form.default_cost_center_id}
-            onChange={(e) => setForm((p) => ({ ...p, default_cost_center_id: e.target.value }))}
-          >
-            <option value="">None</option>
-            {costCenters.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.center_code} — {c.name}
-              </option>
-            ))}
-          </select>
+            value={form.default_cost_center_id ? Number(form.default_cost_center_id) : ""}
+            options={costCenterOptions}
+            onChange={(next) =>
+              setForm((p) => ({ ...p, default_cost_center_id: next === "" ? "" : String(next) }))
+            }
+            placeholder="None"
+            allowClear
+            aria-label="Default cost center"
+          />
         </div>
         <div className="space-y-1">
           <label className={labelClass} htmlFor="vc-narration">
@@ -401,24 +406,21 @@ export function VoucherClassPage() {
           <p className="text-xs font-medium text-text-muted">Line templates</p>
           {lines.map((ln, idx) => (
             <div key={idx} className="space-y-2 rounded-lg border border-border p-2">
-              <select
-                className={fieldClass}
+              <LocalSearchSelect
                 value={ln.account_id || ""}
-                onChange={(e) => {
-                  const next = [...lines];
-                  const cur = next[idx];
+                options={accountOptions}
+                onChange={(next) => {
+                  const nextLines = [...lines];
+                  const cur = nextLines[idx];
                   if (!cur) return;
-                  next[idx] = { ...cur, account_id: Number(e.target.value) };
-                  setLines(next);
+                  nextLines[idx] = { ...cur, account_id: next === "" ? 0 : Number(next) };
+                  setLines(nextLines);
                 }}
-              >
-                <option value="">Account…</option>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.account_number} — {a.name}
-                  </option>
-                ))}
-              </select>
+                placeholder="Account…"
+                allowClear
+                menuPortal
+                aria-label={`Line ${idx + 1} account`}
+              />
               <div className="grid grid-cols-2 gap-2">
                 <select
                   className={fieldClass}

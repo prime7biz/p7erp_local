@@ -471,6 +471,45 @@ async def _on_hand_qty(
     return await _sql_on_hand_qty(db, tenant_id, item_id, warehouse_id)
 
 
+async def _lock_layers_and_assert_issue_qty(
+    db: AsyncSession,
+    tenant_id: int,
+    *,
+    item_id: int,
+    warehouse_id: int | None,
+    qty_needed: float,
+) -> float:
+    """Serialize concurrent issues: lock FIFO layers, then re-check on-hand.
+
+    When the tenant forbids negative stock, refuse if available < qty_needed.
+    Returns the locked on-hand quantity after the check.
+    """
+    from app.models.inventory import InventoryCostLayer
+
+    layer_stmt = select(InventoryCostLayer).where(
+        InventoryCostLayer.tenant_id == tenant_id,
+        InventoryCostLayer.item_id == item_id,
+    )
+    if warehouse_id is None:
+        layer_stmt = layer_stmt.where(InventoryCostLayer.warehouse_id.is_(None))
+    else:
+        layer_stmt = layer_stmt.where(InventoryCostLayer.warehouse_id == warehouse_id)
+    layer_stmt = layer_stmt.order_by(InventoryCostLayer.id).with_for_update()
+    await db.execute(layer_stmt)
+
+    available = await _on_hand_qty(db, tenant_id, item_id, warehouse_id)
+    allow_neg = await tenant_allows_negative_stock(db, tenant_id)
+    if not allow_neg and available + 1e-9 < qty_needed:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Insufficient stock for item {item_id}. "
+                f"Available={available}, required={qty_needed}"
+            ),
+        )
+    return available
+
+
 async def _stock_summary_rows(
     db: AsyncSession,
     tenant_id: int,
@@ -1352,6 +1391,10 @@ class PurchaseOrderItemBody(BaseModel):
     quantity: str
     unit_price: str = "0"
     source_order_id: int | None = None
+    style_id: int | None = None
+    colorway_id: int | None = None
+    style_id: int | None = None
+    colorway_id: int | None = None
 
     @field_validator("quantity", mode="before")
     @classmethod
@@ -1392,6 +1435,8 @@ class PurchaseOrderItemOut(BaseModel):
     source_bom_line_id: int | None = None
     source_order_id: int | None = None
     source_quotation_line_id: int | None = None
+    style_id: int | None = None
+    colorway_id: int | None = None
 
     @field_validator("quantity", "unit_price", mode="before")
     @classmethod
@@ -1432,6 +1477,8 @@ class GoodsReceivingItemBody(BaseModel):
     warehouse_id: int
     quantity: str
     lot_number: str | None = None
+    shade_band: str | None = None
+    width_cm: str | None = None
     purchase_order_line_id: int | None = None
     received_qty: str | None = None
     accepted_qty: str | None = None
@@ -1468,6 +1515,8 @@ class GoodsReceivingItemOut(BaseModel):
     warehouse_id: int
     quantity: str
     lot_number: str | None = None
+    shade_band: str | None = None
+    width_cm: str | None = None
     purchase_order_line_id: int | None = None
     ordered_qty: str | None = None
     previously_received_qty: str | None = None
@@ -1709,6 +1758,7 @@ class DeliveryChallanItemBody(BaseModel):
 class DeliveryChallanBody(BaseModel):
     challan_code: str | None = None
     customer_name: str
+    customer_id: int | None = None
     delivery_date: date | None = None
     notes: str | None = None
     status: str = "DRAFT"
@@ -1737,6 +1787,7 @@ class DeliveryChallanOut(BaseModel):
     tenant_id: int
     challan_code: str
     customer_name: str
+    customer_id: int | None = None
     delivery_date: date | None
     status: str
     notes: str | None
@@ -1746,6 +1797,9 @@ class DeliveryChallanOut(BaseModel):
     verification_id: str | None = None
     signature_hash: str | None = None
     signed_at: datetime | None = None
+    recommended_by_user_id: int | None = None
+    recommended_at: datetime | None = None
+    class_approval_status: str | None = None
 
 
 def _delivery_challan_to_out(
@@ -1759,6 +1813,7 @@ def _delivery_challan_to_out(
         tenant_id=row.tenant_id,
         challan_code=row.challan_code,
         customer_name=row.customer_name,
+        customer_id=getattr(row, "customer_id", None),
         delivery_date=row.delivery_date,
         status=row.status,
         notes=row.notes,
@@ -1768,6 +1823,9 @@ def _delivery_challan_to_out(
         verification_id=getattr(row, "verification_id", None),
         signature_hash=getattr(row, "signature_hash", None),
         signed_at=getattr(row, "signed_at", None),
+        recommended_by_user_id=getattr(row, "recommended_by_user_id", None),
+        recommended_at=getattr(row, "recommended_at", None),
+        class_approval_status=getattr(row, "class_approval_status", None),
     )
 
 
@@ -1799,6 +1857,9 @@ class GatePassOut(BaseModel):
     class1_approval_status: str | None = None
     class1_approved_by: int | None = None
     class1_approved_at: datetime | None = None
+    recommended_by_user_id: int | None = None
+    recommended_at: datetime | None = None
+    class_approval_status: str | None = None
 
     class Config:
         from_attributes = True
@@ -2868,6 +2929,16 @@ async def create_purchase_order(
             feature_flags=tenant.feature_flags,
             when=datetime.utcnow(),
         )
+    await record_doc_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        doc_type="purchase_order",
+        doc_id=row.id,
+        event="created",
+        summary=f"Created {row.po_code} status={row.status}",
+        to_status=row.status,
+    )
     await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     items_result = await db.execute(select(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == row.id))
@@ -2905,9 +2976,24 @@ async def add_purchase_order_rows(db: AsyncSession, tenant: Tenant, body: Purcha
             if line.source_order_id:
                 oids.add(int(line.source_order_id))
         await assert_orders_have_master_contract(db, tenant_id=tenant.id, order_ids=oids)
+    # Phase 2A / 8: soft BTB warnings; hard-block only when material_commitment_block_v1 is on.
+    from app.modules.material_control.buy_warn_service import (
+        assert_commitment_block_if_enabled,
+        build_btb_warn,
+    )
+    from app.modules.material_control.style_tagging import resolve_style_colorway
+
+    btb_warns = await build_btb_warn(
+        db, tenant=tenant, btb_lc_id=body.btb_lc_id, source_order_id=body.source_order_id
+    )
+    assert_commitment_block_if_enabled(tenant, btb_warns)
+
     line_total = 0.0
     for line in body.items:
         line_total += _to_float(line.quantity) * _to_float(line.unit_price)
+        await resolve_style_colorway(
+            db, tenant_id=tenant.id, style_id=line.style_id, colorway_id=line.colorway_id
+        )
     fx = body.exchange_rate_to_base if body.exchange_rate_to_base is not None else 1.0
     base_total = body.base_total_amount if body.base_total_amount is not None else (line_total * fx if line_total else None)
     if body.po_code:
@@ -3475,6 +3561,8 @@ async def create_goods_receiving(
                 warehouse_id=wh,
                 quantity=api_money_to_decimal(acc),
                 lot_number=d.get("lot_number"),
+                shade_band=(str(d["shade_band"]).strip().upper() if d.get("shade_band") else None) or None,
+                width_cm=(str(d["width_cm"]).strip() if d.get("width_cm") else None) or None,
                 purchase_order_line_id=int(poi_id) if poi_id else None,
                 ordered_qty=ord_snap,
                 previously_received_qty=prev_snap,
@@ -3489,8 +3577,21 @@ async def create_goods_receiving(
                 source_bom_id=poi.source_bom_id if poi else None,
                 source_bom_line_id=poi.source_bom_line_id if poi else None,
                 vendor_id=row.vendor_id,
+                style_id=getattr(poi, "style_id", None) if poi else None,
+                colorway_id=getattr(poi, "colorway_id", None) if poi else None,
             )
         )
+    await record_doc_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        doc_type="goods_receiving",
+        doc_id=row.id,
+        event="created",
+        summary=f"Created GRN {row.grn_code} ({src_type}) status={row.status}",
+        to_status=row.status,
+        extra={"source_type": src_type, "purchase_order_id": row.purchase_order_id},
+    )
     await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     items_result = await db.execute(select(GoodsReceivingItem).where(GoodsReceivingItem.goods_receiving_id == row.id))
@@ -3598,6 +3699,16 @@ async def _apply_grn_receive_goods(
         if getattr(line, "unit_price", None) is None and pl is not None:
             line.unit_price = pl.unit_price
 
+        # INV-02: foreign PO unit prices must land in base currency on FIFO / GRNI.
+        fx = 1.0
+        if row.purchase_order_id:
+            po_hdr = await db.get(PurchaseOrder, row.purchase_order_id)
+            if po_hdr and po_hdr.tenant_id == tenant.id and po_hdr.exchange_rate_to_base is not None:
+                fx = _to_float(po_hdr.exchange_rate_to_base)
+                if fx <= 0:
+                    fx = 1.0
+        uc = uc * fx
+
         # Sprint I2: quarantine receives full physical qty; acceptance happens at QC
         stock_qty_s = recv_s if qc_on else acc_s
         if qc_on:
@@ -3633,6 +3744,8 @@ async def _apply_grn_receive_goods(
             btb_lc_id=getattr(row, "btb_lc_id", None),
             master_contract_id=getattr(line, "master_contract_id", None),
             export_case_id=getattr(line, "export_case_id", None),
+            style_id=getattr(line, "style_id", None),
+            colorway_id=getattr(line, "colorway_id", None),
         )
         db.add(mv)
         await db.flush()
@@ -3723,6 +3836,18 @@ async def _apply_grn_receive_goods(
     await post_grn_receipt_gl_journal(db, tenant.id, user.id, row, items)
     row.signed_by_user_id = user.id
     sign_goods_receiving(row, items)
+    await record_doc_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        doc_type="goods_receiving",
+        doc_id=row.id,
+        event="received",
+        summary=f"Received GRN {row.grn_code} into stock",
+        from_status="DRAFT",
+        to_status="RECEIVED",
+        extra={"purchase_order_id": row.purchase_order_id, "line_count": len(items)},
+    )
     await db.commit()
     await db.refresh(row)
     order_ids: set[int] = set()
@@ -4557,21 +4682,27 @@ async def create_delivery_challan(
         if not it or it.tenant_id != tenant.id:
             raise HTTPException(status_code=400, detail=f"Item not found: {line.item_id}")
         await _warehouse_for_tenant(db, tenant.id, line.warehouse_id)
+    await ensure_owned(db, Customer, body.customer_id, tenant.id, "Customer", status_code=404)
     row = DeliveryChallan(
         tenant_id=tenant.id,
         challan_code=challan_code,
         customer_name=body.customer_name,
+        customer_id=body.customer_id,
         delivery_date=body.delivery_date,
         status=create_status,
         notes=body.notes,
         created_by_user_id=user.id,
     )
+    from app.common.authority.challan_gate_class_chain import mark_entered as _mc_mark_entered
+
+    _mc_mark_entered(row, user=user, feature_flags=tenant.feature_flags)
     db.add(row)
     await flush_handling_duplicate_document_code(db)
     for line in body.items:
         db.add(DeliveryChallanItem(tenant_id=tenant.id, challan_id=row.id, **line.model_dump()))
     linked_order_ids: list[int] = []
     seen_oid: set[int] = set()
+    order_customer_ids: set[int] = set()
     for oid in body.order_ids or []:
         if oid in seen_oid:
             continue
@@ -4579,6 +4710,8 @@ async def create_delivery_challan(
         ord_row = await db.get(Order, oid)
         if not ord_row or ord_row.tenant_id != tenant.id:
             raise HTTPException(status_code=400, detail=f"Order {oid} not found")
+        if ord_row.customer_id:
+            order_customer_ids.add(int(ord_row.customer_id))
         db.add(
             DeliveryChallanOrder(
                 tenant_id=tenant.id,
@@ -4587,15 +4720,105 @@ async def create_delivery_challan(
             )
         )
         linked_order_ids.append(oid)
+    if row.customer_id is None and len(order_customer_ids) == 1:
+        row.customer_id = next(iter(order_customer_ids))
     await db.flush()
     lines_result = await db.execute(select(DeliveryChallanItem).where(DeliveryChallanItem.challan_id == row.id))
     item_lines = list(lines_result.scalars().all())
     # Sign at creation so print / QR work before POSTED (re-signed on POST with updated status in payload).
+    # Do not include customer_id in QR payload fields (delivery_challan_payload unchanged).
     sign_delivery_challan(row, item_lines, linked_order_ids)
+    await record_doc_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        doc_type="delivery_challan",
+        doc_id=row.id,
+        event="created",
+        summary=f"Created delivery challan {row.challan_code}",
+        to_status=row.status,
+        extra={"line_count": len(item_lines), "order_ids": linked_order_ids},
+    )
     await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     lines_result = await db.execute(select(DeliveryChallanItem).where(DeliveryChallanItem.challan_id == row.id))
     return _delivery_challan_to_out(row, list(lines_result.scalars().all()), order_ids=linked_order_ids)
+
+
+@router.post("/delivery-challans/{challan_id}/class-recommend", response_model=DeliveryChallanOut)
+async def class_recommend_delivery_challan(
+    challan_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Phase 4: Class 2 recommend when authority + material_conversion_v1 are ON."""
+    _ensure_tenant(user, tenant)
+    row = await db.get(DeliveryChallan, challan_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Delivery challan not found")
+    from app.common.authority.challan_gate_class_chain import recommend as mc_recommend
+    from app.modules.audit.service import log_action
+
+    await mc_recommend(db, user=user, row=row, feature_flags=tenant.feature_flags, when=datetime.utcnow())
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="DELIVERY_CHALLAN_CLASS_RECOMMEND",
+        resource=f"delivery_challan:{row.id}",
+        details=f"challan_code={row.challan_code}",
+    )
+    await db.commit()
+    await db.refresh(row)
+    lines_result = await db.execute(select(DeliveryChallanItem).where(DeliveryChallanItem.challan_id == row.id))
+    oids = (
+        await db.execute(
+            select(DeliveryChallanOrder.order_id).where(
+                DeliveryChallanOrder.tenant_id == tenant.id,
+                DeliveryChallanOrder.delivery_challan_id == row.id,
+            )
+        )
+    ).all()
+    return _delivery_challan_to_out(row, list(lines_result.scalars().all()), order_ids=[int(x[0]) for x in oids])
+
+
+@router.post("/delivery-challans/{challan_id}/class-approve", response_model=DeliveryChallanOut)
+async def class_approve_delivery_challan(
+    challan_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Phase 4: Class 1 approve before POSTED when chain flags are ON."""
+    _ensure_tenant(user, tenant)
+    row = await db.get(DeliveryChallan, challan_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Delivery challan not found")
+    from app.common.authority.challan_gate_class_chain import approve as mc_approve
+    from app.modules.audit.service import log_action
+
+    await mc_approve(db, user=user, row=row, feature_flags=tenant.feature_flags, when=datetime.utcnow())
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="DELIVERY_CHALLAN_CLASS_APPROVE",
+        resource=f"delivery_challan:{row.id}",
+        details=f"challan_code={row.challan_code}",
+    )
+    await db.commit()
+    await db.refresh(row)
+    lines_result = await db.execute(select(DeliveryChallanItem).where(DeliveryChallanItem.challan_id == row.id))
+    oids = (
+        await db.execute(
+            select(DeliveryChallanOrder.order_id).where(
+                DeliveryChallanOrder.tenant_id == tenant.id,
+                DeliveryChallanOrder.delivery_challan_id == row.id,
+            )
+        )
+    ).all()
+    return _delivery_challan_to_out(row, list(lines_result.scalars().all()), order_ids=[int(x[0]) for x in oids])
 
 
 @router.post("/delivery-challans/{challan_id}/status", response_model=DeliveryChallanOut)
@@ -4622,12 +4845,15 @@ async def update_delivery_challan_status(
     if next_status not in allowed:
         raise HTTPException(status_code=400, detail="Invalid status")
     _assert_status_transition(DC_TRANSITIONS, row.status, next_status, label="Delivery challan")
-    posting_now = next_status == "POSTED" and row.status != "POSTED"
+    previous_status = row.status
+    posting_now = next_status == "POSTED" and previous_status != "POSTED"
 
     # Safe stock posting: only create OUT stock movements once.
     if posting_now:
+        from app.common.authority.challan_gate_class_chain import assert_release_allowed
         from app.modules.merch.execution_gates import assert_no_blocking_capa_for_orders
 
+        assert_release_allowed(row, feature_flags=tenant.feature_flags)
         oids_pre = (
             await db.execute(
                 select(DeliveryChallanOrder.order_id).where(
@@ -4753,6 +4979,18 @@ async def update_delivery_challan_status(
         # The QR hash includes status, so it must be computed after the status flips to POSTED.
         row.status = next_status
         sign_delivery_challan(row, lines, oids_for_sign)
+        await record_doc_event(
+            db,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            doc_type="delivery_challan",
+            doc_id=row.id,
+            event="posted",
+            summary=f"Posted delivery challan {row.challan_code}",
+            from_status=previous_status,
+            to_status="POSTED",
+            extra={"line_count": len(lines)},
+        )
 
     row.status = next_status
     if not posting_now and row.verification_id:
@@ -4834,10 +5072,24 @@ async def create_enhanced_gate_pass(
         created_by_user_id=user.id,
         **body.model_dump(exclude={"gate_pass_code"}),
     )
+    from app.common.authority.challan_gate_class_chain import mark_entered as _gp_mark_entered
+
+    _gp_mark_entered(row, user=user, feature_flags=tenant.feature_flags)
     db.add(row)
     await flush_handling_duplicate_document_code(db)
     # Sign at creation so print / QR work before RELEASED (re-signed on RELEASED with updated status in payload).
     sign_gate_pass(row)
+    await record_doc_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        doc_type="gate_pass",
+        doc_id=row.id,
+        event="created",
+        summary=f"Created gate pass {row.gate_pass_code}",
+        to_status=row.status or "DRAFT",
+        extra={"challan_id": row.challan_id},
+    )
     await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     return row
@@ -4867,6 +5119,9 @@ async def update_enhanced_gate_pass_status(
         elif next_status in ("DRAFT", "REJECTED"):
             row.signed_by_user_id = None
         if next_status == "RELEASED" and prev_status != "RELEASED":
+            from app.common.authority.challan_gate_class_chain import assert_release_allowed
+
+            assert_release_allowed(row, feature_flags=tenant.feature_flags)
             if row.signed_by_user_id is None:
                 row.signed_by_user_id = user.id
             from app.common.authority.gate_pass_workflow import on_gate_pass_released
@@ -4877,6 +5132,18 @@ async def update_enhanced_gate_pass_status(
                 row=row,
                 feature_flags=tenant.feature_flags,
                 when=datetime.utcnow(),
+            )
+            await record_doc_event(
+                db,
+                tenant_id=tenant.id,
+                user_id=user.id,
+                doc_type="gate_pass",
+                doc_id=row.id,
+                event="released",
+                summary=f"Released gate pass {row.gate_pass_code}",
+                from_status=prev_status,
+                to_status="RELEASED",
+                extra={"challan_id": row.challan_id},
             )
     if "guard_acknowledged" in body:
         row.guard_acknowledged = bool(body["guard_acknowledged"])
@@ -4974,6 +5241,7 @@ class ProcessReceiveBody(BaseModel):
 class ProductionMaterialIssueLineIn(BaseModel):
     bom_line_id: int
     actual_issue_qty: str
+    roll_id: int | None = None
 
 
 class ProductionMaterialIssueCreateBody(BaseModel):
@@ -4984,6 +5252,7 @@ class ProductionMaterialIssueCreateBody(BaseModel):
     warehouse_id: int
     issue_date: date | None = None
     notes: str | None = None
+    required_shade_band: str | None = None
     lines: list[ProductionMaterialIssueLineIn]
 
 
@@ -5142,6 +5411,47 @@ async def create_and_post_production_material_issue(
             db, user, tenant.id, permission_key=PERMISSION_INVENTORY_OVER_ISSUE_APPROVE
         )
 
+    # Phase 3: QC hold / quarantine warehouse blocks issue when material flags are on.
+    from app.common.tenant_feature_keys import (
+        is_material_budget_plan_v1_enabled,
+        is_material_control_hub_v1_enabled,
+        is_material_inbound_v2_enabled,
+    )
+    from app.modules.material_control.qc_guard import assert_item_not_on_qc_hold
+    from app.modules.material_control import roll_service as mc_roll_service
+
+    if is_material_inbound_v2_enabled(tenant.feature_flags) or is_material_control_hub_v1_enabled(
+        tenant.feature_flags
+    ):
+        for p in line_payloads:
+            await assert_item_not_on_qc_hold(
+                db, tenant.id, int(p["bl"].item_id), body.warehouse_id
+            )
+
+    # Phase 7 lite: shade band constraint when budget plan flag is on and shade/roll provided.
+    if is_material_budget_plan_v1_enabled(tenant.feature_flags):
+        for p, ln in zip(line_payloads, body.lines):
+            item_id = int(p["bl"].item_id)
+            if body.required_shade_band:
+                await mc_roll_service.assert_shade_compatible(
+                    db,
+                    tenant=tenant,
+                    item_id=item_id,
+                    warehouse_id=body.warehouse_id,
+                    required_shade_band=body.required_shade_band,
+                    qty_needed=p["actual"],
+                )
+            if ln.roll_id is not None:
+                await mc_roll_service.consume_roll(
+                    db,
+                    tenant=tenant,
+                    roll_id=ln.roll_id,
+                    qty=p["actual"],
+                    required_shade_band=body.required_shade_band,
+                    expected_item_id=item_id,
+                    expected_warehouse_id=body.warehouse_id,
+                )
+
     issue_code = await next_tenant_code(
         db, model=ProductionMaterialIssue, tenant_id=tenant.id, prefix="PMI-", width=4
     )
@@ -5165,12 +5475,13 @@ async def create_and_post_production_material_issue(
     for p in line_payloads:
         bl = p["bl"]
         item_id = int(bl.item_id)
-        avail = await _on_hand_qty(db, tenant.id, item_id, body.warehouse_id)
-        if avail + 1e-9 < p["actual"]:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Insufficient stock for item {item_id}. Available={avail}, required={p['actual']}",
-            )
+        await _lock_layers_and_assert_issue_qty(
+            db,
+            tenant.id,
+            item_id=item_id,
+            warehouse_id=body.warehouse_id,
+            qty_needed=p["actual"],
+        )
         mv = StockMovement(
             tenant_id=tenant.id,
             item_id=item_id,
@@ -5229,6 +5540,22 @@ async def create_and_post_production_material_issue(
     sign_production_material_issue(pmi, pm_lines)
     await maybe_post_production_material_issue_wip(
         db, tenant=tenant, user_id=user.id, issue=pmi, auto_post=True
+    )
+    await record_doc_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        doc_type="production_material_issue",
+        doc_id=pmi.id,
+        event="posted",
+        summary=f"Posted PMI {pmi.issue_code}",
+        to_status="POSTED",
+        extra={
+            "order_id": pmi.order_id,
+            "bom_id": pmi.bom_id,
+            "warehouse_id": pmi.warehouse_id,
+            "line_count": len(pm_lines),
+        },
     )
     await db.commit()
     await db.refresh(pmi)
@@ -5336,6 +5663,22 @@ async def create_process_order(
         process_number = await next_tenant_code(db, model=ProcessOrder, tenant_id=tenant.id, prefix="PRO-", width=4)
     row = ProcessOrder(tenant_id=tenant.id, process_number=process_number, **body.model_dump(exclude={"process_number"}))
     db.add(row)
+    await flush_handling_duplicate_document_code(db)
+    await record_doc_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        doc_type="process_order",
+        doc_id=row.id,
+        event="created",
+        summary=f"Created process order {row.process_number}",
+        to_status=row.status or "DRAFT",
+        extra={
+            "process_type": str(getattr(row, "process_type", "") or ""),
+            "input_item_id": row.input_item_id,
+            "output_item_id": row.output_item_id,
+        },
+    )
     await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     oid = body.source_order_id or body.linked_order_id
@@ -5440,6 +5783,18 @@ async def issue_process_order(
     )
     row.signed_by_user_id = user.id
     sign_process_order(row, cost_lines)
+    await record_doc_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        doc_type="process_order",
+        doc_id=row.id,
+        event="issued",
+        summary=f"Issued process order {row.process_number}",
+        from_status="DRAFT",
+        to_status="ISSUED",
+        extra={"input_item_id": row.input_item_id, "warehouse_id": row.warehouse_id},
+    )
     await db.commit()
     await db.refresh(row)
     oid = row.source_order_id or row.linked_order_id
@@ -5570,6 +5925,18 @@ async def receive_process_order(
     if row.signed_by_user_id is None:
         row.signed_by_user_id = user.id
     sign_process_order(row, cost_lines)
+    await record_doc_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        doc_type="process_order",
+        doc_id=row.id,
+        event="received",
+        summary=f"Received process order {row.process_number} qty={row.actual_output_qty}",
+        from_status="ISSUED",
+        to_status="RECEIVED",
+        extra={"output_item_id": row.output_item_id, "actual_output_qty": row.actual_output_qty},
+    )
     await db.commit()
     await db.refresh(row)
     oid = row.source_order_id or row.linked_order_id
@@ -6178,9 +6545,13 @@ async def issue_consumption_material(
     if body.warehouse_id is None:
         raise HTTPException(status_code=400, detail="Warehouse is required for issue")
     await _warehouse_for_tenant(db, tenant.id, body.warehouse_id)
-    available = await _on_hand_qty(db, tenant.id, body.item_id, body.warehouse_id)
-    if body.issue_qty > available:
-        raise HTTPException(status_code=400, detail=f"Insufficient stock in warehouse. Available={available}")
+    await _lock_layers_and_assert_issue_qty(
+        db,
+        tenant.id,
+        item_id=body.item_id,
+        warehouse_id=body.warehouse_id,
+        qty_needed=float(body.issue_qty),
+    )
 
     bom_row = (
         await db.execute(
@@ -6728,6 +7099,21 @@ async def create_warehouse_transfer(
                 quantity=str(_to_float(line.quantity)),
             )
         )
+    await record_doc_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        doc_type="warehouse_transfer",
+        doc_id=row.id,
+        event="created",
+        summary=f"Created transfer {row.transfer_code}",
+        to_status="DRAFT",
+        extra={
+            "from_warehouse_id": row.from_warehouse_id,
+            "to_warehouse_id": row.to_warehouse_id,
+            "line_count": len(body.items),
+        },
+    )
     await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     lines_result = await db.execute(
@@ -6819,6 +7205,18 @@ async def post_warehouse_transfer(
     # The QR hash includes status, so it must be computed after the status flips to POSTED.
     row.status = "POSTED"
     sign_warehouse_transfer(row, lines)
+    await record_doc_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        doc_type="warehouse_transfer",
+        doc_id=row.id,
+        event="posted",
+        summary=f"Posted transfer {row.transfer_code}",
+        from_status="DRAFT",
+        to_status="POSTED",
+        extra={"line_count": len(lines)},
+    )
     await db.commit()
     await db.refresh(row)
     lines_result = await db.execute(
@@ -6882,6 +7280,18 @@ async def create_stock_adjustment(
         created_by_user_id=user.id,
     )
     db.add(row)
+    await flush_handling_duplicate_document_code(db)
+    await record_doc_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        doc_type="stock_adjustment",
+        doc_id=row.id,
+        event="created",
+        summary=f"Created adjustment {row.adjust_code} qty={row.quantity}",
+        to_status="DRAFT",
+        extra={"reason_code": row.reason_code, "item_id": row.item_id, "warehouse_id": row.warehouse_id},
+    )
     await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     return row
@@ -6956,6 +7366,18 @@ async def post_stock_adjustment(
         await finalize_movement_fifo(db, tenant.id, adj_mv, in_unit_cost=uc_adj)
     await post_stock_adjustment_gl(db, tenant.id, user.id, row)
     row.status = "POSTED"
+    await record_doc_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        doc_type="stock_adjustment",
+        doc_id=row.id,
+        event="posted",
+        summary=f"Posted adjustment {row.adjust_code} qty={row.quantity}",
+        from_status="DRAFT",
+        to_status="POSTED",
+        extra={"reason_code": row.reason_code, "item_id": row.item_id},
+    )
     await db.commit()
     await db.refresh(row)
     return row
@@ -7584,6 +8006,64 @@ async def gate_pass_print_data(
             "copy_labels": ["Original", "Duplicate", "Triplicate"],
         },
     }
+
+
+@router.post("/enhanced-gate-passes/{gate_pass_id}/class-recommend", response_model=GatePassOut)
+async def class_recommend_gate_pass(
+    gate_pass_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Phase 4: Class 2 recommend when authority + material_conversion_v1 are ON."""
+    _ensure_tenant(user, tenant)
+    row = await db.get(EnhancedGatePass, gate_pass_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Gate pass not found")
+    from app.common.authority.challan_gate_class_chain import recommend as mc_recommend
+    from app.modules.audit.service import log_action
+
+    await mc_recommend(db, user=user, row=row, feature_flags=tenant.feature_flags, when=datetime.utcnow())
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="GATE_PASS_CLASS_RECOMMEND",
+        resource=f"enhanced_gate_pass:{row.id}",
+        details=f"gate_pass_code={row.gate_pass_code}",
+    )
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+@router.post("/enhanced-gate-passes/{gate_pass_id}/class-approve", response_model=GatePassOut)
+async def class_approve_gate_pass_chain(
+    gate_pass_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Phase 4: Class 1 approve (≠ creator/recommender) before release."""
+    _ensure_tenant(user, tenant)
+    row = await db.get(EnhancedGatePass, gate_pass_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Gate pass not found")
+    from app.common.authority.challan_gate_class_chain import approve as mc_approve
+    from app.modules.audit.service import log_action
+
+    await mc_approve(db, user=user, row=row, feature_flags=tenant.feature_flags, when=datetime.utcnow())
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="GATE_PASS_CLASS_APPROVE",
+        resource=f"enhanced_gate_pass:{row.id}",
+        details=f"gate_pass_code={row.gate_pass_code}",
+    )
+    await db.commit()
+    await db.refresh(row)
+    return row
 
 
 @router.post("/enhanced-gate-passes/{gate_pass_id}/class1-approve", response_model=GatePassOut)

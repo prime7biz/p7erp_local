@@ -25,6 +25,8 @@ BASELINE: dict[str, int] = {
     'app/modules/ai_tool/ai_turnover_prediction_service.py::predict_turnover_risk': 2,
     'app/modules/ai_tool/anomaly.py::_high_wastage_anomaly': 6,
     'app/modules/ai_tool/tools/purchase_tools.py::suggest_orders_with_shortage': 6,
+    'app/modules/audit/retention.py::purge_technical_audit_for_tenant': 2,  # (A) bounded delete-batch loop (MAX_BATCHES_PER_TENANT), one SELECT ids + one DELETE per batch; not a per-row query
+    'app/modules/auth/session_service.py::expire_stale_sessions_for_tenant': 2,  # (A) batch loop (200 ids per round), one SELECT + one bulk UPDATE per round; not a per-row query
     'app/modules/commercial/commercial_invoice_service.py::_build_draft_invoice_for_group': 1,
     'app/modules/commercial/commercial_invoice_service.py::create_invoices_from_delivery_challan': 1,
     'app/modules/commercial/commercial_invoice_service.py::order_has_fully_paid_commercial_invoice': 1,
@@ -41,7 +43,7 @@ BASELINE: dict[str, int] = {
     'app/modules/document_verify/service.py::verify_document_publicly': 1,
     'app/modules/facility/accrual_service.py::run_monthly_accrual': 2,
     'app/modules/facility/traceability_service.py::build_traceability_for_utilization': 2,
-    'app/modules/finance/advanced_voucher_service.py::create_note_voucher': 1,
+    'app/modules/finance/advanced_voucher_service.py::create_note_voucher': 2,  # (C) per stock-return line Item cost lookup; interleaved with FIFO posting, not batched on purpose
     'app/modules/finance/control/profitability_service.py::list_order_profit': 1,
     'app/modules/finance/gst_tax_router.py::list_voucher_tax_lines': 1,
     'app/modules/finance/mgmt_performance/setup_service.py::save_category_map': 1,
@@ -67,6 +69,7 @@ BASELINE: dict[str, int] = {
     'app/modules/hr/employee_identity.py::next_employee_code': 1,
     'app/modules/hr/service.py::import_employees_excel': 1,
     'app/modules/hr_allowances/pay_benefits.py::benefits_by_employee': 1,
+    'app/modules/hr_class_requests/apply_service.py::apply_bulk_increment': 1,  # (C) all-or-nothing, max 200 lines; per-employee row lock in id order + compensation write, not batched on purpose
     'app/modules/hr_allowances/router.py::generate_production_bonus': 1,
     'app/modules/hr_attendance/device_service.py::_rebuild_entries': 2,
     'app/modules/hr_attendance/device_service.py::process_punches': 1,
@@ -99,7 +102,7 @@ BASELINE: dict[str, int] = {
     'app/modules/inventory/mrp_engine_service.py::explode_bom_for_order': 4,
     'app/modules/inventory/mrp_engine_service.py::run_mrp': 1,
     'app/modules/inventory/reorder_service.py::check_reorder_points': 1,
-    'app/modules/inventory/router.py::_apply_grn_receive_goods': 4,
+    'app/modules/inventory/router.py::_apply_grn_receive_goods': 5,  # (C) per GRN line PO-header (fx) get; same PO row, identity-map cached; part of FIFO/cost-layer receive, not batched on purpose
     'app/modules/inventory/router.py::_validate_process_order_refs': 2,
     'app/modules/inventory/router.py::add_purchase_order_rows': 1,
     'app/modules/inventory/router.py::approve_consumption_change_request': 1,
@@ -168,6 +171,7 @@ BASELINE: dict[str, int] = {
     'app/modules/production/dashboard_router.py::production_dashboard': 2,
     'app/modules/production/efficiency_ai_service.py::build_efficiency_forecast': 1,
     'app/modules/production/knitting_router.py::_validate_wo_assets': 2,
+    'app/modules/production/machine_swap_service.py::plan_swap': 2,  # (C) max 100 machines; per-machine row lock + assignment close/create in one transaction, not batched on purpose
     'app/modules/production/planning_router.py::release_work_orders': 2,
     'app/modules/production/readiness_service.py::get_order_chain_readiness': 1,
     'app/modules/production/roster_router.py::generate_daily_from_roster': 2,
@@ -184,8 +188,12 @@ BASELINE: dict[str, int] = {
     'app/seeds/phase1_demo.py::run_phase1_demo_seed': 9,
     'app/services/inventory_gl_service.py::post_grn_receipt_gl': 2,
     'app/workers/advanced_voucher_worker.py::_run_all_tenants': 1,
+    'app/workers/hr_class_worker.py::exit_access_shutoff_all_tenants': 2,  # (A) Celery per-tenant loop (+ <=500 employees per tenant)
+    'app/workers/hr_class_worker.py::reminders_daily_all_tenants': 2,  # (A) Celery per-tenant loop (+ <=200 employees per tenant)
     'app/workers/inventory_analytics_worker.py::_weekly_cycle_count': 1,
     'app/workers/medical_certificate_expiry_worker.py::_run_all_tenants': 1,
     'app/workers/mgmt_performance_worker.py::run_scan_all_tenants': 1,
     'app/workers/platform_worker.py::_run_bulk_create': 1,
+    'app/workers/user_activity_worker.py::expire_sessions_all_tenants': 1,  # (A) Celery per-tenant loop
+    'app/workers/user_activity_worker.py::purge_api_audit_all_tenants': 1,  # (A) Celery per-tenant loop
 }

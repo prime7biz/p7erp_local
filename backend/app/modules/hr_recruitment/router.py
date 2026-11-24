@@ -426,12 +426,15 @@ async def hire_candidate(
     The candidate row is locked and marked hired in the same commit as the new employee, so a double
     click cannot create two employee numbers. The CV is uploaded to the employee file afterwards.
     """
+    from app.common.authority.hr_policy import assert_hr_request_required
     from app.models.hr import EmployeeDocument
     from app.modules.hr.router import create_employee
     from app.modules.hr.schemas import EmployeeCreate
 
     _ensure_user_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
+    # When authority classes are ON, hire must go through a NEW_EMPLOYEE class request.
+    await assert_hr_request_required(db, user, tenant)
     cand = (
         await db.execute(
             select(Candidate)

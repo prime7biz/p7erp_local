@@ -60,9 +60,8 @@ describe("QuickAddSelect", () => {
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(createHrDepartment).toHaveBeenCalledWith({ name: "Sewing", is_active: true }); // no code sent
-    const select = screen.getByLabelText("Department") as HTMLSelectElement;
-    expect(select.value).toBe("7");
-    expect(select.selectedOptions[0]?.textContent).toBe("DEPT-0002 - Sewing");
+    const combobox = screen.getByRole("combobox", { name: "Department" }) as HTMLInputElement;
+    expect(combobox.value).toBe("DEPT-0002 - Sewing");
     expect((screen.getByLabelText("Employee name") as HTMLInputElement).value).toBe("Rahima (unsaved)");
     expect(outerSubmit).not.toHaveBeenCalled(); // the modal form never submits the page form
   });
@@ -87,6 +86,6 @@ describe("QuickAddSelect", () => {
     await user.click(screen.getByRole("button", { name: "Create" }));
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toContain("already exists");
-    expect((screen.getByLabelText("Department") as HTMLSelectElement).value).toBe("");
+    expect((screen.getByRole("combobox", { name: "Department" }) as HTMLInputElement).value).toBe("");
   });
 });

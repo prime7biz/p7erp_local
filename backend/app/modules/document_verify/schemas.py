@@ -34,3 +34,22 @@ class PublicProformaVerification(BaseModel):
     invoice_date: str | None = None
     amount: float | None = None
     currency: str | None = None
+
+
+class QuotationPublicVerification(BaseModel):
+    """Buyer-safe quotation check. Never add customer name, costs, margins, notes or internal ids."""
+
+    is_valid: bool
+    document_type: str = "QUOTATION"
+    document_label: str = "Quotation"
+    company_name: str
+    code: str
+    version_no: int
+    status: str
+    style_ref: str | None = None
+    quantity: int | None = None
+    # Fixed-decimal strings (never floats).
+    quoted_unit_price: str | None = None
+    total_amount: str | None = None
+    currency: str | None = None
+    valid_until: str | None = None

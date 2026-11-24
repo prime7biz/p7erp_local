@@ -192,8 +192,19 @@ async def test_class1_hr_viewer_rights_and_cancel_change_request(db_session_inte
     rights_c4 = await cr_service.viewer_rights(db, users["c4_hr"], tenant.id)
     assert rights_c4["can_view_pay"] is False
 
+    # Fixed-class authority is ON: HR changes (cancel included) must go through an HR Request, so the
+    # legacy Tier cancel is refused with HR_REQUEST_REQUIRED (fail closed, never loosened).
+    with pytest.raises(HTTPException) as blocked:
+        await cr_service.cancel(db, tenant=tenant, user=users["c1_hr"], request_pk=req.id)
+    assert blocked.value.status_code == 409
+    assert "HR_REQUEST_REQUIRED" in str(blocked.value.detail)
+
+    # The legacy maker / manager cancel rules are exercised with fixed-class authority OFF.
+    tenant.feature_flags = {**(tenant.feature_flags or {}), USER_AUTHORITY_CLASSES_V1: False}
+    await db.flush()
+    # The requester (maker, Class 4 HR here) may cancel their own open request under the legacy rules.
     cancelled = await cr_service.cancel(
-        db, tenant=tenant, user=users["c1_hr"], request_pk=req.id
+        db, tenant=tenant, user=users["c4_hr"], request_pk=req.id
     )
     assert cancelled.status == "CANCELLED"
 

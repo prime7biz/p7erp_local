@@ -23,6 +23,8 @@ vi.mock("@/api/commercial", () => ({ commercialApi: { listMasterContracts: vi.fn
 vi.mock("@/lib/remoteSelectFetchers", () => ({
   fetchCustomerPage: vi.fn().mockResolvedValue({ options: [], total: 0 }),
   hydrateCustomer: vi.fn().mockResolvedValue(null),
+  fetchStylePage: vi.fn().mockResolvedValue({ options: [], total: 0 }),
+  hydrateStyle: vi.fn().mockResolvedValue(null),
 }));
 
 import { EntityProfitabilityGlPage } from "./EntityProfitabilityGlPage";

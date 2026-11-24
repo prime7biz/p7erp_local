@@ -5,7 +5,6 @@ import {
   type BtbLcCreate,
   type BtbLcAccountingRow,
   type BtbLcRow,
-  type ChartOfAccountResponse,
   type MerchAlertItem,
   type MasterContractRow,
   type ProformaInvoiceRow,
@@ -13,12 +12,14 @@ import {
   type VendorResponse,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { listPageRootClass } from "@/components/app/listPageLayout";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
 import { addMoney, subtractMoney, sumMoneyBy } from "@/lib/money";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
-import { getChartOfAccountsCached, getVendorsCached } from "@/lib/masterData";
+import { getVendorsCached } from "@/lib/masterData";
+import { fetchChartAccountPage, hydrateChartAccount } from "@/lib/remoteSelectFetchers";
 
 const STATUS_OPTIONS = ["DRAFT", "OPEN", "AMENDED", "CLOSED"] as const;
 
@@ -73,7 +74,6 @@ const emptyForm: BtbLcCreate = {
 export function BtbLcsPage() {
   const [items, setItems] = useState<BtbLcRow[]>([]);
   const [allLcs, setAllLcs] = useState<BtbLcRow[]>([]);
-  const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
   const [masterContracts, setMasterContracts] = useState<MasterContractRow[]>([]);
   const [vendors, setVendors] = useState<VendorResponse[]>([]);
   const [exportPis, setExportPis] = useState<ProformaInvoiceRow[]>([]);
@@ -136,7 +136,7 @@ export function BtbLcsPage() {
     setLoading(true);
     setError("");
     try {
-      const [lcRows, allLcRows, masters, vendorRows, exportPiRows, importPiRows, poRows, accountRows, alerts] = await Promise.all([
+      const [lcRows, allLcRows, masters, vendorRows, exportPiRows, importPiRows, poRows, alerts] = await Promise.all([
         api.listBtbLcs({
           status: statusFilter || undefined,
           master_contract_id: selectedMaster,
@@ -148,7 +148,6 @@ export function BtbLcsPage() {
         api.listProformaInvoices({ direction: "EXPORT" }),
         api.listProformaInvoices({ direction: "IMPORT" }),
         api.listPurchaseOrders(),
-        getChartOfAccountsCached({ active_only: true }),
         api.getMerchAlerts({
           entity_type: "btb_lc",
           page: 1,
@@ -167,7 +166,6 @@ export function BtbLcsPage() {
       setExportPis(exportPiRows);
       setVendorPis(importPiRows);
       setPurchaseOrders(poRows);
-      setAccounts(accountRows);
       const grouped: Record<number, MerchAlertItem[]> = {};
       for (const alert of alerts.items) {
         if (!COMMERCIAL_ACTIVE_MERCH_ALERT_STATUSES.has((alert.status || "").toLowerCase())) continue;
@@ -987,34 +985,44 @@ export function BtbLcsPage() {
                     <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
                       {advancedOpeningAccounts && (
                         <>
-                          <select
-                            className="rounded border border-border-strong px-2 py-1 text-sm"
-                            value={openEntryForm.upcoming_lc_liability_account_id}
-                            onChange={(e) =>
-                              setOpenEntryForm((p) => ({ ...p, upcoming_lc_liability_account_id: e.target.value }))
+                          <RemoteSearchSelect
+                            className="w-full"
+                            value={
+                              openEntryForm.upcoming_lc_liability_account_id
+                                ? Number(openEntryForm.upcoming_lc_liability_account_id)
+                                : ""
                             }
-                          >
-                            <option value="">Upcoming LC Liability (Debit) — optional override</option>
-                            {accounts.map((a) => (
-                              <option key={a.id} value={a.id}>
-                                {a.account_number} - {a.name}
-                              </option>
-                            ))}
-                          </select>
-                          <select
-                            className="rounded border border-border-strong px-2 py-1 text-sm"
-                            value={openEntryForm.blocked_credit_facility_account_id}
-                            onChange={(e) =>
-                              setOpenEntryForm((p) => ({ ...p, blocked_credit_facility_account_id: e.target.value }))
+                            onChange={(next) =>
+                              setOpenEntryForm((p) => ({
+                                ...p,
+                                upcoming_lc_liability_account_id: next === "" ? "" : String(next),
+                              }))
                             }
-                          >
-                            <option value="">Blocked Credit Facility (Credit) — optional override</option>
-                            {accounts.map((a) => (
-                              <option key={a.id} value={a.id}>
-                                {a.account_number} - {a.name}
-                              </option>
-                            ))}
-                          </select>
+                            fetchPage={fetchChartAccountPage}
+                            hydrateById={hydrateChartAccount}
+                            placeholder="Upcoming LC Liability (Debit) — optional"
+                            allowClear
+                            aria-label="Upcoming LC liability account"
+                          />
+                          <RemoteSearchSelect
+                            className="w-full"
+                            value={
+                              openEntryForm.blocked_credit_facility_account_id
+                                ? Number(openEntryForm.blocked_credit_facility_account_id)
+                                : ""
+                            }
+                            onChange={(next) =>
+                              setOpenEntryForm((p) => ({
+                                ...p,
+                                blocked_credit_facility_account_id: next === "" ? "" : String(next),
+                              }))
+                            }
+                            fetchPage={fetchChartAccountPage}
+                            hydrateById={hydrateChartAccount}
+                            placeholder="Blocked Credit Facility (Credit) — optional"
+                            allowClear
+                            aria-label="Blocked credit facility account"
+                          />
                         </>
                       )}
                       <input
@@ -1059,34 +1067,44 @@ export function BtbLcsPage() {
                     <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
                       {advancedDocsAccounts && (
                         <>
-                          <select
-                            className="rounded border border-border-strong px-2 py-1 text-sm"
-                            value={docsEntryForm.lc_liability_account_id}
-                            onChange={(e) =>
-                              setDocsEntryForm((p) => ({ ...p, lc_liability_account_id: e.target.value }))
+                          <RemoteSearchSelect
+                            className="w-full"
+                            value={
+                              docsEntryForm.lc_liability_account_id
+                                ? Number(docsEntryForm.lc_liability_account_id)
+                                : ""
                             }
-                          >
-                            <option value="">LC Liability (Debit) — optional override</option>
-                            {accounts.map((a) => (
-                              <option key={a.id} value={a.id}>
-                                {a.account_number} - {a.name}
-                              </option>
-                            ))}
-                          </select>
-                          <select
-                            className="rounded border border-border-strong px-2 py-1 text-sm"
-                            value={docsEntryForm.import_bill_liability_account_id}
-                            onChange={(e) =>
-                              setDocsEntryForm((p) => ({ ...p, import_bill_liability_account_id: e.target.value }))
+                            onChange={(next) =>
+                              setDocsEntryForm((p) => ({
+                                ...p,
+                                lc_liability_account_id: next === "" ? "" : String(next),
+                              }))
                             }
-                          >
-                            <option value="">Import Bill Liability (Credit) — optional override</option>
-                            {accounts.map((a) => (
-                              <option key={a.id} value={a.id}>
-                                {a.account_number} - {a.name}
-                              </option>
-                            ))}
-                          </select>
+                            fetchPage={fetchChartAccountPage}
+                            hydrateById={hydrateChartAccount}
+                            placeholder="LC Liability (Debit) — optional"
+                            allowClear
+                            aria-label="LC liability account"
+                          />
+                          <RemoteSearchSelect
+                            className="w-full"
+                            value={
+                              docsEntryForm.import_bill_liability_account_id
+                                ? Number(docsEntryForm.import_bill_liability_account_id)
+                                : ""
+                            }
+                            onChange={(next) =>
+                              setDocsEntryForm((p) => ({
+                                ...p,
+                                import_bill_liability_account_id: next === "" ? "" : String(next),
+                              }))
+                            }
+                            fetchPage={fetchChartAccountPage}
+                            hydrateById={hydrateChartAccount}
+                            placeholder="Import Bill Liability (Credit) — optional"
+                            allowClear
+                            aria-label="Import bill liability account"
+                          />
                         </>
                       )}
                       <input
@@ -1136,38 +1154,45 @@ export function BtbLcsPage() {
                     </label>
                     <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
                       {advancedRealizationDebit && (
-                        <select
-                          className="rounded border border-border-strong px-2 py-1 text-sm"
-                          value={realizationEntryForm.import_bill_liability_account_id}
-                          onChange={(e) =>
+                        <RemoteSearchSelect
+                          className="w-full"
+                          value={
+                            realizationEntryForm.import_bill_liability_account_id
+                              ? Number(realizationEntryForm.import_bill_liability_account_id)
+                              : ""
+                          }
+                          onChange={(next) =>
                             setRealizationEntryForm((p) => ({
                               ...p,
-                              import_bill_liability_account_id: e.target.value,
+                              import_bill_liability_account_id: next === "" ? "" : String(next),
                             }))
                           }
-                        >
-                          <option value="">Import Bill Liability (Debit) — optional override</option>
-                          {accounts.map((a) => (
-                            <option key={a.id} value={a.id}>
-                              {a.account_number} - {a.name}
-                            </option>
-                          ))}
-                        </select>
+                          fetchPage={fetchChartAccountPage}
+                          hydrateById={hydrateChartAccount}
+                          placeholder="Import Bill Liability (Debit) — optional"
+                          allowClear
+                          aria-label="Realization import bill liability account"
+                        />
                       )}
-                      <select
-                        className="rounded border border-border-strong px-2 py-1 text-sm md:col-span-2"
-                        value={realizationEntryForm.payment_account_id}
-                        onChange={(e) =>
-                          setRealizationEntryForm((p) => ({ ...p, payment_account_id: e.target.value }))
+                      <RemoteSearchSelect
+                        className="w-full md:col-span-2"
+                        value={
+                          realizationEntryForm.payment_account_id
+                            ? Number(realizationEntryForm.payment_account_id)
+                            : ""
                         }
-                      >
-                        <option value="">Payment / bank GL (optional if LC bank has GL)</option>
-                        {accounts.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.account_number} - {a.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(next) =>
+                          setRealizationEntryForm((p) => ({
+                            ...p,
+                            payment_account_id: next === "" ? "" : String(next),
+                          }))
+                        }
+                        fetchPage={fetchChartAccountPage}
+                        hydrateById={hydrateChartAccount}
+                        placeholder="Payment / bank GL (optional if LC bank has GL)"
+                        allowClear
+                        aria-label="Payment account"
+                      />
                       <input
                         type="date"
                         className="rounded border border-border-strong px-2 py-1 text-sm"

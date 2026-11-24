@@ -17,6 +17,7 @@ import { logApiError } from "@/utils/logApiError";
 import { REQUISITION_STATUS_LABEL } from "./requisitionStatus";
 import { RequisitionStatusBadge } from "./RequisitionStatusBadge";
 import { getWarehousesCached } from "@/lib/masterData";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { fetchInventoryItemPage, hydrateInventoryItem } from "@/lib/remoteSelectFetchers";
 
@@ -153,14 +154,16 @@ export function RequisitionsPage() {
                   aria-label="Item"
                   menuPortal
                 />
-                <select className={CTL} value={ln.warehouse_id} onChange={(e) => setLine(i, { warehouse_id: e.target.value ? Number(e.target.value) : "" })}>
-                  <option value="">Warehouse (optional)</option>
-                  {warehouses.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
-                  ))}
-                </select>
+                <LocalSearchSelect
+                  className={CTL}
+                  value={ln.warehouse_id}
+                  options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+                  onChange={(next) => setLine(i, { warehouse_id: next === "" ? "" : Number(next) })}
+                  placeholder="Warehouse (optional)"
+                  aria-label="Warehouse"
+                  allowClear
+                  menuPortal
+                />
                 <input className={CTL} type="number" min="0" step="0.0001" placeholder="Quantity" value={ln.quantity} onChange={(e) => setLine(i, { quantity: e.target.value })} />
                 <input className={CTL} type="number" min="0" step="0.0001" placeholder="Est. price" value={ln.estimated_unit_price} onChange={(e) => setLine(i, { estimated_unit_price: e.target.value })} />
                 <button

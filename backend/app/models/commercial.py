@@ -55,6 +55,9 @@ class MasterContract(Base):
     amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
     currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
     buyer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     bank_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     btb_utilized_amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
@@ -77,6 +80,9 @@ class ExportCase(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT", index=True)
     case_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     trade_case_id: Mapped[int | None] = mapped_column(
         ForeignKey("trade_cases.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -130,6 +136,9 @@ class ProformaInvoice(Base):
     invoice_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
     # Commercial export fields (all nullable)
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     buyer_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     buyer_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     buyer_bank_details: Mapped[str | None] = mapped_column(Text, nullable=True)

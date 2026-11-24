@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   api,
   type CurrencyMasterResponse,
@@ -27,9 +27,11 @@ import {
   withLegacyOption,
 } from "@/lib/commercialTerms";
 import { InquiryCreateSidebar } from "@/features/inquiries/create/InquiryCreateSidebar";
+import { InquiryWorkbenchPage } from "@/features/inquiries/workbench/InquiryWorkbenchPage";
+import { useInquiryWorkbenchV1 } from "@/features/inquiries/workbench/inquiryWorkbenchFlags";
 import { canSubmitInquiry } from "@/features/merch/workflow";
 import { cn } from "@/lib/utils";
-import { fetchCustomerPage, hydrateCustomer } from "@/lib/remoteSelectFetchers";
+import { fetchActiveCustomerPage, fetchStylePage, hydrateCustomer, hydrateStyle } from "@/lib/remoteSelectFetchers";
 import type {
   ConflictResolutionChoice,
   ExtractionStatus,
@@ -120,11 +122,24 @@ function inquiryAutofillRing(level?: FieldConfidence): string {
 }
 
 export function InquiryCreatePage() {
+  const workbenchOn = useInquiryWorkbenchV1();
+  if (workbenchOn) {
+    return <InquiryWorkbenchPage />;
+  }
+  return <InquiryCreatePageLegacy />;
+}
+
+/** Classic full-page inquiry form (used when `inquiry_workbench_v1` is off). */
+function InquiryCreatePageLegacy() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
+  const customerDeepLinkDone = useRef(false);
+  const styleDeepLinkDone = useRef(false);
 
   const [form, setForm] = useState<InquiryCreate>(emptyForm());
+  const [buyerDefaultsHint, setBuyerDefaultsHint] = useState("");
   const [styles, setStyles] = useState<StyleResponse[]>([]);
   const [selectedCustomerName, setSelectedCustomerName] = useState("-");
   const [allLinks, setAllLinks] = useState<CustomerIntermediaryLinkResponse[]>([]);
@@ -265,7 +280,11 @@ export function InquiryCreatePage() {
     });
   };
 
-  const onCustomerChange = (customerId: number, customerName?: string) => {
+  const onCustomerChange = (
+    customerId: number,
+    customerName?: string,
+    customerMeta?: CustomerResponse | null,
+  ) => {
     const firstPrimaryLink =
       allLinks.find((l) => l.customer_id === customerId && l.is_primary) ??
       allLinks.find((l) => l.customer_id === customerId) ??
@@ -277,6 +296,18 @@ export function InquiryCreatePage() {
       setSelectedCustomerName("-");
     }
 
+    const preferred = customerMeta?.preferred_currency?.trim().toUpperCase();
+    const incoterm = customerMeta?.default_incoterm?.trim();
+    const paymentTerms = customerMeta?.payment_terms?.trim();
+    const leadDays = customerMeta?.typical_lead_time_days;
+    const hintParts = [
+      preferred ? `Currency ${preferred}` : "",
+      incoterm ? `Incoterm ${incoterm}` : "",
+      paymentTerms ? `Payment ${paymentTerms}` : "",
+      leadDays != null ? `Lead time ${leadDays} days` : "",
+    ].filter(Boolean);
+    setBuyerDefaultsHint(hintParts.length ? `Buyer defaults: ${hintParts.join(" · ")}` : "");
+
     setForm((prev) => ({
       ...prev,
       customer_id: customerId,
@@ -287,8 +318,29 @@ export function InquiryCreatePage() {
         firstPrimaryLink?.commission_value != null
           ? String(firstPrimaryLink.commission_value)
           : "",
+      ...(preferred
+        ? { currency: preferred, target_price_currency: preferred }
+        : {}),
+      ...(incoterm ? { shipping_term: incoterm } : {}),
     }));
   };
+
+  useEffect(() => {
+    if (isEdit || customerDeepLinkDone.current) return;
+    const raw = searchParams.get("customer_id");
+    const customerId = raw ? Number(raw) : 0;
+    if (!Number.isFinite(customerId) || customerId <= 0) return;
+    customerDeepLinkDone.current = true;
+    void (async () => {
+      try {
+        const c = await api.getCustomer(customerId);
+        onCustomerChange(c.id, c.name, c);
+      } catch (e) {
+        logApiError("InquiryCreatePage.customerDeepLink", e);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, searchParams]);
 
   const onLinkChange = (linkId: number | undefined) => {
     const link = customerLinks.find((l) => l.id === linkId) ?? null;
@@ -301,8 +353,11 @@ export function InquiryCreatePage() {
     }));
   };
 
-  const onStyleChange = (styleId: number | undefined) => {
-    const style = styles.find((s) => s.id === styleId) ?? null;
+  const onStyleChange = (styleId: number | undefined, styleOverride?: StyleResponse | null) => {
+    const style = styleOverride ?? styles.find((s) => s.id === styleId) ?? null;
+    if (style && !styles.some((s) => s.id === style.id)) {
+      setStyles((prev) => [style, ...prev]);
+    }
     setForm((prev) => ({
       ...prev,
       style_id: styleId,
@@ -311,6 +366,24 @@ export function InquiryCreatePage() {
       season: style?.season ?? prev.season,
     }));
   };
+
+  useEffect(() => {
+    if (isEdit || styleDeepLinkDone.current) return;
+    const raw = searchParams.get("style_id");
+    const styleId = raw ? Number(raw) : 0;
+    if (!Number.isFinite(styleId) || styleId <= 0) return;
+    styleDeepLinkDone.current = true;
+    void (async () => {
+      try {
+        const hydrated = await hydrateStyle(styleId);
+        if (!hydrated?.meta) return;
+        onStyleChange(hydrated.meta.id, hydrated.meta);
+      } catch (e) {
+        logApiError("InquiryCreatePage.styleDeepLink", e);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, searchParams]);
 
   useEffect(() => {
     const res = inquiryAi.extraction;
@@ -1145,28 +1218,36 @@ export function InquiryCreatePage() {
                   value={form.customer_id > 0 ? form.customer_id : ""}
                   onChange={(next, opt) => {
                     const id = typeof next === "number" && next > 0 ? next : 0;
-                    onCustomerChange(id, opt?.meta?.name ?? (id ? opt?.label : "-"));
+                    onCustomerChange(
+                      id,
+                      opt?.meta?.name ?? (id ? opt?.label : "-"),
+                      opt?.meta ?? null,
+                    );
                   }}
-                  fetchPage={fetchCustomerPage}
+                  fetchPage={fetchActiveCustomerPage}
                   hydrateById={hydrateCustomer}
                   allowClear
                 />
+                {buyerDefaultsHint ? (
+                  <p className="mt-1 text-xs text-text-muted">{buyerDefaultsHint}</p>
+                ) : null}
               </div>
               <div>
                 <label className={REQUIRED_LABEL}>Style **</label>
                 <div className="space-y-2">
-                  <select
-                    value={form.style_id ?? ""}
-                    onChange={(e) => onStyleChange(e.target.value ? Number(e.target.value) : undefined)}
+                  <RemoteSearchSelect<StyleResponse>
                     className={requiredSelectShell(Boolean(form.style_id))}
-                  >
-                    <option value="">Select style...</option>
-                    {styles.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.style_code} - {s.name}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="Search style…"
+                    value={form.style_id ?? ""}
+                    onChange={(next, opt) => {
+                      const id = typeof next === "number" && next > 0 ? next : undefined;
+                      onStyleChange(id, opt?.meta ?? null);
+                    }}
+                    fetchPage={fetchStylePage}
+                    hydrateById={hydrateStyle}
+                    allowClear
+                    aria-label="Style"
+                  />
                   <button
                     type="button"
                     onClick={() => setShowQuickStyleCreate((v) => !v)}

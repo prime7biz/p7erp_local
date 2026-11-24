@@ -205,7 +205,10 @@ async def create_department(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_master_write_allowed
+
     _ensure_user_tenant(user, tenant)
+    await assert_hr_master_write_allowed(db, user, tenant)
     code = await _next_department_code(db, tenant.id)
     row = Department(
         tenant_id=tenant.id,
@@ -232,7 +235,10 @@ async def update_department(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_master_write_allowed
+
     _ensure_user_tenant(user, tenant)
+    await assert_hr_master_write_allowed(db, user, tenant)
     row = await _get_department_or_404(db, tenant.id, department_id)
     payload = body.model_dump(exclude_unset=True)
     if "code" in payload and payload["code"] is not None:
@@ -274,8 +280,11 @@ async def delete_department(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_master_write_allowed
+
     _ensure_user_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
+    await assert_hr_master_write_allowed(db, user, tenant, allow_delete=True)
     row = await _get_department_or_404(db, tenant.id, department_id)
     if move_to_undefined:
         impact = await master_delete.department_impact(db, tenant.id, department_id)
@@ -354,7 +363,10 @@ async def create_designation(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_master_write_allowed
+
     _ensure_user_tenant(user, tenant)
+    await assert_hr_master_write_allowed(db, user, tenant)
     await _validate_fk_values(db, tenant.id, body.department_id, None, None)
     code = await _next_designation_code(db, tenant.id)
     row = Designation(
@@ -383,7 +395,10 @@ async def update_designation(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_master_write_allowed
+
     _ensure_user_tenant(user, tenant)
+    await assert_hr_master_write_allowed(db, user, tenant)
     row = await _get_designation_or_404(db, tenant.id, designation_id)
     payload = body.model_dump(exclude_unset=True)
     await _validate_fk_values(db, tenant.id, payload.get("department_id"), None, None)
@@ -413,8 +428,11 @@ async def delete_designation(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_master_write_allowed
+
     _ensure_user_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
+    await assert_hr_master_write_allowed(db, user, tenant, allow_delete=True)
     row = await _get_designation_or_404(db, tenant.id, designation_id)
     employee_exists = (
         await db.execute(
@@ -613,7 +631,10 @@ async def create_employee(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+
     _ensure_user_tenant(user, tenant)
+    await assert_hr_request_required(db, user, tenant)
     access = await employee_service.employee_field_access(db, user, tenant.id)
     try:
         row = await employee_service.build_employee(db, tenant=tenant, user=user, body=body, access=access)
@@ -637,7 +658,10 @@ async def update_employee(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+
     _ensure_user_tenant(user, tenant)
+    await assert_hr_request_required(db, user, tenant)
     row = await _get_employee_or_404(db, tenant.id, employee_id)
     assert_direct_edit_allowed(tenant)
     payload = body.model_dump(exclude_unset=True)
@@ -658,32 +682,15 @@ async def activate_employee(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+    from app.modules.hr.employee_status_core import activate_employee_core
+
     _ensure_user_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
     assert_direct_edit_allowed(tenant)
-    row = await _get_employee_or_404(db, tenant.id, employee_id)
-    if not row.is_active:
-        from app.modules.hr_manpower.quota_guard import consume_exception_slot, guard_and_prepare
-
-        exception_id = await guard_and_prepare(
-            db,
-            tenant,
-            department_id=row.department_id,
-            designation_id=row.designation_id,
-            exclude_employee_id=row.id,
-        )
-        row.is_active = True
-        if exception_id is not None:
-            await consume_exception_slot(
-                db,
-                tenant_id=tenant.id,
-                exception_id=exception_id,
-                employee_id=row.id,
-                user_id=user.id,
-            )
-        await db.commit()
-    else:
-        await db.commit()
+    await assert_hr_request_required(db, user, tenant)
+    row = await activate_employee_core(db, tenant=tenant, actor=user, employee_id=employee_id)
+    await db.commit()
     await db.refresh(row)
     return _employee_to_response(row)
 
@@ -695,11 +702,14 @@ async def deactivate_employee(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+    from app.modules.hr.employee_status_core import deactivate_employee_core
+
     _ensure_user_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
     assert_direct_edit_allowed(tenant)
-    row = await _get_employee_or_404(db, tenant.id, employee_id)
-    row.is_active = False
+    await assert_hr_request_required(db, user, tenant)
+    row = await deactivate_employee_core(db, tenant=tenant, employee_id=employee_id)
     await db.commit()
     await db.refresh(row)
     return _employee_to_response(row)
@@ -806,7 +816,10 @@ async def create_section(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_master_write_allowed
+
     _ensure_user_tenant(user, tenant)
+    await assert_hr_master_write_allowed(db, user, tenant)
     code = body.code.strip() if body.code else await hr_domain.next_section_code(db, tenant.id)
     if body.department_id is not None:
         await _get_department_or_404(db, tenant.id, body.department_id)
@@ -842,7 +855,10 @@ async def update_section(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_master_write_allowed
+
     _ensure_user_tenant(user, tenant)
+    await assert_hr_master_write_allowed(db, user, tenant)
     row = await hr_domain.get_section_or_404(db, tenant.id, section_id)
     payload = body.model_dump(exclude_unset=True)
     if "code" in payload and payload["code"] is not None:
@@ -896,8 +912,11 @@ async def delete_section(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a section / line. Its employees and child sections become "Undefined" (empty link)."""
+    from app.common.authority.hr_policy import assert_hr_master_write_allowed
+
     _ensure_user_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
+    await assert_hr_master_write_allowed(db, user, tenant, allow_delete=True)
     row = await hr_domain.get_section_or_404(db, tenant.id, section_id)
     impact = await master_delete.section_impact(db, tenant.id, section_id)
     label = f"{row.code} - {row.name}"
@@ -1032,7 +1051,10 @@ async def create_employee_status_history(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+
     _ensure_user_tenant(user, tenant)
+    await assert_hr_request_required(db, user, tenant)
     await _get_employee_or_404(db, tenant.id, employee_id)
     row = EmployeeStatusHistory(
         tenant_id=tenant.id,
@@ -1369,8 +1391,11 @@ async def import_employees(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+
     _ensure_user_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
+    await assert_hr_request_required(db, user, tenant)
     return await hr_domain.import_employees_excel(db, tenant, user, file)
 
 

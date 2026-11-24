@@ -5,22 +5,26 @@ import {
   type BudgetLineCreate,
   type BudgetResponse,
   type BudgetVsActualResponse,
-  type ChartOfAccountResponse,
-  type CostCenterResponse,
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { logApiError } from "@/utils/logApiError";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { currentMonthLocal } from "@/lib/dates";
-import { getChartOfAccountsCached, getCostCentersCached } from "@/lib/masterData";
+import {
+  fetchChartAccountPage,
+  fetchCostCenterPage,
+  hydrateChartAccount,
+  hydrateCostCenter,
+} from "@/lib/remoteSelectFetchers";
 import { useConfirm } from "@/components/app/useConfirm";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import {
   listPageEmptyClass,
   listPageErrorClass,
   listPageRootClass,
   listPageToolbarButtonClass,
-  listPageToolbarSelectClass,
   listTableBaseClass,
   listTableTdClass,
   listTableTdPrimaryClass,
@@ -95,8 +99,6 @@ export function BudgetsPage() {
       : "off";
   const [fiscalYearFilter, setFiscalYearFilter] = useState("");
   const [budgets, setBudgets] = useState<BudgetResponse[]>([]);
-  const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
-  const [costCenters, setCostCenters] = useState<CostCenterResponse[]>([]);
   const [selectedBudgetId, setSelectedBudgetId] = useState<number | null>(null);
   const [vsActual, setVsActual] = useState<BudgetVsActualResponse | null>(null);
   const [error, setError] = useState("");
@@ -112,15 +114,9 @@ export function BudgetsPage() {
     const token = latest.begin();
     try {
       setError("");
-      const [b, a, c] = await Promise.all([
-        api.listBudgets(fiscalYearFilter ? { fiscal_year: fiscalYearFilter } : undefined),
-        getChartOfAccountsCached({ active_only: true }),
-        getCostCentersCached({ active_only: true }),
-      ]);
+      const b = await api.listBudgets(fiscalYearFilter ? { fiscal_year: fiscalYearFilter } : undefined);
       if (!latest.isCurrent(token)) return;
       setBudgets(b);
-      setAccounts(a);
-      setCostCenters(c);
       if (selectedBudgetId && !b.some((x) => x.id === selectedBudgetId)) {
         setSelectedBudgetId(null);
         setVsActual(null);
@@ -242,19 +238,18 @@ export function BudgetsPage() {
         toolbar={
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-text-primary">Budget List</h2>
-            <select
+            <LocalSearchSelect
               aria-label="Select budget for vs actual"
-              className={listPageToolbarSelectClass}
+              className="min-w-[14rem]"
               value={selectedBudgetId ?? ""}
-              onChange={(e) => setSelectedBudgetId(e.target.value ? Number(e.target.value) : null)}
-            >
-              <option value="">Select for vs actual</option>
-              {budgets.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.budget_name} ({b.fiscal_year})
-                </option>
-              ))}
-            </select>
+              options={budgets.map((b) => ({
+                value: b.id,
+                label: `${b.budget_name} (${b.fiscal_year})`,
+              }))}
+              onChange={(next) => setSelectedBudgetId(next === "" ? null : Number(next))}
+              placeholder="Select for vs actual"
+              allowClear
+            />
           </div>
         }
         footer={showingCountLabel(budgets.length, budgets.length, "budget")}
@@ -451,48 +446,44 @@ export function BudgetsPage() {
                       />
                     </td>
                     <td className="px-3 py-2">
-                      <select
-                        className={fieldClass}
+                      <RemoteSearchSelect
+                        className="w-full"
+                        menuPortal
                         aria-label={`Line ${idx + 1} account`}
+                        placeholder="Any account…"
                         value={line.account_id ?? ""}
-                        onChange={(e) =>
+                        onChange={(next) =>
                           setForm((p) => ({
                             ...p,
                             lines: p.lines.map((r, i) =>
-                              i === idx ? { ...r, account_id: e.target.value ? Number(e.target.value) : null } : r,
+                              i === idx ? { ...r, account_id: next === "" ? null : next } : r,
                             ),
                           }))
                         }
-                      >
-                        <option value="">Any Account</option>
-                        {accounts.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.account_number} - {a.name}
-                          </option>
-                        ))}
-                      </select>
+                        fetchPage={fetchChartAccountPage}
+                        hydrateById={hydrateChartAccount}
+                        allowClear
+                      />
                     </td>
                     <td className="px-3 py-2">
-                      <select
-                        className={fieldClass}
+                      <RemoteSearchSelect
+                        className="w-full"
+                        menuPortal
                         aria-label={`Line ${idx + 1} cost center`}
+                        placeholder="Any cost center…"
                         value={line.cost_center_id ?? ""}
-                        onChange={(e) =>
+                        onChange={(next) =>
                           setForm((p) => ({
                             ...p,
                             lines: p.lines.map((r, i) =>
-                              i === idx ? { ...r, cost_center_id: e.target.value ? Number(e.target.value) : null } : r,
+                              i === idx ? { ...r, cost_center_id: next === "" ? null : next } : r,
                             ),
                           }))
                         }
-                      >
-                        <option value="">Any Cost Center</option>
-                        {costCenters.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.center_code} - {c.name}
-                          </option>
-                        ))}
-                      </select>
+                        fetchPage={fetchCostCenterPage}
+                        hydrateById={hydrateCostCenter}
+                        allowClear
+                      />
                     </td>
                     <td className="px-3 py-2">
                       <input

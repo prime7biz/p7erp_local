@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, type QuotationResponse } from "@/api/client";
 import { useListPagination } from "@/hooks/useListPagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -49,11 +49,12 @@ import { toast } from "sonner";
 export function QuotationsPage() {
   const confirm = useConfirm();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [items, setItems] = useState<QuotationResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("q")?.trim() ?? "");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const { page, setPage, pageSize, setPageSize } = useListPagination();
   const [listTotal, setListTotal] = useState(0);
@@ -312,10 +313,22 @@ export function QuotationsPage() {
                       {new Date(q.created_at).toLocaleDateString()}
                     </td>
                     <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={displayCustomerName(q)}>
-                      {displayCustomerName(q)}
+                      {q.customer_id ? (
+                        <Link to={`/app/customers/${q.customer_id}`} className="text-brand-primary hover:underline">
+                          {displayCustomerName(q)}
+                        </Link>
+                      ) : (
+                        displayCustomerName(q)
+                      )}
                     </td>
                     <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={displayInquiryCode(q)}>
-                      {displayInquiryCode(q)}
+                      {q.inquiry_id != null ? (
+                        <Link to={`/app/inquiries/${q.inquiry_id}`} className="text-brand-primary hover:underline">
+                          {displayInquiryCode(q)}
+                        </Link>
+                      ) : (
+                        displayInquiryCode(q)
+                      )}
                     </td>
                     <td className={listTableTdClass}>
                       <div className="flex items-center gap-2 min-w-0">
@@ -333,7 +346,16 @@ export function QuotationsPage() {
                             className="font-medium text-text-primary truncate text-sm"
                             title={q.style_name ?? q.style_ref ?? undefined}
                           >
-                            {q.style_name ?? q.style_ref ?? "—"}
+                            {q.style_id ? (
+                              <Link
+                                to={`/app/merchandising/styles/${q.style_id}`}
+                                className="text-brand-primary hover:underline"
+                              >
+                                {q.style_name ?? q.style_ref ?? `Style #${q.style_id}`}
+                              </Link>
+                            ) : (
+                              (q.style_name ?? q.style_ref ?? "—")
+                            )}
                           </div>
                           <div
                             className="text-xs text-text-muted whitespace-nowrap truncate"
@@ -387,7 +409,13 @@ export function QuotationsPage() {
                         )}
                         {q.is_converted_to_order && (
                           <span className="inline-flex rounded-full bg-status-info-subtle px-2 py-0.5 text-xs font-medium text-status-info-foreground">
-                            Converted to order
+                            {q.converted_order_id ? (
+                              <Link to={`/app/orders/${q.converted_order_id}`} className="hover:underline">
+                                Converted to order
+                              </Link>
+                            ) : (
+                              "Converted to order"
+                            )}
                           </span>
                         )}
                       </div>

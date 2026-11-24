@@ -27,9 +27,13 @@ import { resolveRate } from "./mappers/currencyFx";
 import { quotationDirtyValues } from "./mappers/quotationDirtyValues";
 import {
   applyOtherCostCalculation,
+  computeAutoQuotedPrice,
+  computeCostPerPiece,
   computeManufacturingLineAmounts,
   computeMaterialLineAmounts,
+  localDateYmd,
   QUOTATION_MANUFACTURING_HOURS_PER_DAY,
+  sizeQuantityFromRatio,
   toSafeNumber,
 } from "./mappers/quotationNumeric";
 import { getCustomersCached } from "@/lib/masterData";
@@ -38,6 +42,15 @@ export function useQuotationWorkspaceController(id?: string) {
   const navigate = useNavigate();
   const isNew = id === "new" || !id;
   const [quotation, setQuotation] = useState<QuotationDetailResponse | null>(null);
+  /** After POST succeeds but PUT fails, retry updates this id instead of creating duplicates. */
+  const [pendingCreatedId, setPendingCreatedId] = useState<number | null>(null);
+  const [savedSnapshot, setSavedSnapshot] = useState<{
+    quotation: QuotationDetailResponse;
+    materials: QuotationMaterialLine[];
+    manufacturing: QuotationManufacturingLine[];
+    otherCosts: QuotationOtherCostLine[];
+    sizeRatios: QuotationSizeRatioLine[];
+  } | null>(null);
   const [customer, setCustomer] = useState<CustomerResponse | null>(null);
   const [inquiry, setInquiry] = useState<InquiryResponse | null>(null);
   const [categories, setCategories] = useState<ItemCategoryResponse[]>([]);
@@ -88,7 +101,7 @@ export function useQuotationWorkspaceController(id?: string) {
           api.listItemUnits(),
           isNew ? getCustomersCached() : Promise.resolve([] as CustomerResponse[]),
           isNew ? api.listInquiries() : Promise.resolve([] as InquiryResponse[]),
-          isNew ? api.listCustomerIntermediaryLinks() : Promise.resolve([] as CustomerIntermediaryLinkResponse[]),
+          api.listCustomerIntermediaryLinks(),
           api.getSettingsConfig(),
           api.listStyles({ status: "ACTIVE" }),
           api.listCurrencies(),
@@ -99,13 +112,17 @@ export function useQuotationWorkspaceController(id?: string) {
         setTenantDefaultCommissionMode(settings.default_commission_mode ?? "");
         setStyles(stylesRes);
         setCurrencies(currenciesRes.filter((currency) => currency.is_active));
+        setAllLinks(linksRes);
+        setPendingCreatedId(null);
+        setUseManualQuotedPrice(false);
+        setManualQuotedPrice("");
         if (isNew) {
           setCustomers(customersRes);
           setInquiries(inquiriesRes.filter(isInquiryOpenForQuotationLink));
-          setAllLinks(linksRes);
         }
 
         if (isNew) {
+          const today = localDateYmd();
           setQuotation({
             id: 0,
             tenant_id: 0,
@@ -117,7 +134,7 @@ export function useQuotationWorkspaceController(id?: string) {
             department: null,
             projected_quantity: null,
             projected_delivery_date: null,
-            quotation_date: new Date().toISOString(),
+            quotation_date: today,
             target_price: null,
             target_price_currency: "USD",
             exchange_rate: "1",
@@ -155,14 +172,27 @@ export function useQuotationWorkspaceController(id?: string) {
           setSizeRatios([]);
           setCustomer(null);
           setInquiry(null);
+          setSavedSnapshot(null);
           setIsEditing(true);
         } else if (id) {
           const q = await api.getQuotation(Number(id), { ai_indicators: 1 });
+          const mats = q.materials ?? [];
+          const mfg = q.manufacturing ?? [];
+          const oc = q.other_costs ?? [];
+          const sr = q.size_ratios ?? [];
           setQuotation(q);
-          setMaterials(q.materials ?? []);
-          setManufacturing(q.manufacturing ?? []);
-          setOtherCosts(q.other_costs ?? []);
-          setSizeRatios(q.size_ratios ?? []);
+          setMaterials(mats);
+          setManufacturing(mfg);
+          setOtherCosts(oc);
+          setSizeRatios(sr);
+          setSavedSnapshot({
+            quotation: q,
+            materials: mats,
+            manufacturing: mfg,
+            otherCosts: oc,
+            sizeRatios: sr,
+          });
+          setIsEditing(false);
           setFormBaseline((n) => n + 1);
           const [cust, inq] = await Promise.all([
             api.getCustomer(q.customer_id),
@@ -170,8 +200,17 @@ export function useQuotationWorkspaceController(id?: string) {
           ]);
           setCustomer(cust);
           setInquiry(inq);
-          if (toSafeNumber(q.quoted_price) > 0) {
+          // Detect manual quoted price: differs from auto (total_cost * (1 + profit%)).
+          const cost = toSafeNumber(q.total_cost);
+          const profitPct = toSafeNumber(q.profit_percentage);
+          const autoQuoted = cost + (cost * profitPct) / 100;
+          const savedQuoted = toSafeNumber(q.quoted_price);
+          if (savedQuoted > 0 && Math.abs(savedQuoted - autoQuoted) > 0.02) {
+            setUseManualQuotedPrice(true);
             setManualQuotedPrice(String(q.quoted_price));
+          } else {
+            setUseManualQuotedPrice(false);
+            setManualQuotedPrice(savedQuoted > 0 ? String(q.quoted_price) : "");
           }
         }
       } catch (e) {
@@ -273,14 +312,24 @@ export function useQuotationWorkspaceController(id?: string) {
   };
 
   const onMaterialChange = useCallback(
-    (index: number, patch: Partial<QuotationMaterialLine>) => {
+    (
+      index: number,
+      patch: Partial<QuotationMaterialLine>,
+      itemOverride?: CostingItemResponse | null,
+    ) => {
       setMaterials((rows) => {
         const next = [...rows];
         const row = { ...next[index], ...patch } as QuotationMaterialLine;
         if ("item_id" in patch) {
           if (patch.item_id) {
-            const selectedItem = items.find((i) => i.id === patch.item_id);
+            const selectedItem =
+              itemOverride && itemOverride.id === patch.item_id
+                ? itemOverride
+                : items.find((i) => i.id === patch.item_id);
             if (selectedItem) {
+              if (selectedItem.category_id != null && row.category_id == null) {
+                row.category_id = selectedItem.category_id;
+              }
               const u = units.find((x) => x.id === selectedItem.unit_id);
               row.unit =
                 u?.name ??
@@ -289,6 +338,9 @@ export function useQuotationWorkspaceController(id?: string) {
                 selectedItem.unit_code ??
                 row.unit ??
                 "";
+              if (!row.description?.trim()) {
+                row.description = selectedItem.name;
+              }
             }
           } else {
             row.unit = "";
@@ -384,22 +436,24 @@ export function useQuotationWorkspaceController(id?: string) {
         [],
         quotationCurrency,
       );
-      row = applyOtherCostCalculation(row, matTotal + mfgTotal);
+      row = applyOtherCostCalculation(row, matTotal, mfgTotal);
       next[index] = row;
       return next;
     });
   };
 
   useEffect(() => {
-    const base = totals.matTotal + totals.mfgTotal;
     setOtherCosts((rows) => {
-      const mapped = rows.map((row) => applyOtherCostCalculation(row, base));
+      const mapped = rows.map((row) =>
+        applyOtherCostCalculation(row, totals.matTotal, totals.mfgTotal),
+      );
       const same = mapped.every((r, i) => {
         const prev = rows[i];
         return (
           prev != null &&
           r.calculated_amount === prev.calculated_amount &&
-          r.total_amount === prev.total_amount
+          r.total_amount === prev.total_amount &&
+          r.base_amount === prev.base_amount
         );
       });
       return same ? rows : mapped;
@@ -409,10 +463,29 @@ export function useQuotationWorkspaceController(id?: string) {
   const onSizeRatioChange = (index: number, patch: Partial<QuotationSizeRatioLine>) => {
     setSizeRatios((rows) => {
       const next = [...rows];
-      next[index] = { ...next[index], ...patch } as QuotationSizeRatioLine;
+      const row = { ...next[index], ...patch } as QuotationSizeRatioLine;
+      if ("ratio_percentage" in patch) {
+        row.quantity = sizeQuantityFromRatio(
+          toSafeNumber(quotation?.projected_quantity),
+          row.ratio_percentage,
+        );
+      }
+      next[index] = row;
       return next;
     });
   };
+
+  // Keep size quantities in sync when projected quantity changes.
+  useEffect(() => {
+    if (quotationId == null) return;
+    const pq = toSafeNumber(projectedQuantity);
+    setSizeRatios((rows) =>
+      rows.map((row) => ({
+        ...row,
+        quantity: sizeQuantityFromRatio(pq, row.ratio_percentage),
+      })),
+    );
+  }, [quotationId, projectedQuantity]);
 
   const handleInquirySelect = async (inquiryId: number | null) => {
     if (!inquiryId) {
@@ -453,14 +526,18 @@ export function useQuotationWorkspaceController(id?: string) {
     }
   };
 
-  const handleCustomerSelect = (customerId: number) => {
-    const cust = customers.find((c) => c.id === customerId) ?? null;
+  const handleCustomerSelect = (customerId: number, customerOverride?: CustomerResponse | null) => {
+    const cust = customerOverride ?? customers.find((c) => c.id === customerId) ?? null;
+    if (cust && !customers.some((c) => c.id === cust.id)) {
+      setCustomers((prev) => [...prev, cust]);
+    }
     const firstPrimaryLink =
       allLinks.find((l) => l.customer_id === customerId && l.is_primary) ??
       allLinks.find((l) => l.customer_id === customerId) ??
       null;
     setCustomer(cust);
     const prefCur = cust?.preferred_currency?.trim();
+    const incoterm = cust?.default_incoterm?.trim();
     updateQuotationHeader({
       customer_id: customerId,
       customer_intermediary_id: firstPrimaryLink?.id ?? null,
@@ -468,11 +545,15 @@ export function useQuotationWorkspaceController(id?: string) {
       commission_type: firstPrimaryLink?.commission_type ?? null,
       commission_value: firstPrimaryLink?.commission_value != null ? String(firstPrimaryLink.commission_value) : null,
       ...(prefCur ? { currency: prefCur.toUpperCase() } : {}),
+      ...(incoterm ? { shipping_term: incoterm } : {}),
     });
   };
 
-  const onStyleSelect = (styleId: number | null) => {
-    const style = styles.find((s) => s.id === styleId) ?? null;
+  const onStyleSelect = (styleId: number | null, styleOverride?: StyleResponse | null) => {
+    const style = styleOverride ?? styles.find((s) => s.id === styleId) ?? null;
+    if (style && !styles.some((s) => s.id === style.id)) {
+      setStyles((prev) => [style, ...prev]);
+    }
     updateQuotationHeader({
       style_id: styleId,
       style_ref: style?.style_code ?? null,
@@ -527,7 +608,7 @@ export function useQuotationWorkspaceController(id?: string) {
         setQuickStyleNotice("Style created successfully.");
       }
       setStyles((prev) => [styleForSelect, ...prev.filter((s) => s.id !== styleForSelect.id)]);
-      onStyleSelect(styleForSelect.id);
+      onStyleSelect(styleForSelect.id, styleForSelect);
       setQuickStyleName("");
       setQuickStyleSeason("");
       setQuickStyleDepartment("");
@@ -557,9 +638,13 @@ export function useQuotationWorkspaceController(id?: string) {
       }
     }
     const pq = toSafeNumber(quotation.projected_quantity);
-    if (pq <= 0 && materials.some((m) => m.category_id != null || m.item_id != null)) {
+    const hasCostLines =
+      materials.some((m) => m.category_id != null || m.item_id != null || (m.description ?? "").trim()) ||
+      manufacturing.some((m) => (m.style_part ?? "").trim()) ||
+      otherCosts.some((c) => (c.cost_head ?? "").trim());
+    if (pq <= 0 && hasCostLines) {
       setError(
-        "Projected quantity is zero — material line totals will be zero. Set a quantity or remove material lines.",
+        "Projected quantity is zero — costing line totals will be zero. Set a quantity or remove costing lines.",
       );
       return;
     }
@@ -567,15 +652,10 @@ export function useQuotationWorkspaceController(id?: string) {
     setError("");
     setSuccess("");
     try {
-      const body = buildQuotationFullUpdatePayload({
-        quotation,
-        materials,
-        manufacturing,
-        otherCosts,
-        sizeRatios,
-      });
-      let targetId = quotation.id;
-      if (isNew) {
+      let working: QuotationDetailResponse = quotation;
+      let targetId = pendingCreatedId ?? quotation.id;
+      const stillCreating = isNew && !pendingCreatedId;
+      if (stillCreating) {
         const linkedInquiryId = quotation.inquiry_id;
         const useConvertPath =
           linkedInquiryId != null &&
@@ -587,6 +667,13 @@ export function useQuotationWorkspaceController(id?: string) {
             profit_percentage: toSafeNumber(quotation.profit_percentage) || 15,
           });
           targetId = base.id;
+          working = {
+            ...quotation,
+            id: base.id,
+            status: base.status,
+            quotation_code: base.quotation_code,
+          };
+          setPendingCreatedId(base.id);
         } else {
           const base = await api.createQuotation({
             customer_id: quotation.customer_id,
@@ -604,17 +691,41 @@ export function useQuotationWorkspaceController(id?: string) {
             notes: quotation.notes ?? undefined,
           });
           targetId = base.id;
+          working = {
+            ...quotation,
+            id: base.id,
+            status: base.status,
+            quotation_code: base.quotation_code,
+          };
+          setPendingCreatedId(base.id);
         }
+      } else if (pendingCreatedId) {
+        working = { ...quotation, id: pendingCreatedId, status: quotation.status };
       }
+      const body = buildQuotationFullUpdatePayload({
+        quotation: working,
+        materials,
+        manufacturing,
+        otherCosts,
+        sizeRatios,
+      });
       const updated = await api.updateQuotationFull(targetId, body);
+      setPendingCreatedId(null);
       setQuotation(updated);
       setMaterials(updated.materials ?? []);
       setManufacturing(updated.manufacturing ?? []);
       setOtherCosts(updated.other_costs ?? []);
       setSizeRatios(updated.size_ratios ?? []);
+      setSavedSnapshot({
+        quotation: updated,
+        materials: updated.materials ?? [],
+        manufacturing: updated.manufacturing ?? [],
+        otherCosts: updated.other_costs ?? [],
+        sizeRatios: updated.size_ratios ?? [],
+      });
       setSuccess("Costing updated.");
       setIsEditing(false);
-      if (isNew) {
+      if (isNew || pendingCreatedId) {
         navigate(`/app/quotations/${targetId}`, { replace: true });
       }
     } catch (e) {
@@ -625,14 +736,22 @@ export function useQuotationWorkspaceController(id?: string) {
   };
 
   useEffect(() => {
-    if (!quotation) return;
+    if (!quotation || !isEditing) return;
     const projectedQty = toSafeNumber(quotation.projected_quantity);
-    const profitPct = toSafeNumber(quotation.profit_percentage);
     const totalCost = totals.total;
-    const quotedAuto = totalCost + (totalCost * profitPct) / 100;
+    const quotedAuto = computeAutoQuotedPrice({
+      totalCost,
+      profitPercentage: toSafeNumber(quotation.profit_percentage),
+      commissionMode: quotation.commission_mode,
+      commissionType: quotation.commission_type,
+      commissionValue: quotation.commission_value,
+    });
     const quotedFinal =
-      useManualQuotedPrice && manualQuotedPrice.trim() !== "" ? toSafeNumber(manualQuotedPrice) : quotedAuto;
-    const costPerPiece = projectedQty > 0 ? quotedFinal / projectedQty : 0;
+      useManualQuotedPrice && manualQuotedPrice.trim() !== ""
+        ? toSafeNumber(manualQuotedPrice)
+        : quotedAuto;
+    // Backend parity: cost_per_piece = total_cost / qty (ex-profit).
+    const costPerPiece = computeCostPerPiece(totalCost, projectedQty);
 
     const patch: Partial<QuotationDetailResponse> = {};
     const totalCostStr = totalCost.toFixed(2);
@@ -648,7 +767,7 @@ export function useQuotationWorkspaceController(id?: string) {
     if (Object.keys(patch).length > 0) {
       setQuotation((prev) => (prev ? { ...prev, ...patch } : prev));
     }
-  }, [manualQuotedPrice, quotation, totals, useManualQuotedPrice]);
+  }, [isEditing, manualQuotedPrice, quotation, totals, useManualQuotedPrice]);
 
   const refreshExchangeRates = async () => {
     if (!quotation) return;
@@ -748,6 +867,49 @@ export function useQuotationWorkspaceController(id?: string) {
     }
   };
 
+  const sendQuotation = async () => {
+    if (!quotation || isNew) return;
+    setRunningWorkflowAction("send");
+    setError("");
+    try {
+      const updated = await api.sendQuotation(quotation.id);
+      setQuotation((prev) => (prev ? { ...prev, status: updated.status } : prev));
+      setSuccess("Quotation sent to customer.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to send quotation");
+    } finally {
+      setRunningWorkflowAction("");
+    }
+  };
+
+  const cancelEdit = () => {
+    if (savedSnapshot) {
+      setQuotation(savedSnapshot.quotation);
+      setMaterials(savedSnapshot.materials);
+      setManufacturing(savedSnapshot.manufacturing);
+      setOtherCosts(savedSnapshot.otherCosts);
+      setSizeRatios(savedSnapshot.sizeRatios);
+      const q = savedSnapshot.quotation;
+      const autoQuoted = computeAutoQuotedPrice({
+        totalCost: toSafeNumber(q.total_cost),
+        profitPercentage: toSafeNumber(q.profit_percentage),
+        commissionMode: q.commission_mode,
+        commissionType: q.commission_type,
+        commissionValue: q.commission_value,
+      });
+      const savedQuoted = toSafeNumber(q.quoted_price);
+      if (savedQuoted > 0 && Math.abs(savedQuoted - autoQuoted) > 0.02) {
+        setUseManualQuotedPrice(true);
+        setManualQuotedPrice(String(q.quoted_price));
+      } else {
+        setUseManualQuotedPrice(false);
+        setManualQuotedPrice(savedQuoted > 0 ? String(q.quoted_price) : "");
+      }
+    }
+    setIsEditing(false);
+    setError("");
+  };
+
   const duplicateAsNewVersion = async () => {
     if (!quotation || isNew) return;
     setDuplicatingVersion(true);
@@ -805,6 +967,7 @@ export function useQuotationWorkspaceController(id?: string) {
     success,
     isEditing,
     setIsEditing,
+    cancelEdit,
     duplicatingVersion,
     runningWorkflowAction,
     useManualQuotedPrice,
@@ -817,6 +980,7 @@ export function useQuotationWorkspaceController(id?: string) {
     isSuperseded,
     selectedStyle,
     totals,
+    allLinks,
     updateQuotationHeader,
     onMaterialChange,
     onManufacturingChange,
@@ -831,6 +995,7 @@ export function useQuotationWorkspaceController(id?: string) {
     refreshExchangeRates,
     submitForReview,
     approveQuotation,
+    sendQuotation,
     duplicateAsNewVersion,
     navigate,
     reloadQuotationDetail,

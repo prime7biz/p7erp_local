@@ -22,6 +22,8 @@ const AGENT_TOOL_LABELS: Record<string, string> = {
   calendar_impact: "Calendar impact",
   analyze_structured_metrics: "Analysis",
   search_notes: "Notes",
+  search_quotations: "Quotations",
+  get_quotation_summary: "Quotation details",
   search_help_articles: "Help articles",
   mfg_delivery_forecast: "Delivery forecast",
   mfg_bottlenecks: "Production bottlenecks",

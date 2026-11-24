@@ -386,9 +386,12 @@ async def replace_employee_compensation(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+
     await _require_payroll(db, user, tenant)
     await get_employee_or_404(db, tenant.id, employee_id)
     assert_direct_edit_allowed(tenant)
+    await assert_hr_request_required(db, user, tenant)
     tenant_id, user_id = tenant.id, user.id
     try:
         result = await comp.replace_employee_compensation(
@@ -448,9 +451,12 @@ async def replace_employee_pay_benefits(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+
     await _require_payroll(db, user, tenant)
     await get_employee_or_404(db, tenant.id, employee_id)
     assert_direct_edit_allowed(tenant)
+    await assert_hr_request_required(db, user, tenant)
     tenant_id, user_id = tenant.id, user.id
     try:
         await comp.lock_employee(db, tenant_id, employee_id)
@@ -497,9 +503,12 @@ async def replace_employee_tax_profile(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+
     await _require_payroll(db, user, tenant)
     await get_employee_or_404(db, tenant.id, employee_id)
     assert_direct_edit_allowed(tenant)
+    await assert_hr_request_required(db, user, tenant)
     tenant_id, user_id = tenant.id, user.id
     try:
         await comp.lock_employee(db, tenant_id, employee_id)

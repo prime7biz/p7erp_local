@@ -6,6 +6,7 @@ import {
   type AccountGroupHierarchyNode,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import {
   listPageEmptyClass,
   listPageErrorClass,
@@ -114,6 +115,10 @@ export function AccountGroupsPage() {
         .filter((r) => r.id !== editingId)
         .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
     [rows, editingId],
+  );
+  const parentSelectOptions = useMemo(
+    () => parentOptions.map((r) => ({ value: r.id, label: r.name })),
+    [parentOptions],
   );
 
   const filteredRows = useMemo(() => {
@@ -537,21 +542,17 @@ export function AccountGroupsPage() {
           <label className={labelClass} htmlFor="ag-parent">
             Parent group
           </label>
-          <select
+          <LocalSearchSelect
             id="ag-parent"
-            className={fieldClass}
             value={form.parent_group_id ?? ""}
-            onChange={(e) =>
-              setForm((p) => ({ ...p, parent_group_id: e.target.value ? Number(e.target.value) : null }))
+            options={parentSelectOptions}
+            onChange={(next) =>
+              setForm((p) => ({ ...p, parent_group_id: next === "" ? null : Number(next) }))
             }
-          >
-            <option value="">No parent</option>
-            {parentOptions.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
+            placeholder="No parent"
+            allowClear
+            aria-label="Parent group"
+          />
         </div>
         <div className="space-y-1">
           <label className={labelClass} htmlFor="ag-sort">
@@ -771,13 +772,17 @@ function TreeNode({
   showAdvanced,
 }: TreeNodeProps) {
   const [open, setOpen] = useState(true);
-  const [reparentParent, setReparentParent] = useState<string>("");
+  const [reparentParent, setReparentParent] = useState<number | "">("");
   const hasChildren = node.children.length > 0;
-  const parentOptions = allRows.filter((r) => r.id !== node.id);
+  const reparentSelectOptions = [
+    { value: 0, label: "Root (no parent)" },
+    ...allRows.filter((r) => r.id !== node.id).map((r) => ({ value: r.id, label: r.name })),
+  ];
 
   const handleReparent = () => {
     if (!onReparent) return;
-    const parentId = reparentParent === "" || reparentParent === "0" ? null : Number(reparentParent);
+    if (reparentParent === "") return;
+    const parentId = reparentParent === 0 ? null : Number(reparentParent);
     onReparent(node.id, parentId, node.sort_order ?? 0);
     setReparentParent("");
   };
@@ -823,19 +828,15 @@ function TreeNode({
         <div className="ml-auto flex flex-wrap gap-1">
           {onReparent && (
             <>
-              <select
+              <LocalSearchSelect
                 value={reparentParent}
-                onChange={(e) => setReparentParent(e.target.value)}
-                className="rounded border border-border px-1.5 py-0.5 text-xs"
-              >
-                <option value="">— Reparent —</option>
-                <option value="0">Root (no parent)</option>
-                {parentOptions.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
+                options={reparentSelectOptions}
+                onChange={(next) => setReparentParent(next === "" ? "" : Number(next))}
+                placeholder="— Reparent —"
+                allowClear
+                className="min-w-[10rem]"
+                aria-label={`Reparent ${node.name}`}
+              />
               <button
                 type="button"
                 onClick={handleReparent}

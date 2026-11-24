@@ -8,6 +8,7 @@ import {
   type WarehouseResponse,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { getWarehousesCached } from "@/lib/masterData";
@@ -88,33 +89,33 @@ export function GodownStockPage() {
       <div className="flex flex-wrap items-end gap-2 rounded-lg border border-gray-200 bg-white p-3">
         <label className="text-xs text-gray-600">
           Item group
-          <select
-            className="mt-1 block rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-            value={groupId}
-            onChange={(e) => setGroupId(e.target.value)}
-          >
-            <option value="">All</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.group_code} — {g.name}
-              </option>
-            ))}
-          </select>
+          <LocalSearchSelect
+            className="mt-1 block min-w-[12rem]"
+            value={groupId ? Number(groupId) : ""}
+            options={groups.map((g) => ({
+              value: g.id,
+              label: `${g.group_code} — ${g.name}`,
+            }))}
+            onChange={(next) => setGroupId(next === "" ? "" : String(next))}
+            placeholder="All"
+            aria-label="Item group"
+            allowClear
+          />
         </label>
         <label className="text-xs text-gray-600">
           Godown
-          <select
-            className="mt-1 block rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-            value={godownId}
-            onChange={(e) => setGodownId(e.target.value)}
-          >
-            <option value="">All</option>
-            {warehouses.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.warehouse_code} — {w.name}
-              </option>
-            ))}
-          </select>
+          <LocalSearchSelect
+            className="mt-1 block min-w-[12rem]"
+            value={godownId ? Number(godownId) : ""}
+            options={warehouses.map((w) => ({
+              value: w.id,
+              label: `${w.warehouse_code} — ${w.name}`,
+            }))}
+            onChange={(next) => setGodownId(next === "" ? "" : String(next))}
+            placeholder="All"
+            aria-label="Godown"
+            allowClear
+          />
         </label>
       </div>
 

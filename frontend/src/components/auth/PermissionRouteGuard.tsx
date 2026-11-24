@@ -4,18 +4,23 @@ import { getRbacMode } from "@/components/auth/rbacMode";
 
 interface PermissionRouteGuardProps {
   permissionKey: string;
+  /** When set, pass if the user has any of these keys (e.g. My HR: hr.access or ess.access). */
+  anyOf?: string[];
 }
 
-export function PermissionRouteGuard({ permissionKey }: PermissionRouteGuardProps) {
+export function PermissionRouteGuard({ permissionKey, anyOf }: PermissionRouteGuardProps) {
   const { me, hasPermission } = useAuth();
   const location = useLocation();
   const mode = getRbacMode(me?.feature_flags);
-  const allowed = hasPermission(permissionKey);
+  const keys = anyOf?.length ? anyOf : [permissionKey];
+  const allowed = keys.some((k) => hasPermission(k));
+  // Fixed-class authority: module grants apply even when soft RBAC is off.
+  const authorityOn = me?.authority_classes_enabled === true;
 
   if (allowed) return <Outlet />;
-  if (mode === "shadow") {
+  if (!authorityOn && mode === "shadow") {
     console.warn("rbac_frontend_shadow_denial", {
-      permissionKey,
+      permissionKey: keys.join("|"),
       mode,
       path: location.pathname,
       userId: me?.user_id ?? null,
@@ -23,7 +28,7 @@ export function PermissionRouteGuard({ permissionKey }: PermissionRouteGuardProp
     });
     return <Outlet />;
   }
-  if (mode === "off") return <Outlet />;
+  if (!authorityOn && mode === "off") return <Outlet />;
 
-  return <Navigate to="/app" replace state={{ deniedPermission: permissionKey }} />;
+  return <Navigate to="/app" replace state={{ deniedPermission: keys[0] }} />;
 }

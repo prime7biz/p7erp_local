@@ -4,6 +4,7 @@ import { QRCodeSVG } from "qrcode.react";
 import {
   ApiError,
   api,
+  type CustomerResponse,
   type DeliveryChallanCreate,
   type DeliveryChallanItemCreate,
   type DeliveryChallanResponse,
@@ -13,17 +14,25 @@ import {
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { LinkedRecordsSection } from "@/components/app/LinkedRecordsSection";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { WorkflowSummaryStrip } from "@/components/app/WorkflowSummaryStrip";
 import { GlPostingsPanel } from "@/components/inventory/GlPostingsPanel";
 import { InventoryDocumentPrintSheets } from "@/components/print/InventoryDocumentPrintSheets";
 import { PrintPreviewModal } from "@/components/print/PrintPreviewModal";
-import { fetchInventoryItemPage, hydrateInventoryItem } from "@/lib/remoteSelectFetchers";
+import {
+  fetchActiveCustomerPage,
+  fetchInventoryItemPage,
+  hydrateCustomer,
+  hydrateInventoryItem,
+} from "@/lib/remoteSelectFetchers";
+import { useAuth } from "@/context/AuthContext";
 import { logApiError } from "@/utils/logApiError";
 import { publicVerifyUrl } from "@/utils/verifyPrintUrl";
 import { getWarehousesCached } from "@/lib/masterData";
 
 const STATUSES = ["DRAFT", "SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED", "POSTED", "REJECTED"];
+const CLASS_CHAIN_STATUSES = new Set(["RECOMMENDED", "APPROVED"]);
 
 function newIdempotencyKey(challanId: number) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -34,6 +43,9 @@ function newIdempotencyKey(challanId: number) {
 
 export function DeliveryChallanDetailPage() {
   const navigate = useNavigate();
+  const flags = useAuth().me?.feature_flags;
+  const classChainOn =
+    flags?.user_authority_classes_v1 === true && flags?.material_conversion_v1 === true;
   const { challanId } = useParams<{ challanId: string }>();
   const isNew = Boolean(useMatch({ path: "/app/inventory/delivery-challans/new", end: true }));
   const idNum = challanId && challanId !== "new" ? Number(challanId) : NaN;
@@ -59,6 +71,7 @@ export function DeliveryChallanDetailPage() {
 
   const [form, setForm] = useState<DeliveryChallanCreate>({
     customer_name: "",
+    customer_id: null,
     delivery_date: null,
     notes: undefined,
     status: "DRAFT",
@@ -134,6 +147,7 @@ export function DeliveryChallanDetailPage() {
         setForm((prev) => ({
           ...prev,
           customer_name: prev.customer_name || order.customer_name || "",
+          customer_id: prev.customer_id || order.customer_id || null,
           order_ids: prev.order_ids?.includes(prefillOrderId) ? prev.order_ids : [...(prev.order_ids ?? []), prefillOrderId],
         }));
       })
@@ -201,6 +215,36 @@ export function DeliveryChallanDetailPage() {
         ) : null}
         <form onSubmit={handleCreate} className="space-y-4 rounded-xl border border-border bg-surface-raised p-4">
           <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary">Customer</label>
+              <div className="mt-1">
+                <RemoteSearchSelect<CustomerResponse>
+                  value={form.customer_id && form.customer_id > 0 ? form.customer_id : ""}
+                  onChange={(id, option) => {
+                    const name = option?.meta?.name ?? option?.label ?? "";
+                    setForm((p) => ({
+                      ...p,
+                      customer_id: id === "" ? null : id,
+                      customer_name: id === "" ? p.customer_name : name || p.customer_name,
+                    }));
+                  }}
+                  fetchPage={fetchActiveCustomerPage}
+                  hydrateById={hydrateCustomer}
+                  placeholder="Search customer…"
+                  aria-label="Customer"
+                  allowClear
+                  menuPortal
+                />
+              </div>
+              {form.customer_id ? (
+                <Link
+                  to={`/app/customers/${form.customer_id}`}
+                  className="mt-1 inline-block text-xs text-brand-primary hover:underline"
+                >
+                  Open customer profile
+                </Link>
+              ) : null}
+            </div>
             <label className="block text-xs font-semibold text-text-secondary">
               Customer name *
               <input
@@ -286,17 +330,20 @@ export function DeliveryChallanDetailPage() {
                   allowClear
                 />
               </div>
-              <select
-                className="rounded border px-2 py-1 text-sm"
-                value={line.warehouse_id || ""}
-                onChange={(e) => setLine((p) => ({ ...p, warehouse_id: Number(e.target.value) }))}
-              >
-                {warehouses.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name}
-                  </option>
-                ))}
-              </select>
+              <LocalSearchSelect
+                className="min-w-[8rem]"
+                value={line.warehouse_id > 0 ? line.warehouse_id : ""}
+                options={warehouses.map((w) => ({
+                  value: w.id,
+                  label: w.name,
+                }))}
+                onChange={(next) =>
+                  setLine((p) => ({ ...p, warehouse_id: next === "" ? 0 : Number(next) }))
+                }
+                placeholder="Warehouse…"
+                aria-label="Warehouse"
+                allowClear={false}
+              />
               <input
                 className="w-28 rounded border px-2 py-1 text-sm"
                 value={line.quantity}
@@ -396,15 +443,23 @@ export function DeliveryChallanDetailPage() {
           <WorkflowSummaryStrip
             items={[
               { label: "Status", value: challan.status },
-              ...(challan.customer_name
+              ...(challan.customer_id
                 ? [
                     {
                       label: "Customer",
                       value: challan.customer_name,
-                      to: `/app/customers?q=${encodeURIComponent(challan.customer_name)}`,
+                      to: `/app/customers/${challan.customer_id}`,
                     },
                   ]
-                : []),
+                : challan.customer_name
+                  ? [
+                      {
+                        label: "Customer",
+                        value: challan.customer_name,
+                        to: `/app/customers?q=${encodeURIComponent(challan.customer_name)}`,
+                      },
+                    ]
+                  : []),
               ...((challan.order_ids ?? []).slice(0, 3).map((oid, idx) => ({
                 label: (challan.order_ids?.length ?? 0) > 1 ? `Order ${idx + 1}` : "Order",
                 value: `#${oid}`,
@@ -584,8 +639,38 @@ export function DeliveryChallanDetailPage() {
         </div>
         <div className="rounded-xl border border-border bg-surface-raised p-4">
           <p className="mb-2 text-sm font-semibold">Workflow</p>
+          {classChainOn ? (
+            <div className="mb-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-brand-primary/40 px-2.5 py-1 text-xs font-medium text-brand-primary hover:bg-brand-primary/10"
+                onClick={async () => {
+                  try {
+                    setChallan(await api.classRecommendDeliveryChallan(challan.id));
+                  } catch (err) {
+                    setError((err as Error).message);
+                  }
+                }}
+              >
+                Class 2 recommend
+              </button>
+              <button
+                type="button"
+                className="rounded-lg border border-status-success/40 px-2.5 py-1 text-xs font-medium text-status-success-foreground hover:bg-status-success-subtle"
+                onClick={async () => {
+                  try {
+                    setChallan(await api.classApproveDeliveryChallan(challan.id));
+                  } catch (err) {
+                    setError((err as Error).message);
+                  }
+                }}
+              >
+                Class 1 approve
+              </button>
+            </div>
+          ) : null}
           <div className="flex flex-wrap gap-2">
-            {STATUSES.map((s) => (
+            {STATUSES.filter((s) => !(classChainOn && CLASS_CHAIN_STATUSES.has(s))).map((s) => (
               <button
                 key={s}
                 type="button"

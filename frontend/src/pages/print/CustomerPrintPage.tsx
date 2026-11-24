@@ -145,6 +145,12 @@ export function CustomerPrintPage() {
           <div><span>Designation</span><strong>{orDash(customer.designation)}</strong></div>
           <div><span>Email</span><strong>{orDash(customer.contact_email ?? customer.email)}</strong></div>
           <div><span>Phone</span><strong>{orDash(customer.contact_phone ?? customer.phone)}</strong></div>
+          {customer.preferred_currency?.trim() ? (
+            <div><span>Preferred currency</span><strong>{customer.preferred_currency.trim()}</strong></div>
+          ) : null}
+          {customer.payment_terms?.trim() ? (
+            <div><span>Payment terms</span><strong>{customer.payment_terms.trim()}</strong></div>
+          ) : null}
         </section>
 
         <section className="qp-kpi-grid">
@@ -190,7 +196,7 @@ export function CustomerPrintPage() {
 
         <section className="qp-notes">
           <h3>Internal Notes</h3>
-          <p>{customer.address || "No additional notes."}</p>
+          <p>{customer.notes?.trim() || customer.address || "No additional notes."}</p>
         </section>
 
         <footer className="qp-footer">

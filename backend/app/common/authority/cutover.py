@@ -21,6 +21,7 @@ from app.common.authority.constants import (
     AUTHORITY_CLASS_3,
     AUTHORITY_CLASS_4,
     AUTHORITY_MODULE_CODES,
+    ERP_AUTHORITY_MODULE_CODES,
 )
 from app.common.authority.module_access import module_code_for_permission
 from app.common.authority.policy import bump_auth_session_version
@@ -64,7 +65,8 @@ def modules_from_role_permissions(permissions: Any) -> list[str]:
     """Map Role.permissions keys to authority module codes (never mutate the role)."""
     if not isinstance(permissions, dict):
         return []
-    allowed = {m.lower() for m in AUTHORITY_MODULE_CODES}
+    # Cutover never proposes the ESS-only module.
+    allowed = {m.lower() for m in ERP_AUTHORITY_MODULE_CODES}
     found: set[str] = set()
     for key, val in permissions.items():
         if val is False:
@@ -105,10 +107,10 @@ def _propose_for_user(
     rname = _role_name(role)
     modules = modules_from_role_permissions(getattr(role, "permissions", None) if role else None)
     if not modules and rname in _ADMIN_NAMES | _MANAGER_NAMES:
-        modules = sorted({m.lower() for m in AUTHORITY_MODULE_CODES})
+        modules = sorted({m.lower() for m in ERP_AUTHORITY_MODULE_CODES})
 
     if rname in _ADMIN_NAMES and earliest_admin_id is not None and user.id == earliest_admin_id:
-        return None, True, modules or sorted({m.lower() for m in AUTHORITY_MODULE_CODES}), STATUS_PROPOSED, (
+        return None, True, modules or sorted({m.lower() for m in ERP_AUTHORITY_MODULE_CODES}), STATUS_PROPOSED, (
             "Earliest admin suggested as Super Admin (human must confirm)"
         )
     if rname in _ADMIN_NAMES:

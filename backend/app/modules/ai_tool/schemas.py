@@ -71,7 +71,7 @@ class AiScreenContextIn(BaseModel):
     """What the user is looking at when they ask (sent by the chat drawer; optional)."""
 
     route: str | None = Field(default=None, max_length=300)
-    record_type: Literal["order", "customer", "style", "voucher", "employee"] | None = None
+    record_type: Literal["order", "customer", "style", "voucher", "employee", "inquiry", "quotation"] | None = None
     record_id: int | None = Field(default=None, ge=1)
 
 

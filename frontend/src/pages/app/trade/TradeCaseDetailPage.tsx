@@ -18,6 +18,7 @@ export function TradeCaseDetailPage() {
   const id = Number(caseId || 0);
 
   const [item, setItem] = useState<TradeCaseRow | null>(null);
+  const [customerLabel, setCustomerLabel] = useState<string | null>(null);
   const [stages, setStages] = useState<TradeCaseStageRow[]>([]);
   const [stageLog, setStageLog] = useState<TradeCaseStageLogRow[]>([]);
   const [docs, setDocs] = useState<TradeDocumentRow[]>([]);
@@ -52,6 +53,16 @@ export function TradeCaseDetailPage() {
       const selected = stageRows.find((s) => s.stage_key === tradeCase.current_stage);
       const next = (selected?.next_stage_keys || [])[0];
       setNextStage(next || "");
+      if (tradeCase.customer_id) {
+        try {
+          const customer = await api.getCustomer(tradeCase.customer_id);
+          setCustomerLabel(`${customer.customer_code} · ${customer.name}`);
+        } catch {
+          setCustomerLabel(`#${tradeCase.customer_id}`);
+        }
+      } else {
+        setCustomerLabel(null);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load trade case");
     } finally {
@@ -90,7 +101,9 @@ export function TradeCaseDetailPage() {
         <nav className="mb-1 flex flex-wrap items-center gap-1 text-xs text-text-muted">
           {item.customer_id ? (
             <>
-              <Link to={`/app/customers/${item.customer_id}`} className="text-brand-primary hover:underline">Customer #{item.customer_id}</Link>
+              <Link to={`/app/customers/${item.customer_id}`} className="text-brand-primary hover:underline">
+                {customerLabel ?? `Customer #${item.customer_id}`}
+              </Link>
               <span>›</span>
             </>
           ) : null}
@@ -166,7 +179,7 @@ export function TradeCaseDetailPage() {
           <p className="mt-1 text-sm text-text-primary">
             {item.customer_id ? (
               <Link to={`/app/customers/${item.customer_id}`} className="text-brand-primary hover:underline">
-                #{item.customer_id}
+                {customerLabel ?? `#${item.customer_id}`}
               </Link>
             ) : (
               "—"

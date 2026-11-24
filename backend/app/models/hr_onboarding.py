@@ -165,4 +165,7 @@ class HrGeneratedEmployeeDocument(Base):
     signature_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     signed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     generated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    hr_class_request_id: Mapped[int | None] = mapped_column(
+        ForeignKey("hr_class_requests.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)

@@ -3219,12 +3219,73 @@ export interface CustomerResponse {
   same_as_billing: boolean;
   /** Default quotation currency; may be absent on older API responses */
   preferred_currency?: string | null;
+  payment_terms?: string | null;
+  default_incoterm?: string | null;
+  typical_lead_time_days?: number | null;
+  industry_segment?: string | null;
+  compliance_level?: string | null;
+  /** Informational decimal string (not enforced credit control) */
+  credit_limit?: string | null;
+  notes?: string | null;
   created_at: string;
   updated_at: string;
   profile_completeness?: number | null;
   last_activity_at?: string | null;
   duplicate_risk_score?: number | null;
   days_since_activity?: number | null;
+}
+
+export interface CustomerDuplicateCheckMatch {
+  id: number;
+  customer_code: string;
+  name: string;
+  contact_email?: string | null;
+  email?: string | null;
+}
+
+export interface CustomerDuplicateCheckResponse {
+  matches: CustomerDuplicateCheckMatch[];
+}
+
+export interface CustomerContactResponse {
+  id: number;
+  tenant_id: number;
+  customer_id: number;
+  name: string;
+  designation: string | null;
+  department: string | null;
+  email: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  is_primary: boolean;
+  is_active: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomerContactCreate {
+  name: string;
+  designation?: string | null;
+  department?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  is_primary?: boolean;
+  is_active?: boolean;
+  notes?: string | null;
+}
+
+export interface CustomerContactUpdate {
+  name?: string | null;
+  designation?: string | null;
+  department?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  is_primary?: boolean | null;
+  is_active?: boolean | null;
+  notes?: string | null;
 }
 
 export interface CustomerFacetsResponse {
@@ -3256,6 +3317,44 @@ export interface CustomerHealthResponse {
   outstanding_receivable_count: number;
   last_activity_at: string | null;
   duplicate_risk_score: number;
+}
+
+/** GET /api/v1/customers/{id}/360 — each section is {allowed:false} or data with allowed:true */
+export type Customer360SectionKey =
+  | "summary"
+  | "merch"
+  | "commercial"
+  | "operations"
+  | "finance"
+  | "partners"
+  | "portal"
+  | "contacts";
+
+export interface Customer360DeniedBlock {
+  allowed: false;
+}
+
+export type Customer360SectionBlock = Customer360DeniedBlock | (Record<string, unknown> & { allowed: true });
+
+export interface Customer360Response {
+  customer_id: number;
+  sections: Partial<Record<Customer360SectionKey, Customer360SectionBlock>> & Record<string, Customer360SectionBlock | undefined>;
+}
+
+export interface CustomerTimelineEvent {
+  at: string;
+  action: string;
+  resource?: string | null;
+  details?: string | null;
+  source?: string | null;
+}
+
+export interface CustomerTimelineResponse {
+  customer_id: number;
+  total: number;
+  limit: number;
+  offset: number;
+  events: CustomerTimelineEvent[];
 }
 
 export interface CustomerAiExtractWrapResponse {
@@ -4242,6 +4341,13 @@ export interface CustomerCreate {
   shipping_country?: string;
   same_as_billing?: boolean;
   preferred_currency?: string;
+  payment_terms?: string;
+  default_incoterm?: string;
+  typical_lead_time_days?: number | null;
+  industry_segment?: string;
+  compliance_level?: string;
+  credit_limit?: string;
+  notes?: string;
 }
 
 export interface CustomerUpdate {
@@ -4273,6 +4379,13 @@ export interface CustomerUpdate {
   shipping_country?: string;
   same_as_billing?: boolean;
   preferred_currency?: string;
+  payment_terms?: string;
+  default_incoterm?: string;
+  typical_lead_time_days?: number | null;
+  industry_segment?: string;
+  compliance_level?: string;
+  credit_limit?: string;
+  notes?: string;
 }
 
 export interface CustomerListPageResponse {
@@ -4371,6 +4484,22 @@ export interface CustomerIntermediaryLinkUpdate {
   notes?: string;
 }
 
+export interface InquiryTechnicalFile {
+  id: string;
+  name?: string | null;
+  filename: string;
+  url?: string | null;
+  content_type?: string | null;
+  size_bytes?: number | null;
+  uploaded_at?: string | null;
+}
+
+export type InquiryType =
+  | "SAMPLE_DEVELOPMENT"
+  | "SALESMAN_SAMPLE"
+  | "QUOTATION"
+  | "REPEAT_ORDER";
+
 export interface InquiryResponse {
   id: number;
   tenant_id: number;
@@ -4398,6 +4527,16 @@ export interface InquiryResponse {
   is_converted_to_quotation?: boolean;
   converted_quotation_id?: number | null;
   notes: string | null;
+  inquiry_type?: InquiryType | string | null;
+  brand?: string | null;
+  season_year?: string | null;
+  material_composition?: string | null;
+  size_range?: string | null;
+  color_options?: string[] | null;
+  country_of_origin?: string | null;
+  special_requirements?: string | null;
+  contact_person?: string | null;
+  technical_files?: InquiryTechnicalFile[];
   items: InquiryItemResponse[];
   created_at: string;
   updated_at: string;
@@ -4446,6 +4585,15 @@ export interface InquiryCreate {
   commission_type?: string;
   commission_value?: string;
   notes?: string;
+  inquiry_type?: InquiryType | string | null;
+  brand?: string | null;
+  season_year?: string | null;
+  material_composition?: string | null;
+  size_range?: string | null;
+  color_options?: string[] | null;
+  country_of_origin?: string | null;
+  special_requirements?: string | null;
+  contact_person?: string | null;
   items?: InquiryItemCreate[];
 }
 
@@ -4467,6 +4615,15 @@ export interface InquiryUpdate {
   commission_value?: string;
   status?: string;
   notes?: string;
+  inquiry_type?: InquiryType | string | null;
+  brand?: string | null;
+  season_year?: string | null;
+  material_composition?: string | null;
+  size_range?: string | null;
+  color_options?: string[] | null;
+  country_of_origin?: string | null;
+  special_requirements?: string | null;
+  contact_person?: string | null;
   items?: InquiryItemCreate[];
 }
 
@@ -6055,6 +6212,7 @@ export interface DeliveryChallanItemCreate {
 export interface DeliveryChallanCreate {
   challan_code?: string;
   customer_name: string;
+  customer_id?: number | null;
   delivery_date?: string | null;
   notes?: string;
   status?: string;
@@ -6075,6 +6233,7 @@ export interface DeliveryChallanResponse {
   tenant_id: number;
   challan_code: string;
   customer_name: string;
+  customer_id?: number | null;
   delivery_date: string | null;
   status: string;
   notes: string | null;
@@ -6130,6 +6289,7 @@ export interface ProcessOrderCreate {
   process_stage?: string | null;
   prior_process_order_id?: number | null;
   vendor_id?: number | null;
+  customer_id?: number | null;
   output_warehouse_id?: number | null;
   source_bom_id?: number | null;
   source_order_id?: number | null;
@@ -6166,6 +6326,7 @@ export interface ProcessOrderResponse {
   process_stage?: string | null;
   prior_process_order_id?: number | null;
   vendor_id?: number | null;
+  customer_id?: number | null;
   output_warehouse_id?: number | null;
   source_bom_id?: number | null;
   source_order_id?: number | null;
@@ -7139,6 +7300,8 @@ export interface QuotationDetailResponse {
   revision_of_id?: number | null;
   superseded_at?: string | null;
   is_latest_revision?: boolean;
+  /** Public verification id (VFY-...). Only present once the backend returns it; set while SENT/APPROVED. */
+  verification_id?: string | null;
   valid_until: string | null;
   size_ratio_enabled: boolean;
   pack_ratio: string | null;
@@ -7306,6 +7469,7 @@ export interface OrderResponse {
 export interface ControlTowerOrderRow {
   order_id: number;
   order_code: string;
+  customer_id?: number | null;
   customer_name?: string | null;
   delivery_date?: string | null;
   pipeline_status?: string | null;
@@ -8942,6 +9106,90 @@ export interface InquiryEventResponse {
   to_status: string | null;
   notes: string | null;
   created_at: string;
+}
+
+export interface InquiryRelatedCustomer {
+  id: number;
+  name: string;
+  customer_code: string;
+  status: string;
+}
+
+export interface InquiryRelatedIntermediary {
+  id: number;
+  name?: string | null;
+  label?: string | null;
+}
+
+export interface InquiryRelatedStyle {
+  id: number;
+  style_code: string;
+  name: string;
+  style_image_url?: string | null;
+  standard_smv?: string | null;
+  standard_smv_confidence?: string | null;
+  bom_count: number;
+  latest_bom_id?: number | null;
+  latest_bom_status?: string | null;
+  estimated_sah?: string | null;
+}
+
+export interface InquiryRelatedQuotation {
+  id: number;
+  quotation_code: string;
+  version_no: number;
+  status: string;
+  quoted_price?: string | null;
+  currency?: string | null;
+}
+
+export interface InquiryRelatedOrder {
+  id: number;
+  order_code: string;
+  status: string;
+  quantity?: number | null;
+  delivery_date?: string | null;
+  quotation_id?: number | null;
+}
+
+export interface InquiryRelatedSample {
+  id: number;
+  sample_code: string;
+  sample_type: string;
+  status: string;
+  target_date?: string | null;
+}
+
+export interface InquiryRelatedTentativeBooking {
+  id: number;
+  line_id: number;
+  status: string;
+  start_date: string;
+  planned_end_date?: string | null;
+  planned_qty: string;
+  confidence_pct: string;
+  expires_at?: string | null;
+}
+
+export interface InquiryRelatedTimelineEvent {
+  id: number;
+  event_type: string;
+  from_status?: string | null;
+  to_status?: string | null;
+  notes?: string | null;
+  created_at: string;
+}
+
+export interface InquiryRelatedResponse {
+  customer: InquiryRelatedCustomer | null;
+  intermediary: InquiryRelatedIntermediary | null;
+  style: InquiryRelatedStyle | null;
+  quotations: InquiryRelatedQuotation[];
+  orders: InquiryRelatedOrder[];
+  samples: InquiryRelatedSample[];
+  can_view_tentative_bookings: boolean;
+  tentative_bookings: InquiryRelatedTentativeBooking[];
+  timeline: InquiryRelatedTimelineEvent[];
 }
 
 export interface ConsumptionReconciliationRow {
@@ -10892,6 +11140,7 @@ export interface ExportCaseCreate {
   status?: string | null;
   case_date?: string | null;
   amount?: number | null;
+  customer_id?: number | null;
   trade_case_id?: number | null;
   order_id?: number | null;
   export_license_number?: string | null;
@@ -10908,6 +11157,7 @@ export interface ExportCaseUpdate {
   status?: string | null;
   case_date?: string | null;
   amount?: number | null;
+  customer_id?: number | null;
   trade_case_id?: number | null;
   order_id?: number | null;
   export_license_number?: string | null;
@@ -10932,6 +11182,7 @@ export interface ProformaInvoiceRow {
   amount?: number | null;
   order_id?: number | null;
   order_ids?: number[];
+  customer_id?: number | null;
   currency?: string | null;
   buyer_name?: string | null;
   buyer_address?: string | null;
@@ -10964,6 +11215,7 @@ export interface ProformaInvoiceCreate {
   status?: string | null;
   invoice_date?: string | null;
   amount?: number | null;
+  customer_id?: number | null;
   buyer_name?: string | null;
   buyer_address?: string | null;
   buyer_bank_details?: string | null;
@@ -11329,6 +11581,7 @@ export interface MasterContractRow {
   btb_utilized_amount?: number | null;
   currency?: string | null;
   buyer_name?: string | null;
+  customer_id?: number | null;
   bank_name?: string | null;
   expiry_date?: string | null;
   /** Cost center for payments and COGS under this contract */
@@ -11347,6 +11600,7 @@ export interface MasterContractCreate {
   amount?: number | null;
   currency?: string | null;
   buyer_name?: string | null;
+  customer_id?: number | null;
   bank_name?: string | null;
   expiry_date?: string | null;
   /** Cost center for payments and COGS; optional, can be auto-created when contract is opened */

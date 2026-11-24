@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { CloudOff, RefreshCw, ScanLine, Wifi } from "lucide-react";
 import { api } from "@/api/client";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import { useAuth } from "@/context/AuthContext";
 import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 import { logApiError } from "@/utils/logApiError";
@@ -199,24 +200,65 @@ export function ScanStationPage() {
       <section className="grid gap-3 rounded-xl border border-border bg-surface-raised p-4 sm:grid-cols-2 lg:grid-cols-4" aria-label={t("scan.setup")}>
         <div>
           <label htmlFor="st-line" className="text-xs font-medium text-text-muted">{t("scan.line")}</label>
-          <select id="st-line" className={select} value={station.lineId} onChange={(e) => setStation({ ...station, lineId: e.target.value })}>
-            <option value="">{t("common.select")}</option>
-            {setup?.lines.map((l) => <option key={l.id} value={l.id}>{l.line_code} · {l.name}</option>)}
-          </select>
+          <LocalSearchSelect
+            id="st-line"
+            className={select}
+            value={station.lineId ? Number(station.lineId) : ""}
+            options={(setup?.lines ?? []).map((l) => ({
+              value: l.id,
+              label: `${l.line_code} · ${l.name}`,
+            }))}
+            onChange={(next) =>
+              setStation({ ...station, lineId: next === "" ? "" : String(next) })
+            }
+            placeholder={t("common.select")}
+            aria-label={t("scan.line")}
+            allowClear
+          />
         </div>
         <div>
           <label htmlFor="st-order" className="text-xs font-medium text-text-muted">{t("scan.order")}</label>
-          <select id="st-order" className={select} value={station.orderId} onChange={(e) => setStation({ ...station, orderId: e.target.value, opId: "" })}>
-            <option value="">{t("common.select")}</option>
-            {setup?.orders.map((o) => <option key={o.id} value={o.id}>{o.order_code}{o.style_ref ? ` · ${o.style_ref}` : ""}</option>)}
-          </select>
+          <LocalSearchSelect
+            id="st-order"
+            className={select}
+            value={station.orderId ? Number(station.orderId) : ""}
+            options={(setup?.orders ?? []).map((o) => ({
+              value: o.id,
+              label: `${o.order_code}${o.style_ref ? ` · ${o.style_ref}` : ""}`,
+            }))}
+            onChange={(next) =>
+              setStation({
+                ...station,
+                orderId: next === "" ? "" : String(next),
+                opId: "",
+              })
+            }
+            placeholder={t("common.select")}
+            aria-label={t("scan.order")}
+            allowClear
+          />
         </div>
         <div>
           <label htmlFor="st-op" className="text-xs font-medium text-text-muted">{t("scan.operation")}</label>
-          <select id="st-op" className={select} value={station.opId} onChange={(e) => setStation({ ...station, opId: e.target.value })} disabled={!station.orderId}>
-            <option value="">{station.orderId && ops.length === 0 ? t("scan.noBulletin") : t("common.select")}</option>
-            {ops.map((o) => <option key={o.id} value={o.id}>{o.sequence_no}. {o.operation_name} ({Number(o.smv)} {t("common.min")})</option>)}
-          </select>
+          <LocalSearchSelect
+            id="st-op"
+            className={select}
+            value={station.opId ? Number(station.opId) : ""}
+            options={ops.map((o) => ({
+              value: o.id,
+              label: `${o.sequence_no}. ${o.operation_name} (${Number(o.smv)} ${t("common.min")})`,
+            }))}
+            onChange={(next) =>
+              setStation({ ...station, opId: next === "" ? "" : String(next) })
+            }
+            placeholder={
+              station.orderId && ops.length === 0 ? t("scan.noBulletin") : t("common.select")
+            }
+            aria-label={t("scan.operation")}
+            disabled={!station.orderId}
+            allowClear
+            emptyMessage={station.orderId && ops.length === 0 ? t("scan.noBulletin") : undefined}
+          />
         </div>
         <div>
           <label htmlFor="st-operator" className="text-xs font-medium text-text-muted">{t("scan.operatorId")}</label>

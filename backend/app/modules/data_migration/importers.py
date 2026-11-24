@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import io
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from sqlalchemy import func, select
@@ -14,6 +15,26 @@ from app.models import Customer, ItemCategory, ItemUnit, Tenant, Vendor, Warehou
 from app.models.costing import Item
 from app.models.finance import AccountGroup
 from app.modules.finance.system_coa_seeding_service import seed_tenant_system_coa
+
+
+def _row_opt(row: dict[str, str], *keys: str) -> str | None:
+    for key in keys:
+        raw = (row.get(key) or "").strip()
+        if raw:
+            return raw
+    return None
+
+
+def _parse_import_credit_limit(raw: str | None) -> Decimal | None:
+    if not raw:
+        return None
+    try:
+        dec = Decimal(raw.replace(",", "").replace(" ", ""))
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise ValueError("credit_limit must be a valid decimal") from exc
+    if not dec.is_finite() or dec < 0:
+        raise ValueError("credit_limit must be a finite non-negative decimal")
+    return dec
 
 
 @dataclass
@@ -93,12 +114,29 @@ async def import_customers(
 ) -> ImportBatchResult:
     result = ImportBatchResult(entity_type="customers", dry_run=dry_run, total_rows=len(rows))
     for i, row in enumerate(rows, start=2):
-        code = row.get("code", "").strip()
-        name = row.get("name", "").strip()
+        # Normalize keys to lowercase so Excel headers stay flexible.
+        norm = {str(k).strip().lower(): (v or "").strip() for k, v in row.items() if k}
+        code = norm.get("code", "").strip()
+        name = norm.get("name", "").strip()
         if not code or not name:
             result.error_count += 1
             result.rows.append(ImportRowResult(i, "error", "code and name required"))
             continue
+        try:
+            credit_limit = _parse_import_credit_limit(_row_opt(norm, "credit_limit"))
+        except ValueError as exc:
+            result.error_count += 1
+            result.rows.append(ImportRowResult(i, "error", str(exc)))
+            continue
+        lead_raw = _row_opt(norm, "typical_lead_time_days")
+        lead_days: int | None = None
+        if lead_raw is not None:
+            try:
+                lead_days = int(lead_raw)
+            except ValueError:
+                result.error_count += 1
+                result.rows.append(ImportRowResult(i, "error", "typical_lead_time_days must be an integer"))
+                continue
         existing = (
             await db.execute(
                 select(Customer).where(Customer.tenant_id == tenant.id, Customer.customer_code == code)
@@ -112,7 +150,23 @@ async def import_customers(
             result.ok_count += 1
             result.rows.append(ImportRowResult(i, "ok", "would create"))
             continue
-        c = Customer(tenant_id=tenant.id, customer_code=code, name=name, email=row.get("email") or None)
+        c = Customer(
+            tenant_id=tenant.id,
+            customer_code=code,
+            name=name,
+            email=_row_opt(norm, "email"),
+            preferred_currency=_row_opt(norm, "preferred_currency"),
+            payment_terms=_row_opt(norm, "payment_terms"),
+            default_incoterm=_row_opt(norm, "default_incoterm"),
+            typical_lead_time_days=lead_days,
+            industry_segment=_row_opt(norm, "industry_segment"),
+            compliance_level=_row_opt(norm, "compliance_level"),
+            credit_limit=credit_limit,
+            notes=_row_opt(norm, "notes"),
+            phone=_row_opt(norm, "phone"),
+            country=_row_opt(norm, "country"),
+            status=_row_opt(norm, "status") or "active",
+        )
         db.add(c)
         await db.flush()
         result.ok_count += 1

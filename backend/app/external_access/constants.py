@@ -32,6 +32,7 @@ SCOPE_RANK = {
 FF_CUSTOMER_PORTAL_ENABLED = "customer_portal_enabled"
 FF_FINANCIER_PORTAL_ENABLED = "financier_portal_enabled"
 FF_CUSTOMER_NOTES_ENABLED = "customer_notes_enabled"
+FF_CUSTOMER_PORTAL_QUOTATIONS_ENABLED = "customer_portal_quotations_enabled"
 FF_FINANCIER_FINANCIAL_SUMMARY_ENABLED = "financier_financial_summary_enabled"
 FF_FINANCIER_PROJECTION_ENABLED = "financier_projection_enabled"
 FF_EXTERNAL_PORTAL_DOCUMENT_DOWNLOADS_ENABLED = "external_portal_document_downloads_enabled"

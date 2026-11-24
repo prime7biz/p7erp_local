@@ -1,12 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   api,
+  type CustomerResponse,
   type InventoryItemResponse,
   type QuotationManufacturingLine,
   type QuotationOtherCostLine,
+  type StyleResponse,
 } from "@/api/client";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { WorkflowSummaryStrip, type WorkflowStripItem } from "@/components/app/WorkflowSummaryStrip";
+import { LinkedRecordsSection, type LinkedRecordRow } from "@/components/app/LinkedRecordsSection";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import { MasterQuickAddModal } from "@/components/app/MasterQuickAddModal";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { logApiError } from "@/utils/logApiError";
 import { SecureImage } from "@/components/SecureImage";
 import {
@@ -15,19 +22,32 @@ import {
   SHIPPING_TERM_OPTIONS,
   withLegacyOption,
 } from "@/lib/commercialTerms";
+import {
+  fetchActiveCustomerPage,
+  fetchStylePage,
+  hydrateCustomer,
+  hydrateStyle,
+} from "@/lib/remoteSelectFetchers";
 import { CollapsibleSection } from "./components/CollapsibleSection";
 import { MaterialItemCombobox } from "./components/MaterialItemCombobox";
 import { useQuotationWorkspaceController } from "./useQuotationWorkspaceController";
+import { useQuotationWiring } from "./useQuotationWiring";
+import { ManufacturingWiringHint, QuotationWiringPanel } from "./components/QuotationWiringPanel";
+import { comparableHintText, isQuotationCostingLocked } from "./mappers/wiringDraftRows";
 import { CostSummaryCard } from "./sidebar/CostSummaryCard";
 import { MarginPricingCard } from "./sidebar/MarginPricingCard";
 import { CostBreakdownCard } from "./sidebar/CostBreakdownCard";
 import { calculateQuotationTotals } from "./mappers/calculateQuotationTotals";
 import {
   applyOtherCostCalculation,
+  computeCommissionAmount,
   formatMoney,
   lineFxToQuotation,
+  resolveOtherCostAmount,
+  sizeQuantityFromRatio,
   toSafeNumber,
 } from "./mappers/quotationNumeric";
+import { canConvertQuotationToOrder } from "@/features/merch/workflow";
 import { useQuotationAi } from "@/hooks/useQuotationAi";
 import { QuotationAiPanel } from "@/components/quotations/QuotationAiPanel";
 import { QuotationCostingIntelligencePanel } from "@/components/quotations/QuotationCostingIntelligencePanel";
@@ -95,6 +115,17 @@ const OTHER_COST_PRESETS: ReadonlyArray<{
   { cost_head: "Bank / LC charges", cost_type: "percentage", value: "1.5", based_on: "subtotal" },
 ];
 
+const SECTION_NAV = [
+  { key: "basics", label: "Basics" },
+  { key: "materials", label: "Materials" },
+  { key: "cm", label: "CM" },
+  { key: "other", label: "Other Costs" },
+  { key: "size", label: "Size Ratios" },
+  { key: "breakdown", label: "Breakdown" },
+] as const;
+
+const WORKFLOW_STAGES = ["DRAFT", "SUBMITTED", "APPROVED", "SENT", "CONVERTED"] as const;
+
 function commissionValueLabel(
   commissionType: string | null | undefined,
   commissionValue: unknown,
@@ -116,9 +147,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
     categories,
     items,
     units,
-    customers,
     inquiries,
-    styles,
     showQuickStyleCreate,
     setShowQuickStyleCreate,
     quickStyleName,
@@ -172,6 +201,10 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
     refreshExchangeRates,
     submitForReview,
     approveQuotation,
+    sendQuotation,
+    cancelEdit,
+    allLinks,
+    revisions,
     duplicateAsNewVersion,
     navigate,
     reloadQuotationDetail,
@@ -181,12 +214,48 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
   const isPrintMode = new URLSearchParams(location.search).get("print") === "1";
   const [sizeRatioCollapsed, setSizeRatioCollapsed] = useState(false);
   const [openRowActions, setOpenRowActions] = useState<string | null>(null);
+  // Numeric fields stored as numbers: remember which are blank so the user can clear them while typing.
+  const [machinesBlank, setMachinesBlank] = useState<Record<number, boolean>>({});
+  const [sizeQtyBlank, setSizeQtyBlank] = useState<Record<number, boolean>>({});
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [orderCreateError, setOrderCreateError] = useState("");
   const [quickAdd, setQuickAdd] = useState<
     { kind: "category" | "item"; rowIdx: number } | null
   >(null);
   const quotationAi = useQuotationAi();
+  const { prefill: wiringPrefill, wiring: wiringContext, hints: priceHints } = useQuotationWiring({
+    quotationId: quotation && quotation.id > 0 ? quotation.id : null,
+    styleId: quotation?.style_id,
+    customerId: quotation?.customer_id,
+    currency: quotation?.currency,
+    materialItemIds: materials.map((m) => m.item_id),
+  });
+  const [activeSection, setActiveSection] = useState<string>("basics");
+
+  const scrollToSection = (key: string) => {
+    setActiveSection(key);
+    document.getElementById(`section-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("section", key);
+      window.history.replaceState(window.history.state, "", url.toString());
+    } catch {
+      /* URL sync is optional */
+    }
+  };
+
+  // Optional deep link: ?section=materials scrolls once after the page has loaded.
+  const sectionDeepLinkDone = useRef(false);
+  useEffect(() => {
+    if (loading || sectionDeepLinkDone.current) return;
+    const key = new URLSearchParams(location.search).get("section");
+    if (!key || !SECTION_NAV.some((s) => s.key === key)) return;
+    sectionDeepLinkDone.current = true;
+    window.setTimeout(() => {
+      setActiveSection(key);
+      document.getElementById(`section-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  }, [loading, location.search]);
 
   const aiFormSnapshot = useMemo(() => {
     if (!quotation) return {};
@@ -219,6 +288,39 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [openRowActions]);
 
+  // Deep link: /app/quotations/new?inquiry_id=123 pre-fills from that inquiry (once).
+  const inquiryDeepLinkDone = useRef(false);
+  useEffect(() => {
+    if (!isNew || inquiryDeepLinkDone.current) return;
+    const raw = new URLSearchParams(location.search).get("inquiry_id");
+    const inquiryId = raw ? Number(raw) : 0;
+    if (!Number.isFinite(inquiryId) || inquiryId <= 0) return;
+    inquiryDeepLinkDone.current = true;
+    void handleInquirySelect(inquiryId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNew, location.search]);
+
+  // Deep link: /app/quotations/new?customer_id=123 pre-selects buyer (once; skipped if inquiry_id set).
+  const customerDeepLinkDone = useRef(false);
+  useEffect(() => {
+    if (!isNew || customerDeepLinkDone.current) return;
+    const params = new URLSearchParams(location.search);
+    if (params.get("inquiry_id")) return;
+    const raw = params.get("customer_id");
+    const customerId = raw ? Number(raw) : 0;
+    if (!Number.isFinite(customerId) || customerId <= 0) return;
+    customerDeepLinkDone.current = true;
+    void (async () => {
+      try {
+        const c = await api.getCustomer(customerId);
+        handleCustomerSelect(c.id, c);
+      } catch (e) {
+        logApiError("QuotationWorkspacePage.customerDeepLink", e);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNew, location.search]);
+
   const appendOtherCostPreset = (preset: (typeof OTHER_COST_PRESETS)[number]) => {
     const { matTotal, mfgTotal } = calculateQuotationTotals(
       materials,
@@ -226,7 +328,6 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
       [],
       quotation?.currency ?? "USD",
     );
-    const base = matTotal + mfgTotal;
     setOtherCosts((rows) => {
       const serial = rows.length + 1;
       const row = applyOtherCostCalculation(
@@ -245,7 +346,8 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
           base_amount: "0",
           local_amount: "0",
         },
-        base
+        matTotal,
+        mfgTotal,
       );
       return [...rows, row];
     });
@@ -275,7 +377,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
   const mfgLineInQuotation = (m: QuotationManufacturingLine) =>
     toSafeNumber(m.total_order_cost) * lineFxToQuotation(m, docCur);
   const otherLineInQuotation = (c: QuotationOtherCostLine) => {
-    const raw = toSafeNumber(c.calculated_amount || c.total_amount);
+    const raw = resolveOtherCostAmount(c);
     if (c.cost_type === "percentage") return raw;
     return raw * lineFxToQuotation(c, docCur);
   };
@@ -284,24 +386,111 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
   const findItemName = (value: number | null) =>
     value == null ? "" : items.find((c) => c.id === value)?.name ?? "";
 
-  const trimsCost = otherCosts
-    .filter((c) => c.cost_head.toLowerCase().includes("trim"))
-    .reduce((acc, c) => acc + (toSafeNumber(c.calculated_amount) || toSafeNumber(c.total_amount)), 0);
-  const washFinishCost = otherCosts
-    .filter((c) => {
-      const key = c.cost_head.toLowerCase();
-      return key.includes("wash") || key.includes("finish");
-    })
-    .reduce((acc, c) => acc + (toSafeNumber(c.calculated_amount) || toSafeNumber(c.total_amount)), 0);
-  const overheadCost = otherCosts
-    .filter((c) => c.cost_head.toLowerCase().includes("overhead"))
-    .reduce((acc, c) => acc + (toSafeNumber(c.calculated_amount) || toSafeNumber(c.total_amount)), 0);
-  const factoryMarginAmount =
-    (toSafeNumber(quotation.quoted_price) || toSafeNumber(quotation.total_amount)) -
-    (toSafeNumber(quotation.total_cost) || totals.total);
-  const factoryMarginPercent =
-    (toSafeNumber(quotation.profit_percentage) ||
-      (totals.total ? (factoryMarginAmount / totals.total) * 100 : 0));
+  // Each other-cost line goes into exactly ONE bucket (trim, wash/finish, overhead, else misc)
+  // so nothing is counted twice. Amounts are converted into the quotation currency.
+  let trimsCost = 0;
+  let washFinishCost = 0;
+  let overheadCost = 0;
+  let otherMiscCost = 0;
+  for (const c of otherCosts) {
+    const key = (c.cost_head || "").toLowerCase();
+    const amount = otherLineInQuotation(c);
+    if (key.includes("trim")) trimsCost += amount;
+    else if (key.includes("wash") || key.includes("finish")) washFinishCost += amount;
+    else if (key.includes("overhead")) overheadCost += amount;
+    else otherMiscCost += amount;
+  }
+
+  const projectedQty = toSafeNumber(quotation.projected_quantity);
+  const costNum = toSafeNumber(quotation.total_cost) || totals.total;
+  const quotedPriceNum = useManualQuotedPrice
+    ? toSafeNumber(manualQuotedPrice)
+    : toSafeNumber(quotation.quoted_price) || toSafeNumber(quotation.total_amount);
+  const factoryMarginAmount = quotedPriceNum - costNum;
+  const factoryMarginPercent = useManualQuotedPrice
+    ? totals.total > 0
+      ? (factoryMarginAmount / totals.total) * 100
+      : 0
+    : toSafeNumber(quotation.profit_percentage);
+  const commissionAmount = computeCommissionAmount({
+    mode: quotation.commission_mode,
+    type: quotation.commission_type,
+    value: quotation.commission_value,
+    baseForPercent: costNum + factoryMarginAmount,
+  }).amount;
+  const costPerPc =
+    toSafeNumber(quotation.cost_per_piece) || (projectedQty > 0 ? costNum / projectedQty : 0);
+
+  const isCostingLocked = ["APPROVED", "SENT", "CONVERTED"].includes(quotation.status);
+  const orderAlreadyCreated = Boolean(quotation.is_converted_to_order) || quotation.status === "CONVERTED";
+  const currentStage = quotation.status === "NEW" ? "DRAFT" : quotation.status;
+  const currentStageIdx = WORKFLOW_STAGES.indexOf(currentStage as (typeof WORKFLOW_STAGES)[number]);
+  const workflowStripItems: WorkflowStripItem[] = WORKFLOW_STAGES.map((stage, i) => ({
+    label: stage.charAt(0) + stage.slice(1).toLowerCase(),
+    value: currentStageIdx === -1 ? "·" : i < currentStageIdx ? "✓" : i === currentStageIdx ? "● Current" : "·",
+    hint: i === currentStageIdx ? `Status: ${quotation.status}` : undefined,
+  }));
+  /** Document chain when this quotation came from an inquiry. */
+  const documentChainStripItems: WorkflowStripItem[] | null = quotation.inquiry_id
+    ? [
+        {
+          label: "Customer",
+          value: customer?.name ?? `#${quotation.customer_id}`,
+          to: quotation.customer_id ? `/app/customers/${quotation.customer_id}` : undefined,
+        },
+        {
+          label: "Inquiry",
+          value: inquiry?.inquiry_code ?? `#${quotation.inquiry_id}`,
+          to: `/app/inquiries/${quotation.inquiry_id}`,
+        },
+        {
+          label: "Quotation",
+          value: quotation.quotation_code,
+          hint: quotation.status,
+        },
+        {
+          label: "Order",
+          value: quotation.converted_order_id ? `#${quotation.converted_order_id}` : "—",
+          to: quotation.converted_order_id ? `/app/orders/${quotation.converted_order_id}` : undefined,
+        },
+      ]
+    : null;
+  const linkedCustomerRows: LinkedRecordRow[] = quotation.customer_id
+    ? [{ id: quotation.customer_id, label: customer?.name ?? `Customer #${quotation.customer_id}`, to: `/app/customers/${quotation.customer_id}` }]
+    : [];
+  const linkedInquiryRows: LinkedRecordRow[] = quotation.inquiry_id
+    ? [{ id: quotation.inquiry_id, label: inquiry?.inquiry_code ?? `Inquiry #${quotation.inquiry_id}`, to: `/app/inquiries/${quotation.inquiry_id}` }]
+    : [];
+  const linkedStyleRows: LinkedRecordRow[] = quotation.style_id
+    ? [{ id: quotation.style_id, label: quotation.style_name ?? quotation.style_ref ?? `Style #${quotation.style_id}`, to: `/app/merchandising/styles/${quotation.style_id}` }]
+    : [];
+  const linkedOrderRows: LinkedRecordRow[] = quotation.converted_order_id
+    ? [{ id: quotation.converted_order_id, label: `Order #${quotation.converted_order_id}`, to: `/app/orders/${quotation.converted_order_id}` }]
+    : [];
+  const intermediaryOptions = allLinks
+    .filter((l) => l.customer_id === quotation.customer_id)
+    .map((l) => ({
+      value: l.id,
+      label: `${l.intermediary_name ?? `#${l.intermediary_id}`}${l.intermediary_code ? ` (${l.intermediary_code})` : ""}${
+        l.is_primary ? " · primary" : ""
+      }`,
+    }));
+  const ratioSum = sizeRatios.reduce((a, r) => a + toSafeNumber(r.ratio_percentage), 0);
+  const applySizePreset = (ratios: string[]) => {
+    const names = ["S", "M", "L", "XL"];
+    setSizeRatios(
+      names.map((size, i) => {
+        const ratio = ratios[i] ?? "0";
+        return {
+          serial_no: i + 1,
+          size,
+          ratio_percentage: ratio,
+          fabric_factor: "1.0",
+          quantity: sizeQuantityFromRatio(projectedQty, ratio),
+        };
+      }),
+    );
+  };
 
   return (
     <div className="print-report space-y-5 p-4 lg:space-y-6 lg:p-6">
@@ -313,20 +502,48 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
         </div>
       </div>
 
-      <header className="no-print flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">Quotation {quotation.quotation_code}</h1>
-          <p className="text-sm text-text-muted">
-            <span title={quotation.created_at}>
-              Created {new Date(quotation.created_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
-            </span>
-            {" · "}
-            {customer?.name ?? `Customer #${quotation.customer_id}`} · {quotation.status}
-            {!isNew && ` · v${quotation.version_no}`}
-            {isSuperseded && " · Superseded"}
-          </p>
-          {showEditableHeader && <p className="mt-1 text-xs text-text-muted">Fields marked with ** are mandatory.</p>}
-        </div>
+      <AppPageHeader
+        className="no-print"
+        title={`Quotation ${quotation.quotation_code}`}
+        description={`Created ${new Date(quotation.created_at).toLocaleString(undefined, {
+          dateStyle: "medium",
+          timeStyle: "short",
+        })} · ${customer?.name ?? `Customer #${quotation.customer_id}`} · ${quotation.status}${
+          !isNew ? ` · v${quotation.version_no}` : ""
+        }${isSuperseded ? " · Superseded" : ""}${showEditableHeader ? " · Fields marked with ** are mandatory." : ""}`}
+        backTo={{ label: "Quotations", to: "/app/quotations" }}
+        belowTitle={
+          !isNew ? (
+            <div className="space-y-2">
+              {documentChainStripItems ? (
+                <WorkflowSummaryStrip items={documentChainStripItems} />
+              ) : null}
+              <WorkflowSummaryStrip items={workflowStripItems} />
+              {revisions.length > 1 && (
+                <div className="flex flex-wrap items-center gap-1.5 text-xs" aria-label="Revisions">
+                  <span className="font-medium text-text-muted">Revisions:</span>
+                  {revisions.map((r) => (
+                    <Link
+                      key={r.id}
+                      to={`/app/quotations/${r.id}`}
+                      title={r.quotation_code}
+                      aria-current={r.id === quotation.id ? "page" : undefined}
+                      className={`rounded-md border px-2 py-0.5 ${
+                        r.id === quotation.id
+                          ? "border-brand-primary bg-brand-primary/10 font-semibold text-brand-primary"
+                          : "border-border bg-surface-raised text-text-secondary hover:bg-surface-subtle"
+                      }`}
+                    >
+                      v{r.version_no}
+                      {r.is_latest_revision ? " (latest)" : ""}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null
+        }
+        actions={
         <div className="flex flex-wrap gap-2">
           {!isNew && (
             <button
@@ -337,7 +554,25 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               Print / Save PDF
             </button>
           )}
-          {canChangeQuotation && (
+          {canChangeQuotation && orderAlreadyCreated && quotation.converted_order_id ? (
+            <Link
+              to={`/app/orders/${quotation.converted_order_id}`}
+              className="rounded-lg border border-status-info/30 bg-status-info-subtle px-3 py-1.5 text-sm font-medium text-status-info-foreground"
+            >
+              View order
+            </Link>
+          ) : null}
+          {canChangeQuotation && quotation.status === "APPROVED" && !orderAlreadyCreated && (
+            <button
+              type="button"
+              disabled
+              title="Send the quotation to the customer first"
+              className="rounded-lg border border-border bg-surface-subtle px-3 py-1.5 text-sm text-text-muted opacity-60"
+            >
+              Send first
+            </button>
+          )}
+          {canChangeQuotation && canConvertQuotationToOrder(quotation.status) && !orderAlreadyCreated && (
             <button
               type="button"
               onClick={async () => {
@@ -385,11 +620,20 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               {!isSuperseded && (
                 <button
                   type="button"
-                  onClick={() => setIsEditing((v) => !v)}
-                  className="rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-sm text-text-secondary"
+                  onClick={() => (isEditing ? cancelEdit() : setIsEditing(true))}
+                  disabled={!isEditing && isCostingLocked}
+                  title={
+                    !isEditing && isCostingLocked
+                      ? "Costing is locked after approval. Use a change request or duplicate as a new version."
+                      : undefined
+                  }
+                  className="rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-sm text-text-secondary disabled:opacity-60"
                 >
                   {isEditing ? "Cancel edit" : "Edit costing"}
                 </button>
+              )}
+              {!isSuperseded && !isEditing && isCostingLocked && (
+                <span className="text-xs text-text-muted">Costing locked ({quotation.status})</span>
               )}
               <button
                 type="button"
@@ -430,8 +674,62 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               {runningWorkflowAction === "approve" ? "Approving..." : "Approve"}
             </button>
           )}
+          {canChangeQuotation && quotation.status === "APPROVED" && (
+            <button
+              type="button"
+              onClick={sendQuotation}
+              disabled={runningWorkflowAction !== ""}
+              className="rounded-lg border border-status-info/30 bg-status-info-subtle px-3 py-1.5 text-sm text-status-info-foreground disabled:opacity-60"
+            >
+              {runningWorkflowAction === "send" ? "Sending..." : "Send to customer"}
+            </button>
+          )}
         </div>
-      </header>
+        }
+      />
+
+      {isCostingLocked && !isNew && (
+        <div
+          className="no-print flex flex-wrap items-center justify-between gap-2 rounded-lg border border-status-warning/30 bg-status-warning-subtle px-4 py-3 text-sm text-status-warning-foreground"
+          role="status"
+        >
+          <span>
+            <span className="font-semibold">Commercial lock:</span> costing is locked ({quotation.status}). To change
+            protected fields, raise a change request or duplicate as a new version.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              document
+                .getElementById("section-change-requests")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+            className="font-semibold underline"
+          >
+            Go to change requests
+          </button>
+        </div>
+      )}
+
+      <nav
+        aria-label="Quotation sections"
+        className="no-print sticky top-0 z-20 -mx-1 flex gap-1 overflow-x-auto rounded-xl border border-border bg-surface-raised/95 px-2 py-1.5 shadow-sm backdrop-blur"
+      >
+        {SECTION_NAV.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => scrollToSection(s.key)}
+            className={`shrink-0 rounded-lg px-3 py-1 text-xs font-medium ${
+              activeSection === s.key
+                ? "bg-brand-primary/10 text-brand-primary"
+                : "text-text-secondary hover:bg-surface-subtle"
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </nav>
 
       {isSuperseded && (
         <div
@@ -467,40 +765,41 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:gap-6">
         <div className="space-y-5 xl:col-span-8 2xl:col-span-9">
-          <CollapsibleSection title={showEditableHeader ? "Quotation Basics" : "Quotation Summary"}>
+          <CollapsibleSection id="section-basics" title={showEditableHeader ? "Quotation Basics" : "Quotation Summary"}>
             {showEditableHeader ? (
               <div className="space-y-4 text-sm">
                 {isNew && (
                   <>
                     <div>
                       <label className="mb-0.5 block font-medium text-text-secondary">Customer **</label>
-                      <select
+                      <RemoteSearchSelect<CustomerResponse>
+                        className="w-full"
                         value={quotation.customer_id || ""}
-                        onChange={(e) => handleCustomerSelect(Number(e.target.value) || 0)}
-                        className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-                      >
-                        <option value="">Select customer...</option>
-                        {customers.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name} ({c.customer_code})
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(next, opt) => {
+                          const id = typeof next === "number" && next > 0 ? next : 0;
+                          handleCustomerSelect(id, opt?.meta ?? null);
+                        }}
+                        fetchPage={fetchActiveCustomerPage}
+                        hydrateById={hydrateCustomer}
+                        placeholder="Search customer…"
+                        aria-label="Customer"
+                        allowClear
+                      />
                     </div>
                     <div>
                       <label className="mb-0.5 block font-medium text-text-secondary">Link to inquiry (optional)</label>
-                      <select
+                      <LocalSearchSelect
+                        className="w-full"
                         value={quotation.inquiry_id ?? ""}
-                        onChange={(e) => handleInquirySelect(e.target.value ? Number(e.target.value) : null)}
-                        className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-                      >
-                        <option value="">None</option>
-                        {inquiries.map((inq) => (
-                          <option key={inq.id} value={inq.id}>
-                            {inq.inquiry_code} · {inq.style_ref ?? "—"}
-                          </option>
-                        ))}
-                      </select>
+                        options={inquiries.map((inq) => ({
+                          value: inq.id,
+                          label: `${inq.inquiry_code} · ${inq.style_ref ?? "—"}`,
+                        }))}
+                        onChange={(next) => handleInquirySelect(next === "" ? null : Number(next))}
+                        placeholder="None"
+                        aria-label="Link to inquiry"
+                        allowClear
+                      />
                     </div>
                   </>
                 )}
@@ -527,18 +826,19 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                   <div className="space-y-2 sm:col-span-2">
                     <label className="mb-0.5 block font-medium text-text-secondary">Style</label>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
-                      <select
+                      <RemoteSearchSelect<StyleResponse>
+                        className="w-full"
                         value={quotation.style_id ?? ""}
-                        onChange={(e) => onStyleSelect(e.target.value ? Number(e.target.value) : null)}
-                        className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-                      >
-                        <option value="">Select style...</option>
-                        {styles.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.style_code} - {s.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(next, opt) => {
+                          const id = next === "" ? null : Number(next);
+                          onStyleSelect(id, opt?.meta ?? null);
+                        }}
+                        fetchPage={fetchStylePage}
+                        hydrateById={hydrateStyle}
+                        placeholder="Search style…"
+                        aria-label="Style"
+                        allowClear
+                      />
                       <button
                         type="button"
                         onClick={() => setShowQuickStyleCreate((v) => !v)}
@@ -606,6 +906,20 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                   </div>
 
                   <div>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Intermediary / agent</label>
+                    <LocalSearchSelect
+                      className="w-full"
+                      value={quotation.customer_intermediary_id ?? ""}
+                      options={intermediaryOptions}
+                      onChange={(next) =>
+                        updateQuotationHeader({ customer_intermediary_id: next === "" ? null : Number(next) })
+                      }
+                      placeholder={intermediaryOptions.length ? "None" : "No intermediary linked to this customer"}
+                      aria-label="Intermediary"
+                      allowClear
+                    />
+                  </div>
+                  <div>
                     <label className="mb-0.5 block font-medium text-text-secondary">Shipping term</label>
                     <select
                       value={quotation.shipping_term ?? ""}
@@ -636,6 +950,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                     <input
                       type="number"
                       min={0}
+                      step={1}
                       value={quotation.projected_quantity ?? ""}
                       onChange={(e) =>
                         updateQuotationHeader({ projected_quantity: e.target.value ? Number(e.target.value) : null })
@@ -680,7 +995,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       type="date"
                       value={quotation.quotation_date ? quotation.quotation_date.slice(0, 10) : ""}
                       onChange={(e) =>
-                        updateQuotationHeader({ quotation_date: e.target.value ? `${e.target.value}T00:00:00` : null })
+                        updateQuotationHeader({ quotation_date: e.target.value || null })
                       }
                       className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
@@ -691,9 +1006,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       type="date"
                       value={quotation.projected_delivery_date ? quotation.projected_delivery_date.slice(0, 10) : ""}
                       onChange={(e) =>
-                        updateQuotationHeader({
-                          projected_delivery_date: e.target.value ? `${e.target.value}T00:00:00` : null,
-                        })
+                        updateQuotationHeader({ projected_delivery_date: e.target.value || null })
                       }
                       className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
@@ -704,7 +1017,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       type="date"
                       value={quotation.valid_until ? quotation.valid_until.slice(0, 10) : ""}
                       onChange={(e) =>
-                        updateQuotationHeader({ valid_until: e.target.value ? `${e.target.value}T00:00:00` : null })
+                        updateQuotationHeader({ valid_until: e.target.value || null })
                       }
                       className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
@@ -715,8 +1028,9 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       <input
                         type="number"
                         step="0.0001"
-                        value={quotation.exchange_rate ?? "1"}
-                        onChange={(e) => updateQuotationHeader({ exchange_rate: e.target.value || null })}
+                        min={0}
+                        value={quotation.exchange_rate ?? ""}
+                        onChange={(e) => updateQuotationHeader({ exchange_rate: e.target.value })}
                         className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                       />
                       <button
@@ -764,10 +1078,10 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                     <label className="mb-0.5 block font-medium text-text-secondary">Markup on factory cost (%)</label>
                     <input
                       type="number"
-                      step="0.01"
+                      step="any"
                       min={0}
-                      value={quotation.profit_percentage ?? "15"}
-                      onChange={(e) => updateQuotationHeader({ profit_percentage: e.target.value || null })}
+                      value={quotation.profit_percentage ?? ""}
+                      onChange={(e) => updateQuotationHeader({ profit_percentage: e.target.value })}
                       className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
                   </div>
@@ -829,9 +1143,11 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                   <div>
                     <label className="mb-0.5 block font-medium text-text-secondary">Commission value</label>
                     <input
-                      type="text"
+                      type="number"
+                      step="any"
+                      min={0}
                       value={quotation.commission_value ?? ""}
-                      onChange={(e) => updateQuotationHeader({ commission_value: e.target.value || null })}
+                      onChange={(e) => updateQuotationHeader({ commission_value: e.target.value })}
                       className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
                   </div>
@@ -848,6 +1164,8 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                     <label className="mb-0.5 block font-medium text-text-secondary">PCS per carton</label>
                     <input
                       type="number"
+                      min={0}
+                      step={1}
                       value={quotation.pcs_per_carton ?? ""}
                       onChange={(e) =>
                         updateQuotationHeader({ pcs_per_carton: e.target.value ? Number(e.target.value) : null })
@@ -882,7 +1200,27 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
             )}
           </CollapsibleSection>
 
+          <QuotationWiringPanel
+            quotation={quotation}
+            isNew={isNew}
+            isEditing={isEditing}
+            locked={isQuotationCostingLocked(quotation.status, isSuperseded)}
+            prefill={wiringPrefill}
+            wiring={wiringContext}
+            items={items}
+            units={units}
+            materials={materials}
+            sizeRatios={sizeRatios}
+            projectedQty={projectedQty}
+            setMaterials={setMaterials}
+            setManufacturing={setManufacturing}
+            setOtherCosts={setOtherCosts}
+            setSizeRatios={setSizeRatios}
+            updateQuotationHeader={updateQuotationHeader}
+          />
+
           <CollapsibleSection
+            id="section-materials"
             title="Materials"
             actions={isEditing ? (
               <button
@@ -925,7 +1263,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       <th scope="col" className="px-2 py-2 text-left">Material Category</th>
                       <th scope="col" className="px-2 py-2 text-left">Item / Description</th>
                       <th scope="col" className="px-2 py-2 text-left">UOM</th>
-                      <th scope="col" className="px-2 py-2 text-right">Consumption</th>
+                      <th scope="col" className="px-2 py-2 text-right">Consumption / Doz</th>
                       <th scope="col" className="px-2 py-2 text-right">Unit Price</th>
                       <th scope="col" className="px-2 py-2 text-left">Curr</th>
                       <th scope="col" className="px-2 py-2 text-right">FX rate</th>
@@ -941,25 +1279,21 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                         <td className="px-2 py-1">
                           {isEditing ? (
                             <div className="flex gap-1">
-                              <select
+                              <LocalSearchSelect
+                                className="min-w-0 flex-1"
                                 value={m.category_id ?? ""}
-                                onChange={(e) =>
+                                onChange={(next) =>
                                   onMaterialChange(idx, {
-                                    category_id: e.target.value ? Number(e.target.value) : null,
+                                    category_id: next === "" ? null : Number(next),
                                     item_id: null,
                                     unit: "",
                                   })
                                 }
-                                className="min-w-0 flex-1 rounded border border-border px-1 py-1 text-xs"
+                                options={categories.map((c) => ({ value: c.id, label: c.name }))}
+                                placeholder="—"
                                 aria-label={`Material category row ${idx + 1}`}
-                              >
-                                <option value="">—</option>
-                                {categories.map((c) => (
-                                  <option key={c.id} value={c.id}>
-                                    {c.name}
-                                  </option>
-                                ))}
-                              </select>
+                                menuPortal
+                              />
                               <button
                                 type="button"
                                 className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] text-text-secondary hover:bg-surface-subtle"
@@ -1027,7 +1361,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               min={0}
                               step="0.0001"
                               value={m.consumption_per_dozen}
-                              onChange={(e) => onMaterialChange(idx, { consumption_per_dozen: e.target.value || "0" })}
+                              onChange={(e) => onMaterialChange(idx, { consumption_per_dozen: e.target.value })}
                               className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
                             />
                           ) : (
@@ -1036,14 +1370,37 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                         </td>
                         <td className="px-2 py-1 text-right">
                           {isEditing ? (
-                            <input
-                              type="number"
-                              min={0}
-                              step="0.0001"
-                              value={m.unit_price}
-                              onChange={(e) => onMaterialChange(idx, { unit_price: e.target.value || "0" })}
-                              className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
-                            />
+                            <>
+                              <input
+                                type="number"
+                                min={0}
+                                step="0.0001"
+                                value={m.unit_price}
+                                onChange={(e) => onMaterialChange(idx, { unit_price: e.target.value })}
+                                className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
+                              />
+                              {(() => {
+                                const hintRow = m.item_id != null ? priceHints[m.item_id] : undefined;
+                                const text = comparableHintText(hintRow, m.currency ?? quotation.currency);
+                                const price = hintRow?.last_po?.unit_price;
+                                if (!text || !price) return null;
+                                return (
+                                  <div className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-text-muted">
+                                    <span>{text}</span>
+                                    {m.unit_price !== price ? (
+                                      <button
+                                        type="button"
+                                        className="rounded border border-border px-1 text-brand-primary hover:bg-surface-subtle"
+                                        onClick={() => onMaterialChange(idx, { unit_price: price })}
+                                        aria-label={`Use last PO price for row ${idx + 1}`}
+                                      >
+                                        Use
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                );
+                              })()}
+                            </>
                           ) : (
                             m.unit_price
                           )}
@@ -1072,7 +1429,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               min={0}
                               step="0.0001"
                               value={m.exchange_rate}
-                              onChange={(e) => onMaterialChange(idx, { exchange_rate: e.target.value || "1" })}
+                              onChange={(e) => onMaterialChange(idx, { exchange_rate: e.target.value })}
                               className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
                             />
                           ) : (
@@ -1118,6 +1475,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
           </CollapsibleSection>
 
           <CollapsibleSection
+            id="section-cm"
             title="Labor / CM (Cut and Make)"
             actions={isEditing ? (
               <button
@@ -1149,6 +1507,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               </button>
             ) : null}
           >
+            <ManufacturingWiringHint prefill={wiringPrefill} wiring={wiringContext} />
             {manufacturing.length === 0 ? (
               <div className="text-xs text-text-muted">No manufacturing lines.</div>
             ) : (
@@ -1191,8 +1550,14 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                           {isEditing ? (
                             <input
                               type="number"
-                              value={m.machines_required}
-                              onChange={(e) => onManufacturingChange(idx, { machines_required: Number(e.target.value || "0") })}
+                              min={0}
+                              step={1}
+                              value={m.machines_required === 0 && machinesBlank[idx] ? "" : m.machines_required}
+                              onChange={(e) => {
+                                const blank = e.target.value === "";
+                                setMachinesBlank((prev) => ({ ...prev, [idx]: blank }));
+                                onManufacturingChange(idx, { machines_required: blank ? 0 : Number(e.target.value) });
+                              }}
                               className="w-16 rounded border border-border px-1 py-1 text-right text-xs"
                             />
                           ) : (
@@ -1203,8 +1568,10 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                           {isEditing ? (
                             <input
                               type="number"
+                              min={0}
+                              step="any"
                               value={m.production_per_hour}
-                              onChange={(e) => onManufacturingChange(idx, { production_per_hour: e.target.value || "0" })}
+                              onChange={(e) => onManufacturingChange(idx, { production_per_hour: e.target.value })}
                               className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
                             />
                           ) : (
@@ -1215,8 +1582,10 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                           {isEditing ? (
                             <input
                               type="number"
+                              min={0}
+                              step="any"
                               value={m.production_per_day}
-                              onChange={(e) => onManufacturingChange(idx, { production_per_day: e.target.value || "0" })}
+                              onChange={(e) => onManufacturingChange(idx, { production_per_day: e.target.value })}
                               className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
                               title="Auto from prod/hr × machines × 8h; edit to override"
                             />
@@ -1228,8 +1597,10 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                           {isEditing ? (
                             <input
                               type="number"
+                              min={0}
+                              step="any"
                               value={m.cost_per_machine}
-                              onChange={(e) => onManufacturingChange(idx, { cost_per_machine: e.target.value || "0" })}
+                              onChange={(e) => onManufacturingChange(idx, { cost_per_machine: e.target.value })}
                               className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
                             />
                           ) : (
@@ -1261,7 +1632,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               type="number"
                               step="0.000001"
                               value={m.exchange_rate}
-                              onChange={(e) => onManufacturingChange(idx, { exchange_rate: e.target.value || "1" })}
+                              onChange={(e) => onManufacturingChange(idx, { exchange_rate: e.target.value })}
                               className="w-24 rounded border border-border px-1 py-1 text-right text-xs"
                             />
                           ) : (
@@ -1305,6 +1676,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
           </CollapsibleSection>
 
           <CollapsibleSection
+            id="section-other"
             title="Other Commercial Costs (Washing, Overheads, Logistics)"
             actions={
               isEditing ? (
@@ -1328,7 +1700,6 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                         [],
                         quotation?.currency ?? "USD",
                       );
-                      const base = matTotal + mfgTotal;
                       setOtherCosts((rows) => {
                         const blank: QuotationOtherCostLine = applyOtherCostCalculation(
                           {
@@ -1346,7 +1717,8 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                             base_amount: "0",
                             local_amount: "0",
                           },
-                          base
+                          matTotal,
+                          mfgTotal,
                         );
                         return [...rows, { ...blank, serial_no: rows.length + 1 }];
                       });
@@ -1413,19 +1785,37 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                           {isEditing ? (
                             <input
                               type="number"
+                              min={0}
+                              step="any"
                               value={c.value}
-                              onChange={(e) => onOtherCostChange(idx, { value: e.target.value || "0" })}
+                              onChange={(e) => onOtherCostChange(idx, { value: e.target.value })}
                               className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
                             />
                           ) : (
                             c.value
                           )}
                         </td>
-                        <td className="px-2 py-1">{c.based_on}</td>
+                        <td className="px-2 py-1">
+                          {isEditing ? (
+                            <select
+                              value={(c.based_on || "subtotal").toLowerCase()}
+                              onChange={(e) => onOtherCostChange(idx, { based_on: e.target.value })}
+                              className="w-full rounded border border-border px-1 py-1 text-xs"
+                              aria-label={`Based on row ${idx + 1}`}
+                            >
+                              <option value="subtotal">Subtotal</option>
+                              <option value="materials">Materials</option>
+                              <option value="manufacturing">Manufacturing</option>
+                            </select>
+                          ) : (
+                            c.based_on
+                          )}
+                        </td>
                         <td className="px-2 py-1">
                           {isEditing ? (
                             <select
                               value={c.currency ?? docCur}
+                              disabled={c.cost_type === "percentage"}
                               onChange={(e) => onOtherCostChange(idx, { currency: e.target.value })}
                               className="w-full min-w-[4.5rem] rounded border border-border px-1 py-1 text-xs"
                             >
@@ -1444,8 +1834,10 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                             <input
                               type="number"
                               step="0.000001"
+                              min={0}
+                              disabled={c.cost_type === "percentage"}
                               value={c.exchange_rate}
-                              onChange={(e) => onOtherCostChange(idx, { exchange_rate: e.target.value || "1" })}
+                              onChange={(e) => onOtherCostChange(idx, { exchange_rate: e.target.value })}
                               className="w-24 rounded border border-border px-1 py-1 text-right text-xs"
                             />
                           ) : (
@@ -1503,6 +1895,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
           </CollapsibleSection>
 
           <CollapsibleSection
+            id="section-size"
             title="Size Ratios"
             actions={isEditing ? (
               <div className="flex flex-wrap items-center gap-2">
@@ -1516,28 +1909,14 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                 </label>
                 <button
                   type="button"
-                  onClick={() =>
-                    setSizeRatios([
-                      { serial_no: 1, size: "S", ratio_percentage: "25", fabric_factor: "1.0", quantity: 0 },
-                      { serial_no: 2, size: "M", ratio_percentage: "25", fabric_factor: "1.0", quantity: 0 },
-                      { serial_no: 3, size: "L", ratio_percentage: "25", fabric_factor: "1.0", quantity: 0 },
-                      { serial_no: 4, size: "XL", ratio_percentage: "25", fabric_factor: "1.0", quantity: 0 },
-                    ])
-                  }
+                  onClick={() => applySizePreset(["25", "25", "25", "25"])}
                   className="no-print rounded-lg border border-border px-2 py-1 text-xs text-text-secondary bg-surface-raised"
                 >
                   Equal preset
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    setSizeRatios([
-                      { serial_no: 1, size: "S", ratio_percentage: "15", fabric_factor: "1.0", quantity: 0 },
-                      { serial_no: 2, size: "M", ratio_percentage: "35", fabric_factor: "1.0", quantity: 0 },
-                      { serial_no: 3, size: "L", ratio_percentage: "35", fabric_factor: "1.0", quantity: 0 },
-                      { serial_no: 4, size: "XL", ratio_percentage: "15", fabric_factor: "1.0", quantity: 0 },
-                    ])
-                  }
+                  onClick={() => applySizePreset(["15", "35", "35", "15"])}
                   className="no-print rounded-lg border border-border px-2 py-1 text-xs text-text-secondary bg-surface-raised"
                 >
                   Pyramid preset
@@ -1607,13 +1986,16 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               {isEditing ? (
                                 <input
                                   type="number"
+                                  min={0}
+                                  step="any"
                                   value={s.ratio_percentage}
                                   onChange={(e) => {
-                                    const nextRatio = e.target.value || "0";
-                                    const qty = Math.round(
-                                      (toSafeNumber(quotation.projected_quantity) * toSafeNumber(nextRatio)) / 100
-                                    );
-                                    onSizeRatioChange(idx, { ratio_percentage: nextRatio, quantity: qty });
+                                    const nextRatio = e.target.value;
+                                    onSizeRatioChange(idx, {
+                                      ratio_percentage: nextRatio,
+                                      quantity: sizeQuantityFromRatio(projectedQty, nextRatio),
+                                    });
+                                    setSizeQtyBlank((prev) => ({ ...prev, [idx]: false }));
                                   }}
                                   className="w-16 rounded border border-border px-1 py-1 text-right text-xs"
                                 />
@@ -1625,8 +2007,10 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               {isEditing ? (
                                 <input
                                   type="number"
+                                  min={0}
+                                  step="any"
                                   value={s.fabric_factor}
-                                  onChange={(e) => onSizeRatioChange(idx, { fabric_factor: e.target.value || "1.0" })}
+                                  onChange={(e) => onSizeRatioChange(idx, { fabric_factor: e.target.value })}
                                   className="w-16 rounded border border-border px-1 py-1 text-right text-xs"
                                 />
                               ) : (
@@ -1638,8 +2022,14 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               {isEditing ? (
                                 <input
                                   type="number"
-                                  value={s.quantity}
-                                  onChange={(e) => onSizeRatioChange(idx, { quantity: Number(e.target.value || "0") })}
+                                  min={0}
+                                  step={1}
+                                  value={s.quantity === 0 && sizeQtyBlank[idx] ? "" : s.quantity}
+                                  onChange={(e) => {
+                                    const blank = e.target.value === "";
+                                    setSizeQtyBlank((prev) => ({ ...prev, [idx]: blank }));
+                                    onSizeRatioChange(idx, { quantity: blank ? 0 : Number(e.target.value) });
+                                  }}
                                   className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
                                 />
                               ) : (
@@ -1673,6 +2063,15 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                     </tfoot>
                   </table>
                 </div>
+                {Math.abs(ratioSum - 100) > 0.5 && (
+                  <div
+                    className="no-print mt-2 rounded border border-status-warning/30 bg-status-warning-subtle px-3 py-2 text-xs text-status-warning-foreground"
+                    role="alert"
+                  >
+                    Size ratios add up to {ratioSum.toFixed(1)}%, not 100%. Quantities will not match the projected
+                    quantity.
+                  </div>
+                )}
                 <div className="no-print mt-3 grid grid-cols-1 gap-2 rounded-lg border border-border-subtle bg-surface-subtle/50 p-3 text-xs text-text-secondary sm:grid-cols-2 lg:grid-cols-4">
                   <div>
                     <span className="font-semibold text-text-primary">Ratio total: </span>
@@ -1705,7 +2104,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
             )}
           </CollapsibleSection>
 
-          <CollapsibleSection title="Final Commercial Breakdown" defaultOpen={!isPrintMode}>
+          <CollapsibleSection id="section-breakdown" title="Final Commercial Breakdown" defaultOpen={!isPrintMode}>
             <div
               className="mb-3 rounded-lg border border-status-warning/30 bg-status-warning-subtle/40 p-3 text-xs text-text-secondary"
               role="note"
@@ -1742,6 +2141,19 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               </div>
             </div>
           </CollapsibleSection>
+
+          {!isNew && (
+            <LinkedRecordsSection
+              className="no-print"
+              title="Related records"
+              columns={[
+                { title: "Customer", rows: linkedCustomerRows },
+                { title: "Inquiry", rows: linkedInquiryRows },
+                { title: "Style", rows: linkedStyleRows },
+                { title: "Converted order", rows: linkedOrderRows },
+              ]}
+            />
+          )}
 
           <div className="text-xs text-text-muted">
             Updated at {new Date(quotation.updated_at).toLocaleString()}
@@ -1786,31 +2198,36 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
 
         <aside className="space-y-4 xl:sticky xl:top-6 xl:col-span-4 2xl:col-span-3 self-start">
           <CostSummaryCard
-            currency={quotation.currency ?? "USD"}
+            currency={docCur}
             materialCost={quotation.material_cost}
             trimsCost={trimsCost}
             laborCost={quotation.manufacturing_cost}
             washFinishCost={washFinishCost}
             overheadCost={overheadCost}
+            otherMiscCost={otherMiscCost}
             totalFobCost={quotation.total_cost}
             factoryMarginAmount={factoryMarginAmount}
             factoryMarginPercent={factoryMarginPercent}
           />
           <MarginPricingCard
             profitPercentage={quotation.profit_percentage}
+            displayMarginPercent={factoryMarginPercent}
+            commissionType={quotation.commission_type}
             commissionValue={quotation.commission_value}
-            netFobPrice={quotation.quoted_price ?? quotation.total_amount}
-            uom="Per PC"
-            currency={quotation.currency ?? "USD"}
+            commissionAmount={commissionAmount}
+            quotedPricePerPc={projectedQty > 0 ? quotedPriceNum / projectedQty : null}
+            quotedOrderTotal={quotedPriceNum}
+            costPerPc={costPerPc}
+            currency={docCur}
           />
           <CostBreakdownCard
-            currency={quotation.currency ?? "USD"}
+            currency={docCur}
             total={totals.total}
             rows={[
               { label: "Materials", value: quotation.material_cost ?? totals.matTotal },
               { label: "Manufacturing", value: quotation.manufacturing_cost ?? totals.mfgTotal },
               { label: "Other Costs", value: quotation.other_cost ?? totals.otherTotal },
-              { label: "Commission", value: quotation.commission_value },
+              { label: "Commission", value: commissionAmount },
             ]}
           />
           <section className="rounded-2xl border border-border bg-surface-raised p-4 shadow-sm print-card">
@@ -1863,6 +2280,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                 <CommercialTimelineCard entityType="quotation" entityId={quotation.id} />
               ) : null}
               {quotation.id ? (
+                <div id="section-change-requests" className="scroll-mt-24">
                 <ChangeRequestPanel
                   entityType="quotation"
                   entityId={quotation.id}
@@ -1884,23 +2302,32 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                     valid_until: quotation.valid_until,
                   }}
                 />
+                </div>
               ) : null}
-              <QuotationCostingIntelligencePanel quotation={quotation} />
-              <QuotationCostingSuggestionsPanel
-                quotation={quotation}
-                mode={showEditableHeader ? "edit" : "view"}
-                onAfterApply={() => void reloadQuotationDetail()}
-              />
-              <QuotationCostBenchmarkPanel quotation={quotation} />
-              <QuotationAiPanel
-                ai={quotationAi}
-                quotationId={quotation.id}
-                formSnapshot={aiFormSnapshot}
-                mode={showEditableHeader ? "edit" : "view"}
-                quotationStatus={quotation.status}
-                onAfterApply={() => void reloadQuotationDetail()}
-              />
-              {quotation.id ? <QuotationAiAuditHistory quotationId={quotation.id} /> : null}
+              <details open className="group rounded-2xl border border-border bg-surface-raised shadow-sm">
+                <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-text-primary">
+                  Insights &amp; AI
+                </summary>
+                <div className="space-y-4 border-t border-border-subtle p-3">
+                  <QuotationCostingIntelligencePanel quotation={quotation} />
+                  <QuotationCostingSuggestionsPanel
+                    quotation={quotation}
+                    mode={showEditableHeader ? "edit" : "view"}
+                    onAfterApply={() => void reloadQuotationDetail()}
+                  />
+                  <QuotationCostBenchmarkPanel quotation={quotation} />
+                  {/* AI extract works before the first save (no quotation id); other AI actions need a saved quotation. */}
+                  <QuotationAiPanel
+                    ai={quotationAi}
+                    quotationId={quotation.id || undefined}
+                    formSnapshot={aiFormSnapshot}
+                    mode={showEditableHeader ? "edit" : "view"}
+                    quotationStatus={quotation.status}
+                    onAfterApply={() => void reloadQuotationDetail()}
+                  />
+                  {quotation.id ? <QuotationAiAuditHistory quotationId={quotation.id} /> : null}
+                </div>
+              </details>
             </>
           )}
         </aside>
@@ -1931,10 +2358,13 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
             }
             if (quickAdd.kind === "item" && rowIdx != null) {
               const inv = record as InventoryItemResponse;
-              onMaterialChange(rowIdx, {
-                item_id: inv.id,
-                description: inv.name,
-              });
+              // InventoryItemResponse has every field CostingItemResponse needs,
+              // so it works as an override even if the refreshed list is not yet in state.
+              onMaterialChange(
+                rowIdx,
+                { item_id: inv.id, description: inv.name, category_id: inv.category_id },
+                inv,
+              );
             }
             setQuickAdd(null);
           }}

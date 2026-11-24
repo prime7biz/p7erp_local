@@ -86,6 +86,44 @@ class FactoryCalendarOverride(Base):
     __table_args__ = (UniqueConstraint("tenant_id", "override_date", name="uq_factory_calendar_tenant_date"),)
 
 
+class ProductionMachineTypeCode(Base):
+    """Optional normalized machine taxonomy (migration 329). Seed after reviewing free-text values."""
+
+    __tablename__ = "production_machine_type_codes"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(32), nullable=False)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    aliases_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("tenant_id", "code", name="uq_prod_machine_type_codes_tenant_code"),)
+
+
+class ProductionMachineSwapRequest(Base):
+    """Idempotent machine plan-swap log (migration 329)."""
+
+    __tablename__ = "production_machine_swap_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    request_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_line_id: Mapped[int] = mapped_column(ForeignKey("sewing_lines.id", ondelete="CASCADE"), nullable=False)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True)
+    valid_from: Mapped[date] = mapped_column(Date, nullable=False)
+    payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    result_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="APPLIED")
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("tenant_id", "request_id", name="uq_prod_machine_swap_req_tenant_rid"),)
+
+
 class DepartmentMachine(Base):
     __tablename__ = "department_machines"
 
@@ -95,6 +133,7 @@ class DepartmentMachine(Base):
     machine_code: Mapped[str] = mapped_column(String(64), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     machine_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    machine_type_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     specs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -276,6 +315,7 @@ class IeOperationsLibrary(Base):
     category: Mapped[str] = mapped_column(String(64), nullable=False, default="other")
     default_smv: Mapped[float] = mapped_column(Numeric(12, 4), nullable=False, default=0)
     machine_type_required: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    machine_type_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -314,6 +354,7 @@ class OperationBulletinOp(Base):
     operation_name: Mapped[str] = mapped_column(String(255), nullable=False)
     smv: Mapped[float] = mapped_column(Numeric(12, 4), nullable=False, default=0)
     machine_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    machine_type_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     attachment_needed: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_critical: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
@@ -412,6 +453,8 @@ class HourlyProductionEntry(Base):
     shift_id: Mapped[int | None] = mapped_column(ForeignKey("production_shifts.id", ondelete="SET NULL"), nullable=True, index=True)
     production_date: Mapped[date] = mapped_column(Date, nullable=False)
     hour_slot: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Migration 328: deterministic match key (dept|date|hour|line|machine|shift). Nullable until unique later.
+    slot_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=False)
     target_qty: Mapped[float | None] = mapped_column(Numeric(18, 3), nullable=True)
     good_qty: Mapped[float | None] = mapped_column(Numeric(18, 3), nullable=True)
     reject_qty: Mapped[float | None] = mapped_column(Numeric(18, 3), nullable=True)
@@ -446,6 +489,22 @@ class MarkerPlan(Base):
     pcs_per_marker: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Migration 330 — cutting / CAD control (nullable)
+    color_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    fabric_item_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fabric_gsm: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
+    cad_file_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    planned_consumption_per_dz: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+    actual_consumption_per_dz: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+    bom_consumption_per_dz: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+    shrinkage_pct: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
+    end_bit_qty: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    splice_loss_qty: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    defect_loss_qty: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    remnant_qty: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    actual_cut_pcs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rejected_panel_pcs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pmi_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -465,6 +524,41 @@ class LayPlan(Base):
     total_fabric_used: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
     planned_pcs: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="planned")
+    # Migration 330
+    color_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    fabric_gsm: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
+    shrinkage_pct: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
+    end_bit_qty: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    splice_loss_qty: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    defect_loss_qty: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    remnant_qty: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    actual_cut_pcs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rejected_panel_pcs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pmi_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    actual_consumption_per_dz: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class CuttingProcessLossEntry(Base):
+    """Categorized fabric process loss (migration 330)."""
+
+    __tablename__ = "cutting_process_loss_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
+    style_id: Mapped[int | None] = mapped_column(ForeignKey("garment_styles.id", ondelete="SET NULL"), nullable=True)
+    marker_plan_id: Mapped[int | None] = mapped_column(ForeignKey("marker_plans.id", ondelete="SET NULL"), nullable=True)
+    lay_plan_id: Mapped[int | None] = mapped_column(ForeignKey("lay_plans.id", ondelete="SET NULL"), nullable=True)
+    loss_bucket: Mapped[str] = mapped_column(String(32), nullable=False)
+    qty: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False, default=0)
+    uom: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    reason_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    roll_or_batch_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    approval_status: Mapped[str] = mapped_column(String(24), nullable=False, default="DRAFT")
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    entered_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -784,6 +878,14 @@ class ProductionQcCheck(Base):
     fail_qty: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     defect_codes: Mapped[list | dict | None] = mapped_column(JSON, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Migration 331 — DHU / RFT linkage
+    style_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    line_style_config_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rework_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reject_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_defects: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rft_pct: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
+    operation_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     entered_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -799,6 +901,47 @@ class ProductionQcCheck(Base):
             name="uq_production_qc_checks_slot",
         ),
     )
+
+
+class ProductionDowntimeLog(Base):
+    __tablename__ = "production_downtime_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    sewing_line_id: Mapped[int] = mapped_column(ForeignKey("sewing_lines.id", ondelete="CASCADE"), nullable=False)
+    shift_id: Mapped[int | None] = mapped_column(ForeignKey("production_shifts.id", ondelete="SET NULL"), nullable=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True)
+    production_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    hour_slot: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reason_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    minutes_lost: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    entered_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class FinishingStageEntry(Base):
+    __tablename__ = "finishing_stage_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    style_id: Mapped[int | None] = mapped_column(ForeignKey("garment_styles.id", ondelete="SET NULL"), nullable=True)
+    sewing_line_id: Mapped[int | None] = mapped_column(ForeignKey("sewing_lines.id", ondelete="SET NULL"), nullable=True)
+    shift_id: Mapped[int | None] = mapped_column(ForeignKey("production_shifts.id", ondelete="SET NULL"), nullable=True)
+    production_date: Mapped[date] = mapped_column(Date, nullable=False)
+    hour_slot: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    stage: Mapped[str] = mapped_column(String(32), nullable=False)
+    color_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    size_name: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    good_qty: Mapped[float] = mapped_column(Numeric(18, 3), nullable=False, default=0)
+    reject_qty: Mapped[float] = mapped_column(Numeric(18, 3), nullable=False, default=0)
+    rework_qty: Mapped[float] = mapped_column(Numeric(18, 3), nullable=False, default=0)
+    carton_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    entered_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class WorkerSkill(Base):

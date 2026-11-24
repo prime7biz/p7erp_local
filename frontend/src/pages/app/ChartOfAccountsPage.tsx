@@ -11,6 +11,7 @@ import {
   type CoaInterestMethod,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import {
   listPageEmptyClass,
   listPageErrorClass,
@@ -19,7 +20,6 @@ import {
   listPageRootClass,
   listPageToolbarButtonClass,
   listPageToolbarInputClass,
-  listPageToolbarSelectClass,
   listTableBaseClass,
   listTableTdClass,
   listTableTdPrimaryClass,
@@ -142,6 +142,10 @@ export function ChartOfAccountsPage() {
   }, [showCoaConfig]);
 
   const groupMap = useMemo(() => new Map(groups.map((g) => [g.id, g.name])), [groups]);
+  const groupSelectOptions = useMemo(
+    () => groups.map((g) => ({ value: g.id, label: g.name })),
+    [groups],
+  );
   const selectedGroup = useMemo(() => groups.find((g) => g.id === form.group_id), [groups, form.group_id]);
   const selectedNature = (selectedGroup?.nature || "").toLowerCase();
   const canActivateInterest =
@@ -157,6 +161,17 @@ export function ChartOfAccountsPage() {
       return (g?.nature || "").toLowerCase() === want && a.id !== editingId;
     });
   }, [rows, groups, selectedNature, editingId]);
+  const counterpartSelectOptions = useMemo(
+    () => counterpartOptions.map((a) => ({ value: a.id, label: `${a.account_number} – ${a.name}` })),
+    [counterpartOptions],
+  );
+  const parentAccountOptions = useMemo(
+    () =>
+      rows
+        .filter((a) => a.id !== editingId)
+        .map((a) => ({ value: a.id, label: `${a.account_number} – ${a.name}` })),
+    [rows, editingId],
+  );
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -406,19 +421,15 @@ export function ChartOfAccountsPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <select
+        <LocalSearchSelect
           aria-label="Filter by group"
-          className={listPageToolbarSelectClass}
+          className="min-w-[12rem]"
           value={filterGroupId}
-          onChange={(e) => setFilterGroupId(e.target.value ? Number(e.target.value) : "")}
-        >
-          <option value="">All groups</option>
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
+          options={groupSelectOptions}
+          onChange={(next) => setFilterGroupId(next === "" ? "" : Number(next))}
+          placeholder="All groups"
+          allowClear
+        />
         <label className="flex items-center gap-2 whitespace-nowrap text-sm text-text-secondary">
           <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
           Show inactive
@@ -762,18 +773,16 @@ export function ChartOfAccountsPage() {
           <label className={labelClass} htmlFor="coa-group">
             Group *
           </label>
-          <select
+          <LocalSearchSelect
             id="coa-group"
-            className={fieldClass}
-            value={form.group_id}
-            onChange={(e) => setForm((p) => ({ ...p, group_id: Number(e.target.value) }))}
-          >
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
-            ))}
-          </select>
+            value={form.group_id || ""}
+            options={groupSelectOptions}
+            onChange={(next) => setForm((p) => ({ ...p, group_id: next === "" ? 0 : Number(next) }))}
+            placeholder="Select group…"
+            required
+            allowClear={false}
+            aria-label="Group"
+          />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
@@ -917,26 +926,20 @@ export function ChartOfAccountsPage() {
               <label className={labelClass} htmlFor="coa-parent">
                 Parent account
               </label>
-              <select
+              <LocalSearchSelect
                 id="coa-parent"
-                className={fieldClass}
                 value={form.parent_account_id ?? ""}
-                onChange={(e) =>
+                options={parentAccountOptions}
+                onChange={(next) =>
                   setForm((p) => ({
                     ...p,
-                    parent_account_id: e.target.value ? Number(e.target.value) : null,
+                    parent_account_id: next === "" ? null : Number(next),
                   }))
                 }
-              >
-                <option value="">No parent</option>
-                {rows
-                  .filter((a) => a.id !== editingId)
-                  .map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.account_number} – {a.name}
-                    </option>
-                  ))}
-              </select>
+                placeholder="No parent"
+                allowClear
+                aria-label="Parent account"
+              />
             </div>
             <div className="space-y-1">
               <label className={labelClass} htmlFor="coa-reviewed">
@@ -1059,25 +1062,21 @@ export function ChartOfAccountsPage() {
                     onChange={(e) => setForm((p) => ({ ...p, interest_amount: e.target.value || null }))}
                   />
                 )}
-                <select
-                  className={fieldClass}
+                <LocalSearchSelect
                   value={form.interest_counterpart_account_id ?? ""}
-                  onChange={(e) =>
+                  options={counterpartSelectOptions}
+                  onChange={(next) =>
                     setForm((p) => ({
                       ...p,
-                      interest_counterpart_account_id: e.target.value ? Number(e.target.value) : null,
+                      interest_counterpart_account_id: next === "" ? null : Number(next),
                     }))
                   }
-                >
-                  <option value="">
-                    {selectedNature === "liability" ? "Interest Expense ledger…" : "Interest Income ledger…"}
-                  </option>
-                  {counterpartOptions.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.account_number} – {a.name}
-                    </option>
-                  ))}
-                </select>
+                  placeholder={
+                    selectedNature === "liability" ? "Interest Expense ledger…" : "Interest Income ledger…"
+                  }
+                  allowClear
+                  aria-label="Interest counterpart account"
+                />
                 {editingId ? (
                   <div className="flex flex-wrap gap-2">
                     <button

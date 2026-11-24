@@ -373,6 +373,11 @@ async def external_me(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 
     role_codes = sorted(await get_role_codes(db, principal))
+    from app.common.tenant_feature_keys import (
+        CUSTOMER_PORTAL_QUOTATIONS_ENABLED,
+        is_customer_portal_quotations_enabled,
+    )
+
     raw = tenant.feature_flags if isinstance(tenant.feature_flags, dict) else {}
     feature_subset = {
         k: raw.get(k)
@@ -393,6 +398,10 @@ async def external_me(
             FF_FINANCIER_PORTAL_ENABLED: is_financier_portal_enabled(tenant),
             FF_SUPPLIER_PORTAL_ENABLED: is_supplier_portal_enabled(tenant),
         }
+    # Always expose the quotations portal flag (default OFF) so the buyer UI can gate links.
+    feature_subset[CUSTOMER_PORTAL_QUOTATIONS_ENABLED] = is_customer_portal_quotations_enabled(
+        tenant.feature_flags
+    )
 
     financier_scope: str | None = None
     if principal.principal_type == PRINCIPAL_FINANCIER:

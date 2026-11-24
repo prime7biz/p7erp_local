@@ -27,7 +27,8 @@ from app.models.inventory import (
 )
 from app.models.hr_onboarding import HrGeneratedEmployeeDocument
 from app.models.tenant import Tenant
-from app.modules.document_verify.schemas import PublicDocumentVerification
+from app.models.merch import Quotation
+from app.modules.document_verify.schemas import PublicDocumentVerification, QuotationPublicVerification
 from app.modules.finance.voucher_signature import compute_voucher_signature_hash
 from app.modules.inventory.document_qr_service import payload_signature_is_valid, rebuild_payload_for_verify
 
@@ -182,7 +183,47 @@ async def _verify_inventory(db: AsyncSession, doc_type: str, row: Any) -> Public
     )
 
 
-async def verify_document_publicly(db: AsyncSession, raw_verification_id: str) -> PublicDocumentVerification | None:
+def _money_text(value: Any) -> str | None:
+    dec = _to_decimal(value)
+    return None if dec is None else f"{dec:.4f}"
+
+
+async def _verify_quotation(db: AsyncSession, quotation: Quotation) -> QuotationPublicVerification | None:
+    """Buyer-safe fields only: no customer, cost, margin or note. Valid only for the current SENT / CONVERTED version."""
+    from decimal import Decimal, ROUND_HALF_UP
+
+    from app.modules.quotations.verification_service import is_verifiable
+
+    tenant = await _company_if_enabled(db, quotation.tenant_id)
+    if tenant is None:
+        return None
+    # Fail closed: non-verifiable rows look like "not found" (no commercial fields with is_valid=false).
+    if not is_verifiable(quotation):
+        return None
+    await bind_session_tenant(db, tenant.id)
+    qty = quotation.projected_quantity or 0
+    order_total = _to_decimal(quotation.total_amount if quotation.total_amount is not None else quotation.quoted_price)
+    unit_price: str | None = None
+    if order_total is not None and qty > 0:
+        unit_price = f"{(order_total / Decimal(qty)).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP):.4f}"
+    return QuotationPublicVerification(
+        is_valid=True,
+        company_name=tenant.name,
+        code=quotation.quotation_code,
+        version_no=quotation.version_no,
+        status=(quotation.status or "").upper(),
+        style_ref=quotation.style_ref,
+        quantity=quotation.projected_quantity,
+        quoted_unit_price=unit_price,
+        total_amount=_money_text(quotation.total_amount if quotation.total_amount is not None else quotation.quoted_price),
+        currency=quotation.currency,
+        valid_until=_iso_date(quotation.valid_until),
+    )
+
+
+async def verify_document_publicly(
+    db: AsyncSession, raw_verification_id: str
+) -> PublicDocumentVerification | QuotationPublicVerification | None:
     """None means "not found" — also used when the owning company has not enabled public verification."""
     vid = normalize_verification_id(raw_verification_id)
     if vid is None:
@@ -195,6 +236,9 @@ async def verify_document_publicly(db: AsyncSession, raw_verification_id: str) -
         row = (await db.execute(select(model).where(model.verification_id == vid))).scalars().first()
         if row is not None:
             return await _verify_inventory(db, doc_type, row)
+    quotation = (await db.execute(select(Quotation).where(Quotation.verification_id == vid))).scalars().first()
+    if quotation is not None:
+        return await _verify_quotation(db, quotation)
     hr_doc = (
         await db.execute(select(HrGeneratedEmployeeDocument).where(HrGeneratedEmployeeDocument.verification_id == vid))
     ).scalars().first()

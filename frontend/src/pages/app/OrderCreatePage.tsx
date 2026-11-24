@@ -1,12 +1,13 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type Dispatch,
   type FormEvent,
   type SetStateAction,
 } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   api,
   type CustomerResponse,
@@ -14,6 +15,7 @@ import {
   type OrderExtractionResponse,
   type QuotationResponse,
 } from "@/api/client";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { OrderAiPanel } from "@/components/orders/OrderAiPanel";
 import { useFormDirty } from "@/hooks/useFormDirty";
@@ -27,7 +29,12 @@ import {
   withLegacyOption,
 } from "@/lib/commercialTerms";
 import { isQuotationOpenForOrderLink } from "@/features/merch/workflow";
-import { fetchCustomerPage, hydrateCustomer } from "@/lib/remoteSelectFetchers";
+import {
+  fetchActiveCustomerPage,
+  fetchStylePage,
+  hydrateCustomer,
+  hydrateStyle,
+} from "@/lib/remoteSelectFetchers";
 
 const ORDER_AI_MERGE_KEYS = new Set([
   "style_ref",
@@ -94,7 +101,9 @@ function mergeOrderExtractionIntoForm(
 
 export function OrderCreatePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const orderAi = useOrderAi();
+  const customerDeepLinkDone = useRef(false);
   const [form, setForm] = useState<OrderCreate>({ customer_id: 0 });
   const [selectedCustomerName, setSelectedCustomerName] = useState<string | null>(null);
   const [quotations, setQuotations] = useState<QuotationResponse[]>([]);
@@ -148,6 +157,27 @@ export function OrderCreatePage() {
     };
     void load();
   }, []);
+
+  useEffect(() => {
+    if (customerDeepLinkDone.current) return;
+    const raw = searchParams.get("customer_id");
+    const customerId = raw ? Number(raw) : 0;
+    if (!Number.isFinite(customerId) || customerId <= 0) return;
+    customerDeepLinkDone.current = true;
+    void (async () => {
+      try {
+        const c = await api.getCustomer(customerId);
+        setSelectedCustomerName(c.name);
+        setForm((prev) => ({
+          ...prev,
+          customer_id: c.id,
+          ...(c.default_incoterm?.trim() ? { shipping_term: c.default_incoterm.trim() } : {}),
+        }));
+      } catch (e) {
+        logApiError("OrderCreatePage.customerDeepLink", e);
+      }
+    })();
+  }, [searchParams]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -229,18 +259,26 @@ export function OrderCreatePage() {
                       customer_id: id,
                     }));
                   }}
-                  fetchPage={fetchCustomerPage}
+                  fetchPage={fetchActiveCustomerPage}
                   hydrateById={hydrateCustomer}
                   allowClear
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-text-secondary mb-1">Linked quotation (optional)</label>
-                <select
+                <LocalSearchSelect
+                  className="w-full"
                   value={form.quotation_id ?? ""}
-                  onChange={(e) => {
-                    const nextQuotationId = e.target.value ? Number(e.target.value) : undefined;
-                    const quote = nextQuotationId ? quotationsById.get(nextQuotationId) ?? null : null;
+                  options={quotations.map((q) => ({
+                    value: q.id,
+                    label: q.quotation_code,
+                    meta: q,
+                  }))}
+                  onChange={(next, opt) => {
+                    const nextQuotationId = next === "" ? undefined : Number(next);
+                    const quote =
+                      (opt?.meta as QuotationResponse | undefined) ??
+                      (nextQuotationId ? quotationsById.get(nextQuotationId) ?? null : null);
                     if (quote?.customer_name) {
                       setSelectedCustomerName(quote.customer_name);
                     }
@@ -258,15 +296,10 @@ export function OrderCreatePage() {
                       commission_value: quote?.commission_value ?? prev.commission_value,
                     }));
                   }}
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
-                >
-                  <option value="">No linked quotation</option>
-                  {quotations.map((q) => (
-                    <option key={q.id} value={q.id}>
-                      {q.quotation_code}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="No linked quotation"
+                  aria-label="Linked quotation"
+                  allowClear
+                />
               </div>
             </div>
           </section>
@@ -289,17 +322,23 @@ export function OrderCreatePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Style ID</label>
-                <input
-                  type="number"
+                <label className="block text-sm font-medium text-text-secondary mb-1">Style</label>
+                <RemoteSearchSelect
+                  className="w-full"
                   value={form.style_id ?? ""}
-                  onChange={(e) =>
+                  onChange={(next, opt) => {
+                    const meta = opt?.meta as { style_code?: string } | undefined;
                     setForm((prev) => ({
                       ...prev,
-                      style_id: e.target.value ? Number(e.target.value) : undefined,
-                    }))
-                  }
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                      style_id: next === "" ? undefined : Number(next),
+                      style_ref: meta?.style_code ?? prev.style_ref,
+                    }));
+                  }}
+                  fetchPage={fetchStylePage}
+                  hydrateById={hydrateStyle}
+                  placeholder="Search style…"
+                  aria-label="Style"
+                  allowClear
                 />
               </div>
               <div>

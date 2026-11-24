@@ -61,9 +61,20 @@ export function Login() {
       localStorage.setItem("lastCompanyCode", code);
       const tid = res.tenant_id ?? (Number.isFinite(Number(code)) ? Number(code) : 0);
       setAuth(res.access_token, tid);
-      await refetch();
+      const me = await refetch();
       const next = safeInternalPath(searchParams.get("next"));
-      navigate(next && next.startsWith("/app") ? next : "/app", { replace: true });
+      if (next && next.startsWith("/app")) {
+        navigate(next, { replace: true });
+        return;
+      }
+      // ESS-only logins land on My HR (fixed-class authority).
+      const grants = (me?.module_grants || []).map((g) => String(g).toLowerCase());
+      const onlyEss =
+        me?.authority_classes_enabled === true &&
+        grants.includes("ess") &&
+        !grants.includes("hr") &&
+        !me?.is_tenant_super_admin;
+      navigate(onlyEss ? "/app/hr/my" : "/app", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid credentials");
     } finally {

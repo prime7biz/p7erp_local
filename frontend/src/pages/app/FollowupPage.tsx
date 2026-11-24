@@ -10,18 +10,19 @@ import {
   type FollowupActionTemplateResponse,
   type FollowupSummaryResponse,
   type TnaGenerateRequest,
-  type CustomerResponse,
   type UserWithRoleResponse,
   type FollowupActionRejectionLogEntry,
   type FollowupActionCommentOut,
   type UnifiedTnaSummaryResponse,
   type UnifiedTnaActionResponse,
 } from "@/api/client";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { logApiError } from "@/utils/logApiError";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { addDaysLocalISO, toLocalISODate, todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
-import { getCustomersCached } from "@/lib/masterData";
+import { fetchCustomerPage, fetchOrderPage, hydrateCustomer, hydrateOrder } from "@/lib/remoteSelectFetchers";
 import { saveBlob } from "@/lib/fileSave";
 
 const TNA_PHASES = [
@@ -233,7 +234,6 @@ export function FollowupPage() {
   const [actions, setActions] = useState<OrderFollowupActionResponse[]>([]);
   const [overdue, setOverdue] = useState<OrderFollowupActionResponse[]>([]);
   const [orders, setOrders] = useState<OrderResponse[]>([]);
-  const [customers, setCustomers] = useState<CustomerResponse[]>([]);
   const [users, setUsers] = useState<UserWithRoleResponse[]>([]);
   const [templates, setTemplates] = useState<FollowupActionTemplateResponse[]>([]);
   const [manageTemplates, setManageTemplates] = useState<FollowupActionTemplateResponse[]>([]);
@@ -314,12 +314,11 @@ export function FollowupPage() {
       if (overdueOnly) params.overdue_only = true;
       if (dueFrom) params.due_from = dueFrom;
       if (dueTo) params.due_to = dueTo;
-      const [sum, list, od, ords, custs, usrs, tmpl, unifiedSum, unifiedList] = await Promise.all([
+      const [sum, list, od, ords, usrs, tmpl, unifiedSum, unifiedList] = await Promise.all([
         api.getFollowupActionsSummary(filterOrderId != null ? { order_id: filterOrderId } : undefined),
         api.listFollowupActions(params),
         api.getFollowupActionsOverdue(),
         api.listOrders({ limit: 200, offset: 0 }),
-        getCustomersCached(),
         api.listUsers(),
         api.listFollowupTemplates({ is_active: true }), // active only for Generate TNA modal
         api.getUnifiedTnaSummary(filterOrderId != null ? { order_id: filterOrderId } : undefined).catch((e) => {
@@ -343,7 +342,6 @@ export function FollowupPage() {
       setActions(list);
       setOverdue(od);
       setOrders(ords);
-      setCustomers(custs);
       setUsers(usrs);
       setTemplates(tmpl);
       setUnifiedSummary(unifiedSum);
@@ -864,38 +862,38 @@ export function FollowupPage() {
         >
           Clear
         </button>
-        <select
+        <RemoteSearchSelect
+          className="min-w-[10rem]"
           value={filterOrderId ?? ""}
-          onChange={(e) => setFilterOrderId(e.target.value ? Number(e.target.value) : null)}
-          className="rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary"
-        >
-          <option value="">All orders</option>
-          {orders.map((o) => (
-            <option key={o.id} value={o.id}>{o.order_code}</option>
-          ))}
-        </select>
-        <select
+          onChange={(next) => setFilterOrderId(next === "" ? null : Number(next))}
+          fetchPage={fetchOrderPage}
+          hydrateById={hydrateOrder}
+          placeholder="All orders"
+          aria-label="Order filter"
+          allowClear
+        />
+        <RemoteSearchSelect
+          className="min-w-[10rem]"
           value={filterBuyerId ?? ""}
-          onChange={(e) => setFilterBuyerId(e.target.value ? Number(e.target.value) : null)}
-          className="rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary"
-          title="Buyer (customer)"
-        >
-          <option value="">All buyers</option>
-          {customers.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-        <select
+          onChange={(next) => setFilterBuyerId(next === "" ? null : Number(next))}
+          fetchPage={fetchCustomerPage}
+          hydrateById={hydrateCustomer}
+          placeholder="All buyers"
+          aria-label="Buyer filter"
+          allowClear
+        />
+        <LocalSearchSelect
+          className="min-w-[10rem]"
           value={filterAssignedToId ?? ""}
-          onChange={(e) => setFilterAssignedToId(e.target.value ? Number(e.target.value) : null)}
-          className="rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary"
-          title="Assigned to"
-        >
-          <option value="">All assigned</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>{userDisplay(u.id)}</option>
-          ))}
-        </select>
+          options={users.map((u) => ({
+            value: u.id,
+            label: userDisplay(u.id) || u.username || `#${u.id}`,
+          }))}
+          onChange={(next) => setFilterAssignedToId(next === "" ? null : Number(next))}
+          placeholder="All assigned"
+          aria-label="Assigned to"
+          allowClear
+        />
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
@@ -1910,16 +1908,18 @@ export function FollowupPage() {
             <div className="mb-3 flex flex-wrap items-center gap-2 justify-between">
               <div className="flex items-center gap-2">
                 <label className="text-sm text-text-secondary">Buyer:</label>
-                <select
+                <RemoteSearchSelect
+                  className="min-w-[10rem]"
                   value={filterTemplateBuyerId ?? ""}
-                  onChange={(e) => setFilterTemplateBuyerId(e.target.value ? Number(e.target.value) : null)}
-                  className="rounded border border-border-strong px-2 py-1.5 text-sm"
-                >
-                  <option value="">All</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+                  onChange={(next) =>
+                    setFilterTemplateBuyerId(next === "" ? null : Number(next))
+                  }
+                  fetchPage={fetchCustomerPage}
+                  hydrateById={hydrateCustomer}
+                  placeholder="All"
+                  aria-label="Template buyer filter"
+                  allowClear
+                />
               </div>
               <button type="button" onClick={openAddTemplate} className="rounded-lg bg-brand-primary px-3 py-1.5 text-sm font-medium text-brand-primary-foreground">
                 Add template

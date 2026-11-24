@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { ComposableMap, Geographies, Geography, Marker } from "react-simple-maps";
 import { Globe, MapPin } from "lucide-react";
 import { getCountryCoordinates } from "@/data/countryCoordinates";
@@ -155,15 +156,17 @@ export function GlobalCustomerMapCardInner({ points }: GlobalCustomerMapCardProp
         <div className="flex flex-wrap items-center gap-2">
           {sortedPoints.length > 0 ? (
             sortedPoints.map((point) => (
-              <span
+              <Link
                 key={point.country}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface-subtle px-2.5 py-1.5 text-xs text-text-secondary"
+                to={`/app/customers?country=${encodeURIComponent(point.country)}`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface-subtle px-2.5 py-1.5 text-xs text-text-secondary hover:border-brand-primary/40 hover:bg-brand-primary/5"
+                title={`View customers in ${point.country}`}
               >
                 <MapPin className="h-3.5 w-3.5 text-brand-primary shrink-0" aria-hidden />
                 <span className="font-medium text-text-primary">{point.country}</span>
                 <span className="text-text-muted">·</span>
                 <span className="font-semibold text-text-primary">{point.count}</span>
-              </span>
+              </Link>
             ))
           ) : (
             <p className="text-xs text-text-muted">No customer location data yet.</p>

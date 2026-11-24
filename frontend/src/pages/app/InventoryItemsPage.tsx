@@ -25,6 +25,7 @@ import { Package, Layers, FolderTree, Plus, X, Scale, Building2 } from "lucide-r
 import { logApiError } from "@/utils/logApiError";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import {
   listTableBaseClass,
   listTableTdClass,
@@ -1289,24 +1290,23 @@ export function InventoryItemsPage() {
                     </option>
                   ))}
                 </select>
-                <select
-                  className="rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-0"
-                  title="Default warehouse for new PO lines"
+                <LocalSearchSelect
+                  className="min-w-[10rem]"
                   value={itemForm.default_warehouse_id ?? ""}
-                  onChange={(e) =>
+                  options={warehouses.map((w) => ({
+                    value: w.id,
+                    label: `${w.warehouse_code} — ${w.name}`,
+                  }))}
+                  onChange={(next) =>
                     setItemForm((p) => ({
                       ...p,
-                      default_warehouse_id: e.target.value ? Number(e.target.value) : null,
+                      default_warehouse_id: next === "" ? null : Number(next),
                     }))
                   }
-                >
-                  <option value="">Default WH (optional)</option>
-                  {warehouses.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.warehouse_code} — {w.name}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Default WH (optional)"
+                  aria-label="Default warehouse for new PO lines"
+                  allowClear
+                />
                 <select
                   className="rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-0"
                   title="Stock group for GL mapping and FIFO summary"
@@ -1661,30 +1661,30 @@ export function InventoryItemsPage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text-muted">Default warehouse</label>
-                  <select
+                  <LocalSearchSelect
                     className={cn(
-                      "w-full rounded-lg border border-border-strong px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:opacity-80",
-                      erpControlFocusClass,
+                      "w-full",
+                      itemModalMode === "view" && "pointer-events-none opacity-80",
                     )}
                     value={editForm.default_warehouse_id ?? ""}
                     disabled={itemModalMode === "view"}
-                    onChange={(e) =>
+                    options={warehouses.map((w) => ({
+                      value: w.id,
+                      label: `${w.warehouse_code} — ${w.name}`,
+                    }))}
+                    onChange={(next) =>
                       setEditForm(
                         (p) =>
                           p && {
                             ...p,
-                            default_warehouse_id: e.target.value ? Number(e.target.value) : null,
+                            default_warehouse_id: next === "" ? null : Number(next),
                           },
                       )
                     }
-                  >
-                    <option value="">None</option>
-                    {warehouses.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.warehouse_code} — {w.name}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="None"
+                    aria-label="Default warehouse"
+                    allowClear
+                  />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text-muted">Stock group</label>

@@ -11,9 +11,11 @@ import {
   type BankAccountResponse,
   type PurchaseOrderResponse,
 } from "@/api/client";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { logApiError } from "@/utils/logApiError";
 import { ProformaPaymentPanel } from "@/components/commercial/ProformaPaymentPanel";
 import { getCustomersCached, getVendorsCached, getBankAccountsCached } from "@/lib/masterData";
+import { fetchActiveCustomerPage, hydrateCustomer } from "@/lib/remoteSelectFetchers";
 
 const INCOTERMS_OPTIONS = ["EXW", "FCA", "FAS", "FOB", "CFR", "CIF", "CIP", "DAP", "DPU", "DDP"] as const;
 const PAYMENT_TERM_OPTIONS = [
@@ -50,6 +52,7 @@ const defaultForm = (): FormState => ({
   status: "DRAFT",
   invoice_date: "",
   amount: undefined,
+  customer_id: null,
   buyer_name: "",
   buyer_address: "",
   buyer_bank_details: "",
@@ -162,6 +165,7 @@ export function ProformaInvoiceFormPage() {
             status: (pi.status as FormState["status"]) ?? "DRAFT",
             invoice_date: pi.invoice_date ?? "",
             amount: pi.amount ?? undefined,
+            customer_id: (pi.customer_id as number | null | undefined) ?? null,
             buyer_name: pi.buyer_name ?? "",
             buyer_address: pi.buyer_address ?? "",
             buyer_bank_details: pi.buyer_bank_details ?? "",
@@ -205,15 +209,25 @@ export function ProformaInvoiceFormPage() {
               }
             }
             const order = list.find((o) => o.id === prefillOrderId);
-            const buyer = customersList.find((c) => c.id === (prefillCustomerId ?? order?.customer_id));
+            const resolvedCustomerId = prefillCustomerId ?? order?.customer_id ?? null;
+            const buyer = customersList.find((c) => c.id === resolvedCustomerId);
             if (order) {
               setForm((prev) => ({
                 ...prev,
                 direction: "EXPORT",
                 order_ids: [order.id],
+                customer_id: resolvedCustomerId,
                 buyer_name: prev.buyer_name || buyer?.name || order.customer_name || "",
               }));
             }
+          } else if (prefillCustomerId) {
+            const buyer = customersList.find((c) => c.id === prefillCustomerId);
+            setForm((prev) => ({
+              ...prev,
+              direction: "EXPORT",
+              customer_id: prefillCustomerId,
+              buyer_name: prev.buyer_name || buyer?.name || "",
+            }));
           }
         }
       } catch (e) {
@@ -309,6 +323,7 @@ export function ProformaInvoiceFormPage() {
       status: form.status || undefined,
       invoice_date: form.invoice_date || undefined,
       amount: form.amount,
+      customer_id: form.direction === "EXPORT" ? form.customer_id ?? null : null,
       buyer_name: form.buyer_name || undefined,
       buyer_address: form.buyer_address || undefined,
       buyer_bank_details: form.buyer_bank_details || undefined,
@@ -632,6 +647,43 @@ export function ProformaInvoiceFormPage() {
             <p className="mt-0.5 text-xs text-text-muted">Buyer / importer details.</p>
           </div>
           <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2">
+            {form.direction === "EXPORT" ? (
+              <div className="md:col-span-2">
+                <label className={labelClass}>Customer</label>
+                <RemoteSearchSelect<CustomerResponse>
+                  value={form.customer_id && form.customer_id > 0 ? form.customer_id : ""}
+                  onChange={(id, option) => {
+                    const name = option?.meta?.name ?? option?.label ?? "";
+                    if (option?.meta) {
+                      setCustomers((prev) =>
+                        prev.some((c) => c.id === option.meta!.id) ? prev : [...prev, option.meta!],
+                      );
+                    }
+                    setForm((prev) => ({
+                      ...prev,
+                      customer_id: id === "" ? null : id,
+                      buyer_name: id === "" ? prev.buyer_name : name || prev.buyer_name,
+                    }));
+                  }}
+                  fetchPage={fetchActiveCustomerPage}
+                  hydrateById={hydrateCustomer}
+                  placeholder="Search customer…"
+                  aria-label="Customer"
+                  allowClear
+                  menuPortal
+                />
+                {form.customer_id &&
+                form.buyer_name &&
+                customerMap.get(form.customer_id)?.name &&
+                customerMap.get(form.customer_id)!.name.trim().toLowerCase() !==
+                  form.buyer_name.trim().toLowerCase() ? (
+                  <p className="mt-1 text-xs text-status-warning-foreground">
+                    Buyer name differs from the selected customer (
+                    {customerMap.get(form.customer_id)?.name}). Check before saving.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             <div className="md:col-span-2">
               <label className={labelClass}>Name</label>
               <input

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, type InquiryResponse } from "@/api/client";
 import { useListPagination } from "@/hooks/useListPagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -8,7 +8,10 @@ import { logApiError } from "@/utils/logApiError";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
 import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
 import {
+  canCancelInquiry,
   canConvertInquiryToQuotation,
+  canEditInquiry,
+  canMarkInquiryLost,
   canSubmitInquiry,
   humanizeStatus,
   INQUIRY_STATUS_FILTER_OPTIONS,
@@ -16,6 +19,8 @@ import {
   inquiryListRowSecondaryTextClass,
   inquiryListRowTertiaryTextClass,
 } from "@/features/merch/workflow";
+import { DEPARTMENT_OPTIONS, INQUIRY_TYPE_OPTIONS } from "@/features/inquiries/workbench/inquiryDepartments";
+import { useInquiryWorkbenchV1 } from "@/features/inquiries/workbench/inquiryWorkbenchFlags";
 import { SecureImage } from "@/components/SecureImage";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import {
@@ -63,13 +68,18 @@ function formatInquiryCreatedAt(iso: string | undefined): string {
 export function InquiriesPage() {
   const confirm = useConfirm();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const workbenchOn = useInquiryWorkbenchV1();
   const [items, setItems] = useState<InquiryResponse[]>([]);
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("q")?.trim() ?? "");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [departmentFilter, setDepartmentFilter] = useState<string>("");
+  const [inquiryTypeFilter, setInquiryTypeFilter] = useState<string>("");
+  const [createdFrom, setCreatedFrom] = useState("");
+  const [createdTo, setCreatedTo] = useState("");
   const { page, setPage, pageSize, setPageSize } = useListPagination();
   const [listTotal, setListTotal] = useState(0);
   const [submittingInquiryId, setSubmittingInquiryId] = useState<number | null>(null);
@@ -86,6 +96,9 @@ export function InquiriesPage() {
         search: debouncedSearch || undefined,
         status: statusFilter || undefined,
         department: departmentFilter || undefined,
+        inquiry_type: workbenchOn && inquiryTypeFilter ? inquiryTypeFilter : undefined,
+        created_from: workbenchOn && createdFrom ? createdFrom : undefined,
+        created_to: workbenchOn && createdTo ? createdTo : undefined,
         page,
         page_size: pageSize,
         ai_indicators: 1,
@@ -101,9 +114,21 @@ export function InquiriesPage() {
     } finally {
       if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [latest, debouncedSearch, statusFilter, departmentFilter, page, pageSize, setPage]);
+  }, [
+    latest,
+    debouncedSearch,
+    statusFilter,
+    departmentFilter,
+    inquiryTypeFilter,
+    createdFrom,
+    createdTo,
+    workbenchOn,
+    page,
+    pageSize,
+    setPage,
+  ]);
 
-  const filteredItems = useMemo(() => items, [items]);
+  const filteredItems = items;
 
   const displayCustomerName = (row: InquiryResponse) =>
     row.customer_name?.trim() ? row.customer_name : `#${row.customer_id}`;
@@ -162,15 +187,54 @@ export function InquiriesPage() {
           className={listPageToolbarSelectClass}
         >
           <option value="">All departments</option>
-          <option value="Infant">Infant</option>
-          <option value="Kids">Kids</option>
-          <option value="Boys">Boys</option>
-          <option value="Girls">Girls</option>
-          <option value="Men">Men</option>
-          <option value="Ladies">Ladies</option>
-          <option value="Knit">Knit</option>
-          <option value="Fleece">Fleece</option>
+          {DEPARTMENT_OPTIONS.map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
         </select>
+        {workbenchOn ? (
+          <>
+            <select
+              value={inquiryTypeFilter}
+              onChange={(e) => {
+                setInquiryTypeFilter(e.target.value);
+                setPage(1);
+              }}
+              className={listPageToolbarSelectClass}
+              aria-label="Inquiry type"
+            >
+              <option value="">All types</option>
+              {INQUIRY_TYPE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <input
+              type="date"
+              value={createdFrom}
+              onChange={(e) => {
+                setCreatedFrom(e.target.value);
+                setPage(1);
+              }}
+              className={listPageToolbarInputClass}
+              aria-label="Created from"
+              title="Created from"
+            />
+            <input
+              type="date"
+              value={createdTo}
+              onChange={(e) => {
+                setCreatedTo(e.target.value);
+                setPage(1);
+              }}
+              className={listPageToolbarInputClass}
+              aria-label="Created to"
+              title="Created to"
+            />
+          </>
+        ) : null}
       </div>
 
       {error && (
@@ -302,7 +366,7 @@ export function InquiriesPage() {
                     >
                       <div className="flex items-center gap-1.5 flex-wrap whitespace-nowrap min-w-0">
                         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(inq.status)}`}>
-                          {inq.status}
+                          {workbenchOn ? humanizeStatus(inq.status) : inq.status}
                         </span>
                         {inq.is_converted_to_quotation && (
                           <span className="inline-flex rounded-full bg-status-info-subtle px-2 py-0.5 text-xs font-medium text-status-info-foreground">
@@ -355,16 +419,37 @@ export function InquiriesPage() {
                             >
                               View
                             </Link>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setOpenActionsId(null);
-                                navigate(`/app/inquiries/${inq.id}/edit`);
-                              }}
-                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
-                            >
-                              Edit
-                            </button>
+                            {canEditInquiry(inq.status) ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenActionsId(null);
+                                  navigate(`/app/inquiries/${inq.id}/edit`);
+                                }}
+                                className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
+                              >
+                                Edit
+                              </button>
+                            ) : null}
+                            {workbenchOn ? (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  setOpenActionsId(null);
+                                  try {
+                                    setError("");
+                                    const cloned = await api.cloneInquiry(inq.id);
+                                    toast.success(`Cloned as ${cloned.inquiry_code}`);
+                                    navigate(`/app/inquiries/${cloned.id}/edit`);
+                                  } catch (e) {
+                                    setError(e instanceof Error ? e.message : "Clone failed");
+                                  }
+                                }}
+                                className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
+                              >
+                                Clone
+                              </button>
+                            ) : null}
                             <Link
                               to={`/app/inquiries/${inq.id}/print`}
                               onClick={() => setOpenActionsId(null)}
@@ -395,7 +480,7 @@ export function InquiriesPage() {
                                 }}
                                 className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-60"
                               >
-                                {submittingInquiryId === inq.id ? "Submitting…" : "Submit inquiry"}
+                                {submittingInquiryId === inq.id ? "Submitting…" : "Submit"}
                               </button>
                             ) : null}
                             {!inq.is_converted_to_quotation && canConvertInquiryToQuotation(inq.status) ? (
@@ -405,9 +490,7 @@ export function InquiriesPage() {
                                   setOpenActionsId(null);
                                   try {
                                     setError("");
-                                    const quotation = await api.convertInquiryToQuotation(inq.id, {
-                                      profit_percentage: 15,
-                                    });
+                                    const quotation = await api.convertInquiryToQuotation(inq.id);
                                     await load();
                                     toast.success(`Quotation ${quotation.quotation_code} created from inquiry.`);
                                   } catch (e) {
@@ -416,26 +499,68 @@ export function InquiriesPage() {
                                 }}
                                 className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-info-foreground hover:bg-status-info-subtle"
                               >
-                                To quotation
+                                Convert
                               </button>
                             ) : null}
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                setOpenActionsId(null);
-                                if (!(await confirm({ title: "Delete this inquiry?", danger: true }))) return;
-                                try {
-                                  setError("");
-                                  await api.deleteInquiry(inq.id);
-                                  await load();
-                                } catch (e) {
-                                  setError(e instanceof Error ? e.message : "Delete failed");
-                                }
-                              }}
-                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-danger hover:bg-status-danger-subtle"
-                            >
-                              Delete
-                            </button>
+                            {workbenchOn && canMarkInquiryLost(inq.status) ? (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  setOpenActionsId(null);
+                                  const notes = window.prompt("Reason for Lost (optional):") ?? undefined;
+                                  try {
+                                    setError("");
+                                    await api.updateInquiryStatus(inq.id, "LOST", notes || undefined);
+                                    await load();
+                                    toast.success("Marked Lost");
+                                  } catch (e) {
+                                    setError(e instanceof Error ? e.message : "Mark Lost failed");
+                                  }
+                                }}
+                                className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-warning-foreground hover:bg-status-warning-subtle"
+                              >
+                                Mark Lost
+                              </button>
+                            ) : null}
+                            {workbenchOn && canCancelInquiry(inq.status) ? (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  setOpenActionsId(null);
+                                  const notes = window.prompt("Cancel reason (optional):") ?? undefined;
+                                  try {
+                                    setError("");
+                                    await api.updateInquiryStatus(inq.id, "CANCELLED", notes || undefined);
+                                    await load();
+                                    toast.success("Inquiry cancelled");
+                                  } catch (e) {
+                                    setError(e instanceof Error ? e.message : "Cancel failed");
+                                  }
+                                }}
+                                className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-danger hover:bg-status-danger-subtle"
+                              >
+                                Cancel
+                              </button>
+                            ) : null}
+                            {(!workbenchOn || inq.status === "DRAFT") ? (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  setOpenActionsId(null);
+                                  if (!(await confirm({ title: "Delete this inquiry?", danger: true }))) return;
+                                  try {
+                                    setError("");
+                                    await api.deleteInquiry(inq.id);
+                                    await load();
+                                  } catch (e) {
+                                    setError(e instanceof Error ? e.message : "Delete failed");
+                                  }
+                                }}
+                                className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-danger hover:bg-status-danger-subtle"
+                              >
+                                Delete
+                              </button>
+                            ) : null}
                           </div>
                         )}
                       </div>

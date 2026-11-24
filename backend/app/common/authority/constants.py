@@ -17,6 +17,8 @@ AUTHORITY_CLASSES: tuple[str, ...] = (
 )
 
 # Align with PERMISSION_REGISTRY top-level keys + common ERP areas used for grants.
+# ``ess`` is self-service only (My HR). It must never be required by Class 1-4 preflight
+# staffing or proposed by cutover / Settings "Select all" — use ERP_AUTHORITY_MODULE_CODES.
 AUTHORITY_MODULE_CODES: tuple[str, ...] = (
     "merch",
     "inventory",
@@ -30,7 +32,10 @@ AUTHORITY_MODULE_CODES: tuple[str, ...] = (
     "reports",
     "ai",
     "business_overview",
+    "ess",
 )
+
+ERP_AUTHORITY_MODULE_CODES: tuple[str, ...] = tuple(c for c in AUTHORITY_MODULE_CODES if c != "ess")
 
 CLASS1_APPROVAL_PENDING = "PENDING_CLASS1"
 CLASS1_APPROVAL_APPROVED = "APPROVED"

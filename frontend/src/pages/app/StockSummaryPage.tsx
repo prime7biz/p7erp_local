@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type StockSummaryRow, type WarehouseResponse } from "@/api/client";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import { useListPagination } from "@/hooks/useListPagination";
 import {
   InventoryEmptyState,
@@ -164,21 +165,21 @@ export function StockSummaryPage() {
               setSearch(e.target.value);
             }}
           />
-          <select
-            className={`w-full rounded border border-border px-3 py-2 text-sm sm:w-auto ${touchFieldClass}`}
+          <LocalSearchSelect
+            className={`w-full min-w-[12rem] sm:w-auto ${touchFieldClass}`}
             value={warehouseId === "" ? "" : warehouseId}
-            onChange={(e) => {
+            options={warehouses.map((w) => ({
+              value: w.id,
+              label: `${w.warehouse_code} — ${w.name}`,
+            }))}
+            onChange={(next) => {
               setPage(1);
-              setWarehouseId(e.target.value ? Number(e.target.value) : "");
+              setWarehouseId(next === "" ? "" : Number(next));
             }}
-          >
-            <option value="">All warehouses</option>
-            {warehouses.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.warehouse_code} — {w.name}
-              </option>
-            ))}
-          </select>
+            placeholder="All warehouses"
+            aria-label="Warehouse filter"
+            allowClear
+          />
           <label className="flex items-center gap-2 text-sm text-text-secondary">
             <input
               type="checkbox"

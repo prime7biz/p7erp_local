@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { api } from "@/api/client";
 import {
@@ -78,6 +78,7 @@ export function TentativeDemandTab({
   canWrite = true,
   phase3On = false,
   canViewFinance = false,
+  focusInquiryId = null,
 }: {
   canEditSettings?: boolean;
   /** From GET /planning-permissions (UI hint; the backend still checks). */
@@ -86,6 +87,8 @@ export function TentativeDemandTab({
   phase3On?: boolean;
   /** can_view_finance hint: may change the Phase 3 settings and see the CPM override. */
   canViewFinance?: boolean;
+  /** Deep link `?inquiry_id=` from Control Tower / Inquiry Workbench. */
+  focusInquiryId?: number | null;
 }) {
   const masters = usePlanningMasters(true);
   const [statusFilter, setStatusFilter] = useState("ACTIVE");
@@ -103,17 +106,29 @@ export function TentativeDemandTab({
   const [cancelRow, setCancelRow] = useState<TentativeBooking | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelError, setCancelError] = useState("");
+  const focusOpenedRef = useRef(false);
 
   const stageDefault = settings.data?.stage_probability?.[draft.source] ?? null;
   const set = (patch: Partial<TentativeDraft>) => setDraft((d) => ({ ...d, ...patch }));
 
-  const openCreate = () => {
+  const openCreate = (prefillInquiryId?: number | null) => {
     setEditing(null);
-    setDraft(EMPTY_DRAFT());
+    const base = EMPTY_DRAFT();
+    if (prefillInquiryId != null && prefillInquiryId > 0) {
+      base.source = "INQUIRY";
+      base.source_id = String(prefillInquiryId);
+    }
+    setDraft(base);
     setErrors([]);
     setSaveError("");
     setDrawerOpen(true);
   };
+
+  useEffect(() => {
+    if (!focusInquiryId || focusOpenedRef.current || !canWrite) return;
+    focusOpenedRef.current = true;
+    openCreate(focusInquiryId);
+  }, [focusInquiryId, canWrite]);
 
   const openEdit = (b: TentativeBooking) => {
     setEditing(b);
@@ -231,7 +246,7 @@ export function TentativeDemandTab({
             ]}
           />
           {canWrite ? (
-            <button type="button" className={secondaryBtn} onClick={openCreate}>
+            <button type="button" className={secondaryBtn} onClick={() => openCreate()}>
               Add tentative booking
             </button>
           ) : null}
@@ -262,7 +277,12 @@ export function TentativeDemandTab({
               </thead>
               <tbody>
                 {data.items.map((b) => (
-                  <tr key={b.id} className="border-b border-border/60 align-top">
+                  <tr
+                    key={b.id}
+                    className={`border-b border-border/60 align-top ${
+                      focusInquiryId != null && b.inquiry_id === focusInquiryId ? "bg-blue-50" : ""
+                    }`}
+                  >
                     <td className="px-2 py-1 font-medium">
                       {b.inquiry_id ? `Inquiry ${b.inquiry_code ?? `#${b.inquiry_id}`}` : `Quotation ${b.quotation_code ?? `#${b.quotation_id}`}`}
                     </td>
@@ -330,7 +350,7 @@ export function TentativeDemandTab({
           </p>
         )}
         <div className="grid gap-3 sm:grid-cols-2">
-          <SelectField id="mfg-tent-line" label="Sewing line" required value={draft.line_id} onChange={(v) => set({ line_id: v })} options={lineOptions} />
+          <SelectField id="mfg-tent-line" label="Sewing line" required searchable value={draft.line_id} onChange={(v) => set({ line_id: v })} options={lineOptions} />
           <TextField id="mfg-tent-qty" label="Planned quantity (pcs)" required inputMode="decimal" value={draft.planned_qty} onChange={(v) => set({ planned_qty: v })} />
           <TextField id="mfg-tent-start" label="Start date" type="date" required value={draft.start_date} onChange={(v) => set({ start_date: v })} />
           <TextField id="mfg-tent-end" label="End date" type="date" value={draft.planned_end_date} onChange={(v) => set({ planned_end_date: v })} />

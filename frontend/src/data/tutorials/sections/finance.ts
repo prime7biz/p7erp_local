@@ -332,7 +332,7 @@ When Settings → Configuration has **Ledger interest on Asset / Liability accou
 ### D. Add a missing ledger while entering a voucher
 
 1. In the voucher's ledger box, type the new name and press **Alt+C** (or click **+ New ledger** at the bottom of the list).
-2. In **New ledger**, choose **Account group (under)**, optional **Opening balance** and **Track bill-wise**, then **Create ledger**. It is selected on the line straight away.
+2. In **New ledger**, choose **Account group (under)** (type part of the group name to narrow the list), optional **Opening balance** and **Track bill-wise**, then **Create ledger**. It is selected on the line straight away.
 
 ## What happens next
 
@@ -367,7 +367,7 @@ When Settings → Configuration has **Ledger interest on Asset / Liability accou
         "import excel",
       ],
       estimatedMinutes: 7,
-      lastUpdated: "2026-11-20",
+      lastUpdated: "2026-11-22",
       audience: "finance",
       coverImage: "/tutorials/screens/accounts.jpg",
       infographics: [

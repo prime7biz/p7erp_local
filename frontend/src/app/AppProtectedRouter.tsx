@@ -3,6 +3,9 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { TradeFeatureRouteGuard } from "@/components/TradeFeatureRouteGuard";
 import { KnittingFeatureRouteGuard } from "@/components/KnittingFeatureRouteGuard";
+import { InboundJobWorkFeatureRouteGuard } from "@/components/InboundJobWorkFeatureRouteGuard";
+import { MaterialControlFeatureRouteGuard } from "@/components/MaterialControlFeatureRouteGuard";
+import { ProductionControlCenterFeatureRouteGuard } from "@/components/ProductionControlCenterFeatureRouteGuard";
 import { PermissionRouteGuard } from "@/components/auth/PermissionRouteGuard";
 import { ControlTowerShortLinkRedirect } from "@/components/control-tower/ControlTowerShortLinkRedirect";
 import { HrLegacyRedirect } from "@/components/hr/kit/HrLegacyRedirect";
@@ -747,8 +750,29 @@ const DailyCrewSheetPage = lazy(() =>
 const ProductionCuttingPage = lazy(() =>
   import("@/pages/app/production/ProductionCuttingPage").then((m) => ({ default: m.ProductionCuttingPage })),
 );
+const ProductionControlCenterPage = lazy(() =>
+  import("@/pages/app/production/control-center/ProductionControlCenterPage").then((m) => ({
+    default: m.ProductionControlCenterPage,
+  })),
+);
 const ProductionKnittingPage = lazy(() =>
   import("@/pages/app/production/ProductionKnittingPage").then((m) => ({ default: m.ProductionKnittingPage })),
+);
+const InboundJobWorkPage = lazy(() =>
+  import("@/pages/app/job-work/InboundJobWorkPage").then((m) => ({ default: m.InboundJobWorkPage })),
+);
+const InboundJobWorkDetailPage = lazy(() =>
+  import("@/pages/app/job-work/InboundJobWorkDetailPage").then((m) => ({ default: m.InboundJobWorkDetailPage })),
+);
+const MaterialControlHubPage = lazy(() =>
+  import("@/components/inventory/material-control/MaterialControlHubPage").then((m) => ({
+    default: m.MaterialControlHubPage,
+  })),
+);
+const MaterialControlLegacyRedirect = lazy(() =>
+  import("@/components/inventory/material-control/MaterialControlLegacyRedirect").then((m) => ({
+    default: m.MaterialControlLegacyRedirect,
+  })),
 );
 const ProductionDyeingPage = lazy(() =>
   import("@/pages/app/production/ProductionDyeingPage").then((m) => ({ default: m.ProductionDyeingPage })),
@@ -869,6 +893,57 @@ export function AppProtectedRouter() {
           <Route path="inventory/traceability" element={<TraceabilityPage />} />
           <Route path="inventory/purchase-orders" element={<PurchaseOrdersPage />} />
           <Route path="inventory/goods-receiving" element={<GoodsReceivingPage />} />
+          <Route element={<MaterialControlFeatureRouteGuard />}>
+            <Route path="inventory/material-control" element={<MaterialControlHubPage />} />
+            <Route
+              path="inventory/material-control/actions"
+              element={<MaterialControlLegacyRedirect from="inventory/material-control/actions" />}
+            />
+            <Route
+              path="inventory/material-control/styles"
+              element={<MaterialControlLegacyRedirect from="inventory/material-control/styles" />}
+            />
+            <Route
+              path="inventory/material-control/orders"
+              element={<MaterialControlLegacyRedirect from="inventory/material-control/orders" />}
+            />
+            <Route
+              path="inventory/material-control/genealogy"
+              element={<MaterialControlLegacyRedirect from="inventory/material-control/genealogy" />}
+            />
+            <Route
+              path="inventory/material-control/scorecard"
+              element={<MaterialControlLegacyRedirect from="inventory/material-control/scorecard" />}
+            />
+            <Route
+              path="inventory/material-control/three-way"
+              element={<MaterialControlLegacyRedirect from="inventory/material-control/three-way" />}
+            />
+            <Route
+              path="inventory/material-control/allocate"
+              element={<MaterialControlLegacyRedirect from="inventory/material-control/allocate" />}
+            />
+            <Route
+              path="inventory/material-control/leftover"
+              element={<MaterialControlLegacyRedirect from="inventory/material-control/leftover" />}
+            />
+            <Route
+              path="inventory/material-control/ops"
+              element={<MaterialControlLegacyRedirect from="inventory/material-control/ops" />}
+            />
+            <Route
+              path="inventory/material-control/watchlist"
+              element={<MaterialControlLegacyRedirect from="inventory/material-control/watchlist" />}
+            />
+            <Route
+              path="inventory/material-control/rolls"
+              element={<MaterialControlLegacyRedirect from="inventory/material-control/rolls" />}
+            />
+            <Route
+              path="inventory/material-control/landed"
+              element={<MaterialControlLegacyRedirect from="inventory/material-control/landed" />}
+            />
+          </Route>
           <Route path="inventory/delivery-challans/:challanId" element={<DeliveryChallanDetailPage />} />
           <Route path="inventory/delivery-challans" element={<DeliveryChallansPage />} />
           <Route path="inventory/enhanced-gate-passes/:gatePassId" element={<GatePassDetailPage />} />
@@ -927,6 +1002,14 @@ export function AppProtectedRouter() {
           <Route path="production/costs" element={<ProductionCostsPage />} />
           <Route element={<KnittingFeatureRouteGuard />}>
             <Route path="production/knitting" element={<ProductionKnittingPage />} />
+          </Route>
+          <Route element={<InboundJobWorkFeatureRouteGuard />}>
+            <Route path="production/job-work" element={<InboundJobWorkPage />} />
+            <Route path="production/job-work/new" element={<InboundJobWorkDetailPage />} />
+            <Route path="production/job-work/:jobId" element={<InboundJobWorkDetailPage />} />
+          </Route>
+          <Route element={<ProductionControlCenterFeatureRouteGuard />}>
+            <Route path="production/control-center" element={<ProductionControlCenterPage />} />
           </Route>
           <Route path="production/dyeing" element={<ProductionDyeingPage />} />
           <Route path="production/dept/:deptType" element={<DepartmentProductionPage />} />
@@ -1098,6 +1181,23 @@ export function AppProtectedRouter() {
           <Route path="finance/utilizations/:utilizationId" element={<UtilizationDetailPage />} />
           <Route path="finance/business-overview" element={<FinanceLegacyRoute from="finance/business-overview" Page={BusinessOverviewPage} />} />
         </Route>
+        {/* My HR: ESS-only users (ess module) or staff with hr.access */}
+        <Route
+          element={
+            <PermissionRouteGuard
+              permissionKey={ROUTE_PERMISSION.hr}
+              anyOf={[ROUTE_PERMISSION.hr, ROUTE_PERMISSION.ess]}
+            />
+          }
+        >
+          <Route path="hr/my" element={<HrHubPage hubId="my" />} />
+          <Route path="hr/ess/profile" element={<HrLegacyRedirect from="hr/ess/profile" />} />
+          <Route path="hr/ess/attendance" element={<HrLegacyRedirect from="hr/ess/attendance" />} />
+          <Route path="hr/ess/leave" element={<HrLegacyRedirect from="hr/ess/leave" />} />
+          <Route path="hr/ess/payslips" element={<HrLegacyRedirect from="hr/ess/payslips" />} />
+          <Route path="hr/ess/tickets" element={<HrLegacyRedirect from="hr/ess/tickets" />} />
+          <Route path="hr/ess/my-requests" element={<HrLegacyRedirect from="hr/ess/my-requests" />} />
+        </Route>
         <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.hr} />}>
           <Route path="hr" element={<HrDashboardPage />} />
           <Route path="hr/employees" element={<HrEmployeesPage />} />
@@ -1107,7 +1207,7 @@ export function AppProtectedRouter() {
           <Route path="hr/employees/:employeeId/profile" element={<HrEmployeeProfilePage />} />
           <Route path="hr/bangladesh-rules" element={<HrBangladeshRulesPage />} />
           {/* HR hubs: one page per area, existing pages shown as ?tab= (see components/hr/kit/hrHubs.ts). */}
-          <Route path="hr/my" element={<HrHubPage hubId="my" />} />
+          <Route path="hr/requests" element={<HrHubPage hubId="requests" />} />
           <Route path="hr/attendance" element={<HrHubPage hubId="attendance" />} />
           <Route path="hr/leave" element={<HrHubPage hubId="leave" />} />
           <Route path="hr/gate" element={<HrHubPage hubId="gate" />} />
@@ -1169,11 +1269,7 @@ export function AppProtectedRouter() {
           <Route path="hr/recruitment/candidates" element={<HrLegacyRedirect from="hr/recruitment/candidates" />} />
           <Route path="hr/recruitment/interviews" element={<HrLegacyRedirect from="hr/recruitment/interviews" />} />
           <Route path="hr/recruitment/offers" element={<HrLegacyRedirect from="hr/recruitment/offers" />} />
-          <Route path="hr/ess/profile" element={<HrLegacyRedirect from="hr/ess/profile" />} />
-          <Route path="hr/ess/attendance" element={<HrLegacyRedirect from="hr/ess/attendance" />} />
-          <Route path="hr/ess/leave" element={<HrLegacyRedirect from="hr/ess/leave" />} />
-          <Route path="hr/ess/payslips" element={<HrLegacyRedirect from="hr/ess/payslips" />} />
-          <Route path="hr/ess/tickets" element={<HrLegacyRedirect from="hr/ess/tickets" />} />
+          <Route path="hr/class-requests" element={<HrLegacyRedirect from="hr/class-requests" />} />
           <Route path="hr/compliance" element={<HrLegacyRedirect from="hr/compliance" />} />
           <Route path="hr/ai-insights" element={<HrLegacyRedirect from="hr/ai-insights" />} />
           <Route path="hr/reports" element={<HrLegacyRedirect from="hr/reports" />} />

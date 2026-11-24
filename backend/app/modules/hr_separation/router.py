@@ -170,42 +170,27 @@ async def create_separation(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+    from app.modules.hr_separation.separation_core import create_separation_core
+
     await _guard(db, user, tenant)
-    if body.separation_type not in SEPARATION_TYPES:
-        raise HTTPException(status_code=400, detail="Deemed resignation is recorded only through an absence case (s.27(3A)); "
-                            f"otherwise use one of {', '.join(SEPARATION_TYPES)}")
-    if body.effective_date < body.last_working_date:
-        raise HTTPException(status_code=400, detail="The effective date must be on or after the last working day")
-    emp = (
-        await db.execute(
-            select(Employee).where(Employee.id == body.employee_id, Employee.tenant_id == tenant.id)
-            .with_for_update().execution_options(populate_existing=True)
-        )
-    ).scalar_one_or_none()
-    if emp is None:
-        raise HTTPException(status_code=404, detail="Employee not found")
-    if emp.joining_date and body.last_working_date < emp.joining_date:
-        raise HTTPException(status_code=400, detail="Last working day is before the joining date")
-    open_sep = (
-        await db.execute(
-            select(HrSeparation.id).where(
-                HrSeparation.tenant_id == tenant.id, HrSeparation.employee_id == emp.id, HrSeparation.status.in_(("DRAFT", "APPROVED"))
-            )
-        )
-    ).first()
-    if open_sep:
-        raise HTTPException(status_code=409, detail=f"Employee already has an open separation #{open_sep[0]}")
-    required = calc.notice_days(body.separation_type, permanent=body.permanent, monthly_rated=body.monthly_rated)
-    sep = HrSeparation(
-        tenant_id=tenant.id, employee_id=emp.id, separation_type=body.separation_type, request_date=body.request_date,
-        last_working_date=body.last_working_date, effective_date=body.effective_date, notice_days_required=required,
-        notice_days_served=body.notice_days_served, permanent=body.permanent, monthly_rated=body.monthly_rated,
-        misconduct_no_compensation=body.misconduct_no_compensation, death_at_work=body.death_at_work,
-        reason=(body.reason or "").strip() or None, status="DRAFT", created_by=user.id,
+    await assert_hr_request_required(db, user, tenant)
+    sep = await create_separation_core(
+        db,
+        tenant=tenant,
+        actor=user,
+        employee_id=body.employee_id,
+        separation_type=body.separation_type,
+        request_date=body.request_date,
+        last_working_date=body.last_working_date,
+        effective_date=body.effective_date,
+        notice_days_served=body.notice_days_served,
+        permanent=body.permanent,
+        monthly_rated=body.monthly_rated,
+        misconduct_no_compensation=body.misconduct_no_compensation,
+        death_at_work=body.death_at_work,
+        reason=body.reason,
     )
-    db.add(sep)
-    await db.flush()
-    await log_action(db, tenant_id=tenant.id, user_id=user.id, action="HR_SEPARATION_CREATED", resource=f"hr.separation:{sep.id}", details=body.separation_type)
     await db.commit()
     await db.refresh(sep)
     return _out(sep, SEP_FIELDS)
@@ -218,15 +203,14 @@ async def approve_separation(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+    from app.modules.hr_separation.separation_core import approve_separation_core
+
     _ensure_tenant(user, tenant)
+    await assert_hr_request_required(db, user, tenant)
     await require_manager_admin(db, user, tenant.id)
     sep = await _locked(db, HrSeparation, tenant.id, sep_id, "Separation")
-    if sep.status != "DRAFT":
-        raise HTTPException(status_code=409, detail=f"Separation is {sep.status}")
-    emp = await _locked(db, Employee, tenant.id, sep.employee_id, "Employee")
-    sep.status, sep.approved_by, sep.approved_at = "APPROVED", user.id, datetime.utcnow()
-    emp.exit_date = sep.effective_date
-    await log_action(db, tenant_id=tenant.id, user_id=user.id, action="HR_SEPARATION_APPROVED", resource=f"hr.separation:{sep.id}", details=f"exit {sep.effective_date}")
+    await approve_separation_core(db, tenant=tenant, actor=user, sep=sep)
     await db.commit()
     await db.refresh(sep)
     return _out(sep, SEP_FIELDS)
@@ -239,20 +223,14 @@ async def cancel_separation(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_final_settlement_class1, assert_hr_request_required
+    from app.modules.hr_separation.separation_core import cancel_separation_core
+
     await _guard(db, user, tenant)
+    await assert_hr_request_required(db, user, tenant)
+    await assert_final_settlement_class1(db, user, tenant)
     sep = await _locked(db, HrSeparation, tenant.id, sep_id, "Separation")
-    fs = (await db.execute(select(HrFinalSettlement).where(HrFinalSettlement.tenant_id == tenant.id, HrFinalSettlement.separation_id == sep.id))).scalar_one_or_none()
-    if sep.status in ("SETTLED", "CANCELLED") or (fs is not None and fs.status != "DRAFT"):
-        raise HTTPException(status_code=409, detail="A separation with an approved or posted settlement cannot be cancelled")
-    if fs is not None:
-        await link_settlement_extras(db, tenant.id, fs.id, {})
-        await db.delete(fs)
-    if sep.status == "APPROVED":
-        emp = await _locked(db, Employee, tenant.id, sep.employee_id, "Employee")
-        if emp.exit_date == sep.effective_date:
-            emp.exit_date = None
-    sep.status = "CANCELLED"
-    await log_action(db, tenant_id=tenant.id, user_id=user.id, action="HR_SEPARATION_CANCELLED", resource=f"hr.separation:{sep.id}")
+    await cancel_separation_core(db, tenant=tenant, actor=user, sep=sep)
     await db.commit()
     await db.refresh(sep)
     return _out(sep, SEP_FIELDS)
@@ -410,7 +388,10 @@ async def approve_settlement(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_final_settlement_class1
+
     _ensure_tenant(user, tenant)
+    await assert_final_settlement_class1(db, user, tenant)
     await require_manager_admin(db, user, tenant.id)
     fs = await _locked(db, HrFinalSettlement, tenant.id, fs_id, "Final settlement")
     if fs.status != "DRAFT":
@@ -438,12 +419,14 @@ async def post_settlement(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_final_settlement_class1
     from app.modules.finance.fiscal_year import fiscal_year_of, tenant_fy_start_month
     from app.modules.finance.posting_core import apply_voucher_to_books
     from app.modules.finance.voucher_controls import allocate_series_voucher_number, finalize_posted_voucher_metadata
     from app.modules.hr_payroll.account_resolver import resolve_payroll_accounts
 
     _ensure_tenant(user, tenant)
+    await assert_final_settlement_class1(db, user, tenant)
     await require_manager_admin(db, user, tenant.id)
     # Lock first, then check the guard: a second click finds voucher_id set and gets the same result.
     fs = await _locked(db, HrFinalSettlement, tenant.id, fs_id, "Final settlement")
@@ -574,7 +557,10 @@ async def mark_settlement_paid(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_final_settlement_class1
+
     _ensure_tenant(user, tenant)
+    await assert_final_settlement_class1(db, user, tenant)
     await require_manager_admin(db, user, tenant.id)
     fs = await _locked(db, HrFinalSettlement, tenant.id, fs_id, "Final settlement")
     if fs.status != "POSTED":
@@ -602,9 +588,11 @@ async def reverse_settlement(
 ):
     """Reverse with a new voucher (finance reversal rules apply). The HR side is undone in the same
     transaction: recovered advances are restored and claimed extras are released for payment again."""
+    from app.common.authority.hr_policy import assert_final_settlement_class1
     from app.modules.finance.router import VoucherReverseBody, reverse_voucher
 
     _ensure_tenant(user, tenant)
+    await assert_final_settlement_class1(db, user, tenant)
     await require_manager_admin(db, user, tenant.id)
     fs = await _locked(db, HrFinalSettlement, tenant.id, fs_id, "Final settlement")
     if fs.status not in ("POSTED", "PAID") or fs.voucher_id is None:

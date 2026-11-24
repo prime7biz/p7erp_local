@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { api, type CustomerResponse, type InquiryResponse, type QuotationDetailResponse, type SettingsConfigResponse } from "@/api/client";
+import { api, type ItemCategoryResponse, type CustomerResponse, type InquiryResponse, type QuotationDetailResponse, type SettingsConfigResponse } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { SecureImage } from "@/components/SecureImage";
 import { PrintPdfToolbarActions } from "@/components/print/PrintPdfToolbarActions";
 import { logApiError } from "@/utils/logApiError";
 import { subtractMoney, sumMoneyBy } from "@/lib/money";
+import { QRCodeSVG } from "qrcode.react";
+import { publicVerifyUrl } from "@/utils/verifyPrintUrl";
 import "@/styles/quotation-print.css";
 
 function formatMoney(value: string | number | null | undefined): string {
@@ -43,6 +45,9 @@ export function QuotationPrintPage() {
     showSignatureBlock: true,
     showFooter: true,
   });
+  // Buyer Quotation hides internal costing (FOB cost, margin, shares, raw material prices).
+  const [docMode, setDocMode] = useState<"buyer" | "internal">("buyer");
+  const [categories, setCategories] = useState<ItemCategoryResponse[]>([]);
   const [templatePreset, setTemplatePreset] = useState<"standard" | "minimal" | "factory">("standard");
 
   const applyPreset = (preset: "standard" | "minimal" | "factory") => {
@@ -94,7 +99,7 @@ export function QuotationPrintPage() {
         const q = await api.getQuotation(quotationId);
         setQuotation(q);
 
-        const [cfg, cust, inq] = await Promise.all([
+        const [cfg, cust, inq, cats] = await Promise.all([
           api.getSettingsConfig().catch((e) => {
             logApiError("QuotationPrintPage.getSettingsConfig", e);
             return null;
@@ -109,7 +114,12 @@ export function QuotationPrintPage() {
                 return null;
               })
             : Promise.resolve(null),
+          api.listItemCategories().catch((e) => {
+            logApiError("QuotationPrintPage.listItemCategories", e);
+            return [] as ItemCategoryResponse[];
+          }),
         ]);
+        setCategories(cats);
         setSettings(cfg);
         setCustomer(cust);
         setInquiry(inq);
@@ -165,6 +175,11 @@ export function QuotationPrintPage() {
     { label: "Commission", value: commissionAmount },
   ];
   const breakdownBase = sumMoneyBy(breakdownRows, (row) => row.value) || 1;
+  const isBuyer = docMode === "buyer";
+  const verifyUrl = publicVerifyUrl(quotation.verification_id);
+  const categoryName = (categoryId: number | null | undefined) =>
+    categoryId == null ? "-" : categories.find((c) => c.id === categoryId)?.name ?? `#${categoryId}`;
+  const unitQuotedPrice = projectedQtyValue > 0 ? quotedPrice / projectedQtyValue : 0;
   const watermarkText = ["APPROVED", "SENT", "CONVERTED"].includes((quotation.status || "").toUpperCase()) ? "Final" : "Draft";
   const watermarkClass = watermarkText === "Final" ? "qp-watermark-final" : "qp-watermark-draft";
 
@@ -190,6 +205,18 @@ export function QuotationPrintPage() {
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <div className="text-xs font-semibold text-brand-primary">Print template settings</div>
           <div className="flex items-center gap-2">
+            <label className="text-xs font-medium text-brand-primary" htmlFor="qp-doc-mode">
+              Document mode
+            </label>
+            <select
+              id="qp-doc-mode"
+              value={docMode}
+              onChange={(e) => setDocMode(e.target.value as "buyer" | "internal")}
+              className="rounded-md border border-brand-primary/30 bg-surface-raised px-2 py-1 text-xs text-brand-primary"
+            >
+              <option value="buyer">Buyer Quotation</option>
+              <option value="internal">Internal Costing Sheet</option>
+            </select>
             <select
               value={templatePreset}
               onChange={(e) => applyPreset(e.target.value as "standard" | "minimal" | "factory")}
@@ -280,7 +307,7 @@ export function QuotationPrintPage() {
             </div>
           </div>
           <div className="qp-header-right">
-            <div className="qp-doc-title">QUOTATION</div>
+            <div className="qp-doc-title">{isBuyer ? "QUOTATION" : "INTERNAL COSTING SHEET"}</div>
             <div className="qp-status">{quotation.status}</div>
           </div>
         </header>
@@ -297,22 +324,34 @@ export function QuotationPrintPage() {
           <div><span>Shipping</span><strong>{quotation.shipping_term ?? "-"}</strong></div>
           <div><span>Department</span><strong>{quotation.department ?? "-"}</strong></div>
           <div><span>Projected Qty</span><strong>{projectedQtyValue.toLocaleString()}</strong></div>
-          <div><span>Commission</span><strong>{quotation.commission_mode ?? "-"} / {quotation.commission_type ?? "-"} / {quotation.commission_value ?? "-"}</strong></div>
+          {!isBuyer && (
+            <div><span>Commission</span><strong>{quotation.commission_mode ?? "-"} / {quotation.commission_type ?? "-"} / {quotation.commission_value ?? "-"}</strong></div>
+          )}
         </section>
 
         <section className="qp-kpi-grid">
-          <div className="qp-kpi qp-kpi-blue">
-            <span>FOB Cost</span>
-            <strong>{formatMoney(quotation.total_cost)} {currency}</strong>
-          </div>
+          {!isBuyer && (
+            <div className="qp-kpi qp-kpi-blue">
+              <span>FOB Cost</span>
+              <strong>{formatMoney(quotation.total_cost)} {currency}</strong>
+            </div>
+          )}
+          {isBuyer && (
+            <div className="qp-kpi qp-kpi-blue">
+              <span>Unit Quoted Price</span>
+              <strong>{formatMoney(unitQuotedPrice)} {currency}</strong>
+            </div>
+          )}
           <div className="qp-kpi qp-kpi-violet">
-            <span>Quoted Price</span>
+            <span>{isBuyer ? "Total Quoted" : "Quoted Price"}</span>
             <strong>{formatMoney(quotation.quoted_price ?? quotation.total_amount)} {currency}</strong>
           </div>
-          <div className="qp-kpi qp-kpi-amber">
-            <span>Margin</span>
-            <strong>{formatMoney(marginAmount)} ({marginPct.toFixed(2)}%)</strong>
-          </div>
+          {!isBuyer && (
+            <div className="qp-kpi qp-kpi-amber">
+              <span>Margin</span>
+              <strong>{formatMoney(marginAmount)} ({marginPct.toFixed(2)}%)</strong>
+            </div>
+          )}
           <div className="qp-kpi qp-kpi-emerald">
             <span>Total Qty</span>
             <strong>{projectedQtyValue.toLocaleString()}</strong>
@@ -349,6 +388,34 @@ export function QuotationPrintPage() {
           </section>
         )}
 
+        <section className="qp-section">
+          <h2>Size Ratio</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Size</th>
+                <th className="right">Ratio %</th>
+                <th className="right">Qty</th>
+              </tr>
+            </thead>
+            <tbody>
+              {quotation.size_ratios.length === 0 ? (
+                <tr><td colSpan={3} className="empty">No size ratio lines.</td></tr>
+              ) : (
+                quotation.size_ratios.map((row, i) => (
+                  <tr key={`size-${i}`}>
+                    <td>{row.size}</td>
+                    <td className="right">{row.ratio_percentage}</td>
+                    <td className="right">{(row.quantity ?? 0).toLocaleString()}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </section>
+
+        {!isBuyer && (
+        <>
         <section className="qp-section">
           <h2>Cost Breakdown</h2>
           <table>
@@ -390,7 +457,7 @@ export function QuotationPrintPage() {
                 quotation.materials.map((line) => (
                   <tr key={`mat-${line.id ?? line.serial_no}`}>
                     <td>{line.serial_no}</td>
-                    <td>{line.category_id ?? "-"}</td>
+                    <td>{categoryName(line.category_id)}</td>
                     <td>{line.description || "-"}</td>
                     <td className="right">{formatMoney(line.unit_price)}</td>
                     <td className="right">{formatMoney(line.total_amount)}</td>
@@ -460,6 +527,8 @@ export function QuotationPrintPage() {
             </tbody>
           </table>
         </section>
+        </>
+        )}
 
         {printPrefs.showRemarks && (
           <section className="qp-notes">
@@ -467,6 +536,18 @@ export function QuotationPrintPage() {
             <p>{quotation.notes || "No additional notes."}</p>
           </section>
         )}
+
+        {isBuyer && verifyUrl ? (
+          <section className="qp-section" aria-label="Quotation verification">
+            <div className="flex items-center gap-3 px-3 py-2">
+              <QRCodeSVG value={verifyUrl} size={80} level="M" />
+              <div className="text-[10px] text-text-secondary">
+                <div className="font-semibold">Scan to verify this quotation</div>
+                <div>{quotation.verification_id}</div>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         {printPrefs.showSignatureBlock && (
           <section className="qp-section">

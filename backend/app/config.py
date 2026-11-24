@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     geoip_city_db_path: str = ""
     # When session tracking is on, alert the user on login from a new IP or device (in-app + email).
     user_session_new_device_alerts: bool = True
+    # Purge API_REQUEST / API_ERROR audit rows older than this many days (0 = never). Business rows kept.
+    audit_api_retention_days: int = 30
+    audit_api_purge_batch_size: int = 2000
+    # true: retention job only logs how many technical rows would be deleted (safe default until ops enables).
+    audit_api_purge_dry_run: bool = True
     # true: alert scans / weekly AI reports / platform maintenance run as loops inside each API
     # process (advisory-locked so one runs). false: the Celery beat service schedules them.
     inprocess_schedulers_enabled: bool = True

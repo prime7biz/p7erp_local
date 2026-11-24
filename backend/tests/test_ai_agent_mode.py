@@ -600,3 +600,60 @@ async def test_tool_results_are_redacted_before_reaching_model(db_session_integr
 
     assert "secret.person@example.com" not in fake.all_text()
     assert any("[EMAIL_REDACTED]" in m for m in fake.tool_messages())
+
+
+@pytest.mark.asyncio
+async def test_quotation_tools_hide_costs_without_mfg_finance_gate(db_session_integration):
+    """Cost / margin fields need GATE_FINANCE and may_view_mfg_finance — not finance.access alone."""
+    from decimal import Decimal
+
+    from app.models.merch import Quotation
+
+    db = db_session_integration
+    tenant, _admin, _ = await create_admin_tenant_with_user(db)
+    customer = await create_customer(db, tenant)
+    q = Quotation(
+        tenant_id=tenant.id,
+        customer_id=customer.id,
+        quotation_code=f"AIQ-{uuid.uuid4().hex[:6]}",
+        status="DRAFT",
+        version_no=1,
+        currency="USD",
+        style_ref="STY-AI",
+        projected_quantity=100,
+        quoted_price=Decimal("1000.0000"),
+        total_amount=Decimal("1000.0000"),
+        total_cost=Decimal("700.0000"),
+        cost_per_piece=Decimal("7.0000"),
+        profit_percentage=Decimal("30.0000"),
+    )
+    db.add(q)
+    await db.flush()
+
+    # Merch + weak finance read (legacy GATE_FINANCE) but NOT admin/manager and NOT mis_report.view.
+    analyst = await _user_with_role(
+        db,
+        tenant,
+        role_name="analyst",
+        permissions={
+            "ai.read": True,
+            "ai.tools.merch.read": True,
+            "ai.tools.finance.read": True,
+            "merch.access": True,
+            "finance.access": True,
+        },
+    )
+    ctx = AgentContext(db=db, tenant=tenant, user=analyst, session_id=0, message_id=None, request_id="qcost")
+    search = await catalog.AGENT_TOOLS["search_quotations"].handler(ctx, {"query": q.quotation_code})
+    summary = await catalog.AGENT_TOOLS["get_quotation_summary"].handler(ctx, {"quotation_id": q.id})
+    assert search["data"]["costs_included"] is False
+    assert summary["data"]["costs_included"] is False
+    assert "total_cost" not in search["data"]["items"][0]
+    assert "total_cost" not in summary["data"]
+    assert "profit_percentage" not in summary["data"]
+
+    manager = await _user_with_role(db, tenant, role_name="manager", permissions={"ai.read": True, "merch.access": True})
+    mctx = AgentContext(db=db, tenant=tenant, user=manager, session_id=0, message_id=None, request_id="qcost-m")
+    msum = await catalog.AGENT_TOOLS["get_quotation_summary"].handler(mctx, {"quotation_id": q.id})
+    assert msum["data"]["costs_included"] is True
+    assert msum["data"]["total_cost"] == "700.0000"

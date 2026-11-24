@@ -68,6 +68,10 @@ function enrichLinesWithLocalAmounts(
   };
 }
 
+function withSerialNos<T extends { serial_no?: number | null }>(rows: T[]): T[] {
+  return rows.map((row, i) => ({ ...row, serial_no: i + 1 }));
+}
+
 export function buildQuotationFullUpdatePayload({
   quotation,
   materials,
@@ -105,9 +109,9 @@ export function buildQuotationFullUpdatePayload({
     pack_ratio: quotation.pack_ratio,
     pcs_per_carton: quotation.pcs_per_carton,
     notes: quotation.notes,
-    materials: mats.filter(isPersistableMaterialRow),
-    manufacturing: mfg.filter(isPersistableManufacturingRow),
-    other_costs: oc.filter(isPersistableOtherCostRow),
-    size_ratios: sizeRatios.filter(isPersistableSizeRatioRow),
+    materials: withSerialNos(mats.filter(isPersistableMaterialRow)),
+    manufacturing: withSerialNos(mfg.filter(isPersistableManufacturingRow)),
+    other_costs: withSerialNos(oc.filter(isPersistableOtherCostRow)),
+    size_ratios: withSerialNos(sizeRatios.filter(isPersistableSizeRatioRow)),
   };
 }

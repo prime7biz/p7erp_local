@@ -20,12 +20,16 @@ import { preferShareOverPrint, shareOrSaveBlob } from "@/lib/fileSave";
 import { useMobileUiV2Phone } from "@/hooks/useMobileUiV2";
 import { useMediaQuery } from "@/hooks/useInventoryListView";
 import { PHONE_MEDIA_QUERY } from "@/lib/mobileUi";
+import { useAuth } from "@/context/AuthContext";
 import { publicVerifyUrl } from "@/utils/verifyPrintUrl";
 
 const STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "RELEASED"];
 
 export function GatePassDetailPage() {
   const navigate = useNavigate();
+  const flags = useAuth().me?.feature_flags;
+  const classChainOn =
+    flags?.user_authority_classes_v1 === true && flags?.material_conversion_v1 === true;
   const { gatePassId } = useParams<{ gatePassId: string }>();
   const isNew = Boolean(useMatch({ path: "/app/inventory/enhanced-gate-passes/new", end: true }));
   const idNum = gatePassId && gatePassId !== "new" ? Number(gatePassId) : NaN;
@@ -267,7 +271,36 @@ export function GatePassDetailPage() {
                 Print
               </button>
             )}
-            {row.status === "RELEASED" && row.class1_approval_status === "PENDING_CLASS1" ? (
+            {classChainOn ? (
+              <>
+                <button
+                  type="button"
+                  className="rounded-lg border border-brand-primary/40 px-3 py-2 text-sm text-brand-primary"
+                  onClick={async () => {
+                    try {
+                      setRow(await api.classRecommendGatePass(row.id));
+                    } catch (err) {
+                      setError((err as Error).message);
+                    }
+                  }}
+                >
+                  Class 2 recommend
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-status-success/40 px-3 py-2 text-sm text-status-success-foreground"
+                  onClick={async () => {
+                    try {
+                      setRow(await api.classApproveGatePass(row.id));
+                    } catch (err) {
+                      setError((err as Error).message);
+                    }
+                  }}
+                >
+                  Class 1 approve
+                </button>
+              </>
+            ) : row.status === "RELEASED" && row.class1_approval_status === "PENDING_CLASS1" ? (
               <>
                 <button
                   type="button"

@@ -10,6 +10,7 @@ import {
   type ItemUnitResponse,
   type InventoryItemResponse,
 } from "@/api/client";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { X } from "lucide-react";
@@ -148,64 +149,54 @@ export function MasterQuickAddModal({
             ) : null}
             {(masterType === "subcategory" || masterType === "item") && (
               <div>
-                <label className="mb-1 block text-xs font-medium text-text-muted">Category</label>
-                <select
-                  className={cn(
-                    "w-full rounded-lg border border-border-strong px-3 py-2 text-sm",
-                    erpControlFocusClass,
-                  )}
-                  value={categoryId}
-                  onChange={(e) => {
-                    setCategoryId(Number(e.target.value));
+                <label htmlFor="master-qa-category" className="mb-1 block text-xs font-medium text-text-muted">
+                  Category
+                </label>
+                <LocalSearchSelect
+                  id="master-qa-category"
+                  value={categoryId || ""}
+                  options={categories.map((c) => ({ value: c.id, label: c.name }))}
+                  onChange={(next) => {
+                    setCategoryId(next === "" ? 0 : Number(next));
                     setSubcategoryId("");
                   }}
+                  placeholder="Select category…"
                   required
-                >
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  allowClear={false}
+                  aria-label="Category"
+                />
               </div>
             )}
             {masterType === "item" && (
               <>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-text-muted">Subcategory (optional)</label>
-                  <select
-                    className={cn(
-                      "w-full rounded-lg border border-border-strong px-3 py-2 text-sm",
-                      erpControlFocusClass,
-                    )}
-                    value={subcategoryId === "" ? "" : String(subcategoryId)}
-                    onChange={(e) => setSubcategoryId(e.target.value ? Number(e.target.value) : "")}
-                  >
-                    <option value="">None</option>
-                    {subsForCat.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
+                  <label htmlFor="master-qa-subcategory" className="mb-1 block text-xs font-medium text-text-muted">
+                    Subcategory (optional)
+                  </label>
+                  <LocalSearchSelect
+                    id="master-qa-subcategory"
+                    value={subcategoryId === "" ? "" : subcategoryId}
+                    options={subsForCat.map((s) => ({ value: s.id, label: s.name }))}
+                    onChange={(next) => setSubcategoryId(next === "" ? "" : Number(next))}
+                    placeholder="None"
+                    allowClear
+                    aria-label="Subcategory (optional)"
+                  />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-text-muted">Unit</label>
-                  <select
-                    className={cn(
-                      "w-full rounded-lg border border-border-strong px-3 py-2 text-sm",
-                      erpControlFocusClass,
-                    )}
-                    value={unitId}
-                    onChange={(e) => setUnitId(Number(e.target.value))}
+                  <label htmlFor="master-qa-unit" className="mb-1 block text-xs font-medium text-text-muted">
+                    Unit
+                  </label>
+                  <LocalSearchSelect
+                    id="master-qa-unit"
+                    value={unitId || ""}
+                    options={units.map((u) => ({ value: u.id, label: u.name }))}
+                    onChange={(next) => setUnitId(next === "" ? 0 : Number(next))}
+                    placeholder="Select unit…"
                     required
-                  >
-                    {units.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name}
-                      </option>
-                    ))}
-                  </select>
+                    allowClear={false}
+                    aria-label="Unit"
+                  />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text-muted">Default cost (optional)</label>

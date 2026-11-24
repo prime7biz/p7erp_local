@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { api, type CustomerResponse, type StyleCreate, type StyleReportRow, type StyleResponse } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
+import { fetchCustomerPage, hydrateCustomer } from "@/lib/remoteSelectFetchers";
 import {
   listPageErrorClass,
   listPageFilterPanelClass,
@@ -29,6 +31,8 @@ const priorityOptions = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 const riskOptions = ["LOW", "MEDIUM", "HIGH"];
 
 export function StylesPage() {
+  const [searchParams] = useSearchParams();
+  const customerDeepLinkDone = useRef(false);
   const [items, setItems] = useState<StyleResponse[]>([]);
   const [reportRows, setReportRows] = useState<StyleReportRow[]>([]);
   const [listTotal, setListTotal] = useState(0);
@@ -60,6 +64,16 @@ export function StylesPage() {
       .then(setCustomers)
       .catch((e) => logApiError("StylesPage.listCustomers", e));
   }, []);
+
+  useEffect(() => {
+    if (customerDeepLinkDone.current) return;
+    const raw = searchParams.get("customer_id");
+    const customerId = raw ? Number(raw) : 0;
+    if (!Number.isFinite(customerId) || customerId <= 0) return;
+    customerDeepLinkDone.current = true;
+    setShowForm(true);
+    setForm((f) => ({ ...f, buyer_customer_id: customerId }));
+  }, [searchParams]);
 
   const latest = useLatestRequest();
 
@@ -228,21 +242,19 @@ export function StylesPage() {
               </option>
             ))}
           </select>
-          <select
-            value={buyerFilter}
-            onChange={(e) => {
-              setBuyerFilter(e.target.value);
+          <RemoteSearchSelect
+            className="min-w-[12rem]"
+            value={buyerFilter ? Number(buyerFilter) : ""}
+            onChange={(next) => {
+              setBuyerFilter(next === "" ? "" : String(next));
               setPage(1);
             }}
-            className="rounded-lg border border-border-strong px-3 py-2 text-sm"
-          >
-            <option value="">All buyer</option>
-            {customers.map((c) => (
-              <option key={c.id} value={String(c.id)}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+            fetchPage={fetchCustomerPage}
+            hydrateById={hydrateCustomer}
+            placeholder="All buyer"
+            aria-label="Buyer filter"
+            allowClear
+          />
           <input
             value={departmentFilter}
             onChange={(e) => {
@@ -303,6 +315,26 @@ export function StylesPage() {
                 onChange={(e) => setForm((f) => ({ ...f, buyer_style_ref: e.target.value || null }))}
                 placeholder="Buyer style ref"
                 className="rounded-lg border border-border-strong px-3 py-2 text-sm"
+              />
+              <RemoteSearchSelect
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                placeholder="Buyer (customer)…"
+                value={form.buyer_customer_id && form.buyer_customer_id > 0 ? form.buyer_customer_id : ""}
+                onChange={(next, opt) => {
+                  const id = typeof next === "number" && next > 0 ? next : null;
+                  if (id != null) {
+                    setCustomers((prev) => {
+                      if (prev.some((c) => c.id === id)) return prev;
+                      const meta = opt?.meta;
+                      if (!meta) return prev;
+                      return [...prev, meta];
+                    });
+                  }
+                  setForm((f) => ({ ...f, buyer_customer_id: id }));
+                }}
+                fetchPage={fetchCustomerPage}
+                hydrateById={hydrateCustomer}
+                allowClear
               />
             </div>
           </div>

@@ -332,6 +332,76 @@ async def test_sign_out_other_sessions_keeps_current(db_session_integration, mon
 
 
 @pytest.mark.asyncio
+async def test_sign_out_others_blocked_while_impersonating(db_session_integration, monkeypatch):
+    from datetime import datetime, timedelta
+
+    from app.common.auth import create_access_token
+    from app.config import get_settings
+    from app.models import ImpersonationSession, PlatformAdmin
+    from app.modules.auth.session_service import create_login_session, new_session_id
+
+    monkeypatch.setattr(get_settings(), "user_session_tracking_enabled", True)
+    monkeypatch.setattr(get_settings(), "login_rate_limit_per_minute", 100)
+
+    db = db_session_integration
+    tenant, admin, _staff, _password = await _seed(db)
+    pa = PlatformAdmin(
+        username=f"pa_{uuid.uuid4().hex[:8]}",
+        email=f"pa_{uuid.uuid4().hex[:8]}@example.com",
+        password_hash=await hash_password("AdminPass123!"),
+        role="support_agent",
+        is_active=True,
+    )
+    db.add(pa)
+    await db.flush()
+    sid = new_session_id()
+    sess = ImpersonationSession(
+        admin_id=pa.id,
+        tenant_id=tenant.id,
+        user_id=admin.id,
+        token_hash="pending",
+        expires_at=datetime.utcnow() + timedelta(hours=1),
+    )
+    db.add(sess)
+    await db.flush()
+    await create_login_session(
+        db,
+        tenant_id=tenant.id,
+        user_id=admin.id,
+        session_id=sid,
+        session_version=None,
+        ip_address="1.2.3.4",
+        user_agent="Mozilla/5.0 Chrome/120.0 Windows NT 10.0",
+        supersede_others=False,
+    )
+    await db.commit()
+
+    token = create_access_token(
+        subject=admin.id,
+        tenant_id=tenant.id,
+        session_id=sid,
+        session_version=int(admin.auth_session_version or 0),
+        impersonator_admin_id=pa.id,
+        impersonation_session_id=sess.id,
+    )
+
+    async def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.post(
+                "/api/v1/settings/my-sessions/sign-out-others",
+                headers={"Authorization": f"Bearer {token}", "X-Tenant-Id": str(tenant.id)},
+            )
+            assert res.status_code == 403, res.text
+            assert "support" in res.json()["detail"].lower()
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.mark.asyncio
 async def test_expire_stale_sessions_and_skip_when_disabled(db_session_integration, monkeypatch):
     from datetime import datetime, timedelta
 

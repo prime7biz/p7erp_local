@@ -39,32 +39,67 @@ export type CustomerFormState = {
   shippingCountry: string;
   /** ISO currency code for quotations (e.g. USD) */
   preferredCurrency: string;
+  /** Phase 2 commercial defaults (optional) */
+  paymentTerms: string;
+  defaultIncoterm: string;
+  /** Kept as string in the form for easy typing; sent as number when valid */
+  typicalLeadTimeDays: string;
+  industrySegment: string;
+  complianceLevel: string;
+  /** Informational decimal string */
+  creditLimit: string;
+  notes: string;
 };
+
+export const CUSTOMER_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "brand", label: "Brand / Buyer" },
+  { value: "retailer", label: "Retailer / Importer" },
+  { value: "buying_house", label: "Buying House / Agent" },
+  { value: "local_buyer", label: "Local / CMT Buyer" },
+  { value: "other", label: "Other" },
+];
+
+/** Legacy SaaS labels kept so old rows still display cleanly in the select. */
+const LEGACY_CUSTOMER_TYPES = new Set(["enterprise", "sme", "startup"]);
+
+export function normalizeCustomerTypeForForm(raw: string | null | undefined): string {
+  const v = (raw || "").trim();
+  if (!v) return "brand";
+  if (CUSTOMER_TYPE_OPTIONS.some((o) => o.value === v) || LEGACY_CUSTOMER_TYPES.has(v)) return v;
+  return "other";
+}
 
 export const INITIAL_CUSTOMER_FORM: CustomerFormState = {
   legalEntityName: "",
   tradeName: "",
   taxIdVatNumber: "",
   website: "",
-  customerType: "enterprise",
+  customerType: "brand",
   status: "active",
   primaryContactName: "",
   designation: "",
   contactEmail: "",
-  countryCode: "+1",
+  countryCode: "+880",
   contactPhone: "",
-  subscribeNewsletter: true,
+  subscribeNewsletter: false,
   companyLogoUrl: "",
   billingAddressLine1: "",
   billingCity: "",
   billingPostalCode: "",
-  billingCountry: "United States",
+  billingCountry: "Bangladesh",
   sameAsBilling: true,
   shippingAddressLine1: "",
   shippingCity: "",
   shippingPostalCode: "",
-  shippingCountry: "United States",
+  shippingCountry: "Bangladesh",
   preferredCurrency: "USD",
+  paymentTerms: "",
+  defaultIncoterm: "",
+  typicalLeadTimeDays: "",
+  industrySegment: "",
+  complianceLevel: "",
+  creditLimit: "",
+  notes: "",
 };
 
 export const CUSTOMER_FORM_BASE_INPUT =
@@ -73,6 +108,15 @@ export const CUSTOMER_FORM_BASE_INPUT =
 function normalizeOptional(value: string): string | undefined {
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
+}
+
+/** Parse lead-time days from the form string; empty → undefined, invalid → undefined. */
+function normalizeLeadTimeDays(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n) || n < 0) return undefined;
+  return Math.round(n);
 }
 
 export function shippingValuesFromForm(form: CustomerFormState): {
@@ -104,26 +148,47 @@ export function customerFromApiToFormState(customer: CustomerResponse): Customer
     tradeName: customer.trade_name ?? "",
     taxIdVatNumber: customer.tax_id_vat_number ?? "",
     website: customer.website ?? "",
-    customerType: customer.customer_type ?? "enterprise",
+    customerType: normalizeCustomerTypeForForm(customer.customer_type),
     status: (customer.status?.toLowerCase() === "inactive" ? "inactive" : "active") as "active" | "inactive",
     primaryContactName: customer.primary_contact_name ?? "",
     designation: customer.designation ?? "",
     contactEmail: customer.contact_email ?? customer.email ?? "",
-    countryCode: customer.phone_country_code ?? "+1",
+    countryCode: customer.phone_country_code ?? "+880",
     contactPhone: customer.contact_phone ?? customer.phone ?? "",
     subscribeNewsletter: customer.subscribe_newsletter,
     companyLogoUrl: customer.company_logo_url ?? "",
     billingAddressLine1: customer.billing_address_line1 ?? "",
     billingCity: customer.billing_city ?? "",
     billingPostalCode: customer.billing_postal_code ?? "",
-    billingCountry: customer.billing_country ?? customer.country ?? "",
+    billingCountry: customer.billing_country ?? customer.country ?? "Bangladesh",
     sameAsBilling: customer.same_as_billing,
     shippingAddressLine1: customer.shipping_address_line1 ?? "",
     shippingCity: customer.shipping_city ?? "",
     shippingPostalCode: customer.shipping_postal_code ?? "",
     shippingCountry: customer.shipping_country ?? "",
     preferredCurrency: customer.preferred_currency?.trim() || "USD",
+    paymentTerms: customer.payment_terms ?? "",
+    defaultIncoterm: customer.default_incoterm ?? "",
+    typicalLeadTimeDays:
+      customer.typical_lead_time_days != null && Number.isFinite(customer.typical_lead_time_days)
+        ? String(customer.typical_lead_time_days)
+        : "",
+    industrySegment: customer.industry_segment ?? "",
+    complianceLevel: customer.compliance_level ?? "",
+    creditLimit: customer.credit_limit ?? "",
+    notes: customer.notes ?? "",
   };
+}
+
+/** Soft completeness hints — only Legal Entity / Name is hard-required to save. */
+export function customerRecommendedMissing(form: CustomerFormState): string[] {
+  const missing: string[] = [];
+  if (!form.primaryContactName.trim()) missing.push("Primary contact");
+  if (!form.contactEmail.trim()) missing.push("Contact email");
+  if (!form.billingAddressLine1.trim()) missing.push("Billing street");
+  if (!form.billingCity.trim()) missing.push("Billing city");
+  if (!form.billingCountry.trim()) missing.push("Billing country");
+  return missing;
 }
 
 /** Build PATCH payload from form + resolved shipping (same rules as create/edit pages). */
@@ -139,27 +204,34 @@ export function buildCustomerCreatePayload(
     website: normalizeOptional(form.website),
     customer_type: normalizeOptional(form.customerType),
     status: form.status,
-    primary_contact_name: form.primaryContactName.trim(),
+    primary_contact_name: normalizeOptional(form.primaryContactName),
     designation: normalizeOptional(form.designation),
-    contact_email: form.contactEmail.trim(),
-    email: form.contactEmail.trim(),
+    contact_email: normalizeOptional(form.contactEmail),
+    email: normalizeOptional(form.contactEmail),
     phone_country_code: normalizeOptional(form.countryCode),
     contact_phone: normalizeOptional(form.contactPhone),
     phone: normalizeOptional(`${form.countryCode} ${form.contactPhone}`),
     subscribe_newsletter: form.subscribeNewsletter,
     company_logo_url: normalizeOptional(form.companyLogoUrl),
-    billing_address_line1: form.billingAddressLine1.trim(),
-    billing_city: form.billingCity.trim(),
+    billing_address_line1: normalizeOptional(form.billingAddressLine1),
+    billing_city: normalizeOptional(form.billingCity),
     billing_postal_code: normalizeOptional(form.billingPostalCode),
-    billing_country: form.billingCountry.trim(),
-    shipping_address_line1: shippingValues.shippingAddressLine1.trim(),
-    shipping_city: shippingValues.shippingCity.trim(),
+    billing_country: normalizeOptional(form.billingCountry),
+    shipping_address_line1: normalizeOptional(shippingValues.shippingAddressLine1),
+    shipping_city: normalizeOptional(shippingValues.shippingCity),
     shipping_postal_code: normalizeOptional(shippingValues.shippingPostalCode),
-    shipping_country: shippingValues.shippingCountry.trim(),
+    shipping_country: normalizeOptional(shippingValues.shippingCountry),
     same_as_billing: form.sameAsBilling,
-    address: form.billingAddressLine1.trim(),
-    country: form.billingCountry.trim(),
+    address: normalizeOptional(form.billingAddressLine1),
+    country: normalizeOptional(form.billingCountry),
     preferred_currency: normalizeOptional(form.preferredCurrency) ?? "USD",
+    payment_terms: normalizeOptional(form.paymentTerms),
+    default_incoterm: normalizeOptional(form.defaultIncoterm),
+    typical_lead_time_days: normalizeLeadTimeDays(form.typicalLeadTimeDays) ?? null,
+    industry_segment: normalizeOptional(form.industrySegment),
+    compliance_level: normalizeOptional(form.complianceLevel),
+    credit_limit: normalizeOptional(form.creditLimit),
+    notes: normalizeOptional(form.notes),
   };
 }
 
@@ -175,26 +247,33 @@ export function buildCustomerUpdatePayload(
     website: normalizeOptional(form.website),
     customer_type: normalizeOptional(form.customerType),
     status: form.status,
-    primary_contact_name: form.primaryContactName.trim(),
+    primary_contact_name: normalizeOptional(form.primaryContactName),
     designation: normalizeOptional(form.designation),
-    contact_email: form.contactEmail.trim(),
-    email: form.contactEmail.trim(),
+    contact_email: normalizeOptional(form.contactEmail),
+    email: normalizeOptional(form.contactEmail),
     phone_country_code: normalizeOptional(form.countryCode),
     contact_phone: normalizeOptional(form.contactPhone),
     phone: normalizeOptional(`${form.countryCode} ${form.contactPhone}`),
     subscribe_newsletter: form.subscribeNewsletter,
     company_logo_url: normalizeOptional(form.companyLogoUrl),
-    billing_address_line1: form.billingAddressLine1.trim(),
-    billing_city: form.billingCity.trim(),
+    billing_address_line1: normalizeOptional(form.billingAddressLine1),
+    billing_city: normalizeOptional(form.billingCity),
     billing_postal_code: normalizeOptional(form.billingPostalCode),
-    billing_country: form.billingCountry.trim(),
-    shipping_address_line1: shippingValues.shippingAddressLine1.trim(),
-    shipping_city: shippingValues.shippingCity.trim(),
+    billing_country: normalizeOptional(form.billingCountry),
+    shipping_address_line1: normalizeOptional(shippingValues.shippingAddressLine1),
+    shipping_city: normalizeOptional(shippingValues.shippingCity),
     shipping_postal_code: normalizeOptional(shippingValues.shippingPostalCode),
-    shipping_country: shippingValues.shippingCountry.trim(),
+    shipping_country: normalizeOptional(shippingValues.shippingCountry),
     same_as_billing: form.sameAsBilling,
-    address: form.billingAddressLine1.trim(),
-    country: form.billingCountry.trim(),
+    address: normalizeOptional(form.billingAddressLine1),
+    country: normalizeOptional(form.billingCountry),
     preferred_currency: normalizeOptional(form.preferredCurrency) ?? "USD",
+    payment_terms: normalizeOptional(form.paymentTerms),
+    default_incoterm: normalizeOptional(form.defaultIncoterm),
+    typical_lead_time_days: normalizeLeadTimeDays(form.typicalLeadTimeDays) ?? null,
+    industry_segment: normalizeOptional(form.industrySegment),
+    compliance_level: normalizeOptional(form.complianceLevel),
+    credit_limit: normalizeOptional(form.creditLimit),
+    notes: normalizeOptional(form.notes),
   };
 }

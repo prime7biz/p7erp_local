@@ -26,7 +26,7 @@ from app.common.orm_numeric import (
     decimal_to_money_response,
     decimal_to_rate_response,
 )
-from sqlalchemy import case, cast, func, Numeric, or_, select
+from sqlalchemy import and_, case, cast, func, Numeric, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
@@ -115,6 +115,7 @@ from app.models import (
     CashForecastScenario,
     CostCenter,
     CurrencyExchangeRate,
+    Customer,
     FxReceipt,
     GoodsReceiving,
     GoodsReceivingItem,
@@ -738,6 +739,7 @@ class FxReceiptOut(BaseModel):
 class BillBody(BaseModel):
     bill_no: str | None = None
     party_name: str
+    customer_id: int | None = None
     bill_type: Literal["PAYABLE", "RECEIVABLE"] = "PAYABLE"
     bill_date: date
     due_date: date
@@ -752,6 +754,7 @@ class BillOut(BaseModel):
     tenant_id: int
     bill_no: str
     party_name: str
+    customer_id: int | None = None
     bill_type: str
     bill_date: date
     due_date: date
@@ -4431,6 +4434,12 @@ async def create_bill(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    if body.bill_type == "PAYABLE" and body.customer_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="customer_id is not allowed on PAYABLE bills",
+        )
+    await ensure_owned(db, Customer, body.customer_id, tenant.id, "Customer", status_code=404)
     prefix = "AP-" if body.bill_type == "PAYABLE" else "AR-"
     code = await next_tenant_code(
         db,
@@ -4446,6 +4455,7 @@ async def create_bill(
         tenant_id=tenant.id,
         bill_no=code,
         party_name=body.party_name,
+        customer_id=body.customer_id,
         bill_type=body.bill_type,
         bill_date=body.bill_date,
         due_date=body.due_date,
@@ -4664,6 +4674,7 @@ async def bills_aging(
     bill_type: str = Query(default="RECEIVABLE"),
     as_of_date: date | None = Query(default=None),
     party_name: str | None = Query(default=None),
+    customer_id: int | None = Query(default=None),
     limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
@@ -4676,6 +4687,21 @@ async def bills_aging(
         OutstandingBill.tenant_id == tenant.id,
         OutstandingBill.bill_type == bill_type.strip().upper(),
     )
+    if customer_id is not None:
+        cust = await ensure_owned(db, Customer, customer_id, tenant.id, "Customer", status_code=404)
+        aliases = [
+            n.strip().lower()
+            for n in (cust.name, cust.legal_entity_name, cust.trade_name)
+            if n and str(n).strip()
+        ]
+        name_conds = [func.lower(OutstandingBill.party_name) == a for a in aliases] if aliases else []
+        match = OutstandingBill.customer_id == cust.id
+        if name_conds:
+            match = or_(
+                match,
+                and_(OutstandingBill.customer_id.is_(None), or_(*name_conds)),
+            )
+        stmt = stmt.where(match)
     if party_name:
         stmt = stmt.where(func.lower(func.coalesce(OutstandingBill.party_name, "")).like(f"%{party_name.strip().lower()}%"))
     rows = list(((await db.execute(stmt.offset(offset).limit(limit))).scalars().all()))
@@ -8186,11 +8212,40 @@ async def create_vendor_bill_draft_from_grn(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    grn = await db.get(GoodsReceiving, grn_id)
-    if not grn or grn.tenant_id != tenant.id:
+    grn = (
+        await db.execute(
+            select(GoodsReceiving)
+            .where(GoodsReceiving.id == grn_id, GoodsReceiving.tenant_id == tenant.id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if not grn:
         raise HTTPException(status_code=404, detail="GRN not found")
     if (grn.status or "").upper() != "RECEIVED":
         raise HTTPException(status_code=400, detail="GRN must be received before creating vendor bill")
+
+    # FIN-18: one active VendorBill per GRN (idempotent replay of existing draft/posted).
+    existing_bill = (
+        await db.execute(
+            select(VendorBill)
+            .where(
+                VendorBill.tenant_id == tenant.id,
+                VendorBill.goods_receiving_id == grn.id,
+                func.upper(VendorBill.status) != "CANCELLED",
+            )
+            .order_by(VendorBill.id.asc())
+            .with_for_update()
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if existing_bill is not None:
+        return {
+            "id": existing_bill.id,
+            "bill_code": existing_bill.bill_code,
+            "status": existing_bill.status,
+            "replay": True,
+        }
+
     vid = getattr(grn, "vendor_id", None)
     if not vid and grn.purchase_order_id:
         po = await db.get(PurchaseOrder, grn.purchase_order_id)
@@ -8220,13 +8275,37 @@ async def create_vendor_bill_draft_from_grn(
     db.add(bill)
     await db.flush()
 
+    # INV-02 / FIN-05: bill amounts must clear GRNI in base currency (same FX as GRN FIFO).
+    fx = Decimal("1")
+    if grn.purchase_order_id:
+        po_fx = await db.get(PurchaseOrder, grn.purchase_order_id)
+        if po_fx and po_fx.tenant_id == tenant.id and po_fx.exchange_rate_to_base is not None:
+            try:
+                fx = Decimal(str(po_fx.exchange_rate_to_base))
+            except Exception:
+                fx = Decimal("1")
+            if fx <= 0:
+                fx = Decimal("1")
+
     gi_res = await db.execute(select(GoodsReceivingItem).where(GoodsReceivingItem.goods_receiving_id == grn.id))
-    run_total = 0.0
+    run_total = Decimal("0")
     for gi in gi_res.scalars().all():
         acc = getattr(gi, "accepted_qty", None) or getattr(gi, "quantity", None) or "0"
-        up = getattr(gi, "unit_price", None) or "0"
-        lt = f"{round(float(acc or 0) * float(up or 0), 4):.4f}"
-        run_total += float(acc or 0) * float(up or 0)
+        # Prefer GRN accepted_value (already base after receive FX); else unit_price × FX.
+        accepted_value = getattr(gi, "accepted_value", None)
+        if accepted_value not in (None, ""):
+            try:
+                lt_dec = to_money_decimal(accepted_value, field="accepted_value")
+            except Exception:
+                lt_dec = Decimal("0")
+            qty_dec = to_money_decimal(acc or 0, field="accepted_qty")
+            up_base = (lt_dec / qty_dec) if qty_dec > 0 else Decimal("0")
+        else:
+            up_foreign = to_money_decimal(getattr(gi, "unit_price", None) or 0, field="unit_price")
+            up_base = quantize_amount(up_foreign * fx)
+            qty_dec = to_money_decimal(acc or 0, field="accepted_qty")
+            lt_dec = quantize_amount(qty_dec * up_base)
+        run_total += lt_dec
         db.add(
             VendorBillLine(
                 tenant_id=tenant.id,
@@ -8235,12 +8314,12 @@ async def create_vendor_bill_draft_from_grn(
                 purchase_order_line_id=getattr(gi, "purchase_order_line_id", None),
                 item_id=gi.item_id,
                 quantity=str(acc),
-                unit_price=str(up),
-                line_total=lt,
+                unit_price=str(up_base),
+                line_total=str(lt_dec),
             )
         )
-    bill.subtotal_amount = f"{run_total:.4f}"
-    bill.total_amount = f"{run_total:.4f}"
+    bill.subtotal_amount = str(quantize_amount(run_total))
+    bill.total_amount = str(quantize_amount(run_total))
     await db.commit()
     await db.refresh(bill)
     return {"id": bill.id, "bill_code": bill.bill_code, "status": bill.status}
@@ -8362,8 +8441,15 @@ async def post_vendor_bill(
     await assert_delegate_manager_or_permission(
         db, user, tenant.id, permission_key=PERMISSION_FINANCE_AP_POSTING_APPROVE
     )
-    b = await db.get(VendorBill, bill_id)
-    if not b or b.tenant_id != tenant.id:
+    b = (
+        await db.execute(
+            select(VendorBill)
+            .where(VendorBill.id == bill_id, VendorBill.tenant_id == tenant.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if not b:
         raise HTTPException(status_code=404, detail="Vendor bill not found")
     if b.voucher_id is not None:
         raise HTTPException(status_code=400, detail="Vendor bill already posted")
@@ -8381,26 +8467,54 @@ async def post_vendor_bill(
         raise HTTPException(status_code=400, detail="Vendor bill total must be greater than zero")
     amt = quantize_amount(total)
 
+    # FIN-05: clear the same GRNI account(s) GRN credited via resolve_inventory_accounts.
+    from app.services.inventory_account_resolver import resolve_inventory_accounts
+
+    grni_buckets: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+    for ln in lines:
+        acc = await resolve_inventory_accounts(db, tenant.id, int(ln.item_id))
+        grni_id = acc.get("grni")
+        if not grni_id:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"GRNI / receipt-clearing account is not mapped for item {ln.item_id}. "
+                    "Map Stock Group GRNI or system GOODS_RECEIVED_NOT_BILLED_IMPORT first."
+                ),
+            )
+        grni_buckets[int(grni_id)] += to_money_decimal(ln.line_total or 0, field="line_total")
+
+    voucher_lines: list[AutoPostingLine] = [
+        AutoPostingLine(
+            entry_type="DEBIT",
+            amount=quantize_amount(bucket_amt),
+            account_id=grni_acct,
+            notes="Clear GRNI / receipt clearing",
+        )
+        for grni_acct, bucket_amt in sorted(grni_buckets.items())
+        if bucket_amt > 0
+    ]
+    if not voucher_lines:
+        raise HTTPException(status_code=400, detail="Vendor bill total must be greater than zero")
+    cleared = sum((ln.amount for ln in voucher_lines), Decimal("0"))
+    if cleared != amt:
+        amt = quantize_amount(cleared)
+    voucher_lines.append(
+        AutoPostingLine(
+            entry_type="CREDIT",
+            amount=amt,
+            system_code="ACCOUNTS_PAYABLE_TRADE",
+            notes="Vendor bill payable",
+        )
+    )
+
     voucher = await create_system_voucher(
         db,
         tenant_id=tenant.id,
         user_id=user.id,
         voucher_type="JOURNAL",
         voucher_date=b.bill_date or today_local(tenant),
-        lines=[
-            AutoPostingLine(
-                entry_type="DEBIT",
-                amount=amt,
-                system_code="GOODS_RECEIVED_NOT_BILLED_IMPORT",
-                notes="Clear GRNI / receipt clearing",
-            ),
-            AutoPostingLine(
-                entry_type="CREDIT",
-                amount=amt,
-                system_code="ACCOUNTS_PAYABLE_TRADE",
-                notes="Vendor bill payable",
-            ),
-        ],
+        lines=voucher_lines,
         description=f"Vendor bill {b.bill_code}",
         reference=b.bill_code,
         source_module="VENDOR_BILL",

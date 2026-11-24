@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollTableCard } from "@/components/finance/kit";
-import { api, type AccountGroupResponse, type ChartOfAccountResponse, type TrialBalanceResponse } from "@/api/client";
+import { api, type AccountGroupResponse, type TrialBalanceResponse } from "@/api/client";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { todayLocalISO } from "@/lib/dates";
 import { addMoney, subtractMoney } from "@/lib/money";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
+import { fetchChartAccountPage, hydrateChartAccount } from "@/lib/remoteSelectFetchers";
 import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 export function GroupSummaryPage() {
@@ -14,7 +17,6 @@ export function GroupSummaryPage() {
   const [groupId, setGroupId] = useState<number | "">("");
   const [accountId, setAccountId] = useState<number | "">("");
   const [groups, setGroups] = useState<AccountGroupResponse[]>([]);
-  const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
   const [compactView, setCompactView] = useState(false);
   const [data, setData] = useState<TrialBalanceResponse | null>(null);
   const [error, setError] = useState("");
@@ -36,15 +38,17 @@ export function GroupSummaryPage() {
 
   async function loadMeta() {
     try {
-      const [accountGroups, chartAccounts] = await Promise.all([api.listAccountGroups(), api.listChartOfAccounts({ active_only: true })]);
-      setGroups(accountGroups);
-      setAccounts(chartAccounts);
+      setGroups(await api.listAccountGroups());
     } catch (e) {
       logApiError("GroupSummaryPage.loadMeta", e);
       setGroups([]);
-      setAccounts([]);
     }
   }
+
+  const groupSelectOptions = useMemo(
+    () => groups.map((g) => ({ value: g.id, label: `${g.code} - ${g.name}` })),
+    [groups],
+  );
 
   useEffect(() => {
     void loadMeta();
@@ -100,22 +104,25 @@ export function GroupSummaryPage() {
       )}
         </div>
         <input type="date" className="rounded border px-3 py-2 text-sm" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} />
-        <select className="rounded border px-3 py-2 text-sm" value={groupId} onChange={(e) => setGroupId(e.target.value ? Number(e.target.value) : "")}>
-          <option value="">All Groups</option>
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.code} - {g.name}
-            </option>
-          ))}
-        </select>
-        <select className="rounded border px-3 py-2 text-sm" value={accountId} onChange={(e) => setAccountId(e.target.value ? Number(e.target.value) : "")}>
-          <option value="">All Accounts</option>
-          {accounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.account_number} - {a.name}
-            </option>
-          ))}
-        </select>
+        <LocalSearchSelect
+          className="min-w-[12rem]"
+          value={groupId}
+          options={groupSelectOptions}
+          onChange={(next) => setGroupId(next === "" ? "" : Number(next))}
+          placeholder="All groups"
+          allowClear
+          aria-label="Filter by group"
+        />
+        <RemoteSearchSelect
+          className="min-w-[14rem]"
+          value={accountId}
+          onChange={(next) => setAccountId(next === "" ? "" : next)}
+          fetchPage={fetchChartAccountPage}
+          hydrateById={hydrateChartAccount}
+          placeholder="All accounts"
+          allowClear
+          aria-label="Filter by account"
+        />
         <button className={`rounded border px-3 py-2 text-sm ${compactView ? "bg-brand-primary text-brand-primary-foreground" : ""}`} onClick={() => setCompactView((v) => !v)}>
           {compactView ? "Comfort View" : "Compact View"}
         </button>

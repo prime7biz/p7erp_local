@@ -1836,7 +1836,126 @@ Many RMG factories run extra in-house units before or after sewing. P7 ERP calls
         },
       ],
       relatedAppRoutes: ["/app/production/setup", "/app/production/knitting", "/app/production/dyeing", "/app/settings/config"],
-      relatedArticleIds: ["mfg-setup", "mfg-hourly-deep", "settings-overview"],
+      relatedArticleIds: ["mfg-setup", "mfg-hourly-deep", "settings-overview", "mfg-inbound-job-work"],
+    },
+    {
+      id: "mfg-production-control-center",
+      title: "Production Control Center: TNA, machine match, cutting loss, live floor, finishing",
+      summary:
+        "One hub for order readiness and TNA slip warnings, OB vs line machine matching, cutting process-loss variance, live hourly sewing/quality board, and finishing-to-pack funnel.",
+      content: `## Overview
+
+**Production Control Center** (\`/app/production/control-center\`) is the factory command board after an order is confirmed. It does not replace specialist screens (line plan, hourly, cutting) — it links them.
+
+## Before you start
+
+- An admin turns on **Production Control Center** in **Settings → Configuration** (flag \`prod_control_center_v1\`). Related switches: \`tna_auto_plan_v1\`, \`mfg_machine_match_v1\`, \`cutting_loss_control_v1\`, \`floor_live_monitor_v1\`, \`finishing_stage_wip_v1\` (all off by default).
+- You need confirmed orders with delivery dates, sewing lines, and (for machine match) an operation bulletin with machine types.
+
+## Steps
+
+1. Open **Manufacturing → Control Center**.
+2. **Order readiness & TNA** — sorted by delivery date; slip days come from the critical-path warning engine (does not change planned dates by itself).
+3. **Planning & machine match** — pick an order to see which lines best match the OB machine mix and how many machine swaps are needed.
+4. **Cutting & process loss** — BOM vs CAD marker vs actual issued variance (when cutting flag is on).
+5. **Live floor & quality** — per-line Target / Good / Efficiency / DHU / RFT; use **Factory TV mode** on a large screen.
+6. **Finishing & packing** — stage funnel from sewing receive through carton pack (warns if finishing exceeds sewing; does not block).
+
+## Tips
+
+- Machine type list should be confirmed from your real data: run \`docker compose exec backend python scripts/list_machine_type_values.py\` before seeding taxonomy codes.
+- Hourly rows now use a stable \`slot_key\` so the same hour cell updates instead of creating duplicates.
+
+## Common problems
+
+- **Menu missing** → Flag \`prod_control_center_v1\` off.
+- **Empty machine match** → Need \`mfg_machine_match_v1\` plus an OB with machine types on the order.
+`,
+      estimatedMinutes: 8,
+      lastUpdated: "2026-11-23",
+      tags: ["production", "control-center", "tna", "hourly", "cutting", "finishing"],
+      relatedAppRoutes: ["/app/production/control-center", "/app/settings/config"],
+      relatedArticleIds: ["mfg-overview", "mfg-hourly-deep", "mfg-line-plan"],
+    },
+    {
+      id: "mfg-inbound-job-work",
+      title: "Inbound Job Work (CMT): customer materials, produce, deliver, bill CM",
+      summary:
+        "When another factory sends free materials for cutting/sewing/finishing, track the contract, zero-value materials, delivery, one CM rate bill, cash/bank receipt, then close.",
+      content: `## Overview
+
+**Inbound Job Work (CMT)** is for work you do for another factory (the **customer / principal**). They send fabric or trims at **zero value** (no purchase cost in your stock). You cut, sew and/or finish a subset of processes, return unused materials, deliver finished pieces, and bill **one CM rate × accepted delivered quantity**. Money posts as **service revenue / AR**, not as a goods sales invoice.
+
+Menu: **Manufacturing → Units (optional) → Inbound Job Work** (\`/app/production/job-work\`).
+
+## Before you start
+
+- An admin turns on **Inbound Job Work** in **Settings → Configuration** (flag \`inbound_job_work_v1\`). When off, the menu and routes are hidden.
+- You need a **Customer** master for the principal factory, and **Items** for the materials they send.
+- System chart of accounts must include AR and service revenue (and VAT output if you use VAT).
+
+## Steps
+
+1. **Create contract** — **New job work**. Pick customer, CM rate (and currency if not BDT), tick Cutting / Sewing / Finishing, add style/color/size ordered qty and material lines with consumption per piece.
+2. **Confirm** the contract (status CONFIRMED).
+3. **Materials** tab — **Receive** free-issue qty, **Consume** as you use it (cannot exceed received), **Return unused** so remaining goes to zero. These qty live only on the job-work ledger — they never enter normal stock valuation or inventory GL.
+4. **Production** tab — enter **produced qty** per line (Phase 1 is manual; shop-floor links come later).
+5. **Delivery** tab — record delivered and rejected qty. Billable qty = accepted (delivered − rejected). This is a job-work delivery note — it does **not** post stock OUT or COGS.
+6. **Billing** tab — **Bill remaining CM** (qty × rate, optional VAT). Then post a **cash or bank receipt** against the open bill.
+7. **Close** when materials remaining = 0 (or returned), all accepted deliveries are billed, and AR is cleared.
+
+## What happens next
+
+- Each bill posts Dr AR / Cr service revenue (plus VAT output if rate &gt; 0).
+- Receipts post Dr cash/bank / Cr AR. Posted vouchers are never edited; cancel bill / reverse receipt create reversing vouchers when allowed.
+- Help for this page opens from the header **Help** button on \`/app/production/job-work\`.
+
+## Tips
+
+- Do **not** use Consignment, NON_PO GRN, or Delivery Challan “Create invoice” for this flow — those paths can value stock or bill goods sales.
+- Knitting customer job-work on Process Orders is a different, knitting-only path.
+
+## Common problems
+
+- **Menu missing** → Flag off in Settings → Configuration.
+- **Cannot close** → Check the blockers on the Contract tab (open materials remaining, unbilled deliveries, or unpaid AR).
+- **Bill fails** → Open accounting period missing, or system ledgers for AR / service revenue not seeded.`,
+      tags: ["job work", "CMT", "inbound", "CM", "service revenue", "free issue"],
+      keywords: [
+        "inbound job work",
+        "CMT",
+        "cut make trim",
+        "customer materials",
+        "free issue",
+        "CM rate",
+        "job work bill",
+        "principal factory",
+      ],
+      estimatedMinutes: 6,
+      lastUpdated: "2026-11-23",
+      audience: "production",
+      coverImage: "/tutorials/screens/production.jpg",
+      infographics: [
+        {
+          type: "flow",
+          title: "Inbound Job Work path",
+          steps: [
+            { label: "Contract", href: "/app/production/job-work/new" },
+            { label: "Receive materials" },
+            { label: "Produce" },
+            { label: "Deliver" },
+            { label: "Bill CM" },
+            { label: "Cash/bank" },
+            { label: "Close" },
+          ],
+        },
+      ],
+      relatedAppRoutes: [
+        "/app/production/job-work",
+        "/app/production/job-work/new",
+        "/app/settings/config",
+      ],
+      relatedArticleIds: ["mfg-optional-units", "mfg-overview", "settings-overview"],
     },
     {
       id: "mfg-efficiency-reports",

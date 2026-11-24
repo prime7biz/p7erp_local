@@ -16,6 +16,7 @@ from app.common.authority.constants import (
     CLASS1_APPROVAL_PENDING,
     CLASS1_APPROVAL_REJECTED,
     CLASS1_APPROVAL_STATUSES,
+    ERP_AUTHORITY_MODULE_CODES,
 )
 from app.common.authority.module_access import (
     assert_module_grant_for_permissions,
@@ -44,6 +45,7 @@ __all__ = [
     "AUTHORITY_CLASS_4",
     "AUTHORITY_CLASSES",
     "AUTHORITY_MODULE_CODES",
+    "ERP_AUTHORITY_MODULE_CODES",
     "CLASS1_APPROVAL_PENDING",
     "CLASS1_APPROVAL_APPROVED",
     "CLASS1_APPROVAL_REJECTED",

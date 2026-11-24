@@ -375,6 +375,7 @@ async def list_samples(
     sample_type: str | None = None,
     style_id: int | None = None,
     order_id: int | None = None,
+    inquiry_id: int | None = None,
     target_from: date | None = None,
     target_to: date | None = None,
     limit: int = Query(50, ge=1, le=MAX_PAGE_SIZE),
@@ -390,6 +391,8 @@ async def list_samples(
         stmt = stmt.where(MerchSampleRequest.style_id == style_id)
     if order_id is not None:
         stmt = stmt.where(MerchSampleRequest.order_id == order_id)
+    if inquiry_id is not None:
+        stmt = stmt.where(MerchSampleRequest.inquiry_id == inquiry_id)
     if target_from is not None:
         stmt = stmt.where(
             MerchSampleRequest.target_date.isnot(None),

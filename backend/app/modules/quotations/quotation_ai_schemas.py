@@ -166,13 +166,6 @@ class _LlmNextActionsOut(BaseModel):
     actions: list[dict[str, Any]] = Field(default_factory=list)
 
 
-class QuotationAiExtractWrapResponse(BaseModel):
-    extraction: dict[str, Any]
-    model_hint: str = "gemini_multimodal"
-    request_id: str | None = None
-    suggestion_batch_id: int | None = None
-
-
 class QuotationAiAuditEntry(BaseModel):
     id: int
     action: str

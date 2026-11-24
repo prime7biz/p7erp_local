@@ -61,6 +61,16 @@ class Inquiry(Base):
         String(32), nullable=False, default="DRAFT", index=True
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    inquiry_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    brand: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    season_year: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    material_composition: Mapped[str | None] = mapped_column(Text, nullable=True)
+    size_range: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    color_options: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    country_of_origin: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    special_requirements: Mapped[str | None] = mapped_column(Text, nullable=True)
+    contact_person: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    technical_files: Mapped[list | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )
@@ -167,6 +177,8 @@ class Quotation(Base):
     # Set when a newer revision replaces this row; superseded rows are read-only.
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     valid_until: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Public QR check id (migration 336). Set while SENT / CONVERTED, cleared on reject / cancel / supersede.
+    verification_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
     size_ratio_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )

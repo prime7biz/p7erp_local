@@ -8,6 +8,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.common.auth import get_current_user
@@ -62,13 +63,25 @@ RESTRICT_CHILD_TABLES = (
 )
 
 
+async def delete_tenant_row(conn, tenant_id: int) -> None:
+    """Delete the test tenant row. Business audit_logs rows are immutable (migration 316), so a tenant
+    that has them cannot be deleted: it is then kept as residue (the pytest residue report lists it)
+    instead of failing the test teardown. A savepoint keeps the rest of the purge usable.
+    (Do not ALTER TABLE audit_logs here: the lock waits behind open test sessions and deadlocks.)"""
+    try:
+        async with conn.begin_nested():
+            await conn.execute(text("DELETE FROM tenants WHERE id = :t"), {"t": tenant_id})
+    except IntegrityError:
+        pass
+
+
 async def purge_tenant(engine, tenant_id: int) -> None:
     async with engine.begin() as conn:
         for table in RESTRICT_CHILD_TABLES:
             exists = (await conn.execute(text("SELECT to_regclass(:t)"), {"t": table})).scalar()
             if exists:
                 await conn.execute(text(f"DELETE FROM {table} WHERE tenant_id = :t"), {"t": tenant_id})
-        await conn.execute(text("DELETE FROM tenants WHERE id = :t"), {"t": tenant_id})
+        await delete_tenant_row(conn, tenant_id)
 
 
 @pytest_asyncio.fixture

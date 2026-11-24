@@ -90,7 +90,15 @@ export function OrderExecutionGrid({
                     {row.order_code}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-text-secondary">{row.customer_name ?? "—"}</td>
+                <td className="px-3 py-2 text-text-secondary">
+                  {row.customer_id && row.customer_name ? (
+                    <Link className="text-status-info hover:underline" to={`/app/customers/${row.customer_id}`}>
+                      {row.customer_name}
+                    </Link>
+                  ) : (
+                    row.customer_name ?? "—"
+                  )}
+                </td>
                 <td className="px-3 py-2 text-text-secondary">{row.delivery_date ?? "—"}</td>
                 <td className="px-3 py-2 text-text-secondary">{row.pipeline_status ?? "—"}</td>
                 <td className="px-3 py-2 text-text-secondary">{row.lc_status ?? "—"}</td>

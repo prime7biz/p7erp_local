@@ -40,6 +40,7 @@ export interface ExternalAccessOverview {
   customer_portal_enabled: boolean;
   financier_portal_enabled: boolean;
   customer_notes_enabled: boolean;
+  customer_portal_quotations_enabled?: boolean;
   financier_financial_summary_enabled: boolean;
   financier_projection_enabled: boolean;
   external_portal_document_downloads_enabled: boolean;
@@ -83,6 +84,7 @@ export interface ExternalFeatureFlagsPatch {
   customer_portal_enabled?: boolean | null;
   financier_portal_enabled?: boolean | null;
   customer_notes_enabled?: boolean | null;
+  customer_portal_quotations_enabled?: boolean | null;
   financier_financial_summary_enabled?: boolean | null;
   financier_projection_enabled?: boolean | null;
   external_portal_document_downloads_enabled?: boolean | null;

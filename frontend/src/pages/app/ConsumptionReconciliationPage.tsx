@@ -6,10 +6,10 @@ import {
   api,
   type ConsumptionReconciliationResponse,
   type ConsumptionReconciliationRow,
-  type CustomerResponse,
-  type StyleResponse,
   type OrderResponse,
 } from "@/api/client";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
+import { fetchCustomerPage, fetchStylePage, hydrateCustomer, hydrateStyle } from "@/lib/remoteSelectFetchers";
 import { saveBlob } from "@/lib/fileSave";
 
 const TOLERANCE_OPTIONS = [2, 5, 10] as const;
@@ -102,8 +102,6 @@ export function ConsumptionReconciliationPage() {
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<"dashboard" | "detail">("dashboard");
 
-  const [customers, setCustomers] = useState<CustomerResponse[]>([]);
-  const [styles, setStyles] = useState<StyleResponse[]>([]);
   const [dashBuyerId, setDashBuyerId] = useState("");
   const [dashStyleId, setDashStyleId] = useState("");
   const [dashDateFrom, setDashDateFrom] = useState("");
@@ -161,17 +159,6 @@ export function ConsumptionReconciliationPage() {
       setOrderSearch("");
     }
   }, [searchParams]);
-
-  useEffect(() => {
-    api
-      .listCustomers()
-      .then(setCustomers)
-      .catch((e) => logApiError("ConsumptionReconciliationPage.listCustomers", e));
-    api
-      .listStyles({ limit: 300 })
-      .then(setStyles)
-      .catch((e) => logApiError("ConsumptionReconciliationPage.listStyles", e));
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -473,39 +460,35 @@ export function ConsumptionReconciliationPage() {
           >
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-text-muted">Buyer</label>
-              <select
-                className="rounded-lg border border-border-strong px-3 py-2 text-sm min-w-[160px]"
-                value={dashBuyerId}
-                onChange={(e) => {
-                  setDashBuyerId(e.target.value);
+              <RemoteSearchSelect
+                className="min-w-[160px]"
+                value={dashBuyerId ? Number(dashBuyerId) : ""}
+                onChange={(next) => {
+                  setDashBuyerId(next === "" ? "" : String(next));
                   setDashPage(1);
                 }}
-              >
-                <option value="">All buyers</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={String(c.id)}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+                fetchPage={fetchCustomerPage}
+                hydrateById={hydrateCustomer}
+                placeholder="All buyers"
+                aria-label="Buyer filter"
+                allowClear
+              />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-text-muted">Style</label>
-              <select
-                className="rounded-lg border border-border-strong px-3 py-2 text-sm min-w-[180px]"
-                value={dashStyleId}
-                onChange={(e) => {
-                  setDashStyleId(e.target.value);
+              <RemoteSearchSelect
+                className="min-w-[180px]"
+                value={dashStyleId ? Number(dashStyleId) : ""}
+                onChange={(next) => {
+                  setDashStyleId(next === "" ? "" : String(next));
                   setDashPage(1);
                 }}
-              >
-                <option value="">All styles</option>
-                {styles.map((s) => (
-                  <option key={s.id} value={String(s.id)}>
-                    {s.style_code} — {s.name ?? s.id}
-                  </option>
-                ))}
-              </select>
+                fetchPage={fetchStylePage}
+                hydrateById={hydrateStyle}
+                placeholder="All styles"
+                aria-label="Style filter"
+                allowClear
+              />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-text-muted">From</label>

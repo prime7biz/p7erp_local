@@ -5,6 +5,7 @@ import {
   type StockAdjustmentResponse,
   type WarehouseResponse,
 } from "@/api/client";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
 import {
@@ -144,18 +145,18 @@ export function StockAdjustmentsPage() {
           });
         }}
       >
-        <select
-          className="rounded border border-border px-2 py-2 text-sm"
-          value={form.warehouse_id || ""}
-          onChange={(e) => setForm((p) => ({ ...p, warehouse_id: Number(e.target.value) }))}
-        >
-          <option value={0}>Warehouse…</option>
-          {warehouses.map((w) => (
-            <option key={w.id} value={w.id}>
-              {w.warehouse_code} — {w.name}
-            </option>
-          ))}
-        </select>
+        <LocalSearchSelect
+          className="min-w-[10rem]"
+          value={form.warehouse_id > 0 ? form.warehouse_id : ""}
+          options={warehouses.map((w) => ({
+            value: w.id,
+            label: `${w.warehouse_code} — ${w.name}`,
+          }))}
+          onChange={(next) => setForm((p) => ({ ...p, warehouse_id: next === "" ? 0 : Number(next) }))}
+          placeholder="Warehouse…"
+          aria-label="Warehouse"
+          allowClear
+        />
         <RemoteSearchSelect
           className="rounded border border-border px-2 py-2 text-sm"
           placeholder="Search item…"

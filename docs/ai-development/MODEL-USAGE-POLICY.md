@@ -3,6 +3,7 @@
 Updated 2026-11-19. Premium is fully opt-in. Expensive Opus models are never auto-launched. Prefer cheaper
 models (GPT 5.6, Claude Sonnet 5.5, Gemini). Companion files: `.cursor/rules/prime7-orchestration.mdc` (always
 applied), `docs/ai-development/ORCHESTRATION.md` (workflow and gates), `.cursor/agents/` (agents).
+Pasteable low-cost prompts: `docs/ai-development/CHEAP-AUTO-CHEATSHEET.md`.
 
 ## 1. Strategy
 
@@ -27,7 +28,8 @@ work itself, Auto subagents do independent reviews, and Premium runs only when y
   `security-auditor-premium` only if the user wants a stronger review.
 - **Never auto-launch Opus.** Do not invoke `claude-opus-*` / Opus thinking-high pins unless the user explicitly
   requests that model for the task.
-- Budget per task without asking: at most 3 subagent runs, at most 1 Premium run, at most 2 correction rounds per gate.
+- Agent count: up to 15 agents per task. If the user names a number in the chat, use that number, including above 15.
+  Premium stays opt-in (at most 1 Premium run unless the user asks). At most 2 correction rounds per gate.
 - Never covered: enabling on-demand billing, raising spending limits, buying credits, production deployment,
   destructive migrations and production data changes. If a Premium call is refused, do not work around it.
 
@@ -61,7 +63,7 @@ Opus (`claude-opus-4-8-thinking-high` and similar) is **not** the default for an
 | Cost driver | What to do |
 |---|---|
 | Premium subagents | Fully opt-in (this policy) |
-| Number of subagents | Each one re-reads files from zero; budget is 3 per task |
+| Number of subagents | Each one re-reads files from zero; up to 15 per task, or the number named in the chat |
 | Long chats | Every message re-sends the whole chat; start a new chat for each new task |
 | Always-applied rules + `AGENTS.md` | Sent with every message; keep them short; deploy and UI-button rules now load only when needed |
 | Main chat model | Prefer **Auto**, or manually pick **GPT 5.6 / Sonnet 5.5 / Gemini**. Do not pin Opus for everyday work |
@@ -90,4 +92,5 @@ Opus (`claude-opus-4-8-thinking-high` and similar) is **not** the default for an
 - Premium files read their base agent file first. Keep both, and keep the base file's sections and headings stable.
 - If a slug disappears, set it to `inherit` and record the change here.
 - History: 2026-11-06 quality-first (many mandatory Premium steps) → 2026-11-09 one automatic Opus security review →
-  2026-11-19 fully opt-in Premium, no Opus defaults.
+  2026-11-19 fully opt-in Premium, no Opus defaults → 2026-11-23 agent count raised from 3 to 15 per task, or any
+  number named in the chat.

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, Save } from "lucide-react";
-import { api, type CustomerUpdate } from "@/api/client";
+import { api, type CustomerDuplicateCheckMatch, type CustomerUpdate } from "@/api/client";
 import { AutofillReviewPanel } from "@/components/ai-extract/AutofillReviewPanel";
 import { ExtraDetailsPanel } from "@/components/ai-extract/ExtraDetailsPanel";
 import { ExtractionStatusBanner } from "@/components/ai-extract/ExtractionStatusBanner";
@@ -13,11 +13,14 @@ import {
   CUSTOMER_EXTRA_TARGETS,
   customerExtraDetailPatch,
   customerFromApiToFormState,
+  customerRecommendedMissing,
   shippingValuesFromForm,
   type CustomerFormState,
 } from "@/components/customers/customerFormShared";
 import { useCustomerAi } from "@/hooks/useCustomerAi";
+import { useFormDirty } from "@/hooks/useFormDirty";
 import { useSecureImage } from "@/hooks/useSecureImage";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import type { ConflictResolutionChoice, ExtractionStatus, FieldApplyState, FieldConfidence } from "@/types/extraction";
 import {
   buildCustomerEnrichApplyStates,
@@ -38,7 +41,7 @@ function isValidWebsite(value: string): boolean {
 }
 
 function isValidEmail(value: string): boolean {
-  if (!value.trim()) return false;
+  if (!value.trim()) return true;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
@@ -101,6 +104,14 @@ export function CustomerEditPage() {
   const [enrichReviewRows, setEnrichReviewRows] = useState<FieldApplyState[]>([]);
   const [aiUndoStack, setAiUndoStack] = useState<CustomerFormState[]>([]);
   const [currencyOptions, setCurrencyOptions] = useState<{ code: string; name: string }[]>([]);
+  const [duplicateWarnings, setDuplicateWarnings] = useState<CustomerDuplicateCheckMatch[]>([]);
+  const [formBaselineKey, setFormBaselineKey] = useState(0);
+  const formDirty = useFormDirty(form, formBaselineKey);
+  useUnsavedChangesGuard(Boolean(form) && formDirty && !submitting);
+  const recommendedMissing = useMemo(
+    () => (form ? customerRecommendedMissing(form) : []),
+    [form],
+  );
 
   useEffect(() => {
     void api
@@ -131,6 +142,8 @@ export function CustomerEditPage() {
         const customer = await api.getCustomer(Number(id));
         if (cancelled) return;
         setForm(customerFromApiToFormState(customer));
+        setFormBaselineKey((k) => k + 1);
+        setDuplicateWarnings([]);
         clearCustomerAi();
         setAutofilled({});
         setReviewRows([]);
@@ -561,17 +574,32 @@ export function CustomerEditPage() {
   const validate = (): string | null => {
     if (!form) return "Form is not ready.";
     if (!form.legalEntityName.trim()) return "Legal entity name is required.";
-    if (!form.primaryContactName.trim()) return "Primary contact name is required.";
-    if (!isValidEmail(form.contactEmail)) return "Please enter a valid contact email.";
-    if (!isValidWebsite(form.website)) return "Please provide a valid website URL (https://...).";
-    if (!form.billingAddressLine1.trim()) return "Billing address is required.";
-    if (!form.billingCity.trim()) return "Billing city is required.";
-    if (!form.billingCountry.trim()) return "Billing country is required.";
-    if (!shippingValues.shippingAddressLine1.trim()) return "Shipping address is required.";
-    if (!shippingValues.shippingCity.trim()) return "Shipping city is required.";
-    if (!shippingValues.shippingCountry.trim()) return "Shipping country is required.";
+    if (form.contactEmail.trim() && !isValidEmail(form.contactEmail)) {
+      return "Please enter a valid contact email, or leave it blank.";
+    }
+    if (!isValidWebsite(form.website)) return "Please provide a valid website URL (https://...), or leave it blank.";
     return null;
   };
+
+  const runDuplicateCheck = useCallback(async () => {
+    if (!form || !id) return;
+    const name = form.legalEntityName.trim();
+    const email = form.contactEmail.trim();
+    if (!name && !email) {
+      setDuplicateWarnings([]);
+      return;
+    }
+    try {
+      const res = await api.duplicateCheckCustomer({
+        name: name || undefined,
+        email: email || undefined,
+        exclude_id: Number(id),
+      });
+      setDuplicateWarnings(res.matches ?? []);
+    } catch (e) {
+      logApiError("CustomerEditPage.duplicateCheck", e);
+    }
+  }, [form, id]);
 
   const toPayload = (): CustomerUpdate => {
     if (!form) return {};
@@ -654,7 +682,9 @@ export function CustomerEditPage() {
           </Link>
           <h1 className="mt-2 text-3xl font-bold text-text-primary">Edit Customer Profile</h1>
           <p className="mt-1 text-sm text-text-muted">Update full customer profile details using the advanced form.</p>
-          <p className="mt-1 text-xs text-text-muted">Fields marked with ** are mandatory.</p>
+          <p className="mt-1 text-xs text-text-muted">
+            Only Legal Entity Name is required to save. Other fields marked (recommended) help completeness.
+          </p>
         </div>
       </div>
 
@@ -667,6 +697,32 @@ export function CustomerEditPage() {
           </div>
         </div>
       )}
+      {recommendedMissing.length > 0 ? (
+        <div className="rounded-xl border border-status-warning/40 bg-status-warning/10 px-4 py-3 text-sm text-text-primary">
+          <p className="font-medium">Recommended fields still empty</p>
+          <p className="mt-1 text-text-secondary">
+            You can still save. Consider adding: {recommendedMissing.join(", ")}.
+          </p>
+        </div>
+      ) : null}
+      {duplicateWarnings.length > 0 ? (
+        <div className="rounded-xl border border-status-warning/40 bg-status-warning/10 px-4 py-3 text-sm text-text-primary">
+          <p className="font-medium">Possible duplicate customers</p>
+          <ul className="mt-1 list-inside list-disc text-text-secondary">
+            {duplicateWarnings.map((m) => (
+              <li key={m.id}>
+                <Link to={`/app/customers/${m.id}`} className="font-medium text-brand-primary hover:underline">
+                  {m.customer_code}
+                </Link>
+                {" · "}
+                {m.name}
+                {m.contact_email || m.email ? ` · ${m.contact_email || m.email}` : ""}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-xs text-text-muted">This is a warning only — you can still save.</p>
+        </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1fr_minmax(260px,320px)] items-start">
         <div className="min-w-0 space-y-6">
@@ -744,6 +800,8 @@ export function CustomerEditPage() {
               companyLogoDisplayUrl={companyLogoDisplayUrl}
               logoUploading={logoUploading}
               onLogoPick={handleLogoPick}
+              onLegalEntityNameBlur={() => void runDuplicateCheck()}
+              onContactEmailBlur={() => void runDuplicateCheck()}
             />
 
             <div className="flex flex-wrap items-center justify-end gap-2">

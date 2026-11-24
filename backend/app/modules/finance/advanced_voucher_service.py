@@ -361,8 +361,69 @@ async def create_note_voucher(
     db.add(voucher)
     await db.flush()
 
+    # Optional stock impact first for DEBIT_NOTE so GL credits can use FIFO value (INV-10).
+    stock_fifo_value = ZERO
+    inventory_credit_account_id: int | None = None
+    if stock_returns:
+        from app.models.costing import Item
+        from app.models.inventory import StockMovement
+        from app.services.fifo_inventory import finalize_movement_fifo
+        from app.services.inventory_account_resolver import resolve_inventory_accounts
+
+        for sr in stock_returns:
+            qty = _money(_d(sr.get("qty")))
+            item_id = int(sr.get("stock_item_id") or 0)
+            if qty <= ZERO or item_id <= 0:
+                continue
+            godown_id = sr.get("godown_id")
+            movement_type = "IN" if note_kind == "CREDIT_NOTE" else "OUT"
+            if movement_type == "OUT" and not godown_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="godown_id (warehouse) is required for debit-note stock returns",
+                )
+            mv = StockMovement(
+                tenant_id=tenant_id,
+                item_id=item_id,
+                warehouse_id=int(godown_id) if godown_id else None,
+                movement_type=movement_type,
+                quantity=qty,
+                reference_type=note_kind,
+                reference_id=voucher.id,
+                movement_date=voucher_date,
+                notes=sr.get("notes") or f"{note_kind} stock",
+                created_by_user_id=created_by,
+                movement_kind=f"{note_kind}_STOCK",
+            )
+            db.add(mv)
+            await db.flush()
+            in_unit_cost: float | None = None
+            if movement_type == "IN":
+                it = await db.get(Item, item_id)
+                in_unit_cost = float(getattr(it, "default_cost", None) or 0) if it else 0.0
+            await finalize_movement_fifo(db, tenant_id, mv, in_unit_cost=in_unit_cost)
+            if movement_type == "OUT":
+                stock_fifo_value += _money(_d(getattr(mv, "movement_value", None) or "0"))
+                if inventory_credit_account_id is None:
+                    acc = await resolve_inventory_accounts(db, tenant_id, item_id)
+                    inventory_credit_account_id = acc.get("inventory")
+
+    # RMC-05-R2: stock left the warehouse — Inventory GL account must exist (fail closed).
+    if (
+        note_kind == "DEBIT_NOTE"
+        and stock_fifo_value > ZERO
+        and not inventory_credit_account_id
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Inventory account is not mapped for debit-note stock return. "
+                "Map Stock Group inventory or system RAW_MATERIAL_INVENTORY first."
+            ),
+        )
+
     # CREDIT_NOTE (customer return): Dr Sales Return (+tax), Cr Customer AR
-    # DEBIT_NOTE (vendor return): Dr Vendor AP, Cr Purchase Return (+tax)
+    # DEBIT_NOTE (vendor return): Dr Vendor AP, Cr Inventory (FIFO) + Purchase Return (variance) (+tax)
     net = amount
     gross = _money(net + tax_amount)
     lines: list[tuple[int, str, Decimal, str]] = []
@@ -373,7 +434,30 @@ async def create_note_voucher(
         lines.append((party_acct, "CREDIT", gross, "AR reduction"))
     else:
         lines.append((party_acct, "DEBIT", gross, "AP reduction"))
-        lines.append((revenue_or_purchase_account_id, "CREDIT", net, "Purchase return"))
+        if inventory_credit_account_id and stock_fifo_value > ZERO:
+            # Inventory credit always matches FIFO layer value; variance vs invoice → Purchase Return.
+            lines.append(
+                (
+                    inventory_credit_account_id,
+                    "CREDIT",
+                    stock_fifo_value,
+                    "Inventory reduction (debit note stock return)",
+                )
+            )
+            variance = _money(net - stock_fifo_value)
+            if variance > ZERO:
+                lines.append((revenue_or_purchase_account_id, "CREDIT", variance, "Purchase return"))
+            elif variance < ZERO:
+                lines.append(
+                    (
+                        revenue_or_purchase_account_id,
+                        "DEBIT",
+                        _money(-variance),
+                        "Purchase return variance",
+                    )
+                )
+        else:
+            lines.append((revenue_or_purchase_account_id, "CREDIT", net, "Purchase return"))
         if tax_account_id and tax_amount > 0:
             lines.append((tax_account_id, "CREDIT", tax_amount, "Input tax reversal"))
 
@@ -393,34 +477,6 @@ async def create_note_voucher(
         )
     await db.flush()
     # The party outstanding changes only when the note is posted (apply_posted_note_to_party_bills).
-
-    # Optional stock impact (goods returned)
-    if stock_returns:
-        from app.models.inventory import StockMovement
-
-        for sr in stock_returns:
-            qty = _money(_d(sr.get("qty")))
-            item_id = int(sr.get("stock_item_id") or 0)
-            if qty <= ZERO or item_id <= 0:
-                continue
-            godown_id = sr.get("godown_id")
-            movement_type = "IN" if note_kind == "CREDIT_NOTE" else "OUT"
-            db.add(
-                StockMovement(
-                    tenant_id=tenant_id,
-                    item_id=item_id,
-                    warehouse_id=int(godown_id) if godown_id else None,
-                    movement_type=movement_type,
-                    quantity=qty,
-                    reference_type=note_kind,
-                    reference_id=voucher.id,
-                    movement_date=voucher_date,
-                    notes=sr.get("notes") or f"{note_kind} stock",
-                    created_by_user_id=created_by,
-                    movement_kind=f"{note_kind}_STOCK",
-                )
-            )
-        await db.flush()
 
     return voucher
 

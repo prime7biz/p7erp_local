@@ -69,10 +69,12 @@ _RESTRICT_CHILD_TABLES = (
 
 async def _purge_tenant(engine, tenant_id: int) -> None:
     """Delete one test tenant; everything else goes through ON DELETE CASCADE from tenants."""
+    from tests.bd_hr_fixtures import delete_tenant_row
+
     async with engine.begin() as conn:
         for table in _RESTRICT_CHILD_TABLES:
             await conn.execute(text(f"DELETE FROM {table} WHERE tenant_id = :t"), {"t": tenant_id})
-        await conn.execute(text("DELETE FROM tenants WHERE id = :t"), {"t": tenant_id})
+        await delete_tenant_row(conn, tenant_id)
 
 
 @pytest_asyncio.fixture

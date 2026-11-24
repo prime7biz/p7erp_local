@@ -47,6 +47,13 @@ export const CUSTOMER_FIELD_LABELS: Record<string, string> = {
   shippingCity: "Shipping city",
   shippingPostalCode: "Shipping postal code",
   shippingCountry: "Shipping country",
+  paymentTerms: "Payment terms",
+  defaultIncoterm: "Default Incoterm",
+  typicalLeadTimeDays: "Typical lead time (days)",
+  industrySegment: "Industry segment",
+  complianceLevel: "Compliance level",
+  creditLimit: "Credit limit",
+  notes: "Notes",
 };
 
 export const INQUIRY_FIELD_LABELS: Record<string, string> = {

@@ -17,6 +17,41 @@ const ACTION_LABELS: Record<string, string> = {
   ORDER_UPDATED: "Order updated",
   ORDER_STATUS_CHANGED: "Order status changed",
   ORDER_DELETED: "Order deleted",
+  INQUIRY_CREATED: "Inquiry created",
+  INQUIRY_STATUS_CHANGED: "Inquiry status changed",
+  INQUIRY_DELETED: "Inquiry deleted",
+  QUOTATION_CREATED: "Quotation created",
+  QUOTATION_STATUS_CHANGED: "Quotation status changed",
+  BOM_SUBMITTED: "BOM submitted",
+  BOM_APPROVED: "BOM approved",
+  BOM_REJECTED: "BOM rejected",
+  BOM_FROZEN: "BOM frozen",
+  EXPORT_CASE_CREATED: "Export case created",
+  EXPORT_CASE_UPDATED: "Export case updated",
+  MASTER_CONTRACT_CREATED: "Sales contract / LC created",
+  MASTER_CONTRACT_UPDATED: "Sales contract / LC updated",
+  MASTER_CONTRACT_STATUS_CHANGED: "Sales contract / LC status changed",
+  PROFORMA_CREATED: "Proforma invoice created",
+  PROFORMA_DELETED: "Proforma invoice deleted",
+  BTB_LC_CREATED: "BTB LC created",
+  PO_CLASS1_APPROVED: "Purchase order Class 1 approved",
+  PO_CLASS1_REJECTED: "Purchase order Class 1 rejected",
+  "purchase_order.created": "Purchase order created",
+  "purchase_order.status": "Purchase order status changed",
+  "goods_receiving.created": "GRN created",
+  "goods_receiving.received": "GRN received into stock",
+  "warehouse_transfer.created": "Warehouse transfer created",
+  "warehouse_transfer.posted": "Warehouse transfer posted",
+  "stock_adjustment.created": "Stock adjustment created",
+  "stock_adjustment.posted": "Stock adjustment posted",
+  "delivery_challan.created": "Delivery challan created",
+  "delivery_challan.posted": "Delivery challan posted",
+  "gate_pass.created": "Gate pass created",
+  "gate_pass.released": "Gate pass released",
+  "production_material_issue.posted": "Production material issue posted",
+  "process_order.created": "Process order created",
+  "process_order.issued": "Process order issued",
+  "process_order.received": "Process order received",
   "voucher.created": "Voucher created",
   "voucher.status": "Voucher workflow step",
   "voucher.class1_approve": "Voucher Class 1 approved",
@@ -33,6 +68,30 @@ export function actionLabel(action: string | null | undefined): string {
   if (ACTION_LABELS[key]) return ACTION_LABELS[key];
   if (key.startsWith("voucher.")) {
     return `Voucher ${key.slice("voucher.".length).replaceAll("_", " ")}`;
+  }
+  if (key.startsWith("purchase_order.")) {
+    return `Purchase order ${key.slice("purchase_order.".length).replaceAll("_", " ")}`;
+  }
+  if (key.startsWith("goods_receiving.")) {
+    return `GRN ${key.slice("goods_receiving.".length).replaceAll("_", " ")}`;
+  }
+  if (key.startsWith("warehouse_transfer.")) {
+    return `Warehouse transfer ${key.slice("warehouse_transfer.".length).replaceAll("_", " ")}`;
+  }
+  if (key.startsWith("stock_adjustment.")) {
+    return `Stock adjustment ${key.slice("stock_adjustment.".length).replaceAll("_", " ")}`;
+  }
+  if (key.startsWith("delivery_challan.")) {
+    return `Delivery challan ${key.slice("delivery_challan.".length).replaceAll("_", " ")}`;
+  }
+  if (key.startsWith("gate_pass.")) {
+    return `Gate pass ${key.slice("gate_pass.".length).replaceAll("_", " ")}`;
+  }
+  if (key.startsWith("production_material_issue.")) {
+    return `Production material issue ${key.slice("production_material_issue.".length).replaceAll("_", " ")}`;
+  }
+  if (key.startsWith("process_order.")) {
+    return `Process order ${key.slice("process_order.".length).replaceAll("_", " ")}`;
   }
   return key.replaceAll("_", " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
 }

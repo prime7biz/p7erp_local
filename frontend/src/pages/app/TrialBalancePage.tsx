@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollTableCard } from "@/components/finance/kit";
 import { Link, useSearchParams } from "react-router-dom";
-import { api, type AccountGroupResponse, type ChartOfAccountResponse, type ReportBasis, type TrialBalanceResponse } from "@/api/client";
+import { api, type AccountGroupResponse, type ReportBasis, type TrialBalanceResponse } from "@/api/client";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { dateParam, idParam, ledgerActivityHref, yearStart } from "@/lib/financeDrilldown";
 import { downloadCsv, downloadXlsx, printCurrentPage } from "@/lib/reportExport";
 import { todayLocalISO } from "@/lib/dates";
 import { sumMoneyBy } from "@/lib/money";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
+import { fetchChartAccountPage, hydrateChartAccount } from "@/lib/remoteSelectFetchers";
 import { useEmbeddedPage } from "@/components/app/embeddedPage";
 
 export function TrialBalancePage() {
@@ -18,7 +21,6 @@ export function TrialBalancePage() {
   const [groupId, setGroupId] = useState<number | "">(() => idParam(searchParams.get("group_id")) ?? "");
   const [accountId, setAccountId] = useState<number | "">("");
   const [groups, setGroups] = useState<AccountGroupResponse[]>([]);
-  const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
   const [compactView, setCompactView] = useState(false);
   const [basis, setBasis] = useState<ReportBasis>(() => (searchParams.get("basis") === "cumulative" ? "cumulative" : "fy"));
   const [data, setData] = useState<TrialBalanceResponse | null>(null);
@@ -41,15 +43,17 @@ export function TrialBalancePage() {
 
   async function loadMeta() {
     try {
-      const [accountGroups, chartAccounts] = await Promise.all([api.listAccountGroups(), api.listChartOfAccounts({ active_only: true })]);
-      setGroups(accountGroups);
-      setAccounts(chartAccounts);
+      setGroups(await api.listAccountGroups());
     } catch (e) {
       logApiError("TrialBalancePage.loadMeta", e);
       setGroups([]);
-      setAccounts([]);
     }
   }
+
+  const groupSelectOptions = useMemo(
+    () => groups.map((g) => ({ value: g.id, label: `${g.code} - ${g.name}` })),
+    [groups],
+  );
 
   useEffect(() => {
     void loadMeta();
@@ -132,22 +136,25 @@ export function TrialBalancePage() {
           <option value="fy">This financial year</option>
           <option value="cumulative">Since start (all years)</option>
         </select>
-        <select className="rounded border px-3 py-2 text-sm" value={groupId} onChange={(e) => setGroupId(e.target.value ? Number(e.target.value) : "")}>
-          <option value="">All Groups</option>
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.code} - {g.name}
-            </option>
-          ))}
-        </select>
-        <select className="rounded border px-3 py-2 text-sm" value={accountId} onChange={(e) => setAccountId(e.target.value ? Number(e.target.value) : "")}>
-          <option value="">All Accounts</option>
-          {accounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.account_number} - {a.name}
-            </option>
-          ))}
-        </select>
+        <LocalSearchSelect
+          className="min-w-[12rem]"
+          value={groupId}
+          options={groupSelectOptions}
+          onChange={(next) => setGroupId(next === "" ? "" : Number(next))}
+          placeholder="All groups"
+          allowClear
+          aria-label="Filter by group"
+        />
+        <RemoteSearchSelect
+          className="min-w-[14rem]"
+          value={accountId}
+          onChange={(next) => setAccountId(next === "" ? "" : next)}
+          fetchPage={fetchChartAccountPage}
+          hydrateById={hydrateChartAccount}
+          placeholder="All accounts"
+          allowClear
+          aria-label="Filter by account"
+        />
         <button
           type="button"
           className={`rounded border px-3 py-2 text-sm ${compactView ? "border-brand-primary bg-brand-primary/10 font-semibold text-brand-primary" : "border-border text-text-secondary"}`}

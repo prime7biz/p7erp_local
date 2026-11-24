@@ -1,5 +1,5 @@
 import type { MeResponse, TenantType } from "@/api/client";
-import { isNavItemVisibleForTenant, type MenuSection, type TenantTypeFilter } from "@/app/sidebarConfig";
+import { isNavItemVisibleForTenant, type MenuSection, type NavItem, type TenantTypeFilter } from "@/app/sidebarConfig";
 import { getRbacMode } from "@/components/auth/rbacMode";
 import { isFinanceHubsV2Enabled } from "@/components/finance/hubs/financeHubs";
 import { buildFinanceHubSection } from "@/components/finance/hubs/financeNavigation";
@@ -37,20 +37,49 @@ export type MenuVisibilityContext = {
   hasPermission: (key: string) => boolean;
   /** When false, Finance hub tabs marked confidential (P&L / Balance Sheet) stay hidden. Undefined = allow. */
   canViewConfidentialReports?: boolean;
+  /** Fixed-class authority: filter by module grants even when soft RBAC is off. */
+  authorityClassesEnabled?: boolean;
+  moduleGrants?: string[] | null;
 };
 
 /**
  * True when a permission key may be shown in the menu. Keys are only checked while
- * `rbac_enforcement` is "enforce", the same rule the desktop sidebar has always used.
+ * `rbac_enforcement` is "enforce", the same rule the desktop sidebar has always used —
+ * unless fixed-class authority is ON, in which case module grants always apply.
  */
 export function isMenuPermissionAllowed(
   permissionKey: string | null | undefined,
   featureFlags: MeResponse["feature_flags"] | undefined,
   hasPermission: (key: string) => boolean,
+  authorityClassesEnabled?: boolean,
 ): boolean {
   if (!permissionKey) return true;
+  if (authorityClassesEnabled) return hasPermission(permissionKey);
   if (getRbacMode(featureFlags) !== "enforce") return true;
   return hasPermission(permissionKey);
+}
+
+function isEssOnlyUser(ctx: MenuVisibilityContext): boolean {
+  if (!ctx.authorityClassesEnabled) return false;
+  const grants = new Set((ctx.moduleGrants || []).map((g) => String(g).toLowerCase()));
+  return grants.has("ess") && !grants.has("hr");
+}
+
+/** ESS-only users may open the HR section but only see My HR. */
+function filterEssOnlyHrItems(items: NavItem[]): NavItem[] {
+  return items.filter((i) => i.href === "/app/hr/my" || i.href.startsWith("/app/hr/my?"));
+}
+
+function sectionAllowed(
+  section: string,
+  ctx: MenuVisibilityContext,
+  canAccess: (key: string) => boolean,
+): boolean {
+  if (section === "HR" && isEssOnlyUser(ctx)) {
+    return ctx.hasPermission("ess.access") || ctx.hasPermission("hr.access");
+  }
+  const key = sectionPermissionKey(section);
+  return canAccess(key || "");
 }
 
 /**
@@ -59,12 +88,14 @@ export function isMenuPermissionAllowed(
  */
 export function filterVisibleMenuSections(sections: MenuSection[], ctx: MenuVisibilityContext): MenuSection[] {
   const { tenantType, enabledOptionalProductionUnits, featureFlags, hasPermission, canViewConfidentialReports } = ctx;
+  const authorityOn = ctx.authorityClassesEnabled === true;
   // finance_hubs_v2 ON: the Finance section is replaced by the hub links, each filtered by its own
   // permission (finance.access or facility.access), so the section-level check is skipped for it.
   const financeHubsOn = isFinanceHubsV2Enabled(featureFlags);
-  const canAccess = (key: string) => isMenuPermissionAllowed(key, featureFlags, hasPermission);
+  const canAccess = (key: string) => isMenuPermissionAllowed(key, featureFlags, hasPermission, authorityOn);
   const hubExtras =
     canViewConfidentialReports === undefined ? undefined : { canViewConfidentialReports };
+  const essOnly = isEssOnlyUser(ctx);
   const base = financeHubsOn
     ? sections.flatMap((s) => {
         if (s.section !== "Finance") return [s];
@@ -77,25 +108,28 @@ export function filterVisibleMenuSections(sections: MenuSection[], ctx: MenuVisi
     .filter(
       (s) =>
         (financeHubsOn && s.section === "Finance") ||
-        isMenuPermissionAllowed(sectionPermissionKey(s.section), featureFlags, hasPermission),
+        sectionAllowed(s.section, ctx, canAccess),
     )
     .map((s) => {
       if (s.subsections && s.subsections.length > 0) {
         const subsections = s.subsections
-          .map((sub) => ({
-            ...sub,
-            items: sub.items.filter((i) =>
+          .map((sub) => {
+            let items = sub.items.filter((i) =>
               isNavItemVisibleForTenant(i, tenantType, enabledOptionalProductionUnits, featureFlags),
-            ),
-          }))
+            );
+            if (essOnly && s.section === "HR") items = filterEssOnlyHrItems(items);
+            return { ...sub, items };
+          })
           .filter((sub) => sub.items.length > 0);
         return { ...s, items: [], subsections };
       }
+      let items = s.items.filter((i) =>
+        isNavItemVisibleForTenant(i, tenantType, enabledOptionalProductionUnits, featureFlags),
+      );
+      if (essOnly && s.section === "HR") items = filterEssOnlyHrItems(items);
       return {
         ...s,
-        items: s.items.filter((i) =>
-          isNavItemVisibleForTenant(i, tenantType, enabledOptionalProductionUnits, featureFlags),
-        ),
+        items,
         subsections: undefined,
       };
     })

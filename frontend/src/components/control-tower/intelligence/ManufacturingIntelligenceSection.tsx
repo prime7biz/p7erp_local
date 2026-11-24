@@ -61,6 +61,8 @@ type Props = {
   initialTab?: MfgTabId | null;
   /** Deep link `?finding=`: recommendation to open on the Predictions tab. */
   focusFindingId?: number | null;
+  /** Deep link `?inquiry_id=`: pre-select inquiry on Tentative demand tab. */
+  focusInquiryId?: number | null;
 };
 
 /**
@@ -81,6 +83,7 @@ export function ManufacturingIntelligenceSection({
   roleName = null,
   initialTab = null,
   focusFindingId = null,
+  focusInquiryId = null,
 }: Props) {
   const [from, setFrom] = useState(() => todayLocalISO());
   const [to, setTo] = useState(() => addDays(todayLocalISO(), 89));
@@ -272,6 +275,7 @@ export function ManufacturingIntelligenceSection({
             canWrite={perms?.can_manage_tentative ?? true}
             phase3On={phase3AnyOn(phase3)}
             canViewFinance={perms?.can_view_finance === true}
+            focusInquiryId={focusInquiryId}
           />
         ) : null}
         {tab === "people" ? (

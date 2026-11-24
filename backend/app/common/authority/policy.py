@@ -16,6 +16,7 @@ from app.common.authority.constants import (
     AUTHORITY_CLASS_4,
     AUTHORITY_MODULE_CODES,
     AUTHORITY_SUPER,
+    ERP_AUTHORITY_MODULE_CODES,
 )
 from app.common.tenant_feature_keys import is_user_authority_classes_v1_enabled
 from app.models import Role, User
@@ -230,7 +231,8 @@ async def effective_authority_payload(
         "authority_class": _norm_class(getattr(user, "authority_class", None)) if enabled else None,
         "is_tenant_super_admin": bool(getattr(user, "is_tenant_super_admin", False)) if enabled else False,
         "module_grants": modules if enabled else [],
-        "available_modules": list(AUTHORITY_MODULE_CODES),
+        # ESS is not offered in Settings "Select all"; it is granted via ESS_ONLY invites / employee link.
+        "available_modules": list(ERP_AUTHORITY_MODULE_CODES),
         "can_view_pnl_balance_sheet": can_pnl,
     }
 
@@ -268,7 +270,9 @@ async def preflight_authority_activation(
             f"(found {super_count})."
         )
 
-    modules = [m.strip().lower() for m in (required_modules or AUTHORITY_MODULE_CODES) if m]
+    # ESS is self-service only — never require Class 1-4 staffing for it.
+    modules = [m.strip().lower() for m in (required_modules or ERP_AUTHORITY_MODULE_CODES) if m]
+    modules = [m for m in modules if m != "ess"]
     # Users with any grant, or Super Admin (treated as all modules).
     users_result = await db.execute(
         select(User).where(User.tenant_id == tenant_id, User.is_active.is_(True))

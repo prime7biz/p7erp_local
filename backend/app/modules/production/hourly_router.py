@@ -24,9 +24,11 @@ from app.models import (
     Tenant,
     User,
 )
-from app.modules.production.schemas import HourlyEntryUpsert
+from app.modules.production.hourly_slot import build_hourly_slot_key
+from app.modules.production.schemas import HourlyBulkUpsert, HourlyEntryUpsert
 
 router = APIRouter(prefix="/production/hourly", tags=["production-hourly"])
+_BULK_REPLAY: dict[tuple[int, str], list[int]] = {}
 
 
 def _ensure(user: User, tenant: Tenant) -> None:
@@ -103,23 +105,45 @@ async def upsert_hourly(
         )
         if pref is not None:
             target_qty = pref
-    # find existing similar row (best-effort match)
-    q = select(HourlyProductionEntry).where(
-        HourlyProductionEntry.tenant_id == tenant.id,
-        HourlyProductionEntry.department_type == body.department_type,
-        HourlyProductionEntry.production_date == d,
-        HourlyProductionEntry.hour_slot == body.hour_slot,
+    slot_key = build_hourly_slot_key(
+        department_type=body.department_type,
+        production_date=d,
+        hour_slot=body.hour_slot,
+        line_id=body.line_id,
+        machine_id=body.machine_id,
+        shift_id=body.shift_id,
     )
-    if body.line_id:
-        q = q.where(HourlyProductionEntry.line_id == body.line_id)
-    else:
-        q = q.where(HourlyProductionEntry.line_id.is_(None))
-    if body.machine_id:
-        q = q.where(HourlyProductionEntry.machine_id == body.machine_id)
-    else:
-        q = q.where(HourlyProductionEntry.machine_id.is_(None))
-    r = await db.execute(q.limit(1))
+    # Prefer deterministic slot_key; fall back to legacy column match for pre-migration rows.
+    r = await db.execute(
+        select(HourlyProductionEntry)
+        .where(
+            HourlyProductionEntry.tenant_id == tenant.id,
+            HourlyProductionEntry.slot_key == slot_key,
+        )
+        .limit(1)
+    )
     row = r.scalar_one_or_none()
+    if row is None:
+        q = select(HourlyProductionEntry).where(
+            HourlyProductionEntry.tenant_id == tenant.id,
+            HourlyProductionEntry.department_type == body.department_type,
+            HourlyProductionEntry.production_date == d,
+            HourlyProductionEntry.hour_slot == body.hour_slot,
+        )
+        if body.line_id:
+            q = q.where(HourlyProductionEntry.line_id == body.line_id)
+        else:
+            q = q.where(HourlyProductionEntry.line_id.is_(None))
+        if body.machine_id:
+            q = q.where(HourlyProductionEntry.machine_id == body.machine_id)
+        else:
+            q = q.where(HourlyProductionEntry.machine_id.is_(None))
+        if body.shift_id:
+            q = q.where(HourlyProductionEntry.shift_id == body.shift_id)
+        else:
+            q = q.where(HourlyProductionEntry.shift_id.is_(None))
+        r = await db.execute(q.limit(1))
+        row = r.scalar_one_or_none()
     if row:
         row.target_qty = target_qty
         row.good_qty = body.good_qty
@@ -133,6 +157,7 @@ async def upsert_hourly(
         row.order_id = body.order_id
         row.style_id = body.style_id
         row.line_style_config_id = body.line_style_config_id
+        row.slot_key = slot_key
         row.entered_by_user_id = user.id
     else:
         row = HourlyProductionEntry(
@@ -146,6 +171,7 @@ async def upsert_hourly(
             shift_id=body.shift_id,
             production_date=d,
             hour_slot=body.hour_slot,
+            slot_key=slot_key,
             target_qty=target_qty,
             good_qty=body.good_qty,
             reject_qty=body.reject_qty,
@@ -187,6 +213,35 @@ async def upsert_hourly(
         except Exception:
             await safe_async_session_rollback(db)
     return {"id": row.id}
+
+
+@router.post("/bulk-upsert")
+async def bulk_upsert_hourly(
+    body: HourlyBulkUpsert,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Grid bulk upsert (flag ``floor_live_monitor_v1`` optional; always available with production.access).
+
+    When ``request_id`` is provided, a second identical call in-process returns the first ids (best-effort
+    idempotency for the same API worker). Prefer DB unique slot_key for durable dedupe.
+    """
+    _ensure(user, tenant)
+    if body.request_id:
+        key = (tenant.id, body.request_id)
+        if key in _BULK_REPLAY:
+            return {"replay": True, "ids": _BULK_REPLAY[key]}
+    ids: list[int] = []
+    for entry in body.entries:
+        # Reuse single upsert path via internal HTTP-less call
+        one = await upsert_hourly(entry, tenant=tenant, user=user, db=db)
+        ids.append(int(one["id"]))
+    if body.request_id:
+        _BULK_REPLAY[(tenant.id, body.request_id)] = ids
+        if len(_BULK_REPLAY) > 500:
+            _BULK_REPLAY.clear()
+    return {"replay": False, "ids": ids}
 
 
 @router.get("/sheet")

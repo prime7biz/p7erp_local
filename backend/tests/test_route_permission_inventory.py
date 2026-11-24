@@ -89,6 +89,8 @@ def test_newly_gated_routers_use_expected_keys():
         f"{API}/hr/employee-access": "hr.access",
         f"{API}/hr/generated-documents": "hr.access",
         f"{API}/hr/change-requests": "hr.access",
+        f"{API}/hr/class-requests": "hr.access",
+        f"{API}/hr/ess": "hr.access",
         f"{API}/hr/manpower": "hr.access",
         f"{API}/mfg-intelligence": "production.planning.read",
         f"{API}/mfg-intelligence/predictive": "production.planning.read",
@@ -99,6 +101,7 @@ def test_newly_gated_routers_use_expected_keys():
         f"{API}/kpi/definitions": "kpi.read",
         f"{API}/kpi/cards": "kpi.read",
         f"{API}/kpi/seed": "kpi.read",
+        f"{API}/job-work": "production.access",
     }
     seen: dict[str, set[str]] = {}
     for route in app.routes:

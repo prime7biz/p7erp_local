@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   api,
   type OrderResponse,
@@ -156,6 +156,7 @@ function OrderSewingLineCell({ s }: { s: OrderSewingLineSummaryOut | null | unde
 
 export function OrdersPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const mobileV2 = useMobileUiV2();
   const phoneUi = useMobileUiV2Phone();
   const editFieldClass = cn("w-full rounded-lg border border-border-strong px-3 py-2 text-sm", phoneUi && mobileFieldClass);
@@ -170,7 +171,7 @@ export function OrdersPage() {
   const [form, setForm] = useState<OrderCreate>({ customer_id: 0 });
   const editFormDirty = useFormDirty(form, editing);
   useUnsavedChangesGuard(modalOpen && editing != null && editFormDirty);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("q")?.trim() ?? "");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [quotations, setQuotations] = useState<QuotationResponse[]>([]);
   const { page, setPage, pageSize, setPageSize } = useListPagination();

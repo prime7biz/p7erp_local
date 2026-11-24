@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type HrDesignationResponse } from "@/api/client";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import { logApiError } from "@/utils/logApiError";
 import { useConfirm } from "@/components/app/useConfirm";
 
@@ -137,7 +138,6 @@ export function ProductionSetupPage() {
   const [lineTemplateMsgMap, setLineTemplateMsgMap] = useState<Record<number, string>>({});
   /** Line-wise default crew: which line is shown (avoids rendering 100+ cards). */
   const [selectedCrewLineId, setSelectedCrewLineId] = useState<number | null>(null);
-  const [crewLineFilter, setCrewLineFilter] = useState("");
   /** Which line is currently fetching template (avoids race when switching lines quickly). */
   const [loadingLineTemplateId, setLoadingLineTemplateId] = useState<number | null>(null);
   const loadedLineTemplateIdsRef = useRef<Set<number>>(new Set());
@@ -254,26 +254,6 @@ export function ProductionSetupPage() {
     () => OPTIONAL_UNITS.filter((u) => settings?.enabled_optional_units.includes(u.key)),
     [settings],
   );
-
-  /** Lines shown in the line-wise crew dropdown (search + always include current selection). */
-  const crewLineSelectOptions = useMemo(() => {
-    const q = crewLineFilter.trim().toLowerCase();
-    let filtered = lines;
-    if (q) {
-      filtered = lines.filter(
-        (l) =>
-          l.line_code.toLowerCase().includes(q) ||
-          l.name.toLowerCase().includes(q),
-      );
-    }
-    if (selectedCrewLineId != null) {
-      const sel = lines.find((l) => l.id === selectedCrewLineId);
-      if (sel && !filtered.some((l) => l.id === selectedCrewLineId)) {
-        return [sel, ...filtered];
-      }
-    }
-    return filtered;
-  }, [lines, crewLineFilter, selectedCrewLineId]);
 
   const selectedCrewLine = useMemo(
     () => (selectedCrewLineId == null ? null : lines.find((l) => l.id === selectedCrewLineId) ?? null),
@@ -1159,23 +1139,23 @@ export function ProductionSetupPage() {
               </label>
               <label className="block text-xs text-text-secondary sm:col-span-2">
                 Supervisor (Line Incharge) — optional
-                <select
+                <LocalSearchSelect
                   className={inputCls}
                   value={lineForm.supervisor_employee_id ?? ""}
-                  onChange={(e) =>
+                  options={lineSupervisorOptions.map((e) => ({
+                    value: e.id,
+                    label: `${e.employee_code} - ${e.name}`,
+                  }))}
+                  onChange={(next) =>
                     setLineForm((f) => ({
                       ...f,
-                      supervisor_employee_id: e.target.value ? Number(e.target.value) : null,
+                      supervisor_employee_id: next === "" ? null : Number(next),
                     }))
                   }
-                >
-                  <option value="">None</option>
-                  {lineSupervisorOptions.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.employee_code} - {e.name}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="None"
+                  aria-label="Supervisor"
+                  allowClear
+                />
               </label>
             </div>
             <button type="submit" className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground">
@@ -1444,34 +1424,23 @@ export function ProductionSetupPage() {
           ) : (
             <>
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-text-secondary sm:max-w-md">
-                  Search / select line
-                  <input
-                    type="search"
-                    placeholder="Filter by code or name…"
-                    className="rounded-md border border-border-subtle bg-surface-elevated px-2 py-1.5 text-sm text-text-primary"
-                    value={crewLineFilter}
-                    onChange={(e) => setCrewLineFilter(e.target.value)}
-                  />
-                </label>
                 <div className="flex min-w-0 flex-1 flex-wrap items-end gap-2 sm:max-w-lg">
                   <label className="min-w-0 flex-1 text-xs text-text-secondary">
-                    Line
-                    <select
-                      className="mt-1 w-full min-w-0 rounded-md border border-border-subtle bg-surface-elevated px-2 py-1.5 text-sm text-text-primary"
+                    Search / select line
+                    <LocalSearchSelect
+                      className="mt-1 w-full min-w-0"
                       value={selectedCrewLineId ?? ""}
-                      onChange={(e) => setSelectedCrewLineId(e.target.value ? Number(e.target.value) : null)}
-                    >
-                      {crewLineSelectOptions.length === 0 ? (
-                        <option value="">No lines match filter</option>
-                      ) : (
-                        crewLineSelectOptions.map((line) => (
-                          <option key={line.id} value={line.id}>
-                            {line.line_code} — {line.name}
-                          </option>
-                        ))
-                      )}
-                    </select>
+                      options={lines.map((line) => ({
+                        value: line.id,
+                        label: `${line.line_code} — ${line.name}`,
+                      }))}
+                      onChange={(next) =>
+                        setSelectedCrewLineId(next === "" ? null : Number(next))
+                      }
+                      placeholder="Filter by code or name…"
+                      aria-label="Sewing line"
+                      allowClear={false}
+                    />
                   </label>
                   <div className="flex shrink-0 gap-1 pb-0.5">
                     <button

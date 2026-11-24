@@ -48,6 +48,7 @@ import {
   UserCog,
   HardDrive,
   Building2,
+  Boxes,
   Menu,
   SlidersHorizontal,
   Droplets,
@@ -328,6 +329,12 @@ export const menuSections: MenuSection[] = [
         label: "Procurement",
         items: [
           {
+            icon: Boxes,
+            label: "Material Control",
+            href: `${PREFIX}/inventory/material-control`,
+            requiresFeatureFlag: "material_control_hub_v1",
+          },
+          {
             icon: ClipboardList,
             label: "Requisitions & CS",
             href: `${PREFIX}/procurement/requisitions`,
@@ -498,6 +505,12 @@ export const menuSections: MenuSection[] = [
         label: "Overview",
         items: [
           { icon: Factory, label: "Production Overview", href: `${PREFIX}/production`, exact: true },
+          {
+            icon: Gauge,
+            label: "Control Center",
+            href: `${PREFIX}/production/control-center`,
+            requiresFeatureFlag: "prod_control_center_v1",
+          },
           { icon: Package, label: "Manufacturing Orders", href: `${PREFIX}/production/manufacturing-orders` },
           { icon: Settings, label: "Production setup", href: `${PREFIX}/production/setup` },
           { icon: Calendar, label: "Factory calendar", href: `${PREFIX}/production/calendar` },
@@ -545,6 +558,12 @@ export const menuSections: MenuSection[] = [
             href: `${PREFIX}/production/knitting`,
             productionUnitKey: "knitting",
             requiresKnittingTenantFeature: true,
+          },
+          {
+            icon: Factory,
+            label: "Inbound Job Work",
+            href: `${PREFIX}/production/job-work`,
+            requiresFeatureFlag: "inbound_job_work_v1",
           },
           {
             icon: Activity,
@@ -646,6 +665,10 @@ export const menuSections: MenuSection[] = [
           { icon: LayoutDashboard, label: "HR Dashboard", href: `${PREFIX}/hr`, exact: true },
           { icon: UserCheck, label: "Employees", href: `${PREFIX}/hr/employees` },
           hrHubNavItem("my"),
+          {
+            ...hrHubNavItem("requests"),
+            requiresFeatureFlag: "user_authority_classes_v1",
+          },
         ],
       },
       {

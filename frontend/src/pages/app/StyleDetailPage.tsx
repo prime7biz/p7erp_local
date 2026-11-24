@@ -155,6 +155,12 @@ export function StyleDetailPage() {
           <p className="text-sm text-text-muted mt-0.5">{style.lifecycle_stage} · {style.status} · {style.department ?? "No department"}</p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            to={`/app/inquiries/new?style_id=${styleId}`}
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
+          >
+            New Inquiry
+          </Link>
           <button
             type="button"
             onClick={() => window.open(`/app/merchandising/styles/${styleId}/print`, "_blank", "noopener,noreferrer")}

@@ -4,7 +4,6 @@ import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import {
   api,
-  type ChartOfAccountResponse,
   type CommissionDirection,
   type CommissionEntry,
   type CommissionRule,
@@ -19,10 +18,18 @@ import { useConfirm } from "@/components/app/useConfirm";
 import { listPageRootClass, listPageTableCardClass } from "@/components/app/listPageLayout";
 import { logApiError } from "@/utils/logApiError";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
-import { fetchCustomerPage, fetchOrderPage, fetchVendorPage, hydrateCustomer, hydrateOrder, hydrateVendor } from "@/lib/remoteSelectFetchers";
+import {
+  fetchChartAccountPage,
+  fetchCustomerPage,
+  fetchOrderPage,
+  fetchVendorPage,
+  hydrateChartAccount,
+  hydrateCustomer,
+  hydrateOrder,
+  hydrateVendor,
+} from "@/lib/remoteSelectFetchers";
 import { todayLocalISO } from "@/lib/dates";
 import { addMoney, sumMoneyBy } from "@/lib/money";
-import { getChartOfAccountsCached } from "@/lib/masterData";
 
 type Tab = "shipments" | "statements" | "rules";
 type Option = { id: number; label: string };
@@ -38,21 +45,14 @@ const dirLabel = (d: CommissionDirection) => (d === "RECEIVABLE" ? "We earn" : "
 const errMsg = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 function useOptions() {
-
   const [agents, setAgents] = useState<Option[]>([]);
-  const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
   useEffect(() => {
-    Promise.all([
-      api.listIntermediaries({ is_active: true }),
-      getChartOfAccountsCached(),
-    ])
-      .then(([a, coa]) => {
-        setAgents(a.map((x) => ({ id: x.id, label: x.name })));
-        setAccounts(coa);
-      })
+    api
+      .listIntermediaries({ is_active: true })
+      .then((a) => setAgents(a.map((x) => ({ id: x.id, label: x.name }))))
       .catch((e) => logApiError("CommissionPage.options", e));
   }, []);
-  return { agents, accounts };
+  return { agents };
 }
 
 export function CommissionPage() {
@@ -722,17 +722,18 @@ function RulesTab({
             {ACCOUNT_FIELDS.map((f) => (
               <div key={f.key}>
                 <label className={labelClass} htmlFor={`cset-${f.key}`}>{f.label}</label>
-                <select
+                <RemoteSearchSelect
                   id={`cset-${f.key}`}
                   value={(draft[f.key] as number | null) ?? ""}
-                  onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value ? Number(e.target.value) : null })}
-                  className={inputClass}
-                >
-                  <option value="">Not set</option>
-                  {options.accounts.map((a) => (
-                    <option key={a.id} value={a.id}>{a.account_number} · {a.name}</option>
-                  ))}
-                </select>
+                  onChange={(next) =>
+                    setDraft({ ...draft, [f.key]: next === "" ? null : next })
+                  }
+                  fetchPage={fetchChartAccountPage}
+                  hydrateById={hydrateChartAccount}
+                  placeholder="Not set"
+                  allowClear
+                  aria-label={f.label}
+                />
               </div>
             ))}
             <div className="sm:col-span-2">

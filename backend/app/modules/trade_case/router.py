@@ -138,17 +138,32 @@ async def _ensure_default_stages(db: AsyncSession, tenant_id: int) -> None:
     await db.flush()
 
 
+async def _default_customer_from_order(
+    db: AsyncSession,
+    tenant_id: int,
+    *,
+    order_id: int | None,
+    customer_id: int | None,
+) -> int | None:
+    """Keep client-supplied customer_id (tenant-checked); otherwise copy from the linked order."""
+    if customer_id is not None:
+        await ensure_owned(db, Customer, int(customer_id), tenant_id, "Customer")
+        return int(customer_id)
+    if order_id is None:
+        return None
+    order = await ensure_owned(db, Order, int(order_id), tenant_id, "Order")
+    if order is None or order.customer_id is None:
+        return None
+    return int(order.customer_id)
+
+
 async def _validate_trade_case_links(db: AsyncSession, tenant_id: int, payload: dict) -> None:
     order_id = payload.get("order_id")
     if order_id is not None:
-        row = await db.get(Order, int(order_id))
-        if not row or row.tenant_id != tenant_id:
-            raise HTTPException(status_code=400, detail="Order not found")
+        await ensure_owned(db, Order, int(order_id), tenant_id, "Order")
     customer_id = payload.get("customer_id")
     if customer_id is not None:
-        row = await db.get(Customer, int(customer_id))
-        if not row or row.tenant_id != tenant_id:
-            raise HTTPException(status_code=400, detail="Customer not found")
+        await ensure_owned(db, Customer, int(customer_id), tenant_id, "Customer")
     vendor_id = payload.get("vendor_id")
     if vendor_id is not None:
         row = await db.get(Vendor, int(vendor_id))
@@ -262,6 +277,12 @@ async def create_trade_case(
     payload["direction"] = str(payload.get("direction") or "EXPORT").strip().upper()
     payload["status"] = str(payload.get("status") or "DRAFT").strip().upper()
     payload["current_stage"] = str(payload.get("current_stage") or "DRAFT").strip().upper()
+    payload["customer_id"] = await _default_customer_from_order(
+        db,
+        tenant.id,
+        order_id=payload.get("order_id"),
+        customer_id=payload.get("customer_id"),
+    )
     await _validate_trade_case_links(db, tenant.id, payload)
     row = TradeCase(tenant_id=tenant.id, **payload)
     db.add(row)
@@ -315,6 +336,20 @@ async def update_trade_case(
         if key in updates and updates[key] != getattr(row, key):
             raise HTTPException(status_code=400, detail=f"Use the transition endpoint to change {key}")
         updates.pop(key, None)
+    effective_order_id = updates["order_id"] if "order_id" in updates else row.order_id
+    if "customer_id" in updates:
+        effective_customer_id = updates.get("customer_id")
+    else:
+        effective_customer_id = row.customer_id
+    if effective_customer_id is None and effective_order_id is not None:
+        updates["customer_id"] = await _default_customer_from_order(
+            db,
+            tenant.id,
+            order_id=effective_order_id,
+            customer_id=None,
+        )
+    elif "customer_id" in updates and updates.get("customer_id") is not None:
+        await ensure_owned(db, Customer, int(updates["customer_id"]), tenant.id, "Customer")
     await _validate_trade_case_links(db, tenant.id, updates)
     for key, value in updates.items():
         setattr(row, key, value)

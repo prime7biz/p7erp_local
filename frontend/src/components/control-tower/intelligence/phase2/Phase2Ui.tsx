@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 
 import { reasonError } from "./phase2Logic";
 
@@ -161,6 +162,8 @@ export function SelectField({
   options,
   placeholder = "Choose…",
   required,
+  /** Type-to-narrow for entity lists (sewing lines, styles). Leave false for tiny enums. */
+  searchable = false,
 }: {
   id: string;
   label: string;
@@ -169,6 +172,7 @@ export function SelectField({
   options: { value: string; label: string }[];
   placeholder?: string;
   required?: boolean;
+  searchable?: boolean;
 }) {
   return (
     <div>
@@ -176,14 +180,27 @@ export function SelectField({
         {label}
         {required ? " *" : ""}
       </label>
-      <select id={id} className={inputCls} value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">{placeholder}</option>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+      {searchable ? (
+        <LocalSearchSelect
+          id={id}
+          value={value}
+          options={options}
+          onChange={(next) => onChange(next === "" ? "" : String(next))}
+          placeholder={placeholder}
+          required={required}
+          allowClear={!required}
+          aria-label={label}
+        />
+      ) : (
+        <select id={id} className={inputCls} value={value} onChange={(e) => onChange(e.target.value)}>
+          <option value="">{placeholder}</option>
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      )}
     </div>
   );
 }

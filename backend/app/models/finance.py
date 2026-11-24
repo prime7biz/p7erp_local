@@ -496,6 +496,9 @@ class OutstandingBill(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     bill_no: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     party_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     bill_type: Mapped[str] = mapped_column(String(16), nullable=False, default="PAYABLE", index=True)
     bill_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     due_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)

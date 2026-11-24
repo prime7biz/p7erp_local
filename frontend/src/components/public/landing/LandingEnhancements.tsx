@@ -179,7 +179,9 @@ export function HeroEnhancedSection() {
                       alt="Prime7 ERP home dashboard with approvals, TNA, alerts and order KPIs"
                       className="absolute inset-0 w-full h-full object-cover object-top"
                       loading="eager"
-                      fetchPriority="high"
+                      // React 18 only accepts the HTML lowercase form; camelCase warns in dev.
+                      // Spread: the React 18 typings do not list the lowercase name (TS2322 at build time).
+                      {...({ fetchpriority: "high" } as Record<string, string>)}
                       width={800}
                       height={500}
                       onError={(e) => {

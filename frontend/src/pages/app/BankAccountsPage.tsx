@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
-import { api, type BankAccountCreate, type BankAccountResponse, type ChartOfAccountResponse } from "@/api/client";
+import { api, type BankAccountCreate, type BankAccountResponse } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import {
   listPageEmptyClass,
   listPageErrorClass,
@@ -16,6 +17,7 @@ import {
 } from "@/components/app/listPageLayout";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
 import { FinanceFormDrawer, FormSection, ScrollTableCard, showingCountLabel } from "@/components/finance/kit";
+import { fetchChartAccountPage, hydrateChartAccount } from "@/lib/remoteSelectFetchers";
 
 const fieldClass =
   "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary focus:border-brand-primary focus:outline-none focus:ring-0";
@@ -37,7 +39,6 @@ const emptyForm: BankAccountCreate = {
 
 export function BankAccountsPage() {
   const [rows, setRows] = useState<BankAccountResponse[]>([]);
-  const [ledgers, setLedgers] = useState<ChartOfAccountResponse[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [openActionsId, setOpenActionsId] = useState<number | string | null>(null);
@@ -49,9 +50,7 @@ export function BankAccountsPage() {
   async function load() {
     try {
       setError("");
-      const [accounts, coa] = await Promise.all([api.listBankAccounts({ active_only: false }), api.listChartOfAccounts()]);
-      setRows(accounts);
-      setLedgers(coa);
+      setRows(await api.listBankAccounts({ active_only: false }));
     } catch (e) {
       setError((e as Error).message);
     }
@@ -198,19 +197,19 @@ export function BankAccountsPage() {
           </div>
           <div>
             <label className={labelClass} htmlFor="ba-gl">Linked GL account (optional)</label>
-            <select
+            <RemoteSearchSelect
               id="ba-gl"
-              className={fieldClass}
+              className="w-full"
               value={form.gl_account_id ?? ""}
-              onChange={(e) => setForm((p) => ({ ...p, gl_account_id: e.target.value ? Number(e.target.value) : undefined }))}
-            >
-              <option value="">None</option>
-              {ledgers.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.account_number} - {l.name}
-                </option>
-              ))}
-            </select>
+              onChange={(next) =>
+                setForm((p) => ({ ...p, gl_account_id: next === "" ? undefined : next }))
+              }
+              fetchPage={fetchChartAccountPage}
+              hydrateById={hydrateChartAccount}
+              placeholder="None"
+              allowClear
+              aria-label="Linked GL account"
+            />
           </div>
         </FormSection>
         <FormSection title="Currency and balances">

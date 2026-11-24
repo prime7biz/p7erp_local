@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   api,
   type BtbLcRow,
+  type CustomerResponse,
   type MerchAlertItem,
   type MasterContractCreate,
   type MasterContractRow,
@@ -14,6 +15,7 @@ import { logApiError } from "@/utils/logApiError";
 import { AutofillReviewPanel } from "@/components/ai-extract/AutofillReviewPanel";
 import { ExtractionAlertsBanner } from "@/components/ai-extract/ExtractionAlertsBanner";
 import { FileImportCard } from "@/components/ai-extract/FileImportCard";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { useCommercialDocExtraction } from "@/hooks/useCommercialDocExtraction";
 import type { ConflictResolutionChoice, FieldApplyState } from "@/types/extraction";
 import { buildLcFieldApplyStates } from "@/utils/extractionHelpers";
@@ -21,6 +23,7 @@ import { todayLocalISO } from "@/lib/dates";
 import { subtractMoney, sumMoneyBy } from "@/lib/money";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { saveBlob } from "@/lib/fileSave";
+import { fetchActiveCustomerPage, hydrateCustomer } from "@/lib/remoteSelectFetchers";
 
 const CONTRACT_TYPES = [
   { value: "EXPORT_LC", label: "Master Export LC" },
@@ -101,11 +104,15 @@ const emptyForm: MasterContractCreate = {
   amount: undefined,
   currency: "USD",
   buyer_name: "",
+  customer_id: null,
   bank_name: "",
   expiry_date: "",
 };
 
 export function MasterContractsPage() {
+  const [searchParams] = useSearchParams();
+  const highlightId = Number(searchParams.get("highlight") || 0) || null;
+  const highlightRowRef = useRef<HTMLTableRowElement | null>(null);
   const [items, setItems] = useState<MasterContractRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -123,6 +130,7 @@ export function MasterContractsPage() {
   const [alertMap, setAlertMap] = useState<Record<number, MerchAlertItem[]>>({});
   const lcExtract = useCommercialDocExtraction("lc");
   const [lcReviewRows, setLcReviewRows] = useState<FieldApplyState[]>([]);
+  const highlightOpenedRef = useRef(false);
 
   const severityRank: Record<string, number> = {
     critical: 5,
@@ -283,6 +291,7 @@ export function MasterContractsPage() {
         amount: contract.amount ?? undefined,
         currency: contract.currency ?? undefined,
         buyer_name: contract.buyer_name ?? undefined,
+        customer_id: contract.customer_id ?? null,
         bank_name: contract.bank_name ?? undefined,
         expiry_date: contract.expiry_date ?? undefined,
       });
@@ -294,6 +303,17 @@ export function MasterContractsPage() {
       setDrawerLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!highlightId || loading || highlightOpenedRef.current) return;
+    const row = items.find((r) => r.id === highlightId);
+    if (!row) return;
+    highlightOpenedRef.current = true;
+    void openDetail(row);
+    requestAnimationFrame(() => {
+      highlightRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [highlightId, items, loading]);
 
   const saveUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -652,12 +672,30 @@ export function MasterContractsPage() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Buyer Name</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Customer</label>
+            <RemoteSearchSelect<CustomerResponse>
+              value={form.customer_id && form.customer_id > 0 ? form.customer_id : ""}
+              onChange={(id, option) => {
+                const name = option?.meta?.name ?? option?.label ?? "";
+                setForm((prev) => ({
+                  ...prev,
+                  customer_id: id === "" ? null : id,
+                  buyer_name: id === "" ? prev.buyer_name : name || prev.buyer_name,
+                }));
+              }}
+              fetchPage={fetchActiveCustomerPage}
+              hydrateById={hydrateCustomer}
+              placeholder="Search customer…"
+              aria-label="Customer"
+              allowClear
+              menuPortal
+            />
+            <label className="mt-2 mb-1.5 block text-sm font-medium text-text-secondary">Buyer Name</label>
             <input
               className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.buyer_name ?? ""}
               onChange={(e) => setForm((prev) => ({ ...prev, buyer_name: e.target.value }))}
-              placeholder="Customer / buyer"
+              placeholder="Customer / buyer (snapshot)"
             />
           </div>
           <div>
@@ -731,7 +769,14 @@ export function MasterContractsPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {visibleItems.map((row) => (
-                  <tr key={row.id} className="cursor-pointer hover:bg-surface-subtle" onClick={() => void openDetail(row)}>
+                  <tr
+                    key={row.id}
+                    ref={row.id === highlightId ? highlightRowRef : undefined}
+                    className={`cursor-pointer hover:bg-surface-subtle ${
+                      row.id === highlightId ? "bg-brand-primary/10 ring-1 ring-inset ring-brand-primary/40" : ""
+                    }`}
+                    onClick={() => void openDetail(row)}
+                  >
                     <td className="px-4 py-2.5 font-medium text-text-primary">{row.reference || `#${row.id}`}</td>
                     <td className="px-4 py-2.5 text-text-secondary">{row.contract_type || "—"}</td>
                     <td className="px-4 py-2.5 text-text-secondary">{row.status || "—"}</td>
@@ -967,7 +1012,25 @@ export function MasterContractsPage() {
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-text-muted">Buyer</label>
+                      <label className="mb-1 block text-xs font-medium text-text-muted">Customer</label>
+                      <RemoteSearchSelect<CustomerResponse>
+                        value={updateForm.customer_id && updateForm.customer_id > 0 ? updateForm.customer_id : ""}
+                        onChange={(id, option) => {
+                          const name = option?.meta?.name ?? option?.label ?? "";
+                          setUpdateForm((p) => ({
+                            ...p,
+                            customer_id: id === "" ? null : id,
+                            buyer_name: id === "" ? p.buyer_name : name || p.buyer_name,
+                          }));
+                        }}
+                        fetchPage={fetchActiveCustomerPage}
+                        hydrateById={hydrateCustomer}
+                        placeholder="Search customer…"
+                        aria-label="Customer"
+                        allowClear
+                        menuPortal
+                      />
+                      <label className="mb-1 mt-2 block text-xs font-medium text-text-muted">Buyer name</label>
                       <input
                         className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                         value={updateForm.buyer_name ?? ""}

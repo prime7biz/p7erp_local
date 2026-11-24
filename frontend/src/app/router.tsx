@@ -115,6 +115,14 @@ const CustomerShipmentsPage = lazy(() =>
 const CustomerNotesPage = lazy(() =>
   import("@/pages/portal/customer/CustomerNotesPage").then((m) => ({ default: m.CustomerNotesPage })),
 );
+const CustomerQuotationsPage = lazy(() =>
+  import("@/pages/portal/customer/CustomerQuotationsPage").then((m) => ({ default: m.CustomerQuotationsPage })),
+);
+const CustomerQuotationDetailPage = lazy(() =>
+  import("@/pages/portal/customer/CustomerQuotationDetailPage").then((m) => ({
+    default: m.CustomerQuotationDetailPage,
+  })),
+);
 
 const FinancierAcceptInvitePage = lazy(() =>
   import("@/pages/portal/financier/FinancierAcceptInvitePage").then((m) => ({ default: m.FinancierAcceptInvitePage })),
@@ -328,6 +336,8 @@ export function AppRouter() {
           <Route path="approvals" element={<CustomerApprovalsPage />} />
           <Route path="shipments" element={<CustomerShipmentsPage />} />
           <Route path="notes" element={<CustomerNotesPage />} />
+          <Route path="quotations" element={<CustomerQuotationsPage />} />
+          <Route path="quotations/:quotationId" element={<CustomerQuotationDetailPage />} />
         </Route>
         <Route path="/portal/supplier/login" element={<PortalLegacyLoginRedirect role="supplier" />} />
         <Route

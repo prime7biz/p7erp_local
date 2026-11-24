@@ -8,11 +8,15 @@ describe("screenContextFromPath", () => {
     expect(screenContextFromPath("/app/accounts/vouchers/9")?.record_type).toBe("voucher");
     expect(screenContextFromPath("/app/hr/employees/21")?.record_id).toBe(21);
     expect(screenContextFromPath("/app/merchandising/styles/5")?.record_type).toBe("style");
+    expect(screenContextFromPath("/app/inquiries/42")?.record_type).toBe("inquiry");
+    expect(screenContextFromPath("/app/inquiries/42/edit")?.record_id).toBe(42);
+    expect(screenContextFromPath("/app/quotations/7")?.record_type).toBe("quotation");
   });
 
   it("ignores lists, new forms and non-numeric ids", () => {
     expect(screenContextFromPath("/app/orders")).toBeNull();
     expect(screenContextFromPath("/app/orders/new")).toBeNull();
+    expect(screenContextFromPath("/app/inquiries/new")).toBeNull();
     expect(screenContextFromPath("/app/customers/abc")).toBeNull();
     expect(screenContextFromPath("/app/orders/0")).toBeNull();
   });

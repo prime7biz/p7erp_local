@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete
 
 from app.common.auth import get_current_user
+from app.common.document_history import record_doc_event
 from app.common.money import (
   fabric_factor_from_input,
   format_money,
@@ -20,6 +21,7 @@ from app.common.money import (
   line_rate_from_input,
   parse_money,
 )
+from app.common.ownership import ensure_owned
 from app.common.pagination import clamp_page_size, safe_page, total_pages
 from app.common.codegen import next_tenant_code
 from app.common.db_errors import flush_handling_duplicate_document_code
@@ -32,6 +34,7 @@ from app.common.workflow import (
   validate_transition,
 )
 from app.database import get_db
+from app.modules.audit.service import log_action_best_effort
 from app.models import (
     CommissionMode,
     Customer,
@@ -39,6 +42,7 @@ from app.models import (
     GarmentStyle,
     Inquiry,
   InquiryEvent,
+  InquiryItem,
     Item,
     ItemUnit,
     Order,
@@ -62,8 +66,9 @@ from app.modules.quotations.schemas import (
     QuotationSizeRatioLine,
     QuotationUpdate,
 )
-from app.modules.quotations import revision_service
+from app.modules.quotations import revision_service, verification_service
 from app.modules.quotations.quotation_ai_router import router as quotation_ai_subrouter
+from app.modules.quotations.wiring_service import router as wiring_router
 from app.modules.quotations import quotation_cost_benchmark_service as qcb_svc
 from app.modules.quotations.quotation_ai_service import compute_quotation_ai_indicators
 from app.modules.quotations.quotation_ai_schemas import QuotationAiIndicatorsOut
@@ -93,6 +98,9 @@ from app.modules.quotations.quotation_commercial_money import (
 
 router = APIRouter(prefix="/quotations", tags=["quotations"])
 router.include_router(quotation_ai_subrouter, prefix="/ai")
+# Static paths (prefill-context, item-price-hints) and /{id}/wiring-context must be registered
+# before the /{quotation_id} routes below.
+router.include_router(wiring_router)
 
 FOUR_DP = Decimal("0.0001")
 
@@ -123,6 +131,33 @@ async def _next_quotation_code(db: AsyncSession, tenant_id: int) -> str:
     tenant_id=tenant_id,
     prefix="QT-",
     width=4,
+  )
+
+
+async def _quotation_event(
+  db: AsyncSession,
+  *,
+  tenant_id: int,
+  user_id: int | None,
+  quotation: Quotation,
+  event: str,
+  summary: str,
+  from_status: str | None = None,
+  to_status: str | None = None,
+  extra: dict | None = None,
+) -> None:
+  """Timeline entry (audit log) for a quotation; never breaks the request (see record_doc_event)."""
+  await record_doc_event(
+    db,
+    tenant_id=tenant_id,
+    user_id=user_id,
+    doc_type="quotation",
+    doc_id=quotation.id,
+    event=event,
+    summary=summary,
+    from_status=from_status,
+    to_status=to_status,
+    extra=extra,
   )
 
 
@@ -445,12 +480,31 @@ async def submit_quotation(
   if not quotation or quotation.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
   revision_service.ensure_quotation_not_superseded(quotation, action="submit it")
+  old_status = quotation.status
   quotation.status = validate_transition(
     QUOTATION_TRANSITIONS,
     quotation.status,
     "SUBMITTED",
     fallback="DRAFT",
     entity_label="quotation",
+  )
+  await log_action_best_effort(
+    db,
+    tenant_id=tenant.id,
+    action="QUOTATION_STATUS_CHANGED",
+    user_id=user.id,
+    resource=f"quotation:{quotation.id}",
+    details=f"Quotation {quotation.quotation_code}: {old_status} → SUBMITTED",
+  )
+  await _quotation_event(
+    db,
+    tenant_id=tenant.id,
+    user_id=user.id,
+    quotation=quotation,
+    event="submitted",
+    summary=f"Quotation {quotation.quotation_code} submitted for approval",
+    from_status=old_status,
+    to_status=quotation.status,
   )
   await db.flush()
   await db.refresh(quotation)
@@ -470,12 +524,31 @@ async def approve_quotation(
   if not quotation or quotation.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
   revision_service.ensure_quotation_not_superseded(quotation, action="approve it")
+  old_status = quotation.status
   quotation.status = validate_transition(
     QUOTATION_TRANSITIONS,
     quotation.status,
     "APPROVED",
     fallback="DRAFT",
     entity_label="quotation",
+  )
+  await log_action_best_effort(
+    db,
+    tenant_id=tenant.id,
+    action="QUOTATION_STATUS_CHANGED",
+    user_id=user.id,
+    resource=f"quotation:{quotation.id}",
+    details=f"Quotation {quotation.quotation_code}: {old_status} → APPROVED",
+  )
+  await _quotation_event(
+    db,
+    tenant_id=tenant.id,
+    user_id=user.id,
+    quotation=quotation,
+    event="approved",
+    summary=f"Quotation {quotation.quotation_code} approved",
+    from_status=old_status,
+    to_status=quotation.status,
   )
   await db.flush()
   await db.refresh(quotation)
@@ -495,12 +568,32 @@ async def send_quotation(
   if not quotation or quotation.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
   revision_service.ensure_quotation_not_superseded(quotation, action="send it")
+  old_status = quotation.status
   quotation.status = validate_transition(
     QUOTATION_TRANSITIONS,
     quotation.status,
     "SENT",
     fallback="DRAFT",
     entity_label="quotation",
+  )
+  await log_action_best_effort(
+    db,
+    tenant_id=tenant.id,
+    action="QUOTATION_STATUS_CHANGED",
+    user_id=user.id,
+    resource=f"quotation:{quotation.id}",
+    details=f"Quotation {quotation.quotation_code}: {old_status} → SENT",
+  )
+  verification_service.sync_verification_id(quotation)
+  await _quotation_event(
+    db,
+    tenant_id=tenant.id,
+    user_id=user.id,
+    quotation=quotation,
+    event="sent",
+    summary=f"Quotation {quotation.quotation_code} sent to the buyer",
+    from_status=old_status,
+    to_status=quotation.status,
   )
   await db.flush()
   await db.refresh(quotation)
@@ -518,6 +611,27 @@ async def revise_quotation(
   if user.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
   revised = await revision_service.revise_quotation(db, tenant_id=tenant.id, quotation_id=quotation_id)
+  await _quotation_event(
+    db,
+    tenant_id=tenant.id,
+    user_id=user.id,
+    quotation=revised,
+    event="revised",
+    summary=f"Quotation {revised.quotation_code} (v{revised.version_no}) created as a revision",
+    to_status=revised.status,
+    extra={"revision_of_id": revised.revision_of_id},
+  )
+  if revised.revision_of_id:
+    await record_doc_event(
+      db,
+      tenant_id=tenant.id,
+      user_id=user.id,
+      doc_type="quotation",
+      doc_id=revised.revision_of_id,
+      event="superseded",
+      summary=f"Replaced by revision {revised.quotation_code} (v{revised.version_no})",
+      extra={"new_quotation_id": revised.id},
+    )
   return _to_quotation_response(revised, tenant=tenant)
 
 
@@ -558,8 +672,13 @@ async def create_quotation_from_inquiry(
   if user.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
-  inquiry = await db.get(Inquiry, inquiry_id)
-  if not inquiry or inquiry.tenant_id != tenant.id:
+  locked = await db.execute(
+    select(Inquiry)
+    .where(Inquiry.id == inquiry_id, Inquiry.tenant_id == tenant.id)
+    .with_for_update()
+  )
+  inquiry = locked.scalar_one_or_none()
+  if inquiry is None:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inquiry not found")
 
   existing = await db.execute(
@@ -584,25 +703,65 @@ async def create_quotation_from_inquiry(
       tenant=tenant,
     )
 
-  customer = await db.get(Customer, inquiry.customer_id)
-  if not customer or customer.tenant_id != tenant.id:
-    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Customer not found")
+  await ensure_owned(
+    db, Customer, inquiry.customer_id, tenant.id, "Customer", status_code=404
+  )
 
   profit_dec = Decimal(str(body.profit_percentage if body else 15.0))
-  profit_pct = float(profit_dec) / 100.0
-  # We treat target_price as a base and apply a margin to simulate quotation pricing
-  try:
-    base_price = float(inquiry.target_price) if inquiry.target_price is not None else 0.0
-  except (TypeError, ValueError):
-    base_price = 0.0
-  quoted_amount = base_price * (1.0 + profit_pct) if base_price > 0 else base_price
-  qamt = _quantize_money4(Decimal(str(quoted_amount))) if quoted_amount else None
+  if inquiry.target_price is not None:
+    base_price = Decimal(str(inquiry.target_price))
+    qamt = (
+      _quantize_money4(base_price * (Decimal("1") + profit_dec / Decimal("100")))
+      if base_price > 0
+      else _quantize_money4(base_price)
+    )
+  else:
+    qamt = None
   tenant_default_mode = (
     tenant.default_commission_mode.value
     if tenant.default_commission_mode is not None
     else CommissionMode.EXCLUDE.value
   )
   inquiry_commission_mode = inquiry.commission_mode or tenant_default_mode
+
+  note_parts: list[str] = []
+  if inquiry.notes:
+    note_parts.append(str(inquiry.notes).strip())
+  meta_lines: list[str] = []
+  if inquiry.season:
+    meta_lines.append(f"Season: {inquiry.season}")
+  for field_name, label in (
+    ("inquiry_type", "Inquiry type"),
+    ("brand", "Brand"),
+    ("material_composition", "Material"),
+    ("size_range", "Size range"),
+    ("color_options", "Colors"),
+    ("country_of_origin", "Origin"),
+    ("special_requirements", "Special requirements"),
+  ):
+    value = getattr(inquiry, field_name, None)
+    if value:
+      meta_lines.append(f"{label}: {value}")
+  if meta_lines:
+    note_parts.append("\n".join(meta_lines))
+  item_rows = (
+    await db.execute(
+      select(InquiryItem)
+      .where(
+        InquiryItem.tenant_id == tenant.id,
+        InquiryItem.inquiry_id == inquiry.id,
+      )
+      .order_by(InquiryItem.sort_order.asc(), InquiryItem.id.asc())
+    )
+  ).scalars().all()
+  if item_rows:
+    item_lines = []
+    for row in item_rows:
+      label = row.item_name or row.description or "Item"
+      qty = f" x{row.quantity}" if row.quantity is not None else ""
+      item_lines.append(f"- {label}{qty}")
+    note_parts.append("Garment items:\n" + "\n".join(item_lines))
+  quotation_notes = "\n\n".join(part for part in note_parts if part) or None
 
   code = await _next_quotation_code(db, tenant.id)
   quotation = Quotation(
@@ -630,7 +789,7 @@ async def create_quotation_from_inquiry(
     status="NEW",
     version_no=1,
     valid_until=None,
-    notes=inquiry.notes,
+    notes=quotation_notes,
   )
   db.add(quotation)
   old_status = inquiry.status
@@ -652,6 +811,36 @@ async def create_quotation_from_inquiry(
     )
   )
   await flush_handling_duplicate_document_code(db)
+  await log_action_best_effort(
+    db,
+    tenant_id=tenant.id,
+    action="QUOTATION_CREATED",
+    user_id=user.id,
+    resource=f"quotation:{quotation.id}",
+    details=f"Created quotation {quotation.quotation_code} from inquiry {inquiry.inquiry_code}",
+  )
+  await _quotation_event(
+    db,
+    tenant_id=tenant.id,
+    user_id=user.id,
+    quotation=quotation,
+    event="created",
+    summary=f"Quotation {quotation.quotation_code} created from inquiry {inquiry.inquiry_code}",
+    to_status=quotation.status,
+    extra={"inquiry_id": inquiry.id},
+  )
+  await record_doc_event(
+    db,
+    tenant_id=tenant.id,
+    user_id=user.id,
+    doc_type="inquiry",
+    doc_id=inquiry.id,
+    event="converted",
+    summary=f"Converted inquiry {inquiry.inquiry_code} to quotation {quotation.quotation_code}",
+    from_status=old_status,
+    to_status=inquiry.status,
+    extra={"quotation_id": quotation.id, "quotation_code": quotation.quotation_code},
+  )
   await db.refresh(quotation)
 
   return _to_quotation_response(quotation, tenant=tenant)
@@ -735,6 +924,23 @@ async def create_quotation(
         )
       )
   await flush_handling_duplicate_document_code(db)
+  await log_action_best_effort(
+    db,
+    tenant_id=tenant.id,
+    action="QUOTATION_CREATED",
+    user_id=user.id,
+    resource=f"quotation:{quotation.id}",
+    details=f"Created quotation {quotation.quotation_code}",
+  )
+  await _quotation_event(
+    db,
+    tenant_id=tenant.id,
+    user_id=user.id,
+    quotation=quotation,
+    event="created",
+    summary=f"Quotation {quotation.quotation_code} created",
+    to_status=quotation.status,
+  )
   await db.refresh(quotation)
   return _to_quotation_response(quotation, tenant=tenant)
 
@@ -859,6 +1065,13 @@ async def get_quotation(
   converted_order_id = converted_map.get(quotation.id)
   book_ccy = resolve_commercial_book_currency(tenant, quotation.currency)
   hdr = _quotation_header_api_strings(quotation)
+  style_name: str | None = None
+  style_image_url: str | None = None
+  if quotation.style_id is not None:
+    style_row = await db.get(GarmentStyle, quotation.style_id)
+    if style_row is not None and style_row.tenant_id == tenant.id:
+      style_name = style_row.name
+      style_image_url = style_row.style_image_url
   detail_ai = None
   if ai_indicators:
     detail_ai = compute_quotation_ai_indicators(
@@ -889,6 +1102,9 @@ async def get_quotation(
     quotation_code=quotation.quotation_code,
     style_ref=quotation.style_ref,
     style_id=quotation.style_id,
+    style_name=style_name,
+    style_image_url=style_image_url,
+    verification_id=quotation.verification_id,
     customer_intermediary_id=quotation.customer_intermediary_id,
     shipping_term=quotation.shipping_term,
     commission_mode=quotation.commission_mode,
@@ -987,6 +1203,7 @@ async def update_quotation(
   if not quotation or quotation.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
   revision_service.ensure_quotation_not_superseded(quotation, action="edit it")
+  status_before = quotation.status
 
   patch_fields = body.model_dump(exclude_unset=True)
   blocked = list_quotation_commercial_patch_violations(quotation.status, patch_fields)
@@ -1038,7 +1255,22 @@ async def update_quotation(
   if body.notes is not None:
     quotation.notes = body.notes
 
+  verification_service.sync_verification_id(quotation)
   await db.flush()
+  await _quotation_event(
+    db,
+    tenant_id=tenant.id,
+    user_id=user.id,
+    quotation=quotation,
+    event="status_changed" if quotation.status != status_before else "updated",
+    summary=(
+      f"Quotation {quotation.quotation_code}: {status_before} → {quotation.status}"
+      if quotation.status != status_before
+      else f"Quotation {quotation.quotation_code} updated"
+    ),
+    from_status=status_before,
+    to_status=quotation.status,
+  )
   await db.refresh(quotation)
   return _to_quotation_response(quotation, tenant=tenant)
 
@@ -1059,6 +1291,7 @@ async def full_update_quotation(
   if not quotation or quotation.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
   revision_service.ensure_quotation_not_superseded(quotation, action="edit its costing")
+  status_before = quotation.status
 
   if is_quotation_commercial_locked(quotation.status):
     raise HTTPException(
@@ -1073,64 +1306,76 @@ async def full_update_quotation(
       },
     )
 
-  # Update header
-  if body.style_ref is not None:
+  # Update header — honor explicit nulls via model_fields_set so cleared UI fields persist.
+  provided = body.model_fields_set
+
+  if "style_ref" in provided:
     quotation.style_ref = body.style_ref
-  if body.style_id is not None:
-    await _validate_style(db, tenant_id=tenant.id, style_id=body.style_id)
+  if "style_id" in provided:
+    if body.style_id is not None:
+      await _validate_style(db, tenant_id=tenant.id, style_id=body.style_id)
     quotation.style_id = body.style_id
-  if body.customer_intermediary_id is not None:
-    await _validate_customer_intermediary(
-      db,
-      tenant_id=tenant.id,
-      customer_id=quotation.customer_id,
-      customer_intermediary_id=body.customer_intermediary_id,
-    )
+  if "customer_intermediary_id" in provided:
+    if body.customer_intermediary_id is not None:
+      await _validate_customer_intermediary(
+        db,
+        tenant_id=tenant.id,
+        customer_id=quotation.customer_id,
+        customer_intermediary_id=body.customer_intermediary_id,
+      )
     quotation.customer_intermediary_id = body.customer_intermediary_id
-  if body.shipping_term is not None:
+  if "shipping_term" in provided:
     quotation.shipping_term = body.shipping_term
-  if body.commission_mode is not None:
+  if "commission_mode" in provided:
     quotation.commission_mode = body.commission_mode
-  if body.commission_type is not None:
+  if "commission_type" in provided:
     quotation.commission_type = body.commission_type
-  if body.commission_value is not None:
+  if "commission_value" in provided:
     quotation.commission_value = body.commission_value
-  if body.department is not None:
+  if "department" in provided:
     quotation.department = body.department
-  if body.projected_quantity is not None:
+  if "projected_quantity" in provided:
     quotation.projected_quantity = body.projected_quantity
-  if body.projected_delivery_date is not None:
+  if "projected_delivery_date" in provided:
     quotation.projected_delivery_date = body.projected_delivery_date
-  if body.quotation_date is not None:
+  if "quotation_date" in provided:
     quotation.quotation_date = body.quotation_date
-  if body.target_price is not None:
-    quotation.target_price = parse_money(body.target_price)
-  if body.target_price_currency is not None:
-    quotation.target_price_currency = normalize_currency_code(body.target_price_currency)
-  if body.exchange_rate is not None:
-    quotation.exchange_rate = parse_money(body.exchange_rate)
-  if body.currency is not None:
-    quotation.currency = normalize_currency_code(body.currency)
-  if body.total_amount is not None:
-    quotation.total_amount = parse_money(body.total_amount)
-  if body.status is not None:
-    quotation.status = validate_transition(
-      QUOTATION_TRANSITIONS,
-      quotation.status,
-      body.status,
-      fallback="DRAFT",
-      entity_label="quotation",
+  if "target_price" in provided:
+    quotation.target_price = parse_money(body.target_price) if body.target_price is not None else None
+  if "target_price_currency" in provided:
+    quotation.target_price_currency = (
+      normalize_currency_code(body.target_price_currency) if body.target_price_currency else None
     )
-  if body.valid_until is not None:
+  if "exchange_rate" in provided:
+    quotation.exchange_rate = parse_money(body.exchange_rate) if body.exchange_rate is not None else None
+  if "currency" in provided and body.currency is not None:
+    quotation.currency = normalize_currency_code(body.currency)
+  if "total_amount" in provided and body.total_amount is not None:
+    quotation.total_amount = parse_money(body.total_amount)
+  if "status" in provided and body.status is not None:
+    # Skip no-op same-status writes (avoids NEW→DRAFT after from-inquiry create).
+    if body.status != quotation.status:
+      quotation.status = validate_transition(
+        QUOTATION_TRANSITIONS,
+        quotation.status,
+        body.status,
+        fallback="DRAFT",
+        entity_label="quotation",
+      )
+  if "valid_until" in provided:
     quotation.valid_until = body.valid_until
-  if body.size_ratio_enabled is not None:
+  if "size_ratio_enabled" in provided and body.size_ratio_enabled is not None:
     quotation.size_ratio_enabled = body.size_ratio_enabled
-  if body.pack_ratio is not None:
+  if "pack_ratio" in provided:
     quotation.pack_ratio = body.pack_ratio
-  if body.pcs_per_carton is not None:
+  if "pcs_per_carton" in provided:
     quotation.pcs_per_carton = body.pcs_per_carton
-  if body.notes is not None:
+  if "notes" in provided:
     quotation.notes = body.notes
+  if "profit_percentage" in provided:
+    quotation.profit_percentage = (
+      parse_money(body.profit_percentage) if body.profit_percentage is not None else None
+    )
 
   recompute_rollups = cost_line_arrays_present_in_request(
     body.materials,
@@ -1345,9 +1590,6 @@ async def full_update_quotation(
     quotation.total_cost = _quantize_money4(total_cost)
     quotation.cost_per_piece = _quantize_money4(cost_per_piece)
 
-  if body.profit_percentage is not None:
-    quotation.profit_percentage = parse_money(body.profit_percentage)
-
   quoted_auto_derived = False
   if body.quoted_price is not None:
     quotation.quoted_price = parse_money(body.quoted_price)
@@ -1394,7 +1636,18 @@ async def full_update_quotation(
       },
     )
 
+  verification_service.sync_verification_id(quotation)
   await db.flush()
+  await _quotation_event(
+    db,
+    tenant_id=tenant.id,
+    user_id=user.id,
+    quotation=quotation,
+    event="updated",
+    summary=f"Quotation {quotation.quotation_code} costing updated",
+    from_status=status_before,
+    to_status=quotation.status,
+  )
   await db.refresh(quotation)
   # Return full detail (same session sees flushed children)
   return await get_quotation(quotation_id, tenant=tenant, user=user, db=db)
@@ -1416,6 +1669,15 @@ async def delete_quotation(
   await ensure_quotation_deletable(db, tenant.id, quotation_id)
   # Deleting the current revision hands "current" back to the revision it replaced.
   restore_revision_id = quotation.revision_of_id if quotation.superseded_at is None else None
+  await _quotation_event(
+    db,
+    tenant_id=tenant.id,
+    user_id=user.id,
+    quotation=quotation,
+    event="deleted",
+    summary=f"Quotation {quotation.quotation_code} (v{quotation.version_no}) deleted",
+    from_status=quotation.status,
+  )
   await db.delete(quotation)
   await db.flush()
   await revision_service.restore_previous_revision(

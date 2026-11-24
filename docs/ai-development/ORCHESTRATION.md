@@ -1,8 +1,9 @@
 # Prime7 multi-agent development workflow (balanced, cost-aware)
 
 > **Since 2026-11-19:** Premium agents are fully opt-in. No automatic Opus / Premium step. CRITICAL work uses Auto
-> `security-auditor`. Prefer cheaper models (GPT 5.6, Sonnet 5.5, Gemini). Budget per task without asking: 3 subagent
-> runs, 1 Premium run, 2 correction rounds. See `MODEL-USAGE-POLICY.md`.
+> `security-auditor`. Prefer cheaper models (GPT 5.6, Sonnet 5.5, Gemini). Agent count: up to 15 per task, or any
+> number the user names in the chat. Premium stays opt-in (1 Premium run unless asked). 2 correction rounds per gate.
+> See `MODEL-USAGE-POLICY.md`.
 
 How the agents in `.cursor/agents/` work together. Models and authorization: `MODEL-USAGE-POLICY.md`. Always-applied rules:
 `prime7-core.mdc`, `prime7-security.mdc`, `prime7-orchestration.mdc`. Verified facts: `prime7-development.mdc`. Tracked
@@ -105,8 +106,9 @@ external portals; env or config; raw SQL; deployment files.
 - Use parallel agents only where the work truly separates. Do not add agents that add no value.
 - **Read-only agents may run in parallel**, for example `qa-engineer-premium` and `security-auditor-premium` on the same diff,
   or `explorer` alongside `ui-designer`.
-- **At most two implementation agents at once**, each in its own Git worktree (`git worktree add ../p7erp_wt_<scope> -b ai/<task>-<scope>`),
-  with disjoint files and a frozen API contract. Never two writers in one checkout, never overlapping files.
+- **Up to 15 agents on a task**, or the number the user names in the chat. Each implementation agent that writes files
+  uses its own Git worktree (`git worktree add ../p7erp_wt_<scope> -b ai/<task>-<scope>`), with disjoint files and a
+  frozen API contract. Never two writers in one checkout, never overlapping files.
 - Repo facts:
   - `docker-compose.yml` bind-mounts the **main checkout** (`./backend:/app`, `./frontend:/app`), so
     `docker compose exec backend pytest` tests the main checkout only.
@@ -135,7 +137,8 @@ external portals; env or config; raw SQL; deployment files.
 - An implementer needs a file outside its scope.
 - Two correction rounds failed.
 - Tests are blocked and cannot be unblocked safely.
-- The per-task budget (3 subagent runs, 1 Premium run) would be exceeded; ask the user first.
+- More than 15 agents would run and the user did not name a higher number in the chat; ask first.
+- A second Premium run would start and the user did not approve Premium; ask first.
 - Any destructive or production-affecting step is needed.
 - Agent output contradicts `git diff` or the test output.
 

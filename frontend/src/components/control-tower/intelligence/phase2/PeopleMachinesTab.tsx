@@ -275,7 +275,7 @@ export function PeopleMachinesTab({ canWrite = true, canEditSmv = true }: { canW
           ))}
         </div>
         <div className="flex flex-wrap items-end gap-3">
-          <SelectField id="mfg-asg-line" label="Sewing line" value={lineFilter} onChange={(v) => { setLineFilter(v); setOffset(0); }} options={lineOptions} placeholder="All lines" />
+          <SelectField id="mfg-asg-line" label="Sewing line" searchable value={lineFilter} onChange={(v) => { setLineFilter(v); setOffset(0); }} options={lineOptions} placeholder="All lines" />
           <TextField id="mfg-asg-on" label="Working on (empty = any date)" type="date" value={activeOn} onChange={(v) => { setActiveOn(v); setOffset(0); }} />
           <label className="flex items-center gap-2 text-xs text-text-secondary">
             <input type="checkbox" checked={includeInactive} onChange={(e) => { setIncludeInactive(e.target.checked); setOffset(0); }} />
@@ -367,13 +367,14 @@ export function PeopleMachinesTab({ canWrite = true, canEditSmv = true }: { canW
             id="mfg-asg-machine"
             label="Machine"
             required
+            searchable
             value={draft.owner_id ? String(draft.owner_id) : ""}
             onChange={(v) => set({ owner_id: v ? Number(v) : null })}
             options={machines}
           />
         )}
         <div className="grid gap-3 sm:grid-cols-2">
-          <SelectField id="mfg-asg-form-line" label="Sewing line" required value={draft.sewing_line_id} onChange={(v) => set({ sewing_line_id: v })} options={lineOptions} />
+          <SelectField id="mfg-asg-form-line" label="Sewing line" required searchable value={draft.sewing_line_id} onChange={(v) => set({ sewing_line_id: v })} options={lineOptions} />
           {kind === "employees" ? (
             <>
               <SelectField
@@ -384,7 +385,7 @@ export function PeopleMachinesTab({ canWrite = true, canEditSmv = true }: { canW
                 onChange={(v) => set({ role: v })}
                 options={ROLES.map((r) => ({ value: r, label: ASSIGNMENT_ROLE_LABEL[r] ?? r }))}
               />
-              <SelectField id="mfg-asg-shift" label="Shift" value={draft.shift_id} onChange={(v) => set({ shift_id: v })} options={shiftOptions} placeholder="Any shift" />
+              <SelectField id="mfg-asg-shift" label="Shift" searchable value={draft.shift_id} onChange={(v) => set({ shift_id: v })} options={shiftOptions} placeholder="Any shift" />
             </>
           ) : null}
           <TextField id="mfg-asg-from" label="First day" type="date" required value={draft.valid_from} onChange={(v) => set({ valid_from: v })} />

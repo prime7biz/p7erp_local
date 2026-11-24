@@ -12,6 +12,7 @@ import {
 } from "@/api/client";
 import { hrBangladeshApi } from "@/api/hrBangladesh";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import {
   listPageChipActiveClass,
   listPageChipInactiveClass,
@@ -645,42 +646,46 @@ export function HrEmployeesPage() {
           <option value="inactive">Inactive only</option>
           <option value="all">All statuses</option>
         </select>
-        <select
-          className={listPageToolbarSelectClass}
+        <LocalSearchSelect
+          className={`${listPageToolbarSelectClass} min-w-[10rem]`}
           value={filters.departmentId ?? ""}
-          onChange={(e) => updateFilters({ departmentId: e.target.value ? Number(e.target.value) : null })}
+          options={[
+            { value: UNDEFINED_FILTER_ID, label: UNDEFINED_LABEL },
+            ...departments.map((d) => ({ value: d.id, label: d.name })),
+          ]}
+          onChange={(next) =>
+            updateFilters({ departmentId: next === "" ? null : Number(next) })
+          }
+          placeholder="All departments"
           aria-label="Department"
-        >
-          <option value="">All departments</option>
-          <option value={UNDEFINED_FILTER_ID}>{UNDEFINED_LABEL}</option>
-          {departments.map((d) => (
-            <option key={d.id} value={d.id}>{d.name}</option>
-          ))}
-        </select>
-        <select
-          className={listPageToolbarSelectClass}
+          allowClear
+        />
+        <LocalSearchSelect
+          className={`${listPageToolbarSelectClass} min-w-[10rem]`}
           value={filters.designationId ?? ""}
-          onChange={(e) => updateFilters({ designationId: e.target.value ? Number(e.target.value) : null })}
+          options={designations.map((d) => ({ value: d.id, label: d.title }))}
+          onChange={(next) =>
+            updateFilters({ designationId: next === "" ? null : Number(next) })
+          }
+          placeholder="All designations"
           aria-label="Designation"
-        >
-          <option value="">All designations</option>
-          {designations.map((d) => (
-            <option key={d.id} value={d.id}>{d.title}</option>
-          ))}
-        </select>
+          allowClear
+        />
         {sections.length > 0 && (
-          <select
-            className={listPageToolbarSelectClass}
+          <LocalSearchSelect
+            className={`${listPageToolbarSelectClass} min-w-[10rem]`}
             value={filters.sectionId ?? ""}
-            onChange={(e) => updateFilters({ sectionId: e.target.value ? Number(e.target.value) : null })}
+            options={[
+              { value: UNDEFINED_FILTER_ID, label: UNDEFINED_LABEL },
+              ...sections.map((s) => ({ value: s.id, label: s.name })),
+            ]}
+            onChange={(next) =>
+              updateFilters({ sectionId: next === "" ? null : Number(next) })
+            }
+            placeholder="All sections / lines"
             aria-label="Section or line"
-          >
-            <option value="">All sections / lines</option>
-            <option value={UNDEFINED_FILTER_ID}>{UNDEFINED_LABEL}</option>
-            {sections.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
+            allowClear
+          />
         )}
         {employmentTypes.length > 0 && (
           <select className={listPageToolbarSelectClass} value={filters.employmentType} onChange={(e) => updateFilters({ employmentType: e.target.value })} aria-label="Employment type">
@@ -1056,50 +1061,59 @@ export function HrEmployeesPage() {
                 value={form.birth_registration_no ?? ""}
                 onChange={(e) => setForm((prev) => ({ ...prev, birth_registration_no: e.target.value }))}
               />
-              <select
+              <LocalSearchSelect
                 className={modalFieldClass}
                 value={form.department_id ?? ""}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, department_id: e.target.value ? Number(e.target.value) : null }))
+                options={departments.map((d) => ({
+                  value: d.id,
+                  label: `${d.code} - ${d.name}`,
+                }))}
+                onChange={(next) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    department_id: next === "" ? null : Number(next),
+                  }))
                 }
-              >
-                <option value="">No department</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.code} - {d.name}
-                  </option>
-                ))}
-              </select>
-              <select
+                placeholder="No department"
+                aria-label="Department"
+                allowClear
+              />
+              <LocalSearchSelect
                 className={modalFieldClass}
                 value={form.designation_id ?? ""}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, designation_id: e.target.value ? Number(e.target.value) : null }))
+                options={designations.map((d) => ({
+                  value: d.id,
+                  label: `${d.code} - ${d.title}`,
+                }))}
+                onChange={(next) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    designation_id: next === "" ? null : Number(next),
+                  }))
                 }
-              >
-                <option value="">No designation</option>
-                {designations.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.code} - {d.title}
-                  </option>
-                ))}
-              </select>
+                placeholder="No designation"
+                aria-label="Designation"
+                allowClear
+              />
               <label className="sm:col-span-2 flex flex-col gap-1 text-xs text-text-muted">
                 Linked app user (ESS / login)
-                <select
-                  className="rounded border border-border-strong px-3 py-2 text-sm text-text-primary"
+                <LocalSearchSelect
+                  className="w-full"
                   value={form.user_id ?? ""}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, user_id: e.target.value ? Number(e.target.value) : null }))
+                  options={tenantUsers.map((u) => ({
+                    value: u.id,
+                    label: `${u.username}${u.email ? ` (${u.email})` : ""}`,
+                  }))}
+                  onChange={(next) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      user_id: next === "" ? null : Number(next),
+                    }))
                   }
-                >
-                  <option value="">None</option>
-                  {tenantUsers.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.username} {u.email ? `(${u.email})` : ""}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="None"
+                  aria-label="Linked app user"
+                  allowClear
+                />
               </label>
               {phoneTouch ? (
                 <label className="flex flex-col gap-1 text-xs text-text-muted sm:col-span-2">

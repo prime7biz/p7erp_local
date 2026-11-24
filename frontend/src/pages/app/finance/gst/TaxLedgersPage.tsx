@@ -1,7 +1,8 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type ChartOfAccountResponse, type TaxLedgerResponse } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import { listPageRootClass } from "@/components/app/listPageLayout";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
 import {
@@ -80,6 +81,10 @@ export function TaxLedgersPage() {
   }
 
   const acctName = new Map(accounts.map((a) => [a.id, `${a.account_number} — ${a.name}`]));
+  const accountOptions = useMemo(
+    () => accounts.map((a) => ({ value: a.id, label: `${a.account_number} — ${a.name}` })),
+    [accounts],
+  );
 
   return (
     <div className={`${listPageRootClass} p-4 md:p-6`}>
@@ -115,19 +120,18 @@ export function TaxLedgersPage() {
         <FormSection title="Tax ledger">
         <label className="text-xs text-text-muted">
           Account
-          <select
-            className="mt-1 block w-full rounded-lg border border-border-strong px-2 py-1.5 text-sm"
-            value={form.chart_account_id}
-            onChange={(e) => setForm((p) => ({ ...p, chart_account_id: e.target.value }))}
+          <LocalSearchSelect
+            className="mt-1"
+            value={form.chart_account_id ? Number(form.chart_account_id) : ""}
+            options={accountOptions}
+            onChange={(next) =>
+              setForm((p) => ({ ...p, chart_account_id: next === "" ? "" : String(next) }))
+            }
+            placeholder="Select…"
             required
-          >
-            <option value="">Select…</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.account_number} — {a.name}
-              </option>
-            ))}
-          </select>
+            allowClear={false}
+            aria-label="Tax ledger account"
+          />
         </label>
         <label className="text-xs text-text-muted">
           Tax type

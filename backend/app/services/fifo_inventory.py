@@ -14,6 +14,7 @@ from app.models import (
     InventoryCostLayer,
     Item,
     ProcessOrder,
+    PurchaseOrder,
     PurchaseOrderItem,
     StockMovement,
 )
@@ -134,6 +135,12 @@ async def resolve_in_unit_cost(
         grn = await db.get(GoodsReceiving, rid)
         if grn and grn.tenant_id == tenant_id:
             if grn.purchase_order_id:
+                po = await db.get(PurchaseOrder, grn.purchase_order_id)
+                fx = 1.0
+                if po and po.tenant_id == tenant_id and po.exchange_rate_to_base is not None:
+                    fx = _q(po.exchange_rate_to_base)
+                    if fx <= 0:
+                        fx = 1.0
                 pl = (
                     await db.execute(
                         select(PurchaseOrderItem).where(
@@ -143,7 +150,7 @@ async def resolve_in_unit_cost(
                     )
                 ).scalars().first()
                 if pl:
-                    return _q(pl.unit_price)
+                    return _q(pl.unit_price) * fx
         return dc
 
     # STOCK_TRANSFER = batch-aware godown transfer (stock hierarchy); same cost rule.

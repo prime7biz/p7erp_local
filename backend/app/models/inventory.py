@@ -39,6 +39,7 @@ class Warehouse(Base):
     is_store: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_rejected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_quarantine: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    is_bonded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -241,6 +242,12 @@ class PurchaseOrderItem(Base):
     source_quotation_line_id: Mapped[int | None] = mapped_column(
         ForeignKey("quotation_materials.id", ondelete="SET NULL"), nullable=True
     )
+    style_id: Mapped[int | None] = mapped_column(
+        ForeignKey("garment_styles.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    colorway_id: Mapped[int | None] = mapped_column(
+        ForeignKey("style_colorways.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
@@ -340,6 +347,8 @@ class GoodsReceivingItem(Base):
     warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False)
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     lot_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    shade_band: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    width_cm: Mapped[str | None] = mapped_column(String(16), nullable=True)
     purchase_order_line_id: Mapped[int | None] = mapped_column(
         ForeignKey("purchase_order_items.id", ondelete="SET NULL"), nullable=True
     )
@@ -372,6 +381,12 @@ class GoodsReceivingItem(Base):
     )
     vendor_id: Mapped[int | None] = mapped_column(ForeignKey("vendors.id", ondelete="SET NULL"), nullable=True)
     line_remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
+    style_id: Mapped[int | None] = mapped_column(
+        ForeignKey("garment_styles.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    colorway_id: Mapped[int | None] = mapped_column(
+        ForeignKey("style_colorways.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
@@ -514,6 +529,12 @@ class StockMovement(Base):
     )
     production_material_issue_id: Mapped[int | None] = mapped_column(
         ForeignKey("production_material_issues.id", ondelete="SET NULL"), nullable=True
+    )
+    style_id: Mapped[int | None] = mapped_column(
+        ForeignKey("garment_styles.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    colorway_id: Mapped[int | None] = mapped_column(
+        ForeignKey("style_colorways.id", ondelete="SET NULL"), nullable=True
     )
 
 
@@ -692,6 +713,9 @@ class DeliveryChallan(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     challan_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     customer_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     delivery_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT", index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -704,6 +728,12 @@ class DeliveryChallan(Base):
     signed_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # Phase 4 class chain (material_conversion_v1 + user_authority_classes_v1); nullable additive
+    recommended_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    recommended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    class_approval_status: Mapped[str | None] = mapped_column(String(24), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -777,6 +807,12 @@ class EnhancedGatePass(Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     class1_approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Phase 4 class chain (material_conversion_v1 + user_authority_classes_v1); nullable additive
+    recommended_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    recommended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    class_approval_status: Mapped[str | None] = mapped_column(String(24), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow

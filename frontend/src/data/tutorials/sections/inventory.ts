@@ -49,7 +49,7 @@ Every number in the stock reports comes from these documents, so if the document
 
 **Master and setup** — **Stock Master** (\`/app/inventory\`: tabs Masters, Groups, Units, Warehouses, Items) · **Stock Groups** · **Stock Items (hierarchy)** and **Godown Stock** *(optional)* · **Vendors**.
 
-**Procurement** — **Requisitions & CS** *(optional)* · **Purchase Orders** · **Goods Receiving** · **Process Orders**.
+**Procurement** — **Material Control** *(optional)* · **Requisitions & CS** *(optional)* · **Purchase Orders** · **Goods Receiving** · **Process Orders**.
 
 **Planning & manufacturing** — **MRP Run**, **Reorder Suggestions**, **Inter-Dept Transfers**, **Receive IDT**, **Process Loss Report**, **Post-Costing**, **Process Loss Standards**, **GRN Inspection**, **Quality Dashboard**, **Vendor Scorecard**, **Cycle Count**, **Serial Tracking**, **Kit Builder**, **Consignment Stock** (each *optional*) · **ABC Analysis**, **EOQ**, **Stock Aging** (always shown). See *Planning and analysis tools*.
 
@@ -83,7 +83,7 @@ Every number in the stock reports comes from these documents, so if the document
       tags: ["inventory", "stock", "store", "warehouse", "PO", "GRN", "challan", "gate pass", "module map"],
       keywords: ["inventory overview", "store module", "procure to pay", "procurement flow", "material flow", "godown", "stock in stock out", "what is inventory"],
       estimatedMinutes: 6,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-23",
       featured: true,
       coverImage: `${S}/inventory.jpg`,
       infographics: [
@@ -98,6 +98,7 @@ Every number in the stock reports comes from these documents, so if the document
           type: "flow",
           title: "Open each step",
           steps: [
+            { label: "Material Control", href: "/app/inventory/material-control" },
             { label: "Requisitions & CS", href: "/app/procurement/requisitions" },
             { label: "Purchase Orders", href: "/app/inventory/purchase-orders" },
             { label: "Goods Receiving", href: "/app/inventory/goods-receiving" },
@@ -117,6 +118,7 @@ Every number in the stock reports comes from these documents, so if the document
       ],
       relatedAppRoutes: [
         "/app/inventory",
+        "/app/inventory/material-control",
         "/app/inventory/purchase-orders",
         "/app/inventory/goods-receiving",
         "/app/inventory/stock-summary",
@@ -125,6 +127,7 @@ Every number in the stock reports comes from these documents, so if the document
         "/app/procurement/requisitions",
       ],
       relatedArticleIds: [
+        "inv-material-control-hub",
         "inv-setup-items-warehouses",
         "inv-po-deep",
         "inv-grn-deep",
@@ -134,6 +137,74 @@ Every number in the stock reports comes from these documents, so if the document
         "inv-approval-gates",
         "gs-row-actions",
       ],
+    },
+    {
+      id: "inv-material-control-hub",
+      title: "Material Control hub (optional)",
+      summary:
+        "Style-first Material Control hub: today's actions, style sheet, allocation, leftover, bond/claim/RTV, watchlist, rolls/shade, and landed cost — each behind its own switch.",
+      content: `## Overview
+
+**Material Control** is an optional Inventory hub that puts style-first material work in one screen. It does **not** replace Purchase Orders, GRNs or Consumption Control — it links them and adds controlled writers when later flags are on.
+
+Menu: **Inventory → Procurement → Material Control** (\`/app/inventory/material-control\`).
+
+## Before you start
+
+- An admin turns on **Enable Material Control hub** in **Settings → Configuration** (flag \`material_control_hub_v1\`). When off, the menu and route are hidden.
+- Extra tabs need their own flags (all default **off**): allocation/UD, leftover + Gate/Challan class chain, physical/bond/claim, RTV, budget watchlist + rolls/shade, landed cost, hard BTB block.
+- Your role needs **Inventory** access.
+
+## Tabs
+
+1. **Today's actions** — draft GRNs, unbilled received GRNs, draft vendor bills, open POs and draft material issues.
+2. **Style control sheet** — pick a style; see orders, open POs, received / unbilled GRNs and material issues.
+3. **By order** — shortcuts into Orders, POs and Consumption Control.
+4. **Genealogy** — lot number → GRN lines and stock movements.
+5. **Allocate** (flag) — reserve a FIFO cost layer to an order/style.
+6. **Leftover return** (flag) — return bought leftover to store (same item).
+7. **Bond / claim / RTV** (flag) — qty-only job-work bond, principal claim, vendor RTV. Physical counts stay on **Stock adjustments**.
+8. **Cost-saving watchlist** (flag) — aging remnants and unbilled GRNI leak buckets.
+9. **Rolls & shade** (budget flag) — register fabric rolls with shade/width; PMI can require a shade band.
+10. **Landed cost** (landed-cost flag) — add freight/duty onto a GRN's open FIFO unit costs.
+11. **3-way match** — soft PO vs GRN vs Vendor bill check (warn only; never blocks posting).
+
+## Gate pass & delivery challan (when Class authority + conversion flag are on)
+
+1. Class 3/4 enter → Class 2 **Recommend** → Class 1 **Approve** (not the creator or recommender) → then release/post.
+2. Legacy role flow stays when either flag is off.
+
+## Tips
+
+- Lot genealogy uses the same data as **Lot Traceability**.
+- Job-work bond never posts FIFO or inventory GL — customer material only.
+- Hard BTB/MSC blocks (\`material_commitment_block_v1\`) stay off until live sign-off.
+
+## Common problems
+
+- **I can't see Material Control.** → Hub flag is off in **Settings → Configuration**.
+- **A tab is missing.** → That phase flag is still off (Allocate, Leftover, Ops, Watchlist, Rolls, Landed cost).
+- **Shade mismatch on issue.** → Required shade does not match available rolls (budget flag on).
+- **Cannot release gate/challan.** → Class 2 recommend and Class 1 approve are required when both authority and conversion flags are on.`,
+      tags: ["inventory", "material control", "style", "lot", "hub", "allocation", "rtv"],
+      keywords: [
+        "material control hub",
+        "style control sheet",
+        "action queue",
+        "genealogy",
+        "leftover return",
+        "bond transfer",
+        "principal claim",
+        "rtv",
+        "watchlist",
+        "rolls",
+        "shade",
+        "landed cost",
+      ],
+      estimatedMinutes: 7,
+      lastUpdated: "2026-11-23",
+      relatedAppRoutes: ["/app/inventory/material-control"],
+      relatedArticleIds: ["inv-overview", "inv-po-deep", "inv-grn-deep", "inv-material-issue"],
     },
     {
       id: "inv-setup-items-warehouses",

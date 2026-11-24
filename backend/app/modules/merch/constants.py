@@ -73,10 +73,14 @@ TNA_DEFAULT_TEMPLATE_SEED: list[tuple[str, str, str, int | None, int]] = [
     ("accessories_approval", "Accessories approval", "approval", 55, 80),
     ("fabric_in_house", "Fabric in-house", "fabric", 45, 90),
     ("accessories_in_house", "Accessories in-house", "trims", 40, 95),
+    ("cad_marker_approved", "CAD / marker approved", "production", 38, 98),
     ("cutting_start", "Cutting start", "production", 35, 100),
+    ("line_machine_allocated", "Line / machine allocated", "production", 30, 105),
     ("sewing_start", "Sewing start", "production", 28, 110),
     ("inline_inspection", "Inline inspection", "inspection", 20, 120),
     ("final_inspection", "Final inspection", "inspection", 10, 130),
+    ("finishing_start", "Finishing start", "finishing", 8, 132),
+    ("packing_complete", "Packing complete", "packing", 6, 135),
     ("ex_factory", "Ex-factory", "shipment", 5, 140),
     ("shipment_docs", "Shipping docs / BL", "commercial", 3, 145),
     ("shipment_confirmation", "Shipment confirmation to buyer", "commercial", 0, 150),
@@ -91,6 +95,10 @@ TNA_EVENT_CHALLAN_POSTED = "delivery_challan_posted"
 TNA_EVENT_CUTTING_START = "cutting_start"
 TNA_EVENT_SEWING_START = "sewing_start"
 TNA_EVENT_LINE_ALLOCATED = "line_allocated"
+TNA_EVENT_CAD_MARKER_APPROVED = "cad_marker_approved"
+TNA_EVENT_LINE_MACHINE_ALLOCATED = "line_machine_allocated"
+TNA_EVENT_FINISHING_START = "finishing_start"
+TNA_EVENT_PACKING_COMPLETE = "packing_complete"
 
 # Map sync event_key → one or more milestone codes (template.code / milestone_type).
 TNA_EVENT_MILESTONE_MAP: dict[str, tuple[str, ...]] = {
@@ -100,7 +108,20 @@ TNA_EVENT_MILESTONE_MAP: dict[str, tuple[str, ...]] = {
     TNA_EVENT_CHALLAN_POSTED: ("shipment_confirmation", "ex_factory"),
     TNA_EVENT_CUTTING_START: ("cutting_start",),
     TNA_EVENT_SEWING_START: ("sewing_start",),
-    TNA_EVENT_LINE_ALLOCATED: ("sewing_start",),  # soft: allocation unlocks sewing prep
+    TNA_EVENT_LINE_ALLOCATED: ("sewing_start", "line_machine_allocated"),
+    TNA_EVENT_CAD_MARKER_APPROVED: ("cad_marker_approved",),
+    TNA_EVENT_LINE_MACHINE_ALLOCATED: ("line_machine_allocated",),
+    TNA_EVENT_FINISHING_START: ("finishing_start",),
+    TNA_EVENT_PACKING_COMPLETE: ("packing_complete",),
+}
+
+# Default predecessor chain for slip cascade when template.predecessor_codes is empty.
+TNA_DEFAULT_PREDECESSORS: dict[str, tuple[str, ...]] = {
+    "cutting_start": ("fabric_in_house", "cad_marker_approved"),
+    "sewing_start": ("cutting_start", "line_machine_allocated", "accessories_in_house"),
+    "finishing_start": ("sewing_start",),
+    "packing_complete": ("finishing_start", "final_inspection"),
+    "ex_factory": ("packing_complete",),
 }
 
 # Merch sample_type → approval / submit milestone codes to complete on sample approve.

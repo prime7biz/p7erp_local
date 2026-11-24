@@ -159,6 +159,7 @@ async def revise_quotation(db: AsyncSession, *, tenant_id: int, quotation_id: in
     try:
         # Supersede first: the "one current quotation per inquiry" index must never see two.
         source.superseded_at = utc_now_naive()
+        source.verification_id = None  # an old printout must stop verifying (Phase 4B)
         await db.flush()
 
         revised = Quotation(

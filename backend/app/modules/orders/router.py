@@ -241,60 +241,21 @@ async def _auto_generate_followup_actions_if_missing(
   tenant_id: int,
   order: Order,
   next_status: str,
+  tenant: Tenant | None = None,
 ) -> None:
-  status_key = (next_status or "").strip().upper()
-  if status_key not in {"NEW", "CONFIRMED", "IN_PROGRESS"}:
-    return
+  """Idempotent TNA seed. When ``tna_auto_plan_v1`` is on, uses working-calendar dates."""
+  from app.modules.merch.tna_auto_plan_service import ensure_followup_actions_for_order
 
-  existing = await db.execute(
-    select(func.count())
-    .select_from(OrderFollowupAction)
-    .where(
-      OrderFollowupAction.tenant_id == tenant_id,
-      OrderFollowupAction.order_id == order.id,
-    )
+  if tenant is None:
+    tenant = await db.get(Tenant, tenant_id)
+  if not tenant or tenant.id != tenant_id:
+    return
+  await ensure_followup_actions_for_order(
+    db,
+    tenant=tenant,
+    order=order,
+    next_status=next_status,
   )
-  if (existing.scalar() or 0) > 0:
-    return
-
-  templates_result = await db.execute(
-    select(FollowupActionTemplate)
-    .where(
-      FollowupActionTemplate.tenant_id == tenant_id,
-      FollowupActionTemplate.is_active == True,
-      or_(
-        FollowupActionTemplate.buyer_id.is_(None),
-        FollowupActionTemplate.buyer_id == order.customer_id,
-      ),
-    )
-    .order_by(FollowupActionTemplate.sequence_no.asc(), FollowupActionTemplate.id.asc())
-  )
-  templates = templates_result.scalars().all()
-  if not templates:
-    return
-
-  for template in templates:
-    planned_date = None
-    if order.delivery_date and template.default_days_before_delivery is not None:
-      planned_date = order.delivery_date - timedelta(days=int(template.default_days_before_delivery))
-    db.add(
-      OrderFollowupAction(
-        tenant_id=tenant_id,
-        order_id=order.id,
-        template_id=template.id,
-        sequence_no=template.sequence_no,
-        phase=template.phase,
-        action_group=template.action_group,
-        title=template.name,
-        is_template_generated=True,
-        is_mandatory=template.is_mandatory,
-        is_active=template.is_active,
-        planned_date=planned_date,
-        status="pending",
-        milestone_type=template.code,
-        **action_route_values(template),
-      )
-    )
 
 
 class PromiseSummaryItem(BaseModel):
@@ -994,7 +955,22 @@ async def update_order(
     tenant_id=tenant.id,
     order=order,
     next_status=order.status,
+    tenant=tenant,
   )
+  if body.delivery_date is not None and _old_delivery_date != order.delivery_date:
+    try:
+      from app.modules.merch.tna_auto_plan_service import replan_open_followup_actions_on_delivery_change
+
+      await replan_open_followup_actions_on_delivery_change(
+        db,
+        tenant=tenant,
+        order=order,
+        old_delivery_date=_old_delivery_date,
+      )
+    except Exception:
+      import logging
+
+      logging.getLogger(__name__).exception("tna_replan_on_delivery_change_failed order_id=%s", order.id)
   await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=order.id)
   await db.refresh(order)
   await log_action_best_effort(

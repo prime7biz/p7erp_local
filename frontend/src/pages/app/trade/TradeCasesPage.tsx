@@ -3,8 +3,10 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Download, Plus } from "lucide-react";
 
 import { api, type TradeCaseCreate, type TradeCaseRow } from "@/api/client";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { fetchCustomerPage, hydrateCustomer } from "@/lib/remoteSelectFetchers";
 import { logApiError } from "@/utils/logApiError";
 import { saveBlob } from "@/lib/fileSave";
 
@@ -206,6 +208,23 @@ export function TradeCasesPage() {
               value={form.order_id ?? ""}
               onChange={(e) => setForm((prev) => ({ ...prev, order_id: e.target.value ? Number(e.target.value) : undefined }))}
               placeholder="Optional"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Customer</label>
+            <RemoteSearchSelect
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+              placeholder="Search customer…"
+              value={form.customer_id && form.customer_id > 0 ? form.customer_id : ""}
+              onChange={(next) =>
+                setForm((prev) => ({
+                  ...prev,
+                  customer_id: typeof next === "number" && next > 0 ? next : undefined,
+                }))
+              }
+              fetchPage={fetchCustomerPage}
+              hydrateById={hydrateCustomer}
+              allowClear
             />
           </div>
           <div>

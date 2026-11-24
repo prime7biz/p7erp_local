@@ -19,7 +19,7 @@ from app.models.costing import Item
 from app.models.finance import Voucher
 from app.models.hr import Employee
 from app.models.inventory import PurchaseOrder, Vendor
-from app.models.merch import Order
+from app.models.merch import Inquiry, Order, Quotation
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +82,38 @@ _SOURCES: list[tuple[str, str, str, Any, Callable[[Any], list], Any, Callable[[A
             kind="order", id=r.id, title=r.order_code, subtitle=_join(r.style_ref, r.status), href=f"/app/orders/{r.id}"
         ),
         lambda m: [m.id, m.order_code, m.style_ref, m.status],
+    ),
+    (
+        "quotation",
+        "Quotations",
+        "merch.access",
+        Quotation,
+        lambda m: [m.quotation_code, m.style_ref],
+        Quotation.id.desc(),
+        lambda r: SearchHit(
+            kind="quotation",
+            id=r.id,
+            title=r.quotation_code,
+            subtitle=_join(r.style_ref, f"v{r.version_no}" if r.version_no else None, r.status),
+            href=f"/app/quotations/{r.id}",
+        ),
+        lambda m: [m.id, m.quotation_code, m.style_ref, m.version_no, m.status],
+    ),
+    (
+        "inquiry",
+        "Inquiries",
+        "merch.access",
+        Inquiry,
+        lambda m: [m.inquiry_code, m.style_ref, m.brand, m.season, m.department],
+        Inquiry.id.desc(),
+        lambda r: SearchHit(
+            kind="inquiry",
+            id=r.id,
+            title=r.inquiry_code,
+            subtitle=_join(r.style_ref, r.brand, r.season, r.department, r.status),
+            href=f"/app/inquiries/{r.id}",
+        ),
+        lambda m: [m.id, m.inquiry_code, m.style_ref, m.brand, m.season, m.department, m.status],
     ),
     (
         "purchase_order",
@@ -201,6 +233,9 @@ async def search_records(
                 .order_by(order_by)
                 .limit(limit)
             )
+            if kind == "quotation":
+                # Old revisions are read-only history; search shows the current version only.
+                stmt = stmt.where(Quotation.superseded_at.is_(None))
             async with db.begin_nested():
                 rows = (await db.execute(stmt)).all()
         except Exception:

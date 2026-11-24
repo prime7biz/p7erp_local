@@ -178,8 +178,21 @@ def _overall(run: HrEmployeeOnboardingRun) -> str:
     return "IN_PROGRESS"
 
 
+async def _persist_onboarding(db: AsyncSession, *, commit_steps: bool) -> None:
+    """Normal HTTP onboarding commits between steps for retry; class-request apply keeps one transaction."""
+    if commit_steps:
+        await db.commit()
+    else:
+        await db.flush()
+
+
 async def start_onboarding(
-    db: AsyncSession, *, tenant: Tenant, user: User, body: OnboardingRequest
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    user: User,
+    body: OnboardingRequest,
+    commit_steps: bool = True,
 ) -> HrEmployeeOnboardingRun:
     tenant_id, user_id = tenant.id, user.id
     existing = (
@@ -215,9 +228,15 @@ async def start_onboarding(
             db, tenant_id=tenant_id, user_id=user_id, action="HR_EMPLOYEE_CREATED",
             resource=f"hr.employee:{emp.id}", details=f"{emp.employee_code} onboarding {body.request_id}",
         )
-        await db.commit()
+        await _persist_onboarding(db, commit_steps=commit_steps)
     return await continue_onboarding(
-        db, tenant=tenant, user=user, request_id=body.request_id, steps=body, authorized=first_attempt
+        db,
+        tenant=tenant,
+        user=user,
+        request_id=body.request_id,
+        steps=body,
+        authorized=first_attempt,
+        commit_steps=commit_steps,
     )
 
 
@@ -229,6 +248,7 @@ async def continue_onboarding(
     request_id: str,
     steps: OnboardingSteps,
     authorized: bool = False,
+    commit_steps: bool = True,
 ) -> HrEmployeeOnboardingRun:
     tenant_id, user_id = tenant.id, user.id
     run = await lock_run(db, tenant_id, request_id)
@@ -299,7 +319,7 @@ async def continue_onboarding(
                 run.payroll_step_status = "FAILED"
                 _record_error(run, "payroll", exc)
         run.updated_at = datetime.utcnow()
-        await db.commit()
+        await _persist_onboarding(db, commit_steps=commit_steps)
         run = await lock_run(db, tenant_id, request_id)
         emp = await _employee(db, tenant_id, run.employee_id)
 
@@ -326,7 +346,7 @@ async def continue_onboarding(
                 run.gate_pass_step_status = "FAILED"
                 _record_error(run, "gate_pass", exc)
         run.updated_at = datetime.utcnow()
-        await db.commit()
+        await _persist_onboarding(db, commit_steps=commit_steps)
         run = await lock_run(db, tenant_id, request_id)
         emp = await _employee(db, tenant_id, run.employee_id)
 
@@ -343,7 +363,7 @@ async def continue_onboarding(
     if run.status == "COMPLETED":
         run.last_error_step = run.last_error_code = run.last_error_message = None
     run.updated_at = datetime.utcnow()
-    await db.commit()
+    await _persist_onboarding(db, commit_steps=commit_steps)
     return run
 
 

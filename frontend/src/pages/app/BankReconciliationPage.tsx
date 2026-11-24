@@ -16,6 +16,7 @@ import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { saveBlob } from "@/lib/fileSave";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import {
   listPageEmptyClass,
   listPageErrorClass,
@@ -359,20 +360,18 @@ export function BankReconciliationPage() {
   }
 
   const bankSelect = (id: string, ariaLabel: string) => (
-    <select
+    <LocalSearchSelect
       id={id}
       aria-label={ariaLabel}
-      className={fieldClass}
-      value={form.bank_account_id}
-      onChange={(e) => void onBankChange(Number(e.target.value))}
-    >
-      <option value={0}>Select bank account</option>
-      {accounts.map((a) => (
-        <option key={a.id} value={a.id}>
-          {a.bank_name} - {a.account_name}
-        </option>
-      ))}
-    </select>
+      value={form.bank_account_id || ""}
+      options={accounts.map((a) => ({
+        value: a.id,
+        label: `${a.bank_name} - ${a.account_name}`,
+      }))}
+      onChange={(next) => void onBankChange(next === "" ? 0 : Number(next))}
+      placeholder="Select bank account"
+      allowClear={false}
+    />
   );
 
   return (

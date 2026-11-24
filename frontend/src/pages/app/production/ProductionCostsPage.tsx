@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type ChartOfAccountResponse } from "@/api/client";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
@@ -286,40 +287,48 @@ export function ProductionCostsPage() {
                 <tr key={`${r.cost_category}-${idx}`} className="border-b border-border-subtle/60">
                   <td className="py-2 pr-3">{r.cost_category}</td>
                   <td className="py-2 pr-3">
-                    <select
-                      className="rounded-md border border-border-subtle px-2 py-1 text-sm"
+                    <LocalSearchSelect
+                      className="min-w-[12rem]"
                       value={r.account_id ?? ""}
-                      onChange={(e) =>
+                      options={postingAccounts.map((a) => ({
+                        value: a.id,
+                        label: `${a.account_number} — ${a.name}`,
+                      }))}
+                      onChange={(next) =>
                         setOverheadRows((prev) =>
-                          prev.map((x, i) => (i === idx ? { ...x, account_id: e.target.value ? Number(e.target.value) : null } : x)),
+                          prev.map((x, i) =>
+                            i === idx ? { ...x, account_id: next === "" ? null : Number(next) } : x,
+                          ),
                         )
                       }
-                    >
-                      <option value="">— none —</option>
-                      {postingAccounts.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.account_number} — {a.name}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="— none —"
+                      aria-label={`Account for ${r.cost_category}`}
+                      allowClear
+                      menuPortal
+                    />
                   </td>
                   <td className="py-2 pr-3">
-                    <select
-                      className="rounded-md border border-border-subtle px-2 py-1 text-sm"
+                    <LocalSearchSelect
+                      className="min-w-[12rem]"
                       value={r.cost_center_id ?? ""}
-                      onChange={(e) =>
+                      options={costCenters.map((c) => ({
+                        value: c.id,
+                        label: `${c.center_code} — ${c.name}`,
+                      }))}
+                      onChange={(next) =>
                         setOverheadRows((prev) =>
-                          prev.map((x, i) => (i === idx ? { ...x, cost_center_id: e.target.value ? Number(e.target.value) : null } : x)),
+                          prev.map((x, i) =>
+                            i === idx
+                              ? { ...x, cost_center_id: next === "" ? null : Number(next) }
+                              : x,
+                          ),
                         )
                       }
-                    >
-                      <option value="">— none —</option>
-                      {costCenters.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.center_code} — {c.name}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="— none —"
+                      aria-label={`Cost center for ${r.cost_category}`}
+                      allowClear
+                      menuPortal
+                    />
                   </td>
                   <td className="py-2 pr-3">
                     <select

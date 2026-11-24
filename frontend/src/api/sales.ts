@@ -7,6 +7,11 @@
 import { fetchAllPaginated, request, requestBlob } from "@/api/core";
 import { inquiryWriteBodyForApi } from "@/api/models";
 import type {
+  QuotationItemPriceHintsResponse,
+  QuotationPrefillContext,
+  QuotationWiringContext,
+} from "@/api/quotationWiring.types";
+import type {
   CommercialChangeRequestOut,
   CommercialTimelineOut,
   CostBenchmarkHistoryResponse,
@@ -24,8 +29,14 @@ import type {
   CustomerAiNlSearchResponse,
   CustomerAiSummaryResponse,
   CustomerAiValidateResponse,
+  CustomerContactCreate,
+  CustomerContactResponse,
+  CustomerContactUpdate,
   CustomerCreate,
+  CustomerDuplicateCheckResponse,
   CustomerFacetsResponse,
+  Customer360Response,
+  Customer360SectionKey,
   CustomerHealthResponse,
   CustomerIntermediaryLinkCreate,
   CustomerIntermediaryLinkResponse,
@@ -34,6 +45,7 @@ import type {
   CustomerLogoUploadResponse,
   CustomerRelatedResponse,
   CustomerResponse,
+  CustomerTimelineResponse,
   CustomerUpdate,
   InquiryAiApplySuggestionsRequest,
   InquiryAiApplySuggestionsResponse,
@@ -50,6 +62,7 @@ import type {
   InquiryCreate,
   InquiryEventResponse,
   InquiryListPageResponse,
+  InquiryRelatedResponse,
   InquiryResponse,
   InquiryUpdate,
   IntermediaryCreate,
@@ -167,6 +180,29 @@ export const salesApi = {
   },
   async getCustomerHealth(customerId: number): Promise<CustomerHealthResponse> {
     return request<CustomerHealthResponse>(`/api/v1/customers/${customerId}/health`);
+  },
+  async getCustomer360(
+    customerId: number,
+    params?: { sections?: Customer360SectionKey[] | string; limit?: number },
+  ): Promise<Customer360Response> {
+    const q = new URLSearchParams();
+    if (params?.sections != null) {
+      const sections = Array.isArray(params.sections) ? params.sections.join(",") : params.sections;
+      if (sections.trim()) q.set("sections", sections);
+    }
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<Customer360Response>(`/api/v1/customers/${customerId}/360${suffix}`);
+  },
+  async getCustomerTimeline(
+    customerId: number,
+    params?: { limit?: number; offset?: number },
+  ): Promise<CustomerTimelineResponse> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<CustomerTimelineResponse>(`/api/v1/customers/${customerId}/timeline${suffix}`);
   },
   async customerAiExtract(file: File, customerId?: number): Promise<CustomerAiExtractWrapResponse> {
     const fd = new FormData();
@@ -741,6 +777,45 @@ export const salesApi = {
   async getCustomer(id: number): Promise<CustomerResponse> {
     return request<CustomerResponse>(`/api/v1/customers/${id}`);
   },
+  async duplicateCheckCustomer(params?: {
+    name?: string;
+    email?: string;
+    exclude_id?: number;
+  }): Promise<CustomerDuplicateCheckResponse> {
+    const q = new URLSearchParams();
+    if (params?.name?.trim()) q.set("name", params.name.trim());
+    if (params?.email?.trim()) q.set("email", params.email.trim());
+    if (params?.exclude_id != null) q.set("exclude_id", String(params.exclude_id));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<CustomerDuplicateCheckResponse>(`/api/v1/customers/duplicate-check${suffix}`);
+  },
+  async listCustomerContacts(customerId: number): Promise<CustomerContactResponse[]> {
+    return request<CustomerContactResponse[]>(`/api/v1/customers/${customerId}/contacts`);
+  },
+  async createCustomerContact(
+    customerId: number,
+    data: CustomerContactCreate,
+  ): Promise<CustomerContactResponse> {
+    return request<CustomerContactResponse>(`/api/v1/customers/${customerId}/contacts`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async updateCustomerContact(
+    customerId: number,
+    contactId: number,
+    data: CustomerContactUpdate,
+  ): Promise<CustomerContactResponse> {
+    return request<CustomerContactResponse>(`/api/v1/customers/${customerId}/contacts/${contactId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async deleteCustomerContact(customerId: number, contactId: number): Promise<void> {
+    return request<void>(`/api/v1/customers/${customerId}/contacts/${contactId}`, {
+      method: "DELETE",
+    });
+  },
   async downloadCustomerPdf(id: number): Promise<Blob> {
     return requestBlob(`/api/v1/customers/${id}/pdf`);
   },
@@ -845,6 +920,7 @@ export const salesApi = {
     search?: string;
     status?: string;
     department?: string;
+    inquiry_type?: string;
     created_from?: string;
     created_to?: string;
     ai_indicators?: 0 | 1;
@@ -855,6 +931,7 @@ export const salesApi = {
     if (params?.search) q.set("search", params.search);
     if (params?.status) q.set("status", params.status);
     if (params?.department) q.set("department", params.department);
+    if (params?.inquiry_type) q.set("inquiry_type", params.inquiry_type);
     if (params?.created_from) q.set("created_from", params.created_from);
     if (params?.created_to) q.set("created_to", params.created_to);
     if (params?.ai_indicators === 1) q.set("ai_indicators", "1");
@@ -868,6 +945,9 @@ export const salesApi = {
   },
   async getInquiry(id: number): Promise<InquiryResponse> {
     return request<InquiryResponse>(`/api/v1/inquiries/${id}`);
+  },
+  async getInquiryRelated(id: number): Promise<InquiryRelatedResponse> {
+    return request<InquiryRelatedResponse>(`/api/v1/inquiries/${id}/related`);
   },
   async createInquiry(data: InquiryCreate): Promise<InquiryResponse> {
     return request<InquiryResponse>("/api/v1/inquiries", {
@@ -883,6 +963,22 @@ export const salesApi = {
   },
   async deleteInquiry(id: number): Promise<void> {
     return request<void>(`/api/v1/inquiries/${id}`, { method: "DELETE" });
+  },
+  async cloneInquiry(id: number): Promise<InquiryResponse> {
+    return request<InquiryResponse>(`/api/v1/inquiries/${id}/clone`, { method: "POST" });
+  },
+  async uploadInquiryTechnicalFile(id: number, file: File): Promise<InquiryResponse> {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<InquiryResponse>(`/api/v1/inquiries/${id}/technical-files`, {
+      method: "POST",
+      body: fd,
+    });
+  },
+  async deleteInquiryTechnicalFile(id: number, fileId: string): Promise<InquiryResponse> {
+    return request<InquiryResponse>(`/api/v1/inquiries/${id}/technical-files/${encodeURIComponent(fileId)}`, {
+      method: "DELETE",
+    });
   },
   async listQuotations(params?: {
     search?: string;
@@ -945,6 +1041,34 @@ export const salesApi = {
     const q =
       params?.ai_indicators === 1 ? `?ai_indicators=${params.ai_indicators}` : "";
     return request<QuotationDetailResponse>(`/api/v1/quotations/${id}${q}`);
+  },
+  // ---------- Quotation wiring (read-only hints) ----------
+  async getQuotationPrefillContext(params: {
+    style_id?: number | null;
+    customer_id?: number | null;
+    currency?: string | null;
+  }): Promise<QuotationPrefillContext> {
+    const q = new URLSearchParams();
+    if (params.style_id) q.set("style_id", String(params.style_id));
+    if (params.customer_id) q.set("customer_id", String(params.customer_id));
+    if (params.currency) q.set("currency", params.currency);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<QuotationPrefillContext>(`/api/v1/quotations/prefill-context${suffix}`);
+  },
+  async getQuotationWiringContext(quotationId: number): Promise<QuotationWiringContext> {
+    return request<QuotationWiringContext>(`/api/v1/quotations/${quotationId}/wiring-context`);
+  },
+  async getQuotationItemPriceHints(
+    itemIds: number[],
+    opts?: { currency?: string | null; uom?: string | null },
+  ): Promise<QuotationItemPriceHintsResponse> {
+    const ids = Array.from(new Set(itemIds.filter((n) => Number.isFinite(n) && n > 0))).slice(0, 100);
+    if (ids.length === 0) return { items: [], omitted: {} };
+    const q = new URLSearchParams();
+    q.set("item_ids", ids.join(","));
+    if (opts?.currency) q.set("currency", opts.currency);
+    if (opts?.uom) q.set("uom", opts.uom);
+    return request<QuotationItemPriceHintsResponse>(`/api/v1/quotations/item-price-hints?${q.toString()}`);
   },
   async createQuotation(data: QuotationCreate): Promise<QuotationResponse> {
     return request<QuotationResponse>("/api/v1/quotations", {

@@ -59,7 +59,19 @@ export function ExternalAccessPage() {
               <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void toggle("customer_notes_enabled")}>
                 Notes: {o.customer_notes_enabled ? "on" : "off"}
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busy || !o.customer_portal_enabled}
+                onClick={() => void toggle("customer_portal_quotations_enabled")}
+              >
+                Quotations: {o.customer_portal_quotations_enabled ? "on" : "off"}
+              </Button>
             </div>
+            <p className="mt-2 text-xs text-text-muted">
+              Quotations lets buyers review SENT quotes and reply Accept / Request revision (notify-only).
+            </p>
             <Link className="mt-3 inline-block text-sm text-brand-primary" to="/app/settings/external-access/customers">
               Manage customer access →
             </Link>

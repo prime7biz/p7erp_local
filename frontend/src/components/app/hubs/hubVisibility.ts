@@ -21,6 +21,14 @@ export function isHubTabVisible(
 ): boolean {
   if (tab.standalone) return false;
   if (tab.requiresFeatureFlag && featureFlags?.[tab.requiresFeatureFlag] !== true) return false;
+  if (
+    !tab.requiresFeatureFlag &&
+    tab.requiresAnyFeatureFlag &&
+    tab.requiresAnyFeatureFlag.length > 0 &&
+    !tab.requiresAnyFeatureFlag.some((k) => featureFlags?.[k] === true)
+  ) {
+    return false;
+  }
   if (tab.hideWhenFeatureFlagFalse && featureFlags?.[tab.hideWhenFeatureFlagFalse] === false) return false;
   if (tab.permissionKey && canAccess && !canAccess(tab.permissionKey)) return false;
   if (tab.requiresConfidentialReports && extras?.canViewConfidentialReports === false) return false;

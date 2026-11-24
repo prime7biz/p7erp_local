@@ -50,6 +50,7 @@ import { useFormDirty } from "@/hooks/useFormDirty";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { cn } from "@/lib/utils";
 import { getInventoryItemsCached, getVendorsCached, getWarehousesCached } from "@/lib/masterData";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { fetchInventoryItemPage, fetchVendorPage, hydrateInventoryItem, hydrateVendor } from "@/lib/remoteSelectFetchers";
 
@@ -705,9 +706,18 @@ export function PurchaseOrdersPage() {
             + New
           </button>
           </div>
-          <select className={poFieldClass} value={line.warehouse_id ?? ""} onChange={(e) => setLine((p) => ({ ...p, warehouse_id: e.target.value ? Number(e.target.value) : null }))}>
-            {warehouses.map((wh) => <option key={wh.id} value={wh.id}>{wh.name}</option>)}
-          </select>
+          <LocalSearchSelect
+            className={poFieldClass}
+            value={line.warehouse_id ?? ""}
+            options={warehouses.map((wh) => ({ value: wh.id, label: wh.name }))}
+            onChange={(next) =>
+              setLine((p) => ({ ...p, warehouse_id: next === "" ? null : Number(next) }))
+            }
+            placeholder="Warehouse…"
+            aria-label="Warehouse"
+            allowClear
+            menuPortal
+          />
           <input
             className={poFieldClass}
             placeholder={lineUnit === "alternate" && lineAltUnit ? `Qty (${lineAltUnit})` : "Qty"}

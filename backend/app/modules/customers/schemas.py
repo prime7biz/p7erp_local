@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -30,6 +32,13 @@ class CustomerCreate(BaseModel):
     shipping_country: str | None = Field(None, max_length=64)
     same_as_billing: bool = True
     preferred_currency: str | None = Field(None, max_length=10)
+    payment_terms: str | None = Field(None, max_length=128)
+    default_incoterm: str | None = Field(None, max_length=32)
+    typical_lead_time_days: int | None = None
+    industry_segment: str | None = Field(None, max_length=64)
+    compliance_level: str | None = Field(None, max_length=64)
+    credit_limit: str | None = Field(None, description="Optional decimal string (informational)")
+    notes: str | None = None
 
 
 class CustomerUpdate(BaseModel):
@@ -61,6 +70,13 @@ class CustomerUpdate(BaseModel):
     shipping_country: str | None = Field(None, max_length=64)
     same_as_billing: bool | None = None
     preferred_currency: str | None = Field(None, max_length=10)
+    payment_terms: str | None = Field(None, max_length=128)
+    default_incoterm: str | None = Field(None, max_length=32)
+    typical_lead_time_days: int | None = None
+    industry_segment: str | None = Field(None, max_length=64)
+    compliance_level: str | None = Field(None, max_length=64)
+    credit_limit: str | None = Field(None, description="Optional decimal string (informational)")
+    notes: str | None = None
 
 
 class CustomerResponse(BaseModel):
@@ -95,6 +111,13 @@ class CustomerResponse(BaseModel):
     shipping_country: str | None
     same_as_billing: bool
     preferred_currency: str | None = None
+    payment_terms: str | None = None
+    default_incoterm: str | None = None
+    typical_lead_time_days: int | None = None
+    industry_segment: str | None = None
+    compliance_level: str | None = None
+    credit_limit: str | None = None
+    notes: str | None = None
     created_at: str
     updated_at: str
     # Optional list/AI enrichments (set by /customers/paginated when include_ai_fields=true)
@@ -153,3 +176,80 @@ class CustomerLogoUploadResponse(BaseModel):
     logo_url: str
     filename: str
     size_bytes: int
+
+
+class DuplicateCheckMatch(BaseModel):
+    id: int
+    customer_code: str
+    name: str
+    contact_email: str | None = None
+    email: str | None = None
+
+
+class DuplicateCheckResponse(BaseModel):
+    matches: list[DuplicateCheckMatch]
+
+
+class CustomerContactCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    designation: str | None = Field(None, max_length=128)
+    department: str | None = Field(None, max_length=64)
+    email: str | None = Field(None, max_length=255)
+    phone: str | None = Field(None, max_length=64)
+    whatsapp: str | None = Field(None, max_length=64)
+    is_primary: bool = False
+    is_active: bool = True
+    notes: str | None = None
+
+
+class CustomerContactUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=255)
+    designation: str | None = Field(None, max_length=128)
+    department: str | None = Field(None, max_length=64)
+    email: str | None = Field(None, max_length=255)
+    phone: str | None = Field(None, max_length=64)
+    whatsapp: str | None = Field(None, max_length=64)
+    is_primary: bool | None = None
+    is_active: bool | None = None
+    notes: str | None = None
+
+
+class CustomerContactResponse(BaseModel):
+    id: int
+    tenant_id: int
+    customer_id: int
+    name: str
+    designation: str | None
+    department: str | None
+    email: str | None
+    phone: str | None
+    whatsapp: str | None
+    is_primary: bool
+    is_active: bool
+    notes: str | None
+    created_at: str
+    updated_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class Customer360Response(BaseModel):
+    customer_id: int
+    sections: dict[str, Any]
+
+
+class CustomerTimelineEvent(BaseModel):
+    at: str
+    action: str
+    resource: str | None = None
+    details: str | None = None
+    source: str | None = None
+
+
+class CustomerTimelineResponse(BaseModel):
+    customer_id: int
+    total: int
+    limit: int
+    offset: int
+    events: list[CustomerTimelineEvent]

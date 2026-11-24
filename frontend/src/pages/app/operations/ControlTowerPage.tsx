@@ -42,6 +42,12 @@ export function ControlTowerPage() {
   const focusOrderRaw = searchParams.get("focus_order") ?? searchParams.get("order");
   const focusOrderNum = focusOrderRaw ? Number(focusOrderRaw) : null;
   const focusOrderId = focusOrderNum != null && !Number.isNaN(focusOrderNum) ? focusOrderNum : null;
+  const focusInquiryRaw = searchParams.get("inquiry_id");
+  const focusInquiryNum = focusInquiryRaw ? Number(focusInquiryRaw) : null;
+  const focusInquiryId =
+    focusInquiryNum != null && !Number.isNaN(focusInquiryNum) && focusInquiryNum > 0
+      ? focusInquiryNum
+      : null;
   const mfgTab = parseTabParam(searchParams.get("tab"));
   const focusFindingId = parseFindingParam(searchParams.get("finding"));
   const flags = me?.feature_flags as Record<string, boolean> | undefined;
@@ -223,7 +229,7 @@ export function ControlTowerPage() {
 
       {flags?.manufacturing_intelligence_v1 === true && vis.showCapacity ? (
         <ManufacturingIntelligenceSection
-          key={`${mfgTab ?? ""}|${focusFindingId ?? ""}`}
+          key={`${mfgTab ?? ""}|${focusFindingId ?? ""}|${focusInquiryId ?? ""}`}
           enabled
           orderOptions={summary?.orders ?? []}
           focusOrderId={focusOrderId}
@@ -235,6 +241,7 @@ export function ControlTowerPage() {
           roleName={me?.role_name}
           initialTab={mfgTab}
           focusFindingId={focusFindingId}
+          focusInquiryId={focusInquiryId}
         />
       ) : null}
 

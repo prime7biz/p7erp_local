@@ -550,8 +550,8 @@ export function AuditPage() {
         </div>
       )}
       <p className="text-xs text-text-muted">
-        Sign-in IP addresses and device details are recorded for security. Contact your administrator if you
-        see activity you do not recognize.
+        Sign-in IP addresses, device details, and business actions are recorded for security and audit. Location
+        may be estimated from IP. Contact your administrator if you see activity you do not recognize.
       </p>
     </div>
   );

@@ -28,6 +28,7 @@ _MODULE_ACCESS_KEY = {
     "customer_logos": "merch.access",
     "style_pictures": "merch.access",
     "trade_docs": "trade.access",
+    "inquiry_tech_files": "merch.access",
 }
 # HR documents are always restricted: manager-type role or an explicit grant of one of these keys.
 _HR_DOCUMENT_KEYS = (PERMISSION_HR_DOCUMENTS_VIEW, "hr.access")

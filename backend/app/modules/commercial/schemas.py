@@ -18,6 +18,7 @@ class MasterContractCreate(BaseModel):
     amount: float | None = Field(None, ge=0)
     currency: str | None = Field(None, max_length=10)
     buyer_name: str | None = Field(None, max_length=255)
+    customer_id: int | None = None
     bank_name: str | None = Field(None, max_length=255)
     expiry_date: date | None = None
     cost_center_id: int | None = Field(
@@ -41,6 +42,7 @@ class MasterContractUpdate(BaseModel):
     amount: float | None = Field(None, ge=0)
     currency: str | None = Field(None, max_length=10)
     buyer_name: str | None = Field(None, max_length=255)
+    customer_id: int | None = None
     bank_name: str | None = Field(None, max_length=255)
     expiry_date: date | None = None
     cost_center_id: int | None = None
@@ -64,6 +66,7 @@ class MasterContractResponse(BaseModel):
     btb_utilized_amount: float | None = None
     currency: str | None
     buyer_name: str | None
+    customer_id: int | None = None
     bank_name: str | None
     expiry_date: str | None
     cost_center_id: int | None = None
@@ -83,6 +86,7 @@ class ExportCaseCreate(BaseModel):
     status: str | None = Field(default="DRAFT", max_length=32)
     case_date: date | None = None
     amount: float | None = Field(None, ge=0)
+    customer_id: int | None = None
     trade_case_id: int | None = None
     order_id: int | None = None
     export_license_number: str | None = Field(default=None, max_length=64)
@@ -99,6 +103,7 @@ class ExportCaseUpdate(BaseModel):
     status: str | None = Field(default=None, max_length=32)
     case_date: date | None = None
     amount: float | None = Field(None, ge=0)
+    customer_id: int | None = None
     trade_case_id: int | None = None
     order_id: int | None = None
     export_license_number: str | None = Field(default=None, max_length=64)
@@ -117,6 +122,7 @@ class ExportCaseResponse(BaseModel):
     status: str
     case_date: str | None
     amount: float | None
+    customer_id: int | None = None
     trade_case_id: int | None = None
     order_id: int | None = None
     export_license_number: str | None = None
@@ -143,6 +149,7 @@ class ProformaInvoiceCreate(BaseModel):
     status: str | None = Field(default="DRAFT", max_length=32)
     invoice_date: date | None = None
     amount: float | None = Field(None, ge=0)
+    customer_id: int | None = None
     buyer_name: str | None = None
     buyer_address: str | None = None
     buyer_bank_details: str | None = None
@@ -179,6 +186,7 @@ class ProformaInvoiceUpdate(BaseModel):
     status: str | None = Field(None, max_length=32)
     invoice_date: date | None = None
     amount: float | None = Field(None, ge=0)
+    customer_id: int | None = None
     buyer_name: str | None = None
     buyer_address: str | None = None
     buyer_bank_details: str | None = None
@@ -218,6 +226,7 @@ class ProformaInvoiceResponse(BaseModel):
     order_ids: list[int] = Field(default_factory=list)
     master_contract_id: int | None = None
     purchase_order_id: int | None = None
+    customer_id: int | None = None
     buyer_name: str | None = None
     buyer_address: str | None = None
     buyer_bank_details: str | None = None

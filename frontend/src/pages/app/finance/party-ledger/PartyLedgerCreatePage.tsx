@@ -1,17 +1,20 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, type PartyLedgerCreate } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
-import { getCustomersCached, getVendorsCached } from "@/lib/masterData";
-
-type PartyOption = { id: number; label: string };
+import {
+  fetchCustomerPage,
+  fetchVendorPage,
+  hydrateCustomer,
+  hydrateVendor,
+} from "@/lib/remoteSelectFetchers";
 
 export function PartyLedgerCreatePage() {
   const navigate = useNavigate();
   const [partyType, setPartyType] = useState<"CUSTOMER" | "VENDOR">("CUSTOMER");
-  const [parties, setParties] = useState<PartyOption[]>([]);
   const [partyId, setPartyId] = useState<number | "">("");
   const [creditLimit, setCreditLimit] = useState("");
   const [creditDays, setCreditDays] = useState("30");
@@ -22,31 +25,6 @@ export function PartyLedgerCreatePage() {
   const [billWise, setBillWise] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadParties() {
-      try {
-        if (partyType === "CUSTOMER") {
-          const rows = await getCustomersCached();
-          if (cancelled) return;
-          setParties(rows.map((c) => ({ id: c.id, label: `${c.customer_code} — ${c.name}` })));
-        } else {
-          const rows = await getVendorsCached();
-          if (cancelled) return;
-          setParties(rows.map((v) => ({ id: v.id, label: `${v.vendor_code} — ${v.name}` })));
-        }
-        setPartyId("");
-      } catch (e) {
-        logApiError("PartyLedgerCreatePage.loadParties", e);
-        if (!cancelled) setError((e as Error).message);
-      }
-    }
-    void loadParties();
-    return () => {
-      cancelled = true;
-    };
-  }, [partyType]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -100,12 +78,22 @@ export function PartyLedgerCreatePage() {
               <input
                 type="radio"
                 checked={partyType === "CUSTOMER"}
-                onChange={() => setPartyType("CUSTOMER")}
+                onChange={() => {
+                  setPartyType("CUSTOMER");
+                  setPartyId("");
+                }}
               />
               Customer
             </label>
             <label className="flex items-center gap-2">
-              <input type="radio" checked={partyType === "VENDOR"} onChange={() => setPartyType("VENDOR")} />
+              <input
+                type="radio"
+                checked={partyType === "VENDOR"}
+                onChange={() => {
+                  setPartyType("VENDOR");
+                  setPartyId("");
+                }}
+              />
               Vendor
             </label>
           </div>
@@ -113,19 +101,27 @@ export function PartyLedgerCreatePage() {
 
         <label className="block text-sm">
           Party
-          <select
-            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
-            value={partyId}
-            onChange={(e) => setPartyId(e.target.value ? Number(e.target.value) : "")}
-            required
-          >
-            <option value="">Select…</option>
-            {parties.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </select>
+          {partyType === "CUSTOMER" ? (
+            <RemoteSearchSelect
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+              placeholder="Search customer…"
+              value={partyId}
+              onChange={(next) => setPartyId(typeof next === "number" && next > 0 ? next : "")}
+              fetchPage={fetchCustomerPage}
+              hydrateById={hydrateCustomer}
+              allowClear
+            />
+          ) : (
+            <RemoteSearchSelect
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+              placeholder="Search vendor…"
+              value={partyId}
+              onChange={(next) => setPartyId(typeof next === "number" && next > 0 ? next : "")}
+              fetchPage={fetchVendorPage}
+              hydrateById={hydrateVendor}
+              allowClear
+            />
+          )}
         </label>
 
         <div className="grid gap-3 sm:grid-cols-2">

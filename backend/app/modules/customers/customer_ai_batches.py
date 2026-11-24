@@ -84,6 +84,12 @@ ALLOWED_FORM_KEYS: frozenset[str] = frozenset(
         "shippingPostalCode",
         "shippingCountry",
         "sameAsBilling",
+        "preferredCurrency",
+        "paymentTerms",
+        "defaultIncoterm",
+        "typicalLeadTimeDays",
+        "industrySegment",
+        "complianceLevel",
     }
 )
 
@@ -107,6 +113,12 @@ _SNAKE_TO_CAMEL = {
     "shipping_country": "shippingCountry",
     "same_as_billing": "sameAsBilling",
     "customer_type": "customerType",
+    "preferred_currency": "preferredCurrency",
+    "payment_terms": "paymentTerms",
+    "default_incoterm": "defaultIncoterm",
+    "typical_lead_time_days": "typicalLeadTimeDays",
+    "industry_segment": "industrySegment",
+    "compliance_level": "complianceLevel",
 }
 
 
@@ -176,6 +188,18 @@ def customer_snapshot_for_field(customer: Customer, field_key: str) -> str:
         v = customer.shipping_country or ""
     elif field_key == "sameAsBilling":
         v = "true" if customer.same_as_billing else "false"
+    elif field_key == "preferredCurrency":
+        v = customer.preferred_currency or ""
+    elif field_key == "paymentTerms":
+        v = customer.payment_terms or ""
+    elif field_key == "defaultIncoterm":
+        v = customer.default_incoterm or ""
+    elif field_key == "typicalLeadTimeDays":
+        v = "" if customer.typical_lead_time_days is None else str(customer.typical_lead_time_days)
+    elif field_key == "industrySegment":
+        v = customer.industry_segment or ""
+    elif field_key == "complianceLevel":
+        v = customer.compliance_level or ""
     else:
         v = ""
     return _trunc(v, TRUNC_SNAP) or ""
@@ -248,6 +272,23 @@ def accumulate_customer_update(field_key: str, raw: str | None, acc: dict[str, A
         b = _parse_bool(v)
         if b is not None:
             acc["same_as_billing"] = b
+    elif field_key == "preferredCurrency":
+        acc["preferred_currency"] = customer_service.clean_optional(v)
+    elif field_key == "paymentTerms":
+        acc["payment_terms"] = customer_service.clean_optional(v)
+    elif field_key == "defaultIncoterm":
+        acc["default_incoterm"] = customer_service.clean_optional(v)
+    elif field_key == "typicalLeadTimeDays":
+        digits = "".join(ch for ch in v if ch.isdigit() or ch == "-")
+        if digits and digits != "-":
+            try:
+                acc["typical_lead_time_days"] = int(digits)
+            except ValueError:
+                pass
+    elif field_key == "industrySegment":
+        acc["industry_segment"] = customer_service.clean_optional(v)
+    elif field_key == "complianceLevel":
+        acc["compliance_level"] = customer_service.clean_optional(v)
 
 
 async def _load_batch_items(

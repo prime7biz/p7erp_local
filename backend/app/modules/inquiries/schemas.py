@@ -5,6 +5,37 @@ from pydantic import BaseModel, Field
 
 from app.common.money_schema import MoneyStrOpt, RateStrOpt
 
+INQUIRY_DEPARTMENT_OPTIONS = (
+  "Infant",
+  "Kids",
+  "Boys",
+  "Girls",
+  "Men",
+  "Ladies",
+  "Knit",
+  "Fleece",
+  "Woven",
+  "Denim",
+  "Outerwear",
+)
+
+InquiryTypeLiteral = Literal[
+  "SAMPLE_DEVELOPMENT",
+  "SALESMAN_SAMPLE",
+  "QUOTATION",
+  "REPEAT_ORDER",
+]
+
+
+class TechnicalFileOut(BaseModel):
+  id: str
+  name: str | None = None
+  filename: str
+  url: str | None = None
+  content_type: str | None = None
+  size_bytes: int | None = None
+  uploaded_at: str | None = None
+
 
 class InquiryItemCreate(BaseModel):
   item_name: str | None = Field(None, max_length=255)
@@ -39,6 +70,16 @@ class InquiryCreate(BaseModel):
   commission_type: Literal["PERCENTAGE", "FIXED"] | None = None
   commission_value: float | None = None
   notes: str | None = None
+  inquiry_type: InquiryTypeLiteral | None = None
+  brand: str | None = Field(None, max_length=128)
+  season_year: str | None = Field(None, max_length=16)
+  material_composition: str | None = None
+  size_range: str | None = Field(None, max_length=128)
+  color_options: list[str] | None = None
+  country_of_origin: str | None = Field(None, max_length=64)
+  special_requirements: str | None = None
+  contact_person: str | None = Field(None, max_length=128)
+  # technical_files are upload-only via POST /inquiries/{id}/technical-files (never from create body)
   items: list[InquiryItemCreate] = Field(default_factory=list)
 
 
@@ -60,6 +101,15 @@ class InquiryUpdate(BaseModel):
   commission_value: float | None = None
   status: str | None = Field(None, max_length=32)
   notes: str | None = None
+  inquiry_type: InquiryTypeLiteral | None = None
+  brand: str | None = Field(None, max_length=128)
+  season_year: str | None = Field(None, max_length=16)
+  material_composition: str | None = None
+  size_range: str | None = Field(None, max_length=128)
+  color_options: list[str] | None = None
+  country_of_origin: str | None = Field(None, max_length=64)
+  special_requirements: str | None = None
+  contact_person: str | None = Field(None, max_length=128)
   items: list[InquiryItemCreate] | None = None
 
 
@@ -98,6 +148,16 @@ class InquiryResponse(BaseModel):
   is_converted_to_quotation: bool = False
   converted_quotation_id: int | None = None
   notes: str | None
+  inquiry_type: str | None = None
+  brand: str | None = None
+  season_year: str | None = None
+  material_composition: str | None = None
+  size_range: str | None = None
+  color_options: list[str] | None = None
+  country_of_origin: str | None = None
+  special_requirements: str | None = None
+  contact_person: str | None = None
+  technical_files: list[TechnicalFileOut] = Field(default_factory=list)
   items: list[InquiryItemResponse] = Field(default_factory=list)
   created_at: str
   updated_at: str
@@ -116,3 +176,86 @@ class InquiryListPageResponse(BaseModel):
   page_size: int
   total_pages: int
 
+
+class InquiryRelatedCustomerOut(BaseModel):
+  id: int
+  name: str
+  customer_code: str
+  status: str
+
+
+class InquiryRelatedIntermediaryOut(BaseModel):
+  id: int
+  name: str | None = None
+  label: str | None = None
+
+
+class InquiryRelatedStyleOut(BaseModel):
+  id: int
+  style_code: str
+  name: str
+  style_image_url: str | None = None
+  standard_smv: str | None = None
+  standard_smv_confidence: str | None = None
+  bom_count: int = 0
+  latest_bom_id: int | None = None
+  latest_bom_status: str | None = None
+  estimated_sah: str | None = None
+
+
+class InquiryRelatedQuotationOut(BaseModel):
+  id: int
+  quotation_code: str
+  version_no: int
+  status: str
+  quoted_price: str | None = None
+  currency: str | None = None
+
+
+class InquiryRelatedOrderOut(BaseModel):
+  id: int
+  order_code: str
+  status: str
+  quantity: int | None = None
+  delivery_date: str | None = None
+  quotation_id: int | None = None
+
+
+class InquiryRelatedSampleOut(BaseModel):
+  id: int
+  sample_code: str
+  sample_type: str
+  status: str
+  target_date: str | None = None
+
+
+class InquiryRelatedTentativeBookingOut(BaseModel):
+  id: int
+  line_id: int
+  status: str
+  start_date: str
+  planned_end_date: str | None = None
+  planned_qty: str
+  confidence_pct: str
+  expires_at: str | None = None
+
+
+class InquiryRelatedTimelineEventOut(BaseModel):
+  id: int
+  event_type: str
+  from_status: str | None = None
+  to_status: str | None = None
+  notes: str | None = None
+  created_at: str
+
+
+class InquiryRelatedResponse(BaseModel):
+  customer: InquiryRelatedCustomerOut | None = None
+  intermediary: InquiryRelatedIntermediaryOut | None = None
+  style: InquiryRelatedStyleOut | None = None
+  quotations: list[InquiryRelatedQuotationOut] = Field(default_factory=list)
+  orders: list[InquiryRelatedOrderOut] = Field(default_factory=list)
+  samples: list[InquiryRelatedSampleOut] = Field(default_factory=list)
+  can_view_tentative_bookings: bool = False
+  tentative_bookings: list[InquiryRelatedTentativeBookingOut] = Field(default_factory=list)
+  timeline: list[InquiryRelatedTimelineEventOut] = Field(default_factory=list)

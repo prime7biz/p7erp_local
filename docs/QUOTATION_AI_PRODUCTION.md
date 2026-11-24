@@ -83,9 +83,14 @@ Displayed as a "C-ready" column in the quotations list page.
 
 ## Frontend Integration
 
-- **QuotationWorkspacePage** sidebar: `QuotationAiPanel` + `QuotationAiAuditHistory`
+- **QuotationWorkspacePage** sidebar: `QuotationAiPanel` + `QuotationAiAuditHistory` (decluttered Insights rail; section sticky nav for Basics / Materials / CM / Other / Sizes / Breakdown)
 - **QuotationsPage** table: "C-ready" column showing `costing_readiness_score`
 - **useQuotationAi hook**: mirrors `useInquiryAi` — manages enrich, validate, dedupe, summary, next-actions state
+- **New quotation AI extract** and **inquiry deep-link** prefill use `POST /quotations/ai/extract` (header suggestions only; user must Save)
+
+## Chat agent tools (AI agent mode)
+
+When `ai_agent_mode_enabled` is on, the catalog exposes read-only `search_quotations` and `get_quotation_summary` (merch gate). **Cost / margin fields** (`total_cost`, `cost_per_piece`, `profit_percentage`) are included only when both `GATE_FINANCE` and `may_view_mfg_finance` pass (admin/manager, or explicit `finance.access` + `finance.mis_report.view`). Quoted price in tool output is the **order total**.
 
 ## Database Migration
 
@@ -123,8 +128,8 @@ docker compose exec backend pytest tests/test_quotation_ai_integration.py -v
 
 ## Limitations
 
-- No document extraction endpoint for quotations (quotations are typically created from inquiries or manually; document extraction may be added in a future phase).
-- Costing line suggestions (e.g., "add this material at this price") are out of scope for this phase.
+- Document extraction exists (`POST /api/v1/quotations/ai/extract`, client `api.quotationAiExtract`). It only returns suggested field values; nothing is saved until the user applies them and saves.
+- AI does not add costing lines by itself. Line suggestions come from the read-only wiring endpoints (Style BOM, Style size scale, last PO price hints) and only fill DRAFT rows on the costing screen; the user confirms with Save. Costing suggestion batches (`/quotations/ai/costing-suggestions`) need an explicit apply.
 - AI cannot trigger status transitions or inquiry-to-quotation conversion.
 
 ## Next Phase Readiness

@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { erpControlFocusClass } from "@/components/app/listPageLayout";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import type { CustomerResponse } from "@/api/client";
+import { fetchCustomerPage, hydrateCustomer } from "@/lib/remoteSelectFetchers";
 
 export type FinancierPrincipalOption = {
   id: number;
@@ -31,7 +33,6 @@ export function ExternalAccessInviteModal({
   onClose,
   onSubmit,
   customers,
-  customersLoading,
   roleOptions,
   financierInvite,
 }: {
@@ -40,6 +41,7 @@ export function ExternalAccessInviteModal({
   onSubmit: (data: ExternalAccessInviteSubmitData) => Promise<void>;
   /** When set (including empty array), show customer + optional role pickers (customer portal invite). */
   customers?: CustomerResponse[];
+  /** Kept for call-site compatibility; picker uses RemoteSearchSelect instead of a preloaded list. */
   customersLoading?: boolean;
   roleOptions?: { value: string; label: string }[];
   /** When set, show financier party + scope + role pickers (financier portal invite). */
@@ -48,7 +50,7 @@ export function ExternalAccessInviteModal({
   const customerMode = customers !== undefined;
   const financierMode = financierInvite !== undefined;
 
-  const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | "">("");
   const [selectedFinancierPartyId, setSelectedFinancierPartyId] = useState("__none__");
   const [scope, setScope] = useState(financierInvite?.scopeOptions[0]?.value ?? "orders_and_pipeline");
   const [roleCode, setRoleCode] = useState(
@@ -59,18 +61,16 @@ export function ExternalAccessInviteModal({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
-  function applyCustomerById(idStr: string) {
-    setSelectedCustomerId(idStr);
-    const id = Number(idStr);
-    if (!Number.isInteger(id) || id < 1) {
+  function applyCustomer(id: number | "", meta?: CustomerResponse) {
+    setSelectedCustomerId(id);
+    if (typeof id !== "number" || id < 1) {
       setEmail("");
       setFullName("");
       return;
     }
-    const c = customers?.find((x) => x.id === id);
-    if (!c) return;
-    const nextEmail = (c.contact_email || c.email || "").trim();
-    const nextName = (c.primary_contact_name || c.name || "").trim();
+    if (!meta) return;
+    const nextEmail = (meta.contact_email || meta.email || "").trim();
+    const nextName = (meta.primary_contact_name || meta.name || "").trim();
     setEmail(nextEmail);
     setFullName(nextName);
   }
@@ -83,17 +83,8 @@ export function ExternalAccessInviteModal({
       return;
     }
     if (customerMode) {
-      if (customersLoading) {
-        setErr("Still loading customers");
-        return;
-      }
-      const cid = Number(selectedCustomerId);
-      if (!Number.isInteger(cid) || cid < 1) {
+      if (typeof selectedCustomerId !== "number" || selectedCustomerId < 1) {
         setErr("Select a customer");
-        return;
-      }
-      if (!customers?.some((c) => c.id === cid)) {
-        setErr("Select a valid customer");
         return;
       }
     }
@@ -135,10 +126,9 @@ export function ExternalAccessInviteModal({
     }
   }
 
-  const noCustomers = customerMode && !customersLoading && (customers?.length ?? 0) === 0;
   const submitDisabled =
     busy ||
-    (customerMode && (customersLoading || noCustomers || !selectedCustomerId)) ||
+    (customerMode && (typeof selectedCustomerId !== "number" || selectedCustomerId < 1)) ||
     (financierMode && financierInvite!.principalsLoading);
 
   return (
@@ -215,27 +205,19 @@ export function ExternalAccessInviteModal({
             <>
               <div>
                 <label className="text-xs font-medium text-text-muted">Customer</label>
-                <select
+                <RemoteSearchSelect<CustomerResponse>
                   className={`mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm ${erpControlFocusClass}`}
+                  placeholder="Search customer…"
                   value={selectedCustomerId}
-                  onChange={(e) => applyCustomerById(e.target.value)}
-                  disabled={customersLoading || noCustomers}
-                >
-                  {customersLoading ? (
-                    <option value="">Loading customers…</option>
-                  ) : noCustomers ? (
-                    <option value="">No customers found</option>
-                  ) : (
-                    <>
-                      <option value="">Select a customer…</option>
-                      {(customers ?? []).map((c) => (
-                        <option key={c.id} value={String(c.id)}>
-                          {c.customer_code} — {c.name}
-                        </option>
-                      ))}
-                    </>
-                  )}
-                </select>
+                  onChange={(next, opt) => {
+                    const id = typeof next === "number" && next > 0 ? next : "";
+                    applyCustomer(id, opt?.meta);
+                  }}
+                  fetchPage={fetchCustomerPage}
+                  hydrateById={hydrateCustomer}
+                  allowClear
+                  menuPortal
+                />
               </div>
               {roleOptions && roleOptions.length > 0 ? (
                 <div>

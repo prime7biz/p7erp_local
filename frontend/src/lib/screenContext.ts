@@ -1,5 +1,12 @@
 /** Which record is open on screen, so the AI assistant can answer "this order" questions. */
-export type ScreenRecordType = "order" | "customer" | "style" | "voucher" | "employee";
+export type ScreenRecordType =
+  | "order"
+  | "customer"
+  | "style"
+  | "voucher"
+  | "employee"
+  | "inquiry"
+  | "quotation";
 
 export type ScreenContext = {
   route: string;
@@ -13,6 +20,8 @@ const PATTERNS: { type: ScreenRecordType; re: RegExp; noun: string }[] = [
   { type: "style", re: /\/app\/merchandising\/styles\/(\d+)(?:\/|$)/, noun: "style" },
   { type: "voucher", re: /\/app\/accounts\/vouchers\/(\d+)(?:\/|$)/, noun: "voucher" },
   { type: "employee", re: /\/app\/hr\/employees\/(\d+)(?:\/|$)/, noun: "employee" },
+  { type: "inquiry", re: /\/app\/inquiries\/(\d+)(?:\/|$)/, noun: "inquiry" },
+  { type: "quotation", re: /\/app\/quotations\/(\d+)(?:\/|$)/, noun: "quotation" },
 ];
 
 export function screenContextFromPath(pathname: string): ScreenContext | null {

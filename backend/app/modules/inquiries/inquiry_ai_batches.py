@@ -12,6 +12,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.money import format_money, format_rate, parse_money
+from app.common.ownership import ensure_owned
 from app.config import get_settings
 from app.models import Customer, CustomerIntermediary, GarmentStyle, Inquiry, Tenant
 from app.models.inquiry_ai_suggestion import InquiryAiSuggestionBatch, InquiryAiSuggestionItem
@@ -76,6 +77,15 @@ ALLOWED_FORM_KEYS: frozenset[str] = frozenset(
         "customer_id",
         "style_id",
         "customer_intermediary_id",
+        "inquiry_type",
+        "brand",
+        "season_year",
+        "material_composition",
+        "size_range",
+        "color_options",
+        "country_of_origin",
+        "special_requirements",
+        "contact_person",
     }
 )
 
@@ -123,6 +133,14 @@ def _clean_str(v: str | None, max_len: int) -> str | None:
     return t[:max_len]
 
 
+def _color_options_snapshot(raw: list | dict | None) -> str:
+    if isinstance(raw, list):
+        return ", ".join(str(c) for c in raw)
+    if raw is None:
+        return ""
+    return json.dumps(raw, default=str)
+
+
 def inquiry_snapshot_for_field(inquiry: Inquiry, field_key: str) -> str:
     m: dict[str, str] = {
         "style_ref": inquiry.style_ref or "",
@@ -144,6 +162,15 @@ def inquiry_snapshot_for_field(inquiry: Inquiry, field_key: str) -> str:
         "customer_intermediary_id": str(inquiry.customer_intermediary_id)
         if inquiry.customer_intermediary_id is not None
         else "",
+        "inquiry_type": inquiry.inquiry_type or "",
+        "brand": inquiry.brand or "",
+        "season_year": inquiry.season_year or "",
+        "material_composition": inquiry.material_composition or "",
+        "size_range": inquiry.size_range or "",
+        "color_options": _color_options_snapshot(inquiry.color_options),
+        "country_of_origin": inquiry.country_of_origin or "",
+        "special_requirements": inquiry.special_requirements or "",
+        "contact_person": inquiry.contact_person or "",
     }
     v = m.get(field_key, "")
     return _trunc(v, TRUNC_SNAP) or ""
@@ -221,6 +248,41 @@ def accumulate_inquiry_update(field_key: str, raw: str | None, acc: dict[str, An
                     acc["customer_intermediary_id"] = iid
             except (TypeError, ValueError):
                 pass
+    elif field_key == "inquiry_type":
+        u = v.upper().replace(" ", "_")
+        if u in ("SAMPLE_DEVELOPMENT", "SALESMAN_SAMPLE", "QUOTATION", "REPEAT_ORDER"):
+            acc["inquiry_type"] = u
+        elif not v:
+            acc["inquiry_type"] = None
+    elif field_key == "brand":
+        acc["brand"] = _clean_str(v, 128)
+    elif field_key == "season_year":
+        acc["season_year"] = _clean_str(v, 16)
+    elif field_key == "material_composition":
+        acc["material_composition"] = v[:8000] if v else None
+    elif field_key == "size_range":
+        acc["size_range"] = _clean_str(v, 128)
+    elif field_key == "color_options":
+        if not v:
+            acc["color_options"] = None
+        else:
+            parsed: list[str] | None = None
+            if v.startswith("["):
+                try:
+                    raw = json.loads(v)
+                    if isinstance(raw, list):
+                        parsed = [str(x).strip() for x in raw if str(x).strip()]
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    parsed = None
+            if parsed is None:
+                parsed = [p.strip() for p in v.split(",") if p.strip()]
+            acc["color_options"] = parsed or None
+    elif field_key == "country_of_origin":
+        acc["country_of_origin"] = _clean_str(v, 64)
+    elif field_key == "special_requirements":
+        acc["special_requirements"] = v[:8000] if v else None
+    elif field_key == "contact_person":
+        acc["contact_person"] = _clean_str(v, 128)
 
 
 async def _load_batch_items(
@@ -718,19 +780,28 @@ async def _validate_inquiry_fk_updates(
 ) -> None:
     cid = acc.get("customer_id", inquiry.customer_id)
     if "customer_id" in acc:
-        c = await db.get(Customer, acc["customer_id"])
-        if not c or c.tenant_id != tenant_id:
-            raise HTTPException(status_code=400, detail="Invalid customer for tenant")
+        await ensure_owned(
+            db, Customer, acc["customer_id"], tenant_id, "Customer", status_code=404
+        )
     if "style_id" in acc and acc["style_id"] is not None:
-        st = await db.get(GarmentStyle, acc["style_id"])
-        if not st or st.tenant_id != tenant_id:
-            raise HTTPException(status_code=400, detail="Invalid style for tenant")
+        await ensure_owned(
+            db, GarmentStyle, acc["style_id"], tenant_id, "Style", status_code=404
+        )
     if "customer_intermediary_id" in acc and acc["customer_intermediary_id"] is not None:
-        link = await db.get(CustomerIntermediary, acc["customer_intermediary_id"])
-        if not link or link.tenant_id != tenant_id:
-            raise HTTPException(status_code=400, detail="Invalid intermediary for tenant")
+        link = await ensure_owned(
+            db,
+            CustomerIntermediary,
+            acc["customer_intermediary_id"],
+            tenant_id,
+            "Customer intermediary",
+            status_code=404,
+        )
+        assert link is not None
         if link.customer_id != cid:
-            raise HTTPException(status_code=400, detail="Intermediary does not belong to inquiry customer")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Customer intermediary not found",
+            )
 
 
 async def apply_suggestions_to_inquiry(
@@ -750,7 +821,6 @@ async def apply_suggestions_to_inquiry(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "BATCH_INQUIRY_MISMATCH", "message": "Batch belongs to a different inquiry."},
         )
-    batch.inquiry_id = inquiry_id
 
     r = await db.execute(select(Inquiry).where(Inquiry.id == inquiry_id, Inquiry.tenant_id == tenant.id))
     inquiry = r.scalar_one_or_none()
@@ -759,6 +829,15 @@ async def apply_suggestions_to_inquiry(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "INQUIRY_NOT_FOUND", "message": "Inquiry not found."},
         )
+    if inquiry.status in ("CONVERTED", "LOST", "CANCELLED"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "INQUIRY_TERMINAL",
+                "message": f"Inquiry is {inquiry.status} and cannot be edited",
+            },
+        )
+    batch.inquiry_id = inquiry_id
 
     by_key = {i.field_key: i for i in items}
     acc: dict[str, Any] = {}

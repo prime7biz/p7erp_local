@@ -11,6 +11,7 @@ type FormState = {
   case_date: string;
   amount: string;
   order_id: string;
+  customer_id: string;
   trade_case_id: string;
   export_license_number: string;
   destination_country: string;
@@ -27,6 +28,7 @@ const emptyForm = (orderIdPrefill?: string): FormState => ({
   case_date: todayLocalISO(),
   amount: "",
   order_id: orderIdPrefill ?? "",
+  customer_id: "",
   trade_case_id: "",
   export_license_number: "",
   destination_country: "",
@@ -79,6 +81,7 @@ export function ExportCaseFormPage() {
           case_date: row.case_date ? String(row.case_date).slice(0, 10) : "",
           amount: row.amount != null ? String(row.amount) : "",
           order_id: row.order_id != null ? String(row.order_id) : "",
+          customer_id: row.customer_id != null ? String(row.customer_id) : "",
           trade_case_id: row.trade_case_id != null ? String(row.trade_case_id) : "",
           export_license_number: String(row.export_license_number ?? ""),
           destination_country: String(row.destination_country ?? ""),
@@ -128,6 +131,7 @@ export function ExportCaseFormPage() {
         }
         setForm((prev) => ({
           ...prev,
+          customer_id: String(order.customer_id),
           reference: prev.reference || `EXP-${order.order_code}`,
           expected_shipment_date: prev.expected_shipment_date || (order.delivery_date || "").slice(0, 10),
           destination_country: prev.destination_country || country,
@@ -190,6 +194,9 @@ export function ExportCaseFormPage() {
     setError("");
     try {
       const orderId = form.order_id.trim() ? Number(form.order_id) : null;
+      const customerId = form.customer_id.trim()
+        ? Number(form.customer_id)
+        : selectedOrder?.customer_id ?? null;
       const tradeCaseId = form.trade_case_id.trim() ? Number(form.trade_case_id) : null;
       const amount = form.amount.trim() ? Number(form.amount) : null;
       const payload: ExportCaseCreate = {
@@ -197,6 +204,7 @@ export function ExportCaseFormPage() {
         status: form.status || "DRAFT",
         case_date: form.case_date || null,
         amount: Number.isFinite(amount as number) ? amount : null,
+        customer_id: customerId && Number.isFinite(customerId) ? customerId : null,
         order_id: orderId && Number.isFinite(orderId) ? orderId : null,
         trade_case_id: tradeCaseId && Number.isFinite(tradeCaseId) ? tradeCaseId : null,
         export_license_number: form.export_license_number.trim() || null,
@@ -261,6 +269,22 @@ export function ExportCaseFormPage() {
           {selectedOrder ? (
             <p className="mt-1 text-xs text-text-muted">
               Delivery {selectedOrder.delivery_date || "—"} · Qty {selectedOrder.quantity ?? "—"}
+              {selectedOrder.customer_id ? (
+                <>
+                  {" "}
+                  · Customer{" "}
+                  <Link className="text-brand-primary hover:underline" to={`/app/customers/${selectedOrder.customer_id}`}>
+                    {selectedOrder.customer_name ?? `#${selectedOrder.customer_id}`}
+                  </Link>
+                </>
+              ) : null}
+            </p>
+          ) : form.customer_id ? (
+            <p className="mt-1 text-xs text-text-muted">
+              Customer{" "}
+              <Link className="text-brand-primary hover:underline" to={`/app/customers/${form.customer_id}`}>
+                #{form.customer_id}
+              </Link>
             </p>
           ) : null}
         </div>

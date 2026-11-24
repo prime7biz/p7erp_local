@@ -243,6 +243,11 @@ async function openSalaryCreate(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByLabelText(/^Set salary now/));
 }
 
+async function pickOption(user: ReturnType<typeof userEvent.setup>, label: string, optionName: string | RegExp) {
+  await user.click(screen.getByLabelText(label));
+  await user.click(screen.getByRole("option", { name: optionName }));
+}
+
 describe("EmployeeWorkspace (create mode): salary set-up", () => {
   beforeEach(() => {
     api.getHrEmployeeAccess.mockResolvedValue(PAYROLL);
@@ -255,7 +260,7 @@ describe("EmployeeWorkspace (create mode): salary set-up", () => {
     await openSalaryCreate(user);
     await user.click(screen.getByRole("button", { name: "Create employee" }));
     expect(await screen.findByText(/Salary set-up: Choose a salary structure/)).toBeTruthy();
-    await user.selectOptions(screen.getByLabelText("Salary structure *"), "4");
+    await pickOption(user, "Salary structure *", /BD-W-G4/);
     await user.click(screen.getByRole("button", { name: "Create employee" }));
     expect(await screen.findByText(/Salary set-up: Enter the basic salary/)).toBeTruthy();
     expect(api.startHrOnboarding).not.toHaveBeenCalled();
@@ -265,8 +270,8 @@ describe("EmployeeWorkspace (create mode): salary set-up", () => {
     const user = userEvent.setup();
     api.previewHrCompensation.mockResolvedValue({ ...VALID, meets_minimum: false, message: "Basic 5000.00 is below the W-G4 minimum basic 7050" });
     await openSalaryCreate(user);
-    await user.selectOptions(screen.getByLabelText("Salary structure *"), "4");
-    await user.selectOptions(screen.getByLabelText("Bangladesh wage grade"), "9");
+    await pickOption(user, "Salary structure *", /BD-W-G4/);
+    await pickOption(user, "Bangladesh wage grade", /W-G4/);
     await user.click(screen.getByLabelText("Override standard basic salary"));
     await user.type(screen.getByLabelText("Employee basic salary *"), "5000");
     await user.click(screen.getByLabelText(/I confirm this employee's basic salary/));
@@ -289,8 +294,8 @@ describe("EmployeeWorkspace (create mode): salary set-up", () => {
   it("switching salary set-up off sends no salary, even with values still chosen", async () => {
     const user = userEvent.setup();
     await openSalaryCreate(user);
-    await user.selectOptions(screen.getByLabelText("Salary structure *"), "4");
-    await user.selectOptions(screen.getByLabelText("Bangladesh wage grade"), "9");
+    await pickOption(user, "Salary structure *", /BD-W-G4/);
+    await pickOption(user, "Bangladesh wage grade", /W-G4/);
     await user.click(screen.getByLabelText(/^Set salary now/));
     await user.click(screen.getByRole("button", { name: "Create employee" }));
     expect(await screen.findByText("EMP-0001 created")).toBeTruthy();
@@ -302,8 +307,8 @@ describe("EmployeeWorkspace (create mode): salary set-up", () => {
     const pending = deferred<HrOnboardingRun>();
     api.startHrOnboarding.mockReturnValueOnce(pending.promise);
     await openSalaryCreate(user);
-    await user.selectOptions(screen.getByLabelText("Salary structure *"), "4");
-    await user.selectOptions(screen.getByLabelText("Bangladesh wage grade"), "9");
+    await pickOption(user, "Salary structure *", /BD-W-G4/);
+    await pickOption(user, "Bangladesh wage grade", /W-G4/);
     expect(await screen.findByText(/Basic 7050 · Gross 12500/, {}, { timeout: 2000 })).toBeTruthy();
     const create = screen.getByRole("button", { name: "Create employee" });
     await user.dblClick(create);
@@ -388,10 +393,10 @@ describe("EmployeeWorkspace (edit mode): separate employment and salary saves", 
     await openEdit(user);
     expect(await screen.findByText("8000 / 14000")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Change salary" }));
-    expect((screen.getByLabelText("Salary structure *") as HTMLSelectElement).value).toBe("4");
-    const grade = screen.getByLabelText("Bangladesh wage grade") as HTMLSelectElement;
-    expect(grade.value).toBe("9");
-    expect([...grade.options].some((o) => o.value === "")).toBe(false); // the grade in force cannot be removed here
+    expect((screen.getByLabelText("Salary structure *") as HTMLInputElement).value).toBe("BD-W-G4 - Worker grade 4");
+    const grade = screen.getByLabelText("Bangladesh wage grade") as HTMLInputElement;
+    expect(grade.value).toContain("W-G4");
+    expect(grade.parentElement?.querySelector('button[aria-label="Clear selection"]')).toBeNull(); // the grade in force cannot be removed here
     expect((screen.getByLabelText("Override standard basic salary") as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText("Employee basic salary *") as HTMLInputElement).value).toBe("8000");
     expect((screen.getByLabelText("New salary starts on *") as HTMLInputElement).value).toBe("");

@@ -229,10 +229,66 @@ MANPOWER_SMV_PANEL_V1 = "manpower_smv_panel_v1"
 # never add to DEFAULT_ON_FEATURE_FLAGS.
 USER_AUTHORITY_CLASSES_V1 = "user_authority_classes_v1"
 
+# HR class-request advanced pieces (need user_authority_classes_v1). Strict, default OFF;
+# never add to DEFAULT_ON_FEATURE_FLAGS.
+HR_REMINDERS_V1 = "hr_reminders_v1"
+HR_ANALYTICS_V1 = "hr_analytics_v1"
+HR_DELEGATION_V1 = "hr_delegation_v1"
+
 # Governed KPI engine (docs/kpi-platform/). Strict, default OFF; never add to DEFAULT_ON_FEATURE_FLAGS.
 KPI_ENGINE_V1 = "kpi_engine_v1"
 # Rule-based KPI predictions (needs kpi_engine_v1). Strict, default OFF.
 KPI_PREDICTIVE_V1 = "kpi_predictive_v1"
+
+# Inbound Job Work / CMT (customer-supplied materials + CM billing). Strict, default OFF.
+INBOUND_JOB_WORK_V1 = "inbound_job_work_v1"
+
+# Guided Inquiry workbench (stepped create/edit, connected detail hub, upgraded list). Strict, default OFF.
+# Never add to DEFAULT_ON_FEATURE_FLAGS.
+INQUIRY_WORKBENCH_V1 = "inquiry_workbench_v1"
+
+# Raw Material & Goods Control hub (Style Control Sheet, Action Queue, Genealogy). Strict, default OFF.
+# Never add to DEFAULT_ON_FEATURE_FLAGS. See docs/raw-material-control/MASTER_PLAN.md Phase 1.
+MATERIAL_CONTROL_HUB_V1 = "material_control_hub_v1"
+
+# Phase 2A: style/colourway tags, job-work binding, Reuse-Before-Buy + BTB soft warn. Strict, default OFF.
+MATERIAL_INBOUND_V2 = "material_inbound_v2"
+
+# Phase 2B: FIFO-layer order allocation + UD utilization event ledger. Strict, default OFF.
+MATERIAL_ALLOC_UD_V1 = "material_alloc_ud_v1"
+
+# Phase 3 extras ride on hub + inbound; QC hold/DN draft also use existing QC flag.
+
+# Phase 4: leftover return + Gate/Challan Class 3/4→2→1. Strict, default OFF.
+MATERIAL_CONVERSION_V1 = "material_conversion_v1"
+
+# Phase 5: physical count UX + job-work bond transfer + principal claim. Strict, default OFF.
+MATERIAL_PHYSICAL_V1 = "material_physical_v1"
+
+# Phase 6: RTV / exchange documents. Strict, default OFF.
+MATERIAL_RETURNS_V1 = "material_returns_v1"
+
+# Phase 7: budget plan + leak watchlist + roll/shade. Strict, default OFF.
+MATERIAL_BUDGET_PLAN_V1 = "material_budget_plan_v1"
+
+# Phase 7 sub: landed cost lite onto FIFO layers. Strict, default OFF (needs budget plan for UX).
+MATERIAL_LANDED_COST_V1 = "material_landed_cost_v1"
+
+# Phase 8: hard BTB/budget/UD/bonded blocks (policy). Strict, default OFF. Live sign-off required.
+MATERIAL_COMMITMENT_BLOCK_V1 = "material_commitment_block_v1"
+
+# Advanced Garment Production Control Center (docs plan). All strict, default OFF;
+# never add to DEFAULT_ON_FEATURE_FLAGS. Nested flags need prod_control_center_v1 where noted.
+PROD_CONTROL_CENTER_V1 = "prod_control_center_v1"
+TNA_AUTO_PLAN_V1 = "tna_auto_plan_v1"
+MFG_MACHINE_MATCH_V1 = "mfg_machine_match_v1"
+CUTTING_LOSS_CONTROL_V1 = "cutting_loss_control_v1"
+FLOOR_LIVE_MONITOR_V1 = "floor_live_monitor_v1"
+FINISHING_STAGE_WIP_V1 = "finishing_stage_wip_v1"
+
+# Customer portal: buyers see SENT quotations and answer ACCEPT / REQUEST_REVISION (migration 337).
+# Strict (only an explicit true switches it on), default OFF; never add to DEFAULT_ON_FEATURE_FLAGS.
+CUSTOMER_PORTAL_QUOTATIONS_ENABLED = "customer_portal_quotations_enabled"
 
 # Flags that are on for every tenant (existing and new) unless explicitly set to False.
 # API payloads read by the frontend (`/auth/me`, `/settings/config`) fill these in as True when missing.
@@ -417,6 +473,21 @@ def is_user_authority_classes_v1_enabled(feature_flags: Any) -> bool:
     return _flag_true(feature_flags, USER_AUTHORITY_CLASSES_V1)
 
 
+def is_hr_reminders_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: probation / contract / document expiry reminders (needs authority classes)."""
+    return is_user_authority_classes_v1_enabled(feature_flags) and _flag_true(feature_flags, HR_REMINDERS_V1)
+
+
+def is_hr_analytics_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: HR analytics panels (needs authority classes)."""
+    return is_user_authority_classes_v1_enabled(feature_flags) and _flag_true(feature_flags, HR_ANALYTICS_V1)
+
+
+def is_hr_delegation_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: Class 1/2 approval delegation (needs authority classes)."""
+    return is_user_authority_classes_v1_enabled(feature_flags) and _flag_true(feature_flags, HR_DELEGATION_V1)
+
+
 def is_kpi_engine_v1_enabled(feature_flags: Any) -> bool:
     """Strict: governed KPI engine (docs/kpi-platform/)."""
     return _flag_true(feature_flags, KPI_ENGINE_V1)
@@ -425,6 +496,96 @@ def is_kpi_engine_v1_enabled(feature_flags: Any) -> bool:
 def is_kpi_predictive_v1_enabled(feature_flags: Any) -> bool:
     """Strict: KPI predictions; requires kpi_engine_v1."""
     return is_kpi_engine_v1_enabled(feature_flags) and _flag_true(feature_flags, KPI_PREDICTIVE_V1)
+
+
+def is_customer_portal_quotations_enabled(feature_flags: Any) -> bool:
+    """Strict: only an explicit ``true`` enables buyer quotation responses in the customer portal."""
+    return _flag_true(feature_flags, CUSTOMER_PORTAL_QUOTATIONS_ENABLED)
+
+
+def is_inbound_job_work_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: inbound Job Work (CMT) hub; default OFF."""
+    return _flag_true(feature_flags, INBOUND_JOB_WORK_V1)
+
+
+def is_inquiry_workbench_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: guided Inquiry workbench UI; default OFF."""
+    return _flag_true(feature_flags, INQUIRY_WORKBENCH_V1)
+
+
+def is_material_control_hub_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: Material Control hub (read-only Phase 1); default OFF."""
+    return _flag_true(feature_flags, MATERIAL_CONTROL_HUB_V1)
+
+
+def is_material_inbound_v2_enabled(feature_flags: Any) -> bool:
+    """Strict: style tags / Reuse-Before-Buy / BTB warn / job-work binding; default OFF."""
+    return _flag_true(feature_flags, MATERIAL_INBOUND_V2)
+
+
+def is_material_alloc_ud_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: FIFO-layer allocation + UD event ledger; default OFF."""
+    return _flag_true(feature_flags, MATERIAL_ALLOC_UD_V1)
+
+
+def is_material_conversion_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: leftover return + Gate/Challan class chain; default OFF."""
+    return _flag_true(feature_flags, MATERIAL_CONVERSION_V1)
+
+
+def is_material_physical_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: physical count + JW bond transfer + principal claim; default OFF."""
+    return _flag_true(feature_flags, MATERIAL_PHYSICAL_V1)
+
+
+def is_material_returns_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: RTV / exchange docs; default OFF."""
+    return _flag_true(feature_flags, MATERIAL_RETURNS_V1)
+
+
+def is_material_budget_plan_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: budget plan UX + leak watchlist + roll/shade; default OFF."""
+    return _flag_true(feature_flags, MATERIAL_BUDGET_PLAN_V1)
+
+
+def is_material_landed_cost_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: allocate freight/duty onto GRN FIFO layers; default OFF."""
+    return _flag_true(feature_flags, MATERIAL_LANDED_COST_V1)
+
+
+def is_prod_control_center_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: unified Production Control Center hub; default OFF."""
+    return _flag_true(feature_flags, PROD_CONTROL_CENTER_V1)
+
+
+def is_tna_auto_plan_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: calendar-aware TNA re-plan + slip cascade; default OFF."""
+    return _flag_true(feature_flags, TNA_AUTO_PLAN_V1)
+
+
+def is_mfg_machine_match_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: OB vs line machine-content similarity; default OFF."""
+    return _flag_true(feature_flags, MFG_MACHINE_MATCH_V1)
+
+
+def is_cutting_loss_control_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: CAD/marker process-loss governance; default OFF."""
+    return _flag_true(feature_flags, CUTTING_LOSS_CONTROL_V1)
+
+
+def is_floor_live_monitor_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: live hourly floor + DHU board; default OFF."""
+    return _flag_true(feature_flags, FLOOR_LIVE_MONITOR_V1)
+
+
+def is_finishing_stage_wip_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: finishing/packing stage WIP ledger; default OFF."""
+    return _flag_true(feature_flags, FINISHING_STAGE_WIP_V1)
+
+
+def is_material_commitment_block_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: hard commitment / UD / bonded blocks; default OFF."""
+    return _flag_true(feature_flags, MATERIAL_COMMITMENT_BLOCK_V1)
 
 
 def is_packing_list_cartons_enabled(feature_flags: Any) -> bool:

@@ -127,6 +127,11 @@ PERMISSION_INVENTORY_KIT_EDIT = "inventory.kit.edit"
 PERMISSION_INVENTORY_CONSIGNMENT_VIEW = "inventory.consignment.view"
 PERMISSION_INVENTORY_CONSIGNMENT_CREATE = "inventory.consignment.create"
 PERMISSION_INVENTORY_CONSIGNMENT_SETTLE = "inventory.consignment.settle"
+# Inbound Job Work (CMT). view/manage: soft (missing = allow). bill/close: fail-closed via explicit or admin/manager.
+PERMISSION_JOB_WORK_VIEW = "job_work.view"
+PERMISSION_JOB_WORK_MANAGE = "job_work.manage"
+PERMISSION_JOB_WORK_BILL = "job_work.bill"
+PERMISSION_JOB_WORK_CLOSE = "job_work.close"
 PERMISSION_COMMERCIAL_INVOICE_CREATE = "commercial.invoice.create"
 PERMISSION_COMMERCIAL_INVOICE_ISSUE = "commercial.invoice.issue"
 PERMISSION_COMMERCIAL_EXPORT_CASE_CREATE = "commercial.export_case.create"
@@ -733,6 +738,26 @@ MATERIAL_CONTROL_GOVERNANCE_KEYS: list[dict[str, str]] = [
         "key": PERMISSION_INVENTORY_CONSIGNMENT_SETTLE,
         "label": "Settle consignment stock (create PO)",
         "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_JOB_WORK_VIEW,
+        "label": "View inbound job work (CMT) contracts",
+        "group": "Production",
+    },
+    {
+        "key": PERMISSION_JOB_WORK_MANAGE,
+        "label": "Create and update inbound job work contracts, materials, deliveries",
+        "group": "Production",
+    },
+    {
+        "key": PERMISSION_JOB_WORK_BILL,
+        "label": "Bill CM charges and record cash/bank receipts for job work (fail-closed)",
+        "group": "Production",
+    },
+    {
+        "key": PERMISSION_JOB_WORK_CLOSE,
+        "label": "Close inbound job work contracts (fail-closed)",
+        "group": "Production",
     },
     {
         "key": PERMISSION_COMMERCIAL_INVOICE_CREATE,

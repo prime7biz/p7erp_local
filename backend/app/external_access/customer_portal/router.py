@@ -393,3 +393,9 @@ async def customer_documents(
         return CustomerDocumentsResponse(items=[], total=0)
     # Safe extension: list only non-download metadata when enabled; file URLs require separate signed flow.
     return CustomerDocumentsResponse(items=[], total=0)
+
+
+# Buyer quotation list / respond (flag customer_portal_quotations_enabled, default OFF).
+from app.external_access.customer_portal.quotations import router as _quotations_router  # noqa: E402
+
+router.include_router(_quotations_router)

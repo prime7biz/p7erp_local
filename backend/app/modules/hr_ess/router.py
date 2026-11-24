@@ -134,7 +134,11 @@ async def update_my_profile(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+
     _ensure_user_tenant(user, tenant)
+    # When authority classes are ON, profile field changes go through an ESS CORRECTION request.
+    await assert_hr_request_required(db, user, tenant)
     employee = await _get_my_employee_or_404(db, tenant.id, user.id)
     pref = await _get_or_create_pref(db, tenant.id, employee.id)
     payload = body.model_dump(exclude_unset=True)
@@ -218,7 +222,11 @@ async def create_my_leave_request(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+
     _ensure_user_tenant(user, tenant)
+    # Bridge: while authority classes are ON, ESS leave must be submitted as an HR class request.
+    await assert_hr_request_required(db, user, tenant)
     employee = await _get_my_employee_or_404(db, tenant.id, user.id)
     await ensure_owned(db, LeaveType, body.leave_type_id, tenant.id, "Leave type")
     # Same rules as HR leave: server-counted days (weekends / holidays skipped), no overlap, one year.

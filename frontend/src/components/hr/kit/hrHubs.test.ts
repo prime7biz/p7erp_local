@@ -73,6 +73,8 @@ const LEGACY_HR_ROUTES = [
   "hr/ess/leave",
   "hr/ess/payslips",
   "hr/ess/tickets",
+  "hr/ess/my-requests",
+  "hr/class-requests",
   "hr/compliance",
   "hr/ai-insights",
   "hr/reports",
@@ -94,6 +96,17 @@ const KEPT_ROUTES = new Set([
   "hr/employees/ai-onboard",
   "hr/employees/:employeeId",
   "hr/bangladesh-rules",
+]);
+
+/** My HR (ESS) routes live outside the hr.access-only guard so ESS-only users can open them. */
+const ESS_ROUTES = new Set([
+  "hr/my",
+  "hr/ess/profile",
+  "hr/ess/attendance",
+  "hr/ess/leave",
+  "hr/ess/payslips",
+  "hr/ess/tickets",
+  "hr/ess/my-requests",
 ]);
 
 function routeElement(path: string): string | null {
@@ -137,14 +150,25 @@ describe("HR hub route contract", () => {
     }
   });
 
-  it("keeps all HR routes behind the hr.access route guard", () => {
+  it("keeps staff HR routes behind the hr.access route guard; My HR is on the ESS/HR guard", () => {
+    const essGuard = routerSource.indexOf("anyOf={[ROUTE_PERMISSION.hr, ROUTE_PERMISSION.ess]}");
+    expect(essGuard).toBeGreaterThan(-1);
+    const essEnd = routerSource.indexOf("</Route>", essGuard);
+    const essBlock = routerSource.slice(essGuard, essEnd);
+    for (const path of ESS_ROUTES) {
+      expect(essBlock, path).toContain(`path="${path}"`);
+    }
+
     const start = routerSource.indexOf("<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.hr} />");
     const end = routerSource.indexOf("</Route>", start);
     expect(start).toBeGreaterThan(-1);
     const block = routerSource.slice(start, end);
     for (const path of [...LEGACY_HR_ROUTES, ...hubs.map((h) => h.path)]) {
+      if (ESS_ROUTES.has(path) || path === "hr/my") continue;
       expect(block, path).toContain(`path="${path}"`);
     }
+    expect(block).toContain('path="hr/requests"');
+    expect(block).toContain('path="hr/class-requests"');
   });
 });
 
@@ -152,11 +176,13 @@ describe("HR sidebar", () => {
   const hr = menuSections.find((s) => s.section === "HR");
   const hrefs = (hr?.subsections ?? []).flatMap((sub) => sub.items.map((i) => i.href));
 
-  it("shows 17 links: dashboard, employees, Bangladesh rules and one per hub", () => {
-    expect(hrefs).toHaveLength(17);
-    expect(new Set(hrefs).size).toBe(17);
+  it("shows 18 links: dashboard, employees, Bangladesh rules and one per hub", () => {
+    expect(hrefs).toHaveLength(18);
+    expect(new Set(hrefs).size).toBe(18);
     for (const hub of hubs) expect(hrefs).toContain(`/app/${hub.path}`);
-    expect(hrefs).toEqual(expect.arrayContaining(["/app/hr", "/app/hr/employees", "/app/hr/bangladesh-rules"]));
+    expect(hrefs).toEqual(
+      expect.arrayContaining(["/app/hr", "/app/hr/employees", "/app/hr/bangladesh-rules", "/app/hr/requests"]),
+    );
   });
 });
 

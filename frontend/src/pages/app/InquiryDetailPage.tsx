@@ -3,11 +3,22 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api, type InquiryResponse, type CustomerResponse } from "@/api/client";
 import { InquiryAiAuditHistory } from "@/components/inquiries/InquiryAiAuditHistory";
 import { InquiryAiPanel } from "@/components/inquiries/InquiryAiPanel";
+import { InquiryWorkbenchDetail } from "@/features/inquiries/workbench/InquiryWorkbenchDetail";
+import { useInquiryWorkbenchV1 } from "@/features/inquiries/workbench/inquiryWorkbenchFlags";
 import { canConvertInquiryToQuotation, canSubmitInquiry } from "@/features/merch/workflow";
 import { useInquiryAi } from "@/hooks/useInquiryAi";
 import { useSecureImage } from "@/hooks/useSecureImage";
 
 export function InquiryDetailPage() {
+  const workbenchOn = useInquiryWorkbenchV1();
+  if (workbenchOn) {
+    return <InquiryWorkbenchDetail />;
+  }
+  return <InquiryDetailPageLegacy />;
+}
+
+/** Classic inquiry detail (used when `inquiry_workbench_v1` is off). */
+function InquiryDetailPageLegacy() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [item, setItem] = useState<InquiryResponse | null>(null);

@@ -18,6 +18,14 @@ export function toFixedString(value: number, digits = 4): string {
   return value.toFixed(digits);
 }
 
+/** Local calendar date as YYYY-MM-DD (never UTC ISO with time). */
+export function localDateYmd(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 /** Multiplier from line currency amount → quotation currency (1 when same currency). */
 export function lineFxToQuotation(
   row: { currency?: string | null; exchange_rate?: string | null },
@@ -26,7 +34,9 @@ export function lineFxToQuotation(
   const q = (quotationCurrency || "USD").trim().toUpperCase();
   const l = (row.currency || q).trim().toUpperCase();
   if (l === q) return 1;
-  return Math.max(0, toSafeNumber(row.exchange_rate) || 1);
+  const rate = toSafeNumber(row.exchange_rate);
+  if (rate <= 0) return 1;
+  return rate;
 }
 
 export function formatMoney(value: number): string {
@@ -36,25 +46,109 @@ export function formatMoney(value: number): string {
   });
 }
 
+/** Prefer calculated_amount when set (including "0" / "0.00"); match backend other_cost_rollup_amount_string. */
 export function resolveOtherCostAmount(row: QuotationOtherCostLine): number {
-  return toSafeNumber(row.calculated_amount) || toSafeNumber(row.total_amount);
+  const calc = row.calculated_amount;
+  if (calc != null && String(calc).trim() !== "") {
+    return toSafeNumber(calc);
+  }
+  return toSafeNumber(row.total_amount);
 }
 
-/** Recalculate derived amounts for one other-cost row (fabric+CM subtotal for % rows). */
+/**
+ * Recalculate derived amounts for one other-cost row.
+ * `based_on`: subtotal (mat+mfg), materials, or manufacturing.
+ */
 export function applyOtherCostCalculation(
   row: QuotationOtherCostLine,
-  matMfgSubtotal: number
+  matTotal: number,
+  mfgTotal: number = 0,
 ): QuotationOtherCostLine {
-  const base = Math.max(0, matMfgSubtotal);
+  const based = String(row.based_on || "subtotal").trim().toLowerCase();
+  let base = Math.max(0, matTotal + mfgTotal);
+  if (based === "materials" || based === "material") {
+    base = Math.max(0, matTotal);
+  } else if (based === "manufacturing" || based === "cm" || based === "labor") {
+    base = Math.max(0, mfgTotal);
+  }
+  const baseStr = base.toFixed(2);
   if (row.cost_type === "fixed") {
     const v = toSafeNumber(row.value);
     const s = v.toFixed(2);
-    return { ...row, calculated_amount: s, total_amount: s };
+    return {
+      ...row,
+      calculated_amount: s,
+      total_amount: s,
+      percentage: "0",
+      base_amount: baseStr,
+    };
   }
   const pct = toSafeNumber(row.value);
   const amt = (base * pct) / 100;
   const s = amt.toFixed(2);
-  return { ...row, calculated_amount: s, total_amount: s, percentage: String(pct) };
+  return {
+    ...row,
+    calculated_amount: s,
+    total_amount: s,
+    percentage: String(pct),
+    base_amount: baseStr,
+  };
+}
+
+/**
+ * Commission amount in quotation currency.
+ * INCLUDE: added into auto-derived quoted price.
+ * EXCLUDE: memo only (returned for display, caller decides whether to add).
+ */
+export function computeCommissionAmount(opts: {
+  mode: string | null | undefined;
+  type: string | null | undefined;
+  value: string | number | null | undefined;
+  /** Cost + factory margin (before commission). */
+  baseForPercent: number;
+}): { amount: number; includedInQuoted: boolean } {
+  const mode = String(opts.mode || "EXCLUDE").trim().toUpperCase();
+  const type = String(opts.type || "").trim().toUpperCase();
+  const raw = toSafeNumber(opts.value);
+  let amount = 0;
+  if (type === "FIXED") {
+    amount = Math.max(0, raw);
+  } else if (type === "PERCENTAGE") {
+    amount = Math.max(0, (opts.baseForPercent * raw) / 100);
+  }
+  return {
+    amount,
+    includedInQuoted: mode === "INCLUDE" && amount > 0,
+  };
+}
+
+/** Factory cost ÷ projected qty (ex-profit). Zero when qty ≤ 0. */
+export function computeCostPerPiece(totalCost: number, projectedQuantity: number): number {
+  const qty = toSafeNumber(projectedQuantity);
+  return qty > 0 ? toSafeNumber(totalCost) / qty : 0;
+}
+
+/**
+ * Auto-derived order-total quoted price: cost + factory margin (+ INCLUDE commission).
+ * Shared by live edit rollup and cancelEdit manual-vs-auto detection.
+ */
+export function computeAutoQuotedPrice(opts: {
+  totalCost: number;
+  profitPercentage: number;
+  commissionMode: string | null | undefined;
+  commissionType: string | null | undefined;
+  commissionValue: string | number | null | undefined;
+}): number {
+  const totalCost = toSafeNumber(opts.totalCost);
+  const marginAmount = (totalCost * toSafeNumber(opts.profitPercentage)) / 100;
+  const beforeCommission = totalCost + marginAmount;
+  const commission = computeCommissionAmount({
+    mode: opts.commissionMode,
+    type: opts.commissionType,
+    value: opts.commissionValue,
+    baseForPercent: beforeCommission,
+  });
+  return beforeCommission + (commission.includedInQuoted ? commission.amount : 0);
 }
 
 /**
@@ -130,4 +224,11 @@ export function isPersistableOtherCostRow(row: QuotationOtherCostLine): boolean 
 
 export function isPersistableSizeRatioRow(row: QuotationSizeRatioLine): boolean {
   return Boolean((row.size ?? "").trim());
+}
+
+/** Size quantity from projected order qty and ratio %. */
+export function sizeQuantityFromRatio(projectedQuantity: number, ratioPercentage: string | number): number {
+  const pq = Math.max(0, projectedQuantity);
+  const pct = toSafeNumber(ratioPercentage);
+  return Math.round((pq * pct) / 100);
 }

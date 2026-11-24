@@ -8,6 +8,7 @@ import {
   type HrDesignationUpdate,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import {
   listPageChipActiveClass,
   listPageChipInactiveClass,
@@ -344,20 +345,23 @@ export function HrDesignationsPage() {
           <option value="active">Active only</option>
           <option value="inactive">Inactive only</option>
         </select>
-        <select
+        <LocalSearchSelect
           className={`${listPageToolbarSelectClass} sm:w-52`}
           value={filters.department ?? ""}
-          onChange={(e) => setDepartment(departmentFromParam(e.target.value || null))}
+          options={[
+            { value: "none", label: "No department" },
+            ...departments.map((d) => ({
+              value: d.id,
+              label: `${d.code} - ${d.name}`,
+            })),
+          ]}
+          onChange={(next) =>
+            setDepartment(departmentFromParam(next === "" ? null : String(next)))
+          }
+          placeholder="All departments"
           aria-label="Department"
-        >
-          <option value="">All departments</option>
-          <option value="none">No department</option>
-          {departments.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.code} - {d.name}
-            </option>
-          ))}
-        </select>
+          allowClear
+        />
         <button type="button" className={listPageToolbarButtonClass} onClick={clearFilters} disabled={filterCount === 0}>
           Clear{filterCount > 0 ? ` (${filterCount})` : ""}
         </button>

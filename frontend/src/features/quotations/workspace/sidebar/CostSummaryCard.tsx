@@ -3,10 +3,13 @@ import { formatMoney, toSafeNumber } from "../mappers/quotationNumeric";
 interface CostSummaryCardProps {
   currency: string;
   materialCost: string | null | undefined;
+  /** Other-cost buckets already converted to quotation currency. */
   trimsCost: number;
   laborCost: string | null | undefined;
   washFinishCost: number;
   overheadCost: number;
+  /** Remaining other costs (freight, bank, custom) in quotation currency. */
+  otherMiscCost?: number;
   totalFobCost: string | null | undefined;
   factoryMarginAmount: number;
   factoryMarginPercent: number;
@@ -14,12 +17,15 @@ interface CostSummaryCardProps {
 
 export function CostSummaryCard(props: CostSummaryCardProps) {
   const rows = [
-    { label: "Direct Fabric", value: toSafeNumber(props.materialCost) },
-    { label: "Trims & Accessories", value: props.trimsCost },
+    { label: "Materials (Fabric & Trims)", value: toSafeNumber(props.materialCost) },
+    { label: "Other — Trims & Accessories", value: props.trimsCost },
     { label: "Direct Labor (CM)", value: toSafeNumber(props.laborCost) },
     { label: "Washing & Finishing", value: props.washFinishCost },
     { label: "Factory Overheads", value: props.overheadCost },
   ];
+  if ((props.otherMiscCost ?? 0) > 0.005) {
+    rows.push({ label: "Other commercial costs", value: props.otherMiscCost ?? 0 });
+  }
   const total = toSafeNumber(props.totalFobCost) || rows.reduce((acc, row) => acc + row.value, 0);
 
   return (

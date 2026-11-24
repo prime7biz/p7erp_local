@@ -156,30 +156,32 @@ A **customer** is a buyer you sell to (for example a brand or retailer). Every i
 1. Open **Merchandising → Customers** (\`/app/customers\`).
 2. Search by name, code or contact. If the buyer is not there, click **New customer**.
 3. Optional: in **Import Customer Info**, upload a business card, letterhead or company profile. The AI fills the fields it can read. Check each value in **Review extracted fields** and click apply only for correct ones. Other details the AI read are listed under **More details found in the document**; pick a field in **Put into** or leave **Don't use**.
-4. Fill the required fields (marked **\\*\\***): **Legal Entity Name**, **Primary Contact Name**, **Email Address**, and the **Billing Address** (**Street Address**, **City**, **Country**).
+4. Enter **Legal Entity Name** (the only field required to save). Add recommended details when you can: **Primary Contact**, **Email**, and **Billing** street / city / country.
 5. Choose **Customer Type**, **Status** (Active / Inactive) and **Preferred quotation currency**.
-6. Fill the **Shipping Address**, or turn on **Same as billing**.
-7. Click **Save Customer** (or **Save & Add Another** to enter the next buyer).
+6. Optionally fill **Commercial defaults** (payment terms, Incoterm, lead time, credit limit note) — these are hints for quotations, not hard credit control.
+7. Fill the **Shipping Address**, or turn on **Same as billing**.
+8. Click **Save Customer** (or **Save & Add Another** to enter the next buyer).
 
 ## What happens next
 
 - The customer gets a code (for example \`LKH-CUST-02\`) and appears in the customer pick list on inquiries, quotations and orders.
-- The customer page (\`/app/customers/:id\`) shows the buyer's **Inquiries**, **Quotations**, **Orders** and **Outstanding receivable bills** in one place.
+- The customer page (\`/app/customers/:id\`) is a **360 workspace** with tabs for Merch, Commercial, Operations, Finance (if you have access), Contacts, Portal and Activity. Use the header buttons to start a new inquiry, quotation, style or order for that buyer.
 
 ## Tips
 
 - Use **Actions → Edit** on the list to update a buyer; **Actions → Print** gives a one-page profile.
 - The **Profile** % and **Dup risk** columns warn about incomplete or duplicate records.
-- Set a buyer to **Inactive** instead of deleting it once it has documents.
+- Set a buyer to **Inactive** instead of deleting it once it has documents. New inquiries / quotations / orders prefer **Active** customers in the search list.
 
 ## Common problems
 
-- **"Possible duplicate customers" warning** → open the existing record instead of creating a new one.
-- **Cannot save** → a field marked **\\*\\*** is empty (often billing **City** or **Country**).`,
+- **"Possible duplicate customers" warning** → check the listed buyer first; you can still save if this is a new company.
+- **Recommended fields still empty** → you can save anyway; add contact and billing later for a complete profile.
+- **Cannot save** → **Legal Entity Name** is empty.`,
       tags: ["customer", "buyer", "merchandising", "master data"],
       keywords: ["buyer", "party", "client", "add customer", "new buyer", "customer profile", "brand"],
       estimatedMinutes: 4,
-      lastUpdated: "2026-11-14",
+      lastUpdated: "2026-11-23",
       audience: "merchandiser",
       coverImage: `${S}/customers.jpg`,
       infographics: [
@@ -221,12 +223,16 @@ A **customer** is a buyer you sell to (for example a brand or retailer). Every i
 
 An **inquiry** is the buyer's first request: "Can you make this style, this many pieces, at this price, by this date?" Merchandisers create it so the costing team has everything needed for a quotation.
 
+## Optional Inquiry Workbench
+
+In **Settings → Configuration → More**, an admin can turn on **Enable Inquiry Workbench**. When it is on, New / Edit Inquiry uses a guided multi-step form (Basics → Product → Commercial → Lines & notes → Review) with product fields (brand, composition, size range, colours, tech-pack files) and a readiness checklist. When the switch is off, the classic single-page form stays.
+
 ## Before you start
 
 - The **customer** must exist (**Merchandising → Customers**).
 - A **garment style** helps a lot. You can pick an existing one or create it on the spot with **Quick Add Style**.
 
-## Steps
+## Steps (classic form)
 
 1. Open **Merchandising → Inquiries** (\`/app/inquiries\`) and click **New Inquiry**.
 2. Optional: in **Import Inquiry Info**, upload the buyer's inquiry sheet, email screenshot or tech-pack PDF. Check every suggested value before you accept it. Extra details such as material, colours or certifications appear under **More details found in the document**, where you choose the field in **Put into** (usually **Notes**) and click **Apply**.
@@ -237,10 +243,17 @@ An **inquiry** is the buyer's first request: "Can you make this style, this many
 7. Click **Save inquiry**. The code (for example \`INQ-0016\`) is created automatically.
 8. When everything is complete, open the inquiry again (**Actions → Edit**) and click **Save & submit**, or use **Submit inquiry** on the detail page.
 
+## Steps (Inquiry Workbench, when enabled)
+
+1. Walk through the five steps and fill required **Customer** and **Style** on Basics.
+2. On Product, add brand, composition, sizes, colours and (after the first save) technical files.
+3. On Review, check the readiness list, then **Save draft** or **Save & submit**.
+
 ## What happens next
 
 - A **Submitted** inquiry can be turned into a quotation with **Convert to quotation** (see **Inquiry detail: submit and convert**).
 - The inquiry shows in **Order Pipeline** under **Inquiry · Draft** or **Inquiry · Submitted**.
+- Use **Actions → Clone** on the list to copy an inquiry into a new draft (useful for repeat buyers).
 
 ## Tips
 
@@ -252,10 +265,10 @@ An **inquiry** is the buyer's first request: "Can you make this style, this many
 - **Amber labels or borders stay on** → a required field (**\\*\\***) is still empty.
 - **Wrong buyer chosen** → fix it before you submit; a converted inquiry can no longer be changed.
 - **AI filled a wrong value** → AI suggestions are only suggestions. Correct the field before saving.`,
-      tags: ["inquiry", "create", "merchandising", "draft", "buyer request"],
-      keywords: ["enquiry", "RFQ", "request for quotation", "new inquiry", "buyer request", "tech pack", "target price"],
+      tags: ["inquiry", "create", "merchandising", "draft", "buyer request", "workbench"],
+      keywords: ["enquiry", "RFQ", "request for quotation", "new inquiry", "buyer request", "tech pack", "target price", "inquiry workbench"],
       estimatedMinutes: 5,
-      lastUpdated: "2026-11-14",
+      lastUpdated: "2026-11-23",
       featured: true,
       audience: "merchandiser",
       coverImage: `${S}/merch-inquiry-new-form.jpg`,
@@ -302,6 +315,8 @@ An **inquiry** is the buyer's first request: "Can you make this style, this many
 
 The **inquiry detail** page shows one buyer request and the next button you need. It is where an inquiry becomes a **quotation**.
 
+When **Inquiry Workbench** is enabled in Settings, the detail page also shows linked style / quotation / order / samples, a status timeline, product specs, and buttons for **Edit**, **Clone**, **Mark Lost** and **Cancel** (not only Convert).
+
 ## Before you start
 
 - Open the inquiry from **Merchandising → Inquiries** (\`/app/inquiries\`): click its code, or **Actions → View**.
@@ -310,32 +325,34 @@ The **inquiry detail** page shows one buyer request and the next button you need
 
 1. Read the header: **Inquiry INQ-xxxx**, created date, customer and **status**.
 2. Check the cards: **Summary** (customer, style, department, season), **Commercials** (target price, currency, exchange rate, quantity, expected delivery), **Style & Intermediary**, **Notes** and **Garment items**.
-3. If a yellow box says **Missing recommended fields for clean quotation prefill**, click **Back to list → Actions → Edit** and fill them first.
+3. If a yellow box says **Missing recommended fields for clean quotation prefill**, click **Edit** on the detail page (or **Actions → Edit** on the list) and fill them first.
 4. If the status is **DRAFT**, click **Submit inquiry**.
-5. When the status is **SUBMITTED**, click **Convert to quotation**. The app creates a **Draft** quotation and opens it.
+5. When the status is **SUBMITTED**, click **Convert to quotation**. The app creates a **Draft** quotation and opens it. On the quotation, the **Suggestions** bar can add materials from the style BOM and sizes from the style scale (see **Build the quotation costing sheet**).
 6. If the inquiry was already converted, the button changes to **Open quotation**.
+7. If the buyer drops the request, use **Mark Lost** or **Cancel** on the detail page or list Actions (when Workbench is on), or **Move** on the **Order Pipeline** board.
 
 From the list you can do the same with **Actions → Submit inquiry** and **Actions → To quotation**.
 
 ## What happens next
 
-- The inquiry becomes **CONVERTED** and is locked.
+- The inquiry becomes **CONVERTED** and is locked (no further field edits).
 - Continue on the quotation: build the costing (see **Build the quotation costing sheet**).
-- If the buyer drops the request, mark it **Lost** or **Cancelled** with **Move** on the **Order Pipeline** board (\`/app/merchandising/pipeline\`).
 
 ## Tips
 
 - **Print / Save PDF** gives a clean copy to share inside the team.
 - The **Inquiry AI** card can validate fields, find duplicates and suggest next actions. Its results are advice only; nothing changes until you edit the inquiry.
+- Linked records help you jump to the style, quotation, order or sample without searching.
 
 ## Common problems
 
 - **No "Convert to quotation" button** → status is still **DRAFT**: click **Submit inquiry** first. If the status is **LOST** or **CANCELLED**, it can no longer be converted.
-- **"Submit the inquiry before converting it to a quotation."** → same cause: submit first.`,
-      tags: ["inquiry", "detail", "status", "convert", "submit"],
-      keywords: ["enquiry", "convert inquiry", "to quotation", "submit inquiry", "inquiry status", "lost inquiry"],
+- **"Submit the inquiry before converting it to a quotation."** → same cause: submit first.
+- **Cannot edit** → Converted, Lost and Cancelled inquiries are locked; use **Clone** to start a new draft.`,
+      tags: ["inquiry", "detail", "status", "convert", "submit", "workbench"],
+      keywords: ["enquiry", "convert inquiry", "to quotation", "submit inquiry", "inquiry status", "lost inquiry", "clone inquiry"],
       estimatedMinutes: 3,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-23",
       audience: "merchandiser",
       coverImage: `${S}/merch-inquiry-detail.jpg`,
       videos: [
@@ -398,9 +415,25 @@ A **quotation** is your price offer to the buyer. Behind it sits a **costing she
 9. Check **Final Commercial Breakdown**: **FOB Cost**, **Factory Margin**, **Agency Commission** and **Final Quoted Price**. Adjust **Markup on factory cost (%)** if needed.
 10. Click **Save draft**. To change it later, click **Edit costing**.
 
+## Suggestions on the costing sheet
+
+Below **Quotation Basics** a **Suggestions** bar helps you fill the draft faster. These buttons only fill draft rows; nothing is saved until you click **Save draft**. They are disabled when the quotation is **Approved**, **Sent** or **Converted**.
+
+- **Suggest materials from Style BOM** — adds one line per BOM item (consumption per piece × 12; wastage is not applied and the price starts at 0).
+- **Load sizes from Style Scale** — fills **Size Ratios** with an equal split of the style's sizes.
+- **Copy costing from another quotation** — pick a quotation and the sections to copy.
+- Beside **Unit Price**, a small *Last PO …* hint appears when a comparable price exists; click **Use** to take it.
+- Near **Labor / CM**, you may see the style's standard SMV and the factory cost per minute (guidance only).
+
+Use the section bar (**Basics, Materials, CM, Other Costs, Size Ratios, Breakdown**) to jump between sections.
+
 ## What happens next
 
-When the costing is right, send it for approval: **Submit for review → Approve → Send** (see **Quotation approval and convert to order**).
+When the costing is right, send it for approval: **Submit for review → Approve → Send to customer** (the **Send to customer** button is on the quotation page once it is Approved). See **Quotation approval and convert to order**.
+
+## Print for the buyer or for the team
+
+Open **Print**. **Document mode** has two choices: **Buyer Quotation** (no internal costs, margin or commission; shows a QR code to verify the quotation once it is Sent) and **Internal Costing Sheet** (full cost breakdown, never give it to the buyer).
 
 ## Tips
 
@@ -429,7 +462,7 @@ When the costing is right, send it for approval: **Submit for review → Approve
         "size ratio",
       ],
       estimatedMinutes: 8,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-23",
       featured: true,
       audience: "merchandiser",
       coverImage: `${S}/merch-quotation-workspace.jpg`,
@@ -494,7 +527,7 @@ A quotation passes three checks before it can become an order: someone **submits
 1. Open the quotation (\`/app/quotations\` → click the code).
 2. Status **DRAFT** or **NEW**: click **Submit for review** (or list **Actions → Submit**).
 3. Status **SUBMITTED**: the approver clicks **Approve**. From now on the commercial fields are **locked**.
-4. Status **APPROVED**: on the list, open **Actions → Send** after you email or hand the offer to the buyer.
+4. Status **APPROVED**: click **Send to customer** on the quotation page (or list **Actions → Send**) after you email or hand the offer to the buyer. Print the **Buyer Quotation** (not the Internal Costing Sheet) for the buyer.
 5. Status **SENT**: when the buyer confirms, click **Create Order** on the quotation (or list **Actions → Convert to order**).
 6. The new order opens. Its code looks like \`ORD-0008\`, and the quotation becomes **CONVERTED**.
 
@@ -518,6 +551,7 @@ If a quotation is already linked to an **order**, it cannot be revised — chang
 
 ## Tips
 
+- If your company enables the customer portal for quotations, the buyer sees **SENT** quotations under **Quotations** in the portal and can **Accept** or **Request revision** (with a note). Their answer notifies your team; it does not change the status, so you still convert or revise yourself.
 - The list chips **Has inquiry**, **Has style image**, **Ready to convert** and **Latest only** help you find work quickly.
 - **Needs action** on the list counts Draft, New and Submitted quotations.
 - If the buyer asks for a new price after approval, use **Duplicate as new version** rather than editing (see *Revise a quotation* above).
@@ -531,7 +565,7 @@ If a quotation is already linked to an **order**, it cannot be revised — chang
       tags: ["quotation", "order", "convert", "approve", "sales", "revision", "version"],
       keywords: ["approve quotation", "send quotation", "convert to order", "sales order", "SO", "confirm order", "buyer accepted", "revise quotation", "new version", "superseded"],
       estimatedMinutes: 4,
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-23",
       audience: "merchandiser",
       coverImage: `${S}/quotations.jpg`,
       infographics: [

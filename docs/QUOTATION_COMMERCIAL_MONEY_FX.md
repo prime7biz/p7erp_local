@@ -11,7 +11,7 @@ This document describes the **normalized semantics and validation rules** for qu
 | `currency` | Document / costing currency for the quote | PATCH + PUT | Same |
 | `exchange_rate` | FX from buyer target currency toward document currency (see UI copy) | Yes | Same |
 | `profit_percentage` | Markup on **rolled-up factory `total_cost`** for auto `quoted_price` | Yes | Same |
-| `quoted_price` | Offer price (manual or derived from cost + margin) | Yes | Same |
+| `quoted_price` | **Order total** offer (manual or derived from cost + margin × qty). Buyer-facing **unit price** = `quoted_price` ÷ `projected_quantity` (QR / Customer Portal only; null when qty ≤ 0) | Yes | Same |
 | `total_amount` | Summary offer total; aligned with `quoted_price` when the latter is set or auto-derived on PUT unless `total_amount` is sent explicitly | Yes (PATCH) | Same |
 | `material_cost`, `manufacturing_cost`, `other_cost`, `total_cost`, `cost_per_piece` | **Calculated on PUT** when any of `materials` / `manufacturing` / `other_costs` keys are present | No (server-owned) | Full PUT blocked when locked |
 
@@ -49,9 +49,14 @@ See `backend/app/modules/orders/commercial_fields.py`. Direct PATCH only exposes
 
 ## Known limitations (before advanced costing AI)
 
-- Line-level amounts are still summed **without** cross-currency normalization; mixed line currencies can make `total_cost` numerically inconsistent.
-- Header `exchange_rate` is **not** applied in server rollup math; it is governed for consistency and AI/UI alignment.
+- Line-level amounts are still summed **without** cross-currency normalization; mixed line currencies can make `total_cost` numerically inconsistent. The Cost Summary card may show a **display-only book-currency estimate** when every included line has a comparable rate; that estimate is never persisted.
+- Header `exchange_rate` is **not** applied in server rollup math; it is governed for consistency and AI/UI alignment. Missing FX stays **manual** (no silent 1.0).
 - Order conversion still copies only a subset of commercial fields; pricing truth may remain on the quotation until a later phase.
+
+## Display FX and comparable price hints (read-only)
+
+- `GET /quotations/prefill-context` and `/quotations/{id}/wiring-context` return `exchange_rates` (latest active rate per currency pair) for **display only**. They never change the header `exchange_rate` or any saved amount.
+- `GET /quotations/item-price-hints?item_ids=` returns the last PO unit price per item. A price is `comparable` only when the PO currency (and the unit of measure, if given) matches the quotation. The costing screen shows the hint beside **Unit Price** only when it is comparable and in the line's own currency, with a one-click **Use** button. Amounts are decimal strings and are never converted between currencies.
 
 ## Readiness for advanced costing AI
 

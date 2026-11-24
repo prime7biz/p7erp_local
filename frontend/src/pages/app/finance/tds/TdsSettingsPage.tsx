@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -7,6 +7,7 @@ import {
   type TdsSectionResponse,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
 import {
   FinanceFormDrawer,
@@ -153,6 +154,10 @@ export function TdsSettingsPage() {
   }
 
   const acctLabel = new Map(accounts.map((a) => [a.id, `${a.account_number} — ${a.name}`]));
+  const accountOptions = useMemo(
+    () => accounts.map((a) => ({ value: a.id, label: `${a.account_number} — ${a.name}` })),
+    [accounts],
+  );
 
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -180,18 +185,15 @@ export function TdsSettingsPage() {
         <FormSection title="Global settings" description="GL account that receives deducted TDS.">
         <label className="block text-xs text-gray-600">
           TDS payable account
-          <select
-            className="mt-1 block w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-            value={tdsPayableAccountId}
-            onChange={(e) => setTdsPayableAccountId(e.target.value)}
-          >
-            <option value="">Not set</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.account_number} — {a.name}
-              </option>
-            ))}
-          </select>
+          <LocalSearchSelect
+            className="mt-1"
+            value={tdsPayableAccountId ? Number(tdsPayableAccountId) : ""}
+            options={accountOptions}
+            onChange={(next) => setTdsPayableAccountId(next === "" ? "" : String(next))}
+            placeholder="Not set"
+            allowClear
+            aria-label="TDS payable account"
+          />
         </label>
         <button type="submit" className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
           Save settings

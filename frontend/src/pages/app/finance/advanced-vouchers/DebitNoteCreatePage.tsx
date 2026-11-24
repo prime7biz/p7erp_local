@@ -2,20 +2,24 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   api,
-  type ChartOfAccountResponse,
   type PartyLedgerBillResponse,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import { logApiError } from "@/utils/logApiError";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
-import { fetchPartyLedgerPage, hydratePartyLedger } from "@/lib/remoteSelectFetchers";
+import {
+  fetchChartAccountPage,
+  fetchPartyLedgerPage,
+  hydrateChartAccount,
+  hydratePartyLedger,
+} from "@/lib/remoteSelectFetchers";
 import { todayLocalISO } from "@/lib/dates";
 import { addMoney } from "@/lib/money";
 
 export function DebitNoteCreatePage() {
   const navigate = useNavigate();
   const [bills, setBills] = useState<PartyLedgerBillResponse[]>([]);
-  const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -29,18 +33,6 @@ export function DebitNoteCreatePage() {
     voucher_date: todayLocalISO(),
     description: "",
   });
-
-  useEffect(() => {
-    void api
-      .listChartOfAccounts({ active_only: true })
-      .then((coa) => {
-        setAccounts(coa);
-      })
-      .catch((e) => {
-        logApiError("DebitNoteCreatePage.init", e);
-        setError((e as Error).message);
-      });
-  }, []);
 
   useEffect(() => {
     if (!form.party_ledger_id) {
@@ -72,6 +64,10 @@ export function DebitNoteCreatePage() {
     e.preventDefault();
     if (!form.party_ledger_id) {
       setError("Select a party ledger.");
+      return;
+    }
+    if (!form.revenue_or_purchase_account_id) {
+      setError("Select a revenue / purchase account.");
       return;
     }
     try {
@@ -127,20 +123,22 @@ export function DebitNoteCreatePage() {
         </label>
         <label className="text-xs text-gray-600 sm:col-span-2">
           Original bill
-          <select
-            className="mt-1 block w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-            value={form.original_bill_id}
-            onChange={(e) => setForm((p) => ({ ...p, original_bill_id: e.target.value }))}
+          <LocalSearchSelect
+            className="mt-1"
+            value={form.original_bill_id ? Number(form.original_bill_id) : ""}
+            options={bills.map((b) => ({
+              value: b.id,
+              label: `${b.bill_number} — pending ${b.pending_amount} (${b.bill_date ?? "no date"})`,
+            }))}
+            onChange={(next) =>
+              setForm((p) => ({ ...p, original_bill_id: next === "" ? "" : String(next) }))
+            }
+            placeholder="Select bill…"
             required
+            allowClear={false}
             disabled={!form.party_ledger_id}
-          >
-            <option value="">Select bill…</option>
-            {bills.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.bill_number} — pending {b.pending_amount} ({b.bill_date ?? "no date"})
-              </option>
-            ))}
-          </select>
+            aria-label="Original bill"
+          />
         </label>
         <label className="text-xs text-gray-600">
           Voucher date
@@ -171,34 +169,36 @@ export function DebitNoteCreatePage() {
         </label>
         <label className="text-xs text-gray-600">
           Tax account
-          <select
-            className="mt-1 block w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-            value={form.tax_account_id}
-            onChange={(e) => setForm((p) => ({ ...p, tax_account_id: e.target.value }))}
-          >
-            <option value="">None</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.account_number} — {a.name}
-              </option>
-            ))}
-          </select>
+          <RemoteSearchSelect
+            className="mt-1"
+            value={form.tax_account_id ? Number(form.tax_account_id) : ""}
+            onChange={(next) =>
+              setForm((p) => ({ ...p, tax_account_id: next === "" ? "" : String(next) }))
+            }
+            fetchPage={fetchChartAccountPage}
+            hydrateById={hydrateChartAccount}
+            placeholder="None"
+            allowClear
+            aria-label="Tax account"
+          />
         </label>
         <label className="text-xs text-gray-600 sm:col-span-2">
           Revenue / purchase account
-          <select
-            className="mt-1 block w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-            value={form.revenue_or_purchase_account_id}
-            onChange={(e) => setForm((p) => ({ ...p, revenue_or_purchase_account_id: e.target.value }))}
-            required
-          >
-            <option value="">Select account…</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.account_number} — {a.name}
-              </option>
-            ))}
-          </select>
+          <RemoteSearchSelect
+            className="mt-1"
+            value={form.revenue_or_purchase_account_id ? Number(form.revenue_or_purchase_account_id) : ""}
+            onChange={(next) =>
+              setForm((p) => ({
+                ...p,
+                revenue_or_purchase_account_id: next === "" ? "" : String(next),
+              }))
+            }
+            fetchPage={fetchChartAccountPage}
+            hydrateById={hydrateChartAccount}
+            placeholder="Select account…"
+            allowClear={false}
+            aria-label="Revenue or purchase account"
+          />
         </label>
         <label className="text-xs text-gray-600 sm:col-span-2">
           Description

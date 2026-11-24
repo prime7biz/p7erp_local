@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccountGroupResponse, ChartOfAccountResponse } from "@/api/client";
@@ -122,10 +123,13 @@ describe("ChartOfAccountsPage", () => {
   });
 
   it("filters the ledger table by account group", async () => {
+    const user = userEvent.setup();
     renderPage();
     expect(await screen.findByText("Petty Cash")).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText("Filter by group"), { target: { value: "10" } });
+    const groupFilter = screen.getByRole("combobox", { name: "Filter by group" });
+    await user.click(groupFilter);
+    await user.click(within(screen.getByRole("listbox")).getByRole("option", { name: "Cash-in-Hand" }));
 
     await waitFor(() => {
       expect(screen.getByText("Petty Cash")).toBeTruthy();

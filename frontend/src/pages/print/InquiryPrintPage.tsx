@@ -138,7 +138,7 @@ export function InquiryPrintPage() {
           <div><span>Department</span><strong>{inquiry.department ?? "-"}</strong></div>
           <div><span>Season</span><strong>{inquiry.season ?? "-"}</strong></div>
           <div><span>Quantity</span><strong>{inquiry.quantity != null ? inquiry.quantity.toLocaleString() : "-"}</strong></div>
-          <div><span>Target Price</span><strong>{formatMoney(inquiry.target_price)} USD</strong></div>
+          <div><span>Target Price</span><strong>{formatMoney(inquiry.target_price)} {inquiry.target_price_currency || inquiry.currency || "USD"}</strong></div>
           <div><span>Intermediary</span><strong>{inquiry.intermediary_name ?? "-"}</strong></div>
           <div><span>Shipping</span><strong>{inquiry.shipping_term ?? "-"}</strong></div>
           <div><span>Commission</span><strong>{inquiry.commission_mode ?? "-"} / {inquiry.commission_type ?? "-"} / {inquiry.commission_value ?? "-"}</strong></div>
@@ -149,7 +149,7 @@ export function InquiryPrintPage() {
         <section className="qp-kpi-grid">
           <div className="qp-kpi qp-kpi-blue">
             <span>Target Price</span>
-            <strong>{formatMoney(inquiry.target_price)} USD</strong>
+            <strong>{formatMoney(inquiry.target_price)} {inquiry.target_price_currency || inquiry.currency || "USD"}</strong>
           </div>
           <div className="qp-kpi qp-kpi-violet">
             <span>Quantity</span>

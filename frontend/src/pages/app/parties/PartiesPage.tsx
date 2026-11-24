@@ -4,13 +4,13 @@ import {
   type CustomerIntermediaryLinkCreate,
   type CustomerIntermediaryLinkResponse,
   type CustomerIntermediaryLinkUpdate,
-  type CustomerResponse,
   type IntermediaryCreate,
   type IntermediaryResponse,
   type IntermediaryUpdate,
 } from "@/api/client";
-import { getCustomersCached } from "@/lib/masterData";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { useConfirm } from "@/components/app/useConfirm";
+import { fetchCustomerPage, hydrateCustomer } from "@/lib/remoteSelectFetchers";
 
 type PartiesTab = "buying_houses" | "agents" | "links";
 
@@ -43,7 +43,7 @@ export function PartiesPage() {
   const [buyingHouses, setBuyingHouses] = useState<IntermediaryResponse[]>([]);
   const [agents, setAgents] = useState<IntermediaryResponse[]>([]);
   const [links, setLinks] = useState<CustomerIntermediaryLinkResponse[]>([]);
-  const [customers, setCustomers] = useState<CustomerResponse[]>([]);
+  const [customerNames, setCustomerNames] = useState<Record<number, string>>({});
 
   const [editingIntermediary, setEditingIntermediary] = useState<IntermediaryResponse | null>(null);
   const [intermediaryForm, setIntermediaryForm] = useState<IntermediaryCreate>(
@@ -59,16 +59,22 @@ export function PartiesPage() {
     setLoading(true);
     setError("");
     try {
-      const [buyingHouseRows, agentRows, linkRows, customerRows] = await Promise.all([
+      const [buyingHouseRows, agentRows, linkRows] = await Promise.all([
         api.listIntermediaries({ kind: "BUYING_HOUSE" }),
         api.listIntermediaries({ kind: "AGENT" }),
         api.listCustomerIntermediaryLinks(),
-        getCustomersCached(),
       ]);
       setBuyingHouses(buyingHouseRows);
       setAgents(agentRows);
       setLinks(linkRows);
-      setCustomers(customerRows);
+      const ids = [...new Set(linkRows.map((l) => l.customer_id).filter((id) => id > 0))];
+      const nameEntries = await Promise.all(
+        ids.map(async (id) => {
+          const opt = await hydrateCustomer(id);
+          return [id, opt?.meta?.name ?? opt?.label ?? `#${id}`] as const;
+        }),
+      );
+      setCustomerNames(Object.fromEntries(nameEntries));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load parties");
     } finally {
@@ -194,7 +200,7 @@ export function PartiesPage() {
     if (activeTab === "links") beginCreateLink();
   }, [activeTab]);
 
-  const customerName = (id: number) => customers.find((c) => c.id === id)?.name ?? `#${id}`;
+  const customerName = (id: number) => customerNames[id] ?? `#${id}`;
 
   return (
     <div className="space-y-6">
@@ -434,20 +440,24 @@ export function PartiesPage() {
                 </h2>
                 <div>
                   <label className="block text-xs text-text-secondary mb-1">Customer **</label>
-                  <select
-                    value={linkForm.customer_id || ""}
-                    onChange={(e) =>
-                      setLinkForm((prev) => ({ ...prev, customer_id: Number(e.target.value) || 0 }))
-                    }
+                  <RemoteSearchSelect
                     className="w-full rounded border border-border-strong px-3 py-2 text-sm"
-                  >
-                    <option value="">Select customer...</option>
-                    {customers.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="Search customer…"
+                    value={linkForm.customer_id > 0 ? linkForm.customer_id : ""}
+                    onChange={(next, opt) => {
+                      const id = typeof next === "number" && next > 0 ? next : 0;
+                      if (id > 0) {
+                        setCustomerNames((prev) => ({
+                          ...prev,
+                          [id]: opt?.meta?.name ?? opt?.label ?? `#${id}`,
+                        }));
+                      }
+                      setLinkForm((prev) => ({ ...prev, customer_id: id }));
+                    }}
+                    fetchPage={fetchCustomerPage}
+                    hydrateById={hydrateCustomer}
+                    allowClear
+                  />
                 </div>
                 <div>
                   <label className="block text-xs text-text-secondary mb-1">Intermediary **</label>

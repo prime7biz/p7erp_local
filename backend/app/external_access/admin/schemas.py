@@ -9,6 +9,7 @@ class ExternalAccessOverviewResponse(BaseModel):
     customer_portal_enabled: bool
     financier_portal_enabled: bool
     customer_notes_enabled: bool
+    customer_portal_quotations_enabled: bool = False
     financier_financial_summary_enabled: bool
     financier_projection_enabled: bool
     external_portal_document_downloads_enabled: bool
@@ -23,6 +24,7 @@ class ExternalFeatureFlagsPatch(BaseModel):
     customer_portal_enabled: bool | None = None
     financier_portal_enabled: bool | None = None
     customer_notes_enabled: bool | None = None
+    customer_portal_quotations_enabled: bool | None = None
     financier_financial_summary_enabled: bool | None = None
     financier_projection_enabled: bool | None = None
     external_portal_document_downloads_enabled: bool | None = None

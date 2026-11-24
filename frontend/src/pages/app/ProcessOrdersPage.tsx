@@ -20,7 +20,14 @@ import { InventoryDocumentPrintSheets } from "@/components/print/InventoryDocume
 import { PrintPreviewModal } from "@/components/print/PrintPreviewModal";
 import { useListViewPreference } from "@/hooks/useInventoryListView";
 import { logApiError } from "@/utils/logApiError";
-import { fetchInventoryItemPage, fetchVendorPage, hydrateInventoryItem, hydrateVendor } from "@/lib/remoteSelectFetchers";
+import {
+  fetchCustomerPage,
+  fetchInventoryItemPage,
+  fetchVendorPage,
+  hydrateCustomer,
+  hydrateInventoryItem,
+  hydrateVendor,
+} from "@/lib/remoteSelectFetchers";
 import { getWarehousesCached } from "@/lib/masterData";
 
 const PROCESS_TYPES = ["KNITTING", "DYEING", "FINISHING", "CUTTING", "WASHING", "PRINTING"];
@@ -54,6 +61,7 @@ function defaultForm(warehouses: WarehouseResponse[]): ProcessOrderCreate {
     process_stage: "",
     prior_process_order_id: null,
     vendor_id: null,
+    customer_id: null,
     linked_order_id: null,
     source_bom_id: null,
     source_order_id: null,
@@ -172,6 +180,7 @@ export function ProcessOrdersPage() {
         ...form,
         prior_process_order_id: form.prior_process_order_id || null,
         vendor_id: form.vendor_id || null,
+        customer_id: form.customer_id || null,
         linked_order_id: form.linked_order_id || null,
         source_bom_id: form.source_bom_id || null,
         source_order_id: form.source_order_id || null,
@@ -445,6 +454,15 @@ export function ProcessOrdersPage() {
             hydrateById={hydrateVendor}
             placeholder="Vendor / subcontractor"
             aria-label="Vendor / subcontractor"
+          />
+          <RemoteSearchSelect
+            value={form.customer_id ?? ""}
+            onChange={(next) => setForm((prev) => ({ ...prev, customer_id: next === "" ? null : next }))}
+            fetchPage={fetchCustomerPage}
+            hydrateById={hydrateCustomer}
+            placeholder="Customer (optional)"
+            aria-label="Customer"
+            allowClear
           />
           <RemoteSearchSelect
             className="rounded border px-3 py-2 text-sm"

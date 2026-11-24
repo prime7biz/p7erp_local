@@ -7,6 +7,8 @@ interface CollapsibleSectionProps {
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
+  /** Anchor id so a section nav can scroll to this section. */
+  id?: string;
 }
 
 export function CollapsibleSection({
@@ -15,13 +17,17 @@ export function CollapsibleSection({
   actions,
   children,
   className,
+  id,
 }: CollapsibleSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
   const panelId = useId();
   const buttonId = useId();
 
   return (
-    <section className={cn("rounded-2xl border border-border bg-surface-raised shadow-sm", className)}>
+    <section
+      id={id}
+      className={cn("scroll-mt-24 rounded-2xl border border-border bg-surface-raised shadow-sm", className)}
+    >
       <header className="flex items-center justify-between gap-3 border-b border-border-subtle px-4 py-3 md:px-5">
         <button
           id={buttonId}

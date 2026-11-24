@@ -733,11 +733,17 @@ export const financeApi = {
       body: JSON.stringify(data),
     });
   },
-  async getBillsAging(params?: { bill_type?: "PAYABLE" | "RECEIVABLE"; as_of_date?: string; party_name?: string }): Promise<BillsAgingResponse> {
+  async getBillsAging(params?: {
+    bill_type?: "PAYABLE" | "RECEIVABLE";
+    as_of_date?: string;
+    party_name?: string;
+    customer_id?: number;
+  }): Promise<BillsAgingResponse> {
     const q = new URLSearchParams();
     if (params?.bill_type) q.set("bill_type", params.bill_type);
     if (params?.as_of_date) q.set("as_of_date", params.as_of_date);
     if (params?.party_name) q.set("party_name", params.party_name);
+    if (params?.customer_id != null) q.set("customer_id", String(params.customer_id));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<BillsAgingResponse>(`/api/v1/finance/bills/aging${suffix}`);
   },

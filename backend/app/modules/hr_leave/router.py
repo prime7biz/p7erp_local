@@ -48,6 +48,7 @@ from app.modules.hr_leave.schemas import (
     LeaveTypeUpdate,
 )
 from app.modules.hr_leave.leave_days import validate_leave_request
+from app.modules.hr_leave import request_core as leave_core
 
 router = APIRouter(prefix="/hr/leave", tags=["hr-leave"])
 
@@ -140,31 +141,7 @@ async def _get_or_create_balance(
     leave_type_id: int,
     balance_year: int,
 ) -> LeaveBalance:
-    row = (
-        await db.execute(
-            select(LeaveBalance).where(
-                LeaveBalance.tenant_id == tenant_id,
-                LeaveBalance.employee_id == employee_id,
-                LeaveBalance.leave_type_id == leave_type_id,
-                LeaveBalance.balance_year == balance_year,
-            )
-        )
-    ).scalar_one_or_none()
-    if row:
-        return row
-    row = LeaveBalance(
-        tenant_id=tenant_id,
-        employee_id=employee_id,
-        leave_type_id=leave_type_id,
-        balance_year=balance_year,
-        allocated_days="0",
-        used_days="0",
-        pending_days="0",
-        closing_balance_days="0",
-    )
-    db.add(row)
-    await db.flush()
-    return row
+    return await leave_core.get_or_create_balance(db, tenant_id, employee_id, leave_type_id, balance_year)
 
 
 async def _adjust_leave_balance(
@@ -176,56 +153,19 @@ async def _adjust_leave_balance(
     validate: bool = False,
     is_paid: bool = True,
 ) -> None:
-    """Move days between pending/used under a row lock and recompute closing.
-
-    ``validate`` rejects bookings beyond the allocation, but only when an allocation
-    exists (tenants that never configured allocations keep the old unlimited behaviour).
-    """
-    bal = await _get_or_create_balance(
+    """Move days between pending/used under a row lock and recompute closing."""
+    await leave_core.adjust_leave_balance(
         db,
-        tenant_id=req.tenant_id,
-        employee_id=req.employee_id,
-        leave_type_id=req.leave_type_id,
-        balance_year=req.from_date.year,
+        req,
+        pending_delta=pending_delta,
+        used_delta=used_delta,
+        validate=validate,
+        is_paid=is_paid,
     )
-    bal = (
-        await db.execute(
-            select(LeaveBalance)
-            .where(LeaveBalance.id == bal.id)
-            .with_for_update()
-            .execution_options(populate_existing=True)
-        )
-    ).scalar_one()
-    allocated = _to_float(bal.allocated_days)
-    used = _to_float(bal.used_days)
-    pending = _to_float(bal.pending_days)
-    if validate and is_paid and allocated > 0:
-        available = allocated - used - pending
-        need = pending_delta + used_delta
-        if need > available + 1e-9:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Insufficient leave balance: available {available:.2f} day(s), requested {need:.2f}",
-            )
-    pending = max(pending + pending_delta, 0.0)
-    used = max(used + used_delta, 0.0)
-    bal.pending_days = _fmt(pending)
-    bal.used_days = _fmt(used)
-    bal.closing_balance_days = _fmt(allocated - used - pending)
 
 
 async def _lock_leave_request(db: AsyncSession, tenant_id: int, request_id: int) -> LeaveRequest:
-    row = (
-        await db.execute(
-            select(LeaveRequest)
-            .where(LeaveRequest.id == request_id, LeaveRequest.tenant_id == tenant_id)
-            .with_for_update()
-            .execution_options(populate_existing=True)
-        )
-    ).scalar_one_or_none()
-    if not row:
-        raise HTTPException(status_code=404, detail="Leave request not found")
-    return row
+    return await leave_core.lock_leave_request(db, tenant_id, request_id)
 
 
 def _leave_type_out(row: LeaveType) -> LeaveTypeOut:
@@ -498,52 +438,25 @@ async def create_leave_request(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+
     _ensure_tenant(user, tenant)
+    await assert_hr_request_required(db, user, tenant)
     employee = await _employee_or_404(db, tenant.id, body.employee_id)
     await _require_self_or_leave_manage(db, user, tenant.id, employee)
-    leave_type = await _leave_type_or_404(db, tenant.id, body.leave_type_id)
-    days_requested = await validate_leave_request(
+    row = await leave_core.create_leave_request_core(
         db,
         tenant=tenant,
-        employee_id=employee.id,
-        from_date=body.from_date,
-        to_date=body.to_date,
-        requested_days=body.days_requested,
-    )
-    initial_status = "PENDING" if leave_type.requires_approval else "APPROVED"
-    row = LeaveRequest(
-        tenant_id=tenant.id,
+        actor=user,
         employee_id=body.employee_id,
         leave_type_id=body.leave_type_id,
         from_date=body.from_date,
         to_date=body.to_date,
-        days_requested=days_requested,
-        reason=body.reason.strip() if body.reason else None,
-        status=initial_status,
-        requested_by=user.id,
-        approved_by=user.id if initial_status == "APPROVED" else None,
-        approved_at=datetime.utcnow() if initial_status == "APPROVED" else None,
+        days_requested=body.days_requested,
+        reason=body.reason,
     )
-    db.add(row)
-    await db.flush()
-    days = _to_float(row.days_requested)
-    if initial_status == "PENDING":
-        await _adjust_leave_balance(db, row, pending_delta=days, validate=True, is_paid=leave_type.is_paid)
-    else:
-        await _adjust_leave_balance(db, row, used_delta=days, validate=True, is_paid=leave_type.is_paid)
     await db.commit()
     await db.refresh(row)
-    if initial_status == "APPROVED":
-        db.add(
-            LeaveApproval(
-                tenant_id=tenant.id,
-                leave_request_id=row.id,
-                action="AUTO_APPROVED",
-                action_by=user.id,
-                note="Auto approved because leave type does not require approval",
-            )
-        )
-        await db.commit()
     return _leave_request_out(row)
 
 
@@ -555,7 +468,10 @@ async def update_leave_request(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+
     _ensure_tenant(user, tenant)
+    await assert_hr_request_required(db, user, tenant)
     row = await _lock_leave_request(db, tenant.id, request_id)
     await _require_self_or_leave_manage(db, user, tenant.id, await _employee_or_404(db, tenant.id, row.employee_id))
     if row.status not in {"DRAFT", "PENDING"}:
@@ -593,27 +509,13 @@ async def submit_leave_request(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+
     _ensure_tenant(user, tenant)
+    await assert_hr_request_required(db, user, tenant)
     row = await _lock_leave_request(db, tenant.id, request_id)
     await _require_self_or_leave_manage(db, user, tenant.id, await _employee_or_404(db, tenant.id, row.employee_id))
-    if row.status not in {"DRAFT", "PENDING"}:
-        raise HTTPException(status_code=400, detail="Only draft/pending requests can be submitted")
-    if row.status == "DRAFT":
-        # Drafts do not block each other, so check the dates again before reserving the days.
-        row.days_requested = await validate_leave_request(
-            db,
-            tenant=tenant,
-            employee_id=row.employee_id,
-            from_date=row.from_date,
-            to_date=row.to_date,
-            requested_days=row.days_requested,
-            exclude_request_id=row.id,
-        )
-        lt = await _leave_type_or_404(db, tenant.id, row.leave_type_id)
-        await _adjust_leave_balance(
-            db, row, pending_delta=_to_float(row.days_requested), validate=True, is_paid=lt.is_paid
-        )
-    row.status = "PENDING"
+    await leave_core.submit_leave_request_core(db, tenant=tenant, row=row)
     await db.commit()
     await db.refresh(row)
     return _leave_request_out(row)
@@ -627,25 +529,14 @@ async def approve_leave_request(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+
     _ensure_tenant(user, tenant)
+    await assert_hr_request_required(db, user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
     row = await _lock_leave_request(db, tenant.id, request_id)
-    if row.status != "PENDING":
-        raise HTTPException(status_code=400, detail="Only pending requests can be approved")
-    row.status = "APPROVED"
-    row.approved_by = user.id
-    row.approved_at = datetime.utcnow()
-    row.approval_note = body.note.strip() if body.note else None
-    days = _to_float(row.days_requested)
-    await _adjust_leave_balance(db, row, pending_delta=-days, used_delta=days)
-    db.add(
-        LeaveApproval(
-            tenant_id=tenant.id,
-            leave_request_id=row.id,
-            action="APPROVED",
-            action_by=user.id,
-            note=row.approval_note,
-        )
+    await leave_core.approve_leave_request_core(
+        db, tenant=tenant, actor=user, row=row, note=body.note
     )
     await db.commit()
     await db.refresh(row)
@@ -660,24 +551,14 @@ async def reject_leave_request(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.authority.hr_policy import assert_hr_request_required
+
     _ensure_tenant(user, tenant)
+    await assert_hr_request_required(db, user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
     row = await _lock_leave_request(db, tenant.id, request_id)
-    if row.status != "PENDING":
-        raise HTTPException(status_code=400, detail="Only pending requests can be rejected")
-    row.status = "REJECTED"
-    row.approved_by = user.id
-    row.approved_at = datetime.utcnow()
-    row.approval_note = body.note.strip() if body.note else None
-    await _adjust_leave_balance(db, row, pending_delta=-_to_float(row.days_requested))
-    db.add(
-        LeaveApproval(
-            tenant_id=tenant.id,
-            leave_request_id=row.id,
-            action="REJECTED",
-            action_by=user.id,
-            note=row.approval_note,
-        )
+    await leave_core.reject_leave_request_core(
+        db, tenant=tenant, actor=user, row=row, note=body.note
     )
     await db.commit()
     await db.refresh(row)

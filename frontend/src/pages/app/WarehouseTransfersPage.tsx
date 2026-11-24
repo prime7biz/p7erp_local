@@ -7,6 +7,7 @@ import {
   type WarehouseTransferCreate,
   type WarehouseTransferResponse,
 } from "@/api/client";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { GlPostingsPanel } from "@/components/inventory/GlPostingsPanel";
 import { InventoryDocumentPrintSheets } from "@/components/print/InventoryDocumentPrintSheets";
@@ -218,33 +219,37 @@ export function WarehouseTransfersPage() {
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4">
           <label className="text-xs text-text-muted">
             From warehouse
-            <select
-              className="mt-0.5 w-full rounded border border-border px-2 py-2 text-sm"
-              value={form.from_warehouse_id || ""}
-              onChange={(e) => setForm((p) => ({ ...p, from_warehouse_id: Number(e.target.value) }))}
-            >
-              <option value={0}>Select…</option>
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.warehouse_code} — {w.name}
-                </option>
-              ))}
-            </select>
+            <LocalSearchSelect
+              className="mt-0.5 w-full"
+              value={form.from_warehouse_id > 0 ? form.from_warehouse_id : ""}
+              options={warehouses.map((w) => ({
+                value: w.id,
+                label: `${w.warehouse_code} — ${w.name}`,
+              }))}
+              onChange={(next) =>
+                setForm((p) => ({ ...p, from_warehouse_id: next === "" ? 0 : Number(next) }))
+              }
+              placeholder="Select…"
+              aria-label="From warehouse"
+              allowClear
+            />
           </label>
           <label className="text-xs text-text-muted">
             To warehouse
-            <select
-              className="mt-0.5 w-full rounded border border-border px-2 py-2 text-sm"
-              value={form.to_warehouse_id || ""}
-              onChange={(e) => setForm((p) => ({ ...p, to_warehouse_id: Number(e.target.value) }))}
-            >
-              <option value={0}>Select…</option>
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.warehouse_code} — {w.name}
-                </option>
-              ))}
-            </select>
+            <LocalSearchSelect
+              className="mt-0.5 w-full"
+              value={form.to_warehouse_id > 0 ? form.to_warehouse_id : ""}
+              options={warehouses.map((w) => ({
+                value: w.id,
+                label: `${w.warehouse_code} — ${w.name}`,
+              }))}
+              onChange={(next) =>
+                setForm((p) => ({ ...p, to_warehouse_id: next === "" ? 0 : Number(next) }))
+              }
+              placeholder="Select…"
+              aria-label="To warehouse"
+              allowClear
+            />
           </label>
           <label className="text-xs text-text-muted">
             Transfer date

@@ -1,6 +1,19 @@
 from datetime import datetime
-from sqlalchemy import String, Text, DateTime, ForeignKey, Index, UniqueConstraint
+from decimal import Decimal
+
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.database import Base
 
 
@@ -50,6 +63,41 @@ class Customer(Base):
     shipping_country: Mapped[str | None] = mapped_column(String(64), nullable=True)
     same_as_billing: Mapped[bool] = mapped_column(nullable=False, default=True)
     preferred_currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    payment_terms: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    default_incoterm: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    typical_lead_time_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    industry_segment: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    compliance_level: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    credit_limit: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+
+class CustomerContact(Base):
+    __tablename__ = "customer_contacts"
+    __table_args__ = (
+        Index("ix_customer_contacts_tenant_customer", "tenant_id", "customer_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    customer_id: Mapped[int] = mapped_column(
+        ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    designation: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    department: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    whatsapp: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False

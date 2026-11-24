@@ -1,5 +1,5 @@
 ---
-description: Prime7 balanced (cost-aware) orchestration. Auto by default; Premium fully opt-in. Prefer cheaper models (GPT 5.6 / Sonnet 5.5 / Gemini). Never auto-launch Opus. STANDARD / ADVANCED / CRITICAL modes, gates, subagent and correction limits. Always applied.
+description: Prime7 balanced (cost-aware) orchestration. Auto by default; Premium fully opt-in. Prefer cheaper models (GPT 5.6 / Sonnet 5.5 / Gemini). Never auto-launch Opus. STANDARD / ADVANCED / CRITICAL modes and gates. Up to 15 agents per task, or any number the user names in chat. Always applied.
 globs:
 alwaysApply: true
 ---
@@ -26,8 +26,10 @@ fields, its approval prompts and your dashboard spending limits.
 3. **Never auto-launch expensive Opus models.** Do not invoke `claude-opus-*` / `*-thinking-high` Opus pins, and do not
    start `architect-premium` or `security-auditor-premium` unless the user explicitly approved Premium for this task.
    Prefer Auto inherit agents, or (when the user opts into Premium) GPT 5.6 Sol, Claude Sonnet 5.5, or Gemini.
-4. **Budget per task without asking:** at most **3 subagent runs** in total, at most **1 Premium run**, and at most
-   **2 correction rounds** per failed gate. Beyond that, report to the user and ask.
+4. **Agent count:** use up to **15 agents** on a task. If the user names a number in the chat, use that number, including
+   a number above 15. Launch an agent only when it adds clear value. Premium stays opt-in: at most **1 Premium run**
+   unless the user asks for Premium. At most **2 correction rounds** per failed gate. Beyond the Premium or correction
+   limit, report to the user and ask.
 5. **Keep context small:** prefer `Grep` and partial `Read` over reading whole large files; use `explore` with
    "quick" thoroughness; do not re-read files already in this chat; give subagents short, focused prompts.
 6. Run tests yourself with the Shell tool (Docker / npm). Use `test-runner` only when the run is long or noisy.
@@ -51,7 +53,8 @@ fields, its approval prompts and your dashboard spending limits.
 - Never let the implementer be the only reviewer of substantial or risky work. Code generation is not proof.
 - A test passed only if executed output is visible in this chat.
 - Read-only agents cannot run shell; pass them `git status`, `git diff` and test output in the prompt.
-- Run at most **two** implementation agents at once, and only in separate Git worktrees with disjoint files.
+- The task may use up to **15 agents**, or the number the user names in the chat. Agents that write files still run in
+  separate Git worktrees with disjoint files. Never put two writers in one checkout.
 - Ask the user before destructive actions, production migrations or deploys, force pushes, or production data changes.
 - Never enable on-demand billing, raise spending limits or buy credits. If a Premium call fails, do not work around it;
   report and ask.

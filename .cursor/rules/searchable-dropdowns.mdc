@@ -1,0 +1,36 @@
+---
+description: Entity/master dropdowns must support type-to-narrow search (LocalSearchSelect or RemoteSearchSelect)
+globs: frontend/src/**/*.{tsx,ts}
+alwaysApply: false
+---
+
+# Searchable entity dropdowns
+
+When the user picks a **master or entity** (ledger, account group, customer, vendor, item, style, order,
+warehouse, department, designation, section, sewing line, cost center, employee, …), do **not** use a
+native `<select>`. Native selects only jump by prefix and feel like one-letter search.
+
+## Use one of these
+
+1. **`RemoteSearchSelect`** (`frontend/src/components/app/RemoteSearchSelect.tsx`) — large lists with
+   server search. Prefer helpers in `frontend/src/lib/remoteSelectFetchers.ts`
+   (`fetchCustomerPage`, `fetchInventoryItemPage`, `fetchChartAccountPage`, `fetchStylePage`, …).
+2. **`LocalSearchSelect`** (`frontend/src/components/app/LocalSearchSelect.tsx`) — lists already loaded
+   in the page (warehouses, account groups, departments, designations, sewing lines, …).
+   Filter is case-insensitive **contains** on the label (typing `operator` keeps “Junior Operator”
+   and “Senior Operator”).
+
+Shared wrappers that already type-to-narrow: `QuickAddSelect`, HR/Phase2 `SelectField` with
+`searchable`, `HrEmployeeSelect`.
+
+## Keep native `<select>` only for tiny enums
+
+Yes/No, status (Draft/Active/…), debit/credit, financial year, currency, page size, gender, shipping
+term, and similar fixed lists of a few options.
+
+## Checklist for new pickers
+
+- [ ] Entity list → Local or Remote search select (not native `<select>`).
+- [ ] `required` / red required border still work when the form needs them.
+- [ ] Inside tables or drawers, set `menuPortal` so the menu is not clipped.
+- [ ] Update tests that used `selectOptions` to drive the combobox instead.

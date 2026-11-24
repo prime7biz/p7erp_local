@@ -271,34 +271,25 @@ services:
           cpus: "0.5"
           memory: 384M
 
-  # Dev only: Vite dev server with hot reload (edits show up without rebuilding the image).
-  # Production uses the prebuilt Nginx image from frontend/Dockerfile.prod (docker-compose.prod.yml).
+  # Local: the same Nginx image production uses (frontend/Dockerfile.prod), so pages load fast with no
+  # Vite file watching over the Windows bind mount. No hot reload: after a frontend change run
+  #   docker compose up -d --build frontend
+  # Vite dev server (hot reload) is still available on the host: cd frontend; npm run dev
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
       args:
-        # Empty = same-origin /api/* through the Vite dev proxy (no browser CORS).
+        # Empty = same-origin /api/* (nginx.prod.conf proxies /api to the backend container).
         - VITE_API_BASE_URL=${VITE_API_BASE_URL:-}
-        - VITE_ALLOWED_HOSTS=${VITE_ALLOWED_HOSTS:-localhost,127.0.0.1}
+        - VITE_PWA_ENABLED=${VITE_PWA_ENABLED:-false}
+        - VITE_ANDROID_APK_URL=${VITE_ANDROID_APK_URL:-}
+        - VITE_PLAY_STORE_URL=${VITE_PLAY_STORE_URL:-}
+        # Local speed-up: skip the public-page pre-render step (SEO only; production keeps it on).
+        - PRERENDER_PUBLIC_HTML=false
     restart: always
     ports:
-      - "5173:5173"
-    environment:
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
-      VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS:-localhost,127.0.0.1}
-      VITE_DEV_PROXY_TARGET: ${VITE_DEV_PROXY_TARGET:-http://backend:8000}
-      # false = browser no longer reloads by itself on each saved file; press F5 to see changes.
-      VITE_DEV_HMR: ${VITE_DEV_HMR:-true}
-      # Installable mobile app (docs/mobile-feasibility). Set VITE_PWA_ENABLED=true in .env to try it locally.
-      VITE_PWA_ENABLED: ${VITE_PWA_ENABLED:-false}
-      VITE_ANDROID_APK_URL: ${VITE_ANDROID_APK_URL:-}
-      VITE_PLAY_STORE_URL: ${VITE_PLAY_STORE_URL:-}
-      CHOKIDAR_USEPOLLING: true
-      CHOKIDAR_INTERVAL: 1000
-    volumes:
-      - ./frontend:/app
-      - frontend_node_modules:/app/node_modules
+      - "5173:80"
     depends_on:
       backend:
         condition: service_healthy

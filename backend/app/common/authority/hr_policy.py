@@ -322,10 +322,15 @@ def require_ess_access():
         user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
     ) -> None:
+        tenant = None
+        tenant_feature_flags = None
         if getattr(request.state, "tenant_feature_flags_cached", False):
             tenant_feature_flags = getattr(request.state, "tenant_feature_flags", None)
-            tenant = getattr(request.state, "tenant", None)
-        else:
+            # get_current_user stores the tenant as ``auth_user_tenant`` (not ``tenant``).
+            tenant = getattr(request.state, "auth_user_tenant", None) or getattr(
+                request.state, "tenant", None
+            )
+        if tenant is None:
             tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
             tenant = tenant_result.scalar_one_or_none()
             tenant_feature_flags = tenant.feature_flags if tenant else None

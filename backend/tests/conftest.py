@@ -77,6 +77,16 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     )
 
 
+@pytest_asyncio.fixture(autouse=True)
+async def _release_async_db_between_tests():
+    """Each test gets its own event loop. Drop the shared pool and audit tasks with that loop."""
+    from app.common.request_logger import release_db_resources_for_this_loop
+
+    await release_db_resources_for_this_loop()
+    yield
+    await release_db_resources_for_this_loop()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _rls_pin_stubbed_auth():
     """RLS test mode only: tests that stub ``get_current_user`` (or the external principal) still

@@ -150,9 +150,35 @@ def _submit_audit_row(row: dict) -> None:
     global _audit_queue
     settings = get_settings()
     loop = asyncio.get_running_loop()
-    if _audit_queue is None or _audit_queue.loop is not loop:
+    if _audit_queue is not None and _audit_queue.loop is not loop:
+        # The previous loop is finished (pytest opens a new loop per test). Drop that queue.
+        # Its tasks were cancelled in release_db_resources_for_this_loop before the loop closed.
+        _audit_queue = None
+    if _audit_queue is None:
         _audit_queue = _AuditWriteQueue(loop, int(settings.audit_log_max_concurrency or 1))
     _audit_queue.submit(row, int(settings.audit_log_max_pending or 1))
+
+
+async def release_db_resources_for_this_loop() -> None:
+    """Cancel this loop's audit writes and close the shared DB pool.
+
+    Pytest uses a new event loop for every test. A pool connection or audit task left on the
+    previous loop makes the next test fail with ``Future attached to a different loop`` or
+    ``Event loop is closed``.
+    """
+    global _audit_queue
+    loop = asyncio.get_running_loop()
+    queue = _audit_queue
+    if queue is not None and queue.loop is loop:
+        _audit_queue = None
+        pending = [task for task in list(queue.tasks) if not task.done()]
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+    elif queue is not None:
+        _audit_queue = None
+    await engine.dispose()
 
 
 _READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})

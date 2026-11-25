@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.modules.quotations.quotation_basis import unit_price as quotation_unit_price
 from app.common.business_date import today_local
 from app.common.codegen import next_tenant_code
 from app.models import (
@@ -96,7 +97,7 @@ def resolve_selling_unit_price(
             )
 
     if confirm_quotation_fallback and live_quotation is not None:
-        qprice = _d(live_quotation.quoted_price)
+        qprice = _d(quotation_unit_price(live_quotation))  # per-piece for dozen-first quotations
         if qprice > 0:
             return (
                 qprice,

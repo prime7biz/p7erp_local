@@ -157,8 +157,12 @@ export function QuotationPrintPage() {
     : me?.username || me?.email || "System";
   const currency = quotation.currency ?? "USD";
   const totalQty = quotation.size_ratios.reduce((acc, row) => acc + (row.quantity ?? 0), 0);
-  const fobCost = Number(quotation.total_cost ?? 0);
-  const quotedPrice = Number(quotation.quoted_price ?? quotation.total_amount ?? 0);
+  // Dozen-first quotations are costed per dozen and priced per piece; margin is shown on the dozen figures.
+  const dozenFirst = quotation.costing_basis === "PER_DOZEN";
+  const fobCost = Number((dozenFirst ? quotation.total_cost_per_dozen : quotation.total_cost) ?? 0);
+  const quotedPrice = Number(
+    (dozenFirst ? quotation.quoted_price_per_dozen : (quotation.quoted_price ?? quotation.total_amount)) ?? 0,
+  );
   const marginAmount = subtractMoney(quotedPrice, fobCost);
   const marginPct = fobCost ? (marginAmount / fobCost) * 100 : 0;
   const tenantName = settings?.company_name || me?.tenant_name || "Tenant";
@@ -179,7 +183,15 @@ export function QuotationPrintPage() {
   const verifyUrl = publicVerifyUrl(quotation.verification_id);
   const categoryName = (categoryId: number | null | undefined) =>
     categoryId == null ? "-" : categories.find((c) => c.id === categoryId)?.name ?? `#${categoryId}`;
-  const unitQuotedPrice = projectedQtyValue > 0 ? quotedPrice / projectedQtyValue : 0;
+  const unitQuotedPrice = dozenFirst
+    ? Number(quotation.quoted_price_per_piece ?? 0)
+    : projectedQtyValue > 0
+      ? quotedPrice / projectedQtyValue
+      : 0;
+  const orderTotalText =
+    dozenFirst && !(Number(projectedQtyValue) > 0)
+      ? "Quantity not set"
+      : `${formatMoney(quotation.quoted_price ?? quotation.total_amount)} ${currency}`;
   const watermarkText = ["APPROVED", "SENT", "CONVERTED"].includes((quotation.status || "").toUpperCase()) ? "Final" : "Draft";
   const watermarkClass = watermarkText === "Final" ? "qp-watermark-final" : "qp-watermark-draft";
 
@@ -332,20 +344,26 @@ export function QuotationPrintPage() {
         <section className="qp-kpi-grid">
           {!isBuyer && (
             <div className="qp-kpi qp-kpi-blue">
-              <span>FOB Cost</span>
-              <strong>{formatMoney(quotation.total_cost)} {currency}</strong>
+              <span>{dozenFirst ? "FOB Cost / dozen" : "FOB Cost"}</span>
+              <strong>{formatMoney(dozenFirst ? quotation.total_cost_per_dozen : quotation.total_cost)} {currency}</strong>
             </div>
           )}
           {isBuyer && (
             <div className="qp-kpi qp-kpi-blue">
               <span>Unit Quoted Price</span>
-              <strong>{formatMoney(unitQuotedPrice)} {currency}</strong>
+              <strong>{dozenFirst ? unitQuotedPrice.toFixed(4) : formatMoney(unitQuotedPrice)} {currency}</strong>
             </div>
           )}
           <div className="qp-kpi qp-kpi-violet">
             <span>{isBuyer ? "Total Quoted" : "Quoted Price"}</span>
-            <strong>{formatMoney(quotation.quoted_price ?? quotation.total_amount)} {currency}</strong>
+            <strong>{orderTotalText}</strong>
           </div>
+          {dozenFirst && !isBuyer && (
+            <div className="qp-kpi qp-kpi-blue">
+              <span>Price / piece · dozen</span>
+              <strong>{unitQuotedPrice.toFixed(4)} · {formatMoney(quotation.quoted_price_per_dozen)} {currency}</strong>
+            </div>
+          )}
           {!isBuyer && (
             <div className="qp-kpi qp-kpi-amber">
               <span>Margin</span>

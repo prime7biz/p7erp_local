@@ -179,6 +179,17 @@ class Quotation(Base):
     valid_until: Mapped[date | None] = mapped_column(Date, nullable=True)
     # Public QR check id (migration 336). Set while SENT / CONVERTED, cleared on reject / cancel / supersede.
     verification_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
+    # Migration 338 (flag quotation_costing_accuracy_v1). costing_basis NULL = legacy quotation: stored values
+    # are order totals and are never reinterpreted. quoted_price_per_piece is the buyer unit price.
+    costing_basis: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    margin_method: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    fixed_commission_basis: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    material_cost_per_dozen: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    manufacturing_cost_per_dozen: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    other_cost_per_dozen: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    total_cost_per_dozen: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    quoted_price_per_dozen: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    quoted_price_per_piece: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     size_ratio_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )

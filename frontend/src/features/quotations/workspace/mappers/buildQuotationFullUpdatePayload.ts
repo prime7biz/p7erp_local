@@ -6,6 +6,7 @@ import type {
   QuotationOtherCostLine,
   QuotationSizeRatioLine,
 } from "@/api/client";
+import { stripRowKey } from "./rowKeys";
 import {
   isPersistableManufacturingRow,
   isPersistableMaterialRow,
@@ -22,6 +23,8 @@ interface BuildPayloadInput {
   manufacturing: QuotationManufacturingLine[];
   otherCosts: QuotationOtherCostLine[];
   sizeRatios: QuotationSizeRatioLine[];
+  /** Dozen-first only: the buyer price per piece when the user typed one (null = server calculates it). */
+  manualPricePerPiece?: number | null;
 }
 
 /** BDT per 1 unit of document currency × line amount in document currency → local_amount on each line. */
@@ -68,8 +71,8 @@ function enrichLinesWithLocalAmounts(
   };
 }
 
-function withSerialNos<T extends { serial_no?: number | null }>(rows: T[]): T[] {
-  return rows.map((row, i) => ({ ...row, serial_no: i + 1 }));
+function withSerialNos<T extends { serial_no?: number | null; _rowKey?: string }>(rows: T[]): Array<Omit<T, "_rowKey">> {
+  return rows.map((row, i) => ({ ...stripRowKey(row), serial_no: i + 1 }));
 }
 
 export function buildQuotationFullUpdatePayload({
@@ -78,6 +81,7 @@ export function buildQuotationFullUpdatePayload({
   manufacturing,
   otherCosts,
   sizeRatios,
+  manualPricePerPiece = null,
 }: BuildPayloadInput): QuotationFullUpdate {
   const { materials: mats, manufacturing: mfg, otherCosts: oc } = enrichLinesWithLocalAmounts(
     quotation,
@@ -85,7 +89,16 @@ export function buildQuotationFullUpdatePayload({
     manufacturing,
     otherCosts,
   );
+  const dozenFirst = quotation.costing_basis === "PER_DOZEN";
   return {
+    ...(dozenFirst
+      ? {
+          costing_basis: "PER_DOZEN" as const,
+          margin_method: quotation.margin_method ?? "MARKUP_ON_COST",
+          fixed_commission_basis: "PER_ORDER" as const,
+          quoted_price_per_piece: manualPricePerPiece != null ? manualPricePerPiece.toFixed(4) : null,
+        }
+      : {}),
     style_ref: quotation.style_ref,
     style_id: quotation.style_id,
     department: quotation.department,

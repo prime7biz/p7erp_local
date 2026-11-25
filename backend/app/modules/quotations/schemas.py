@@ -14,6 +14,7 @@ from app.common.money_schema import (
 )
 
 
+
 class QuotationCreate(BaseModel):
   customer_id: int = Field(..., gt=0)
   inquiry_id: int | None = Field(None, gt=0)
@@ -74,6 +75,9 @@ class QuotationResponse(BaseModel):
   cost_per_piece: str | None = None
   profit_percentage: str | None = None
   quoted_price: str | None = None
+  costing_basis: str | None = None
+  margin_method: str | None = None
+  quoted_price_per_piece: str | None = None
   status: str
   next_status_options: list[str] = Field(default_factory=list)
   is_converted_to_order: bool = False
@@ -122,6 +126,8 @@ class QuotationMaterialLine(BaseModel):
   exchange_rate: RateLineStr = "1"
   base_amount: MoneyLineStr = "0"
   local_amount: MoneyLineStr = "0"
+  # Dozen-first costing (flag quotation_costing_accuracy_v1). Ignored while the flag is OFF.
+  wastage_pct: PctStrOpt = None
 
 
 class QuotationManufacturingLine(BaseModel):
@@ -140,6 +146,14 @@ class QuotationManufacturingLine(BaseModel):
   exchange_rate: RateLineStr = "1"
   base_amount: MoneyLineStr = "0"
   local_amount: MoneyLineStr = "0"
+  # Dozen-first costing (flag quotation_costing_accuracy_v1). Ignored while the flag is OFF.
+  cm_mode: Literal["SMV_CPM", "LINE_OUTPUT", "DIRECT"] | None = None
+  smv: MoneyStrOpt = None
+  efficiency_pct: PctStrOpt = None
+  cpm: RateStrOpt = None
+  cpm_basis: Literal["EARNED_MIN", "AVAILABLE_MIN"] | None = None
+  working_hours_per_day: MoneyStrOpt = None
+  direct_cm_basis: Literal["PER_DOZEN", "PER_PIECE"] | None = None
 
 
 class QuotationOtherCostLine(BaseModel):
@@ -157,6 +171,8 @@ class QuotationOtherCostLine(BaseModel):
   exchange_rate: RateLineStr = "1"
   base_amount: MoneyLineStr = "0"
   local_amount: MoneyLineStr = "0"
+  # Dozen-first costing: how a fixed row is entered. Ignored while the flag is OFF.
+  cost_basis: Literal["PER_DOZEN", "PER_PIECE", "PER_ORDER"] | None = None
 
 
 class QuotationSizeRatioLine(BaseModel):
@@ -216,6 +232,16 @@ class QuotationDetailResponse(BaseModel):
   notes: str | None
   created_at: str
   updated_at: str
+  # Dozen-first costing (NULL on legacy quotations; quoted_price/total_amount stay ORDER totals there).
+  costing_basis: str | None = None
+  margin_method: str | None = None
+  fixed_commission_basis: str | None = None
+  material_cost_per_dozen: str | None = None
+  manufacturing_cost_per_dozen: str | None = None
+  other_cost_per_dozen: str | None = None
+  total_cost_per_dozen: str | None = None
+  quoted_price_per_dozen: str | None = None
+  quoted_price_per_piece: str | None = None
   materials: list[QuotationMaterialLine] = []
   manufacturing: list[QuotationManufacturingLine] = []
   other_costs: list[QuotationOtherCostLine] = []
@@ -258,6 +284,12 @@ class QuotationFullUpdate(BaseModel):
   pack_ratio: str | None = None
   pcs_per_carton: int | None = None
   notes: str | None = None
+  # Dozen-first costing (flag quotation_costing_accuracy_v1). All ignored while the flag is OFF.
+  # quoted_price_per_piece: send a value only for a manual buyer price; null = let the server compute it.
+  costing_basis: Literal["PER_DOZEN"] | None = None
+  margin_method: Literal["MARKUP_ON_COST", "MARGIN_ON_FOB"] | None = None
+  fixed_commission_basis: Literal["PER_ORDER"] | None = None
+  quoted_price_per_piece: MoneyStrOpt = None
   materials: list[QuotationMaterialLine] | None = None
   manufacturing: list[QuotationManufacturingLine] | None = None
   other_costs: list[QuotationOtherCostLine] | None = None

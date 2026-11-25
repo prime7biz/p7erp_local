@@ -634,6 +634,9 @@ def _quotation_row(q: Any, customer_name: str | None, *, with_costs: bool) -> di
         "valid_until": q.valid_until.isoformat() if q.valid_until else None,
         "href": f"/app/quotations/{q.id}",
     }
+    if q.costing_basis is not None:
+        # Dozen-first quotation: quoted_price / total_amount are order totals; the buyer unit price is per piece.
+        row["quoted_price_per_piece"] = None if q.quoted_price_per_piece is None else format(q.quoted_price_per_piece, "f")
     if with_costs:
         row["total_cost"] = None if q.total_cost is None else format(q.total_cost, "f")
         row["cost_per_piece"] = None if q.cost_per_piece is None else format(q.cost_per_piece, "f")

@@ -152,9 +152,18 @@ def _build_margin_impact(
   tentative_total: float,
   actual_total: float,
   overall_status: str,
+  order_quantity: int | None = None,
 ) -> dict[str, Any]:
   snap_cost = _parse_snap_money(snap, "total_cost")
   snap_quoted = _parse_snap_money(snap, "quoted_price")
+  if snap and snap.get("costing_basis"):
+    # Dozen-first snapshot: `quoted_price` is the per-piece price, so price the ORDER quantity explicitly
+    # (cost per dozen x qty / 12 against per-piece price x qty); works when the quote had no quantity.
+    qty = float(order_quantity or 0)
+    per_piece = _parse_snap_money(snap, "quoted_price_per_piece")
+    cost_dz = _parse_snap_money(snap, "total_cost_per_dozen")
+    snap_quoted = per_piece * qty if per_piece is not None and qty > 0 else None
+    snap_cost = cost_dz * qty / 12.0 if cost_dz is not None and qty > 0 else None
   snap_profit = _parse_snap_money(snap, "profit_percentage")
   var_amt, var_pct, _ = compute_variance(tentative_total, actual_total)
 
@@ -450,6 +459,7 @@ async def build_order_cost_variance(
       tentative_total=tentative_total,
       actual_total=actual_total,
       overall_status=overall_status,
+      order_quantity=order.quantity,
     )
     # Align margin variance with green-when-no-actuals rule.
     if not has_actual_data:

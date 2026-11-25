@@ -26,6 +26,11 @@ TRUNC_VALUE = 2048
 TRUNC_SNAP = 1024
 TRUNC_META_JSON = 48_000
 
+# Header fields that drive a dozen-first price; AI suggestions for them are skipped on such quotations.
+_DOZEN_FIRST_PRICE_FIELDS: frozenset[str] = frozenset(
+    {"projected_quantity", "commission_mode", "commission_type", "commission_value", "currency", "total_amount"}
+)
+
 FIELD_SUGGESTION_ACTION_TYPES: frozenset[str] = frozenset({"extract", "enrich"})
 TRACE_ACTION_TYPES: frozenset[str] = frozenset({"validate", "dedupe", "summary", "next_actions"})
 
@@ -813,6 +818,10 @@ async def apply_suggestions_to_quotation(
             skipped.append(nk)
             continue
         if nk in PROTECTED_FIELDS:
+            skipped.append(nk)
+            continue
+        if quotation.costing_basis is not None and nk in _DOZEN_FIRST_PRICE_FIELDS:
+            # A dozen-first price is computed by the full costing save; AI must not change its inputs behind it.
             skipped.append(nk)
             continue
         if is_quotation_commercial_locked(quotation.status) and nk in QUOTATION_PROTECTED_COMMERCIAL_FIELDS:

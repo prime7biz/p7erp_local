@@ -44,6 +44,7 @@ from app.models import (
   InquiryEvent,
   InquiryItem,
     Item,
+    ItemCategory,
     ItemUnit,
     Order,
     Quotation,
@@ -72,6 +73,8 @@ from app.modules.quotations.wiring_service import router as wiring_router
 from app.modules.quotations import quotation_cost_benchmark_service as qcb_svc
 from app.modules.quotations.quotation_ai_service import compute_quotation_ai_indicators
 from app.modules.quotations.quotation_ai_schemas import QuotationAiIndicatorsOut
+from app.common.tenant_feature_keys import is_quotation_costing_accuracy_v1_enabled
+from app.modules.quotations.quotation_costing_service import apply_dozen_first_costing
 from app.modules.quotations.quotation_costing_feature import (
     is_quotation_cost_benchmark_enabled,
 )
@@ -109,6 +112,47 @@ def _quantize_money4(d: Decimal) -> Decimal:
   return d.quantize(FOUR_DP, rounding=ROUND_HALF_UP)
 
 
+# Header fields that change a dozen-first price, so a PUT carrying one of them recomputes the quotation.
+_DOZEN_FIRST_DRIVER_FIELDS = frozenset({
+  "profit_percentage",
+  "commission_mode",
+  "commission_type",
+  "commission_value",
+  "projected_quantity",
+  "margin_method",
+  "quoted_price_per_piece",
+  "costing_basis",
+  "currency",
+})
+
+_DOZEN_FIRST_PATCH_BLOCKED = frozenset({"total_amount", "commission_mode", "commission_type", "commission_value", "currency"})
+
+# Fields nobody may write directly on a dozen-first quotation while its feature switch is OFF.
+_DOZEN_FIRST_LOCKED_FIELDS = _DOZEN_FIRST_DRIVER_FIELDS | frozenset({
+  "quoted_price",
+  "total_amount",
+  "material_cost",
+  "manufacturing_cost",
+  "other_cost",
+  "total_cost",
+  "cost_per_piece",
+})
+
+
+def _optional_decimal(value: str | None, places: str) -> Decimal | None:
+  """Parse an optional costing input; None stays None (the calculator treats it as 'not set')."""
+  if value is None or (isinstance(value, str) and not value.strip()):
+    return None
+  try:
+    return parse_money_decimal(value, field="costing").quantize(Decimal(places), rounding=ROUND_HALF_UP)
+  except MoneyParseError as e:
+    raise HTTPException(
+      status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+      detail={"code": "QUOTATION_MONEY_VALIDATION", "message": str(e)},
+    ) from e
+
+
+
 def _quotation_header_api_strings(q: Quotation) -> dict[str, str | None]:
   return {
     "target_price": format_money(q.target_price),
@@ -121,6 +165,12 @@ def _quotation_header_api_strings(q: Quotation) -> dict[str, str | None]:
     "cost_per_piece": format_money(q.cost_per_piece),
     "profit_percentage": format_pct(q.profit_percentage),
     "quoted_price": format_money(q.quoted_price),
+    "material_cost_per_dozen": format_money(q.material_cost_per_dozen),
+    "manufacturing_cost_per_dozen": format_money(q.manufacturing_cost_per_dozen),
+    "other_cost_per_dozen": format_money(q.other_cost_per_dozen),
+    "total_cost_per_dozen": format_money(q.total_cost_per_dozen),
+    "quoted_price_per_dozen": format_money(q.quoted_price_per_dozen),
+    "quoted_price_per_piece": format_money(q.quoted_price_per_piece),
   }
 
 
@@ -213,6 +263,9 @@ def _to_quotation_response(
     cost_per_piece=hdr["cost_per_piece"],
     profit_percentage=hdr["profit_percentage"],
     quoted_price=hdr["quoted_price"],
+    costing_basis=quotation.costing_basis,
+    margin_method=quotation.margin_method,
+    quoted_price_per_piece=hdr["quoted_price_per_piece"],
     status=quotation.status,
     next_status_options=next_status_options(
       QUOTATION_TRANSITIONS,
@@ -961,6 +1014,7 @@ def _material_to_line(m: QuotationMaterial) -> QuotationMaterialLine:
     exchange_rate=format_rate(m.exchange_rate) or "1",
     base_amount=format_money(m.base_amount) or "0",
     local_amount=format_money(m.local_amount) or "0",
+    wastage_pct=format_pct(m.wastage_pct),
   )
 
 
@@ -981,6 +1035,13 @@ def _manufacturing_to_line(m: QuotationManufacturing) -> QuotationManufacturingL
     exchange_rate=format_rate(m.exchange_rate) or "1",
     base_amount=format_money(m.base_amount) or "0",
     local_amount=format_money(m.local_amount) or "0",
+    cm_mode=m.cm_mode,
+    smv=format_money(m.smv),
+    efficiency_pct=format_pct(m.efficiency_pct),
+    cpm=format_rate(m.cpm),
+    cpm_basis=m.cpm_basis,
+    working_hours_per_day=format_money(m.working_hours_per_day),
+    direct_cm_basis=m.direct_cm_basis,
   )
 
 
@@ -1000,6 +1061,7 @@ def _other_cost_to_line(c: QuotationOtherCost) -> QuotationOtherCostLine:
     exchange_rate=format_rate(c.exchange_rate) or "1",
     base_amount=format_money(c.base_amount) or "0",
     local_amount=format_money(c.local_amount) or "0",
+    cost_basis=c.cost_basis,
   )
 
 
@@ -1136,6 +1198,15 @@ async def get_quotation(
     pack_ratio=quotation.pack_ratio,
     pcs_per_carton=quotation.pcs_per_carton,
     notes=quotation.notes,
+    costing_basis=quotation.costing_basis,
+    margin_method=quotation.margin_method,
+    fixed_commission_basis=quotation.fixed_commission_basis,
+    material_cost_per_dozen=hdr["material_cost_per_dozen"],
+    manufacturing_cost_per_dozen=hdr["manufacturing_cost_per_dozen"],
+    other_cost_per_dozen=hdr["other_cost_per_dozen"],
+    total_cost_per_dozen=hdr["total_cost_per_dozen"],
+    quoted_price_per_dozen=hdr["quoted_price_per_dozen"],
+    quoted_price_per_piece=hdr["quoted_price_per_piece"],
     created_at=quotation.created_at.isoformat(),
     updated_at=quotation.updated_at.isoformat(),
     materials=materials,
@@ -1206,6 +1277,20 @@ async def update_quotation(
   status_before = quotation.status
 
   patch_fields = body.model_dump(exclude_unset=True)
+  if quotation.costing_basis is not None and set(patch_fields) & _DOZEN_FIRST_PATCH_BLOCKED:
+    # A dozen-first price is always computed by the full costing save (PUT); a quick PATCH would desync it.
+    flag_on = is_quotation_costing_accuracy_v1_enabled(tenant.feature_flags)
+    raise HTTPException(
+      status_code=status.HTTP_409_CONFLICT,
+      detail={
+        "code": "QUOTATION_COSTING_USE_FULL_SAVE" if flag_on else "QUOTATION_COSTING_FLAG_OFF",
+        "message": (
+          "Price, commission and currency of a dozen-first quotation change only through the full costing save."
+          if flag_on
+          else "This quotation uses dozen-first costing, which is switched off for your company. It is read-only."
+        ),
+      },
+    )
   blocked = list_quotation_commercial_patch_violations(quotation.status, patch_fields)
   if blocked:
     raise HTTPException(
@@ -1309,6 +1394,30 @@ async def full_update_quotation(
   # Update header — honor explicit nulls via model_fields_set so cleared UI fields persist.
   provided = body.model_fields_set
 
+  # Dozen-first costing (strict flag, default OFF). A quotation with costing_basis set keeps that basis
+  # for good; a legacy one (costing_basis NULL) switches only when the client asks and the flag is ON.
+  costing_flag_on = is_quotation_costing_accuracy_v1_enabled(tenant.feature_flags)
+  was_dozen_first = quotation.costing_basis is not None
+  arrays_in_request = cost_line_arrays_present_in_request(body.materials, body.manufacturing, body.other_costs)
+  # With the flag OFF a dozen-first quotation is read-only: any cost line OR any price / quantity / commission
+  # field is refused (a header-only PUT must not leave the stored per-dozen price out of step with its totals).
+  if was_dozen_first and not costing_flag_on and (arrays_in_request or provided & _DOZEN_FIRST_LOCKED_FIELDS):
+    raise HTTPException(
+      status_code=status.HTTP_409_CONFLICT,
+      detail={
+        "code": "QUOTATION_COSTING_FLAG_OFF",
+        "message": (
+          "This quotation uses dozen-first costing, which is switched off for your company. "
+          "Its saved values are read-only until the feature is switched back on."
+        ),
+      },
+    )
+  use_dozen_first = costing_flag_on and (
+    was_dozen_first or ("costing_basis" in provided and body.costing_basis == "PER_DOZEN")
+  )
+  if use_dozen_first and "margin_method" in provided and body.margin_method is not None:
+    quotation.margin_method = body.margin_method
+
   if "style_ref" in provided:
     quotation.style_ref = body.style_ref
   if "style_id" in provided:
@@ -1350,7 +1459,7 @@ async def full_update_quotation(
     quotation.exchange_rate = parse_money(body.exchange_rate) if body.exchange_rate is not None else None
   if "currency" in provided and body.currency is not None:
     quotation.currency = normalize_currency_code(body.currency)
-  if "total_amount" in provided and body.total_amount is not None:
+  if "total_amount" in provided and body.total_amount is not None and not use_dozen_first:
     quotation.total_amount = parse_money(body.total_amount)
   if "status" in provided and body.status is not None:
     # Skip no-op same-status writes (avoids NEW→DRAFT after from-inquiry create).
@@ -1400,6 +1509,23 @@ async def full_update_quotation(
 
   # Replace materials
   if body.materials is not None:
+    # One batched tenant check for every category id on the request (no query per line).
+    requested_category_ids = {r.category_id for r in body.materials if r.category_id is not None}
+    if requested_category_ids:
+      owned_category_ids = set((await db.execute(
+        select(ItemCategory.id).where(
+          ItemCategory.tenant_id == tenant.id,
+          ItemCategory.id.in_(requested_category_ids),
+        )
+      )).scalars().all())
+      if owned_category_ids != requested_category_ids:
+        raise HTTPException(
+          status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+          detail={
+            "code": "MATERIAL_INVALID_CATEGORY",
+            "message": "A material line references a category that was not found for this tenant.",
+          },
+        )
     await db.execute(delete(QuotationMaterial).where(
       QuotationMaterial.quotation_id == quotation_id,
       QuotationMaterial.tenant_id == tenant.id,
@@ -1418,6 +1544,7 @@ async def full_update_quotation(
           },
         )
       effective_unit = (row.unit or "").strip()
+      line_category_id = row.category_id
       if row.item_id is not None:
         inv_item = await db.get(Item, row.item_id)
         if not inv_item or inv_item.tenant_id != tenant.id:
@@ -1428,6 +1555,9 @@ async def full_update_quotation(
               "message": f"Material line {i + 1}: item not found for this tenant.",
             },
           )
+        if use_dozen_first:
+          # The item decides the category (and unit) so the saved line can never contradict the item master.
+          line_category_id = inv_item.category_id
         uom = await db.get(ItemUnit, inv_item.unit_id)
         if not uom or uom.tenant_id != tenant.id:
           raise HTTPException(
@@ -1451,7 +1581,7 @@ async def full_update_quotation(
         tenant_id=tenant.id,
         quotation_id=quotation_id,
         serial_no=row.serial_no or (i + 1),
-        category_id=row.category_id,
+        category_id=line_category_id,
         item_id=row.item_id,
         description=row.description,
         unit=effective_unit or (row.unit or ""),
@@ -1463,6 +1593,7 @@ async def full_update_quotation(
         exchange_rate=line_rate_from_input(row.exchange_rate),
         base_amount=line_money_from_input(row.base_amount),
         local_amount=line_money_from_input(row.local_amount),
+        wastage_pct=_optional_decimal(row.wastage_pct, "0.0001") if use_dozen_first else None,
       ))
 
   # Replace manufacturing
@@ -1491,6 +1622,13 @@ async def full_update_quotation(
         exchange_rate=line_rate_from_input(row.exchange_rate),
         base_amount=line_money_from_input(row.base_amount),
         local_amount=line_money_from_input(row.local_amount),
+        cm_mode=row.cm_mode if use_dozen_first else None,
+        smv=_optional_decimal(row.smv, "0.0001") if use_dozen_first else None,
+        efficiency_pct=_optional_decimal(row.efficiency_pct, "0.0001") if use_dozen_first else None,
+        cpm=_optional_decimal(row.cpm, "0.000001") if use_dozen_first else None,
+        cpm_basis=row.cpm_basis if use_dozen_first else None,
+        working_hours_per_day=_optional_decimal(row.working_hours_per_day, "0.01") if use_dozen_first else None,
+        direct_cm_basis=row.direct_cm_basis if use_dozen_first else None,
       ))
 
   # Replace other costs
@@ -1518,6 +1656,7 @@ async def full_update_quotation(
         exchange_rate=line_rate_from_input(row.exchange_rate),
         base_amount=line_money_from_input(row.base_amount),
         local_amount=line_money_from_input(row.local_amount),
+        cost_basis=row.cost_basis if use_dozen_first else None,
       ))
 
   # Replace size ratios
@@ -1542,7 +1681,7 @@ async def full_update_quotation(
   await db.flush()
 
   total_cost = Decimal("0")
-  if recompute_rollups:
+  if recompute_rollups and not use_dozen_first:
     mat_total = Decimal("0")
     mfg_total = Decimal("0")
     other_total = Decimal("0")
@@ -1591,7 +1730,9 @@ async def full_update_quotation(
     quotation.cost_per_piece = _quantize_money4(cost_per_piece)
 
   quoted_auto_derived = False
-  if body.quoted_price is not None:
+  if use_dozen_first:
+    pass  # prices come from apply_dozen_first_costing below
+  elif body.quoted_price is not None:
     quotation.quoted_price = parse_money(body.quoted_price)
   elif recompute_rollups and total_cost > 0 and quotation.profit_percentage:
     try:
@@ -1609,7 +1750,9 @@ async def full_update_quotation(
     quotation.quoted_price = _quantize_money4(quoted_price)
     quoted_auto_derived = True
 
-  if body.total_amount is not None:
+  if use_dozen_first:
+    pass
+  elif body.total_amount is not None:
     quotation.total_amount = parse_money(body.total_amount)
   elif body.quoted_price is not None or quoted_auto_derived:
     quotation.total_amount = quotation.quoted_price
@@ -1634,6 +1777,26 @@ async def full_update_quotation(
         "message": combined_fx_errs[0],
         "errors": combined_fx_errs,
       },
+    )
+
+  if use_dozen_first and (
+    arrays_in_request or not was_dozen_first or provided & _DOZEN_FIRST_DRIVER_FIELDS
+  ):
+    manual_price_pc: Decimal | None = None
+    if body.quoted_price_per_piece is not None:
+      try:
+        manual_price_pc = parse_money_decimal(body.quoted_price_per_piece, field="quoted_price_per_piece")
+      except MoneyParseError as e:
+        raise HTTPException(
+          status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+          detail={"code": "QUOTATION_MONEY_VALIDATION", "message": str(e), "field": e.field},
+        ) from e
+    await db.flush()
+    await apply_dozen_first_costing(
+      db,
+      tenant_id=tenant.id,
+      quotation=quotation,
+      manual_price_per_piece=manual_price_pc,
     )
 
   verification_service.sync_verification_id(quotation)

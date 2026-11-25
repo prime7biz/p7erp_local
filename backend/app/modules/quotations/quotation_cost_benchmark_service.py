@@ -119,13 +119,25 @@ async def _fetch_peer_quotations(
 
 
 def _metrics_for_quotation(q: Quotation) -> dict[str, float | None]:
-    tc = _dec(q.total_cost)
-    mc = _dec(q.material_cost)
-    mfgc = _dec(q.manufacturing_cost)
-    oc = _dec(q.other_cost)
-    pq = float(q.projected_quantity) if q.projected_quantity and q.projected_quantity > 0 else None
-    cpp = float(tc / Decimal(str(pq))) if tc is not None and pq else None
+    dozen_first = q.costing_basis is not None and q.total_cost_per_dozen is not None
+    if dozen_first:
+        # Per-dozen basis works even when the quote had no quantity; ratios are unaffected by the basis.
+        tc = _dec(q.total_cost_per_dozen)
+        mc = _dec(q.material_cost_per_dozen)
+        mfgc = _dec(q.manufacturing_cost_per_dozen)
+        oc = _dec(q.other_cost_per_dozen)
+        cpp = float(tc / Decimal("12")) if tc is not None else None
+    else:
+        tc = _dec(q.total_cost)
+        mc = _dec(q.material_cost)
+        mfgc = _dec(q.manufacturing_cost)
+        oc = _dec(q.other_cost)
+        pq = float(q.projected_quantity) if q.projected_quantity and q.projected_quantity > 0 else None
+        cpp = float(tc / Decimal(str(pq))) if tc is not None and pq else None
     prof = _dec(q.profit_percentage)
+    if dozen_first and q.margin_method == "MARGIN_ON_FOB" and prof is not None and prof < Decimal("100"):
+        # Compare like for like: express a margin-on-FOB share as the equivalent markup on cost.
+        prof = prof / (Decimal("100") - prof) * Decimal("100")
     mat_r = _ratio(mc, tc)
     mfg_r = _ratio(mfgc, tc)
     oth_r = _ratio(oc, tc)

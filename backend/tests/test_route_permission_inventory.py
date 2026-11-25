@@ -102,6 +102,7 @@ def test_newly_gated_routers_use_expected_keys():
         f"{API}/kpi/cards": "kpi.read",
         f"{API}/kpi/seed": "kpi.read",
         f"{API}/job-work": "production.access",
+        f"{API}/costing/items": "merch.access",  # includes GET /costing/items/{item_id}
     }
     seen: dict[str, set[str]] = {}
     for route in app.routes:

@@ -7,7 +7,10 @@ Revenue chain (gross, contract value; never `Quotation.quoted_price` as a unit p
   1. order snapshot `quoted_price` (unit price) x order qty                         SNAPSHOT_QUOTED   (COMMITTED)
   2. proforma invoice amount, only when that PI links exactly one order            PI_SINGLE_ORDER   (COMMITTED)
      (a PI linking several orders is skipped: reason PI_MULTI_ORDER; several live PIs: PI_MULTIPLE_FOR_ORDER)
-  3. `Quotation.total_amount` x order qty / projected qty                          QUOTATION_TOTAL_SCALED (ESTIMATED)
+  3a. dozen-first quotation: `quoted_price_per_piece` x order qty                     QUOTATION_PER_PIECE (ESTIMATED)
+  3b. `Quotation.total_amount` x order qty / projected qty                          QUOTATION_TOTAL_SCALED (ESTIMATED)
+      (a dozen-first quotation is loaded on its PER-DOZEN basis: cost / total columns are per dozen and the
+      projected quantity is 12, so order qty / 12 scales them correctly even when the quote had no quantity)
   else UNKNOWN (missing input `selling_price`).
 FX (M2): base currency = 1; the quotation's stored `exchange_rate` when the revenue currency is the quotation
 currency; anything else is UNKNOWN (left out of totals, listed in `unknown_by_currency`).
@@ -32,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Order, ProformaInvoice, ProformaInvoiceOrder, Quotation
 from app.models.parties import CustomerIntermediary
+from app.modules.commission.service import is_per_order_fixed
 from app.modules.mfg_intelligence.decimals import ZERO, to_dec
 from app.modules.mfg_intelligence.money import (
     CLASS_COMMITTED,
@@ -50,6 +54,7 @@ RATE_QUOTATION = "QUOTATION_EXCHANGE_RATE"
 SRC_SNAPSHOT = "SNAPSHOT_QUOTED"
 SRC_PI = "PI_SINGLE_ORDER"
 SRC_QUOTATION = "QUOTATION_TOTAL_SCALED"
+SRC_QUOTATION_PER_PIECE = "QUOTATION_PER_PIECE"
 SRC_QUOTATION_UNSCALED = "QUOTATION_TOTAL"
 PI_CLOSED_STATUSES = ("CANCELLED", "CANCELED", "VOID", "REJECTED")
 
@@ -64,6 +69,7 @@ class QuotationInfo:
     manufacturing_cost: Decimal | None
     other_cost: Decimal | None
     projected_quantity: int | None
+    unit_price: Decimal | None = None  # dozen-first quotations only: quoted_price_per_piece
 
 
 @dataclass
@@ -131,10 +137,16 @@ async def load_order_money_context(db: AsyncSession, tenant_id: int, base: str, 
                     Quotation.manufacturing_cost,
                     Quotation.other_cost,
                     Quotation.projected_quantity,
+                    Quotation.costing_basis,
+                    Quotation.quoted_price_per_piece,
+                    Quotation.quoted_price_per_dozen,
+                    Quotation.material_cost_per_dozen,
+                    Quotation.manufacturing_cost_per_dozen,
+                    Quotation.other_cost_per_dozen,
                 ).where(Quotation.tenant_id == tenant_id, Quotation.id.in_(q_ids))
             )
         ).all():
-            ctx.quotations[int(row[0])] = QuotationInfo(
+            info = QuotationInfo(
                 id=int(row[0]),
                 currency=norm_ccy(row[1]) or base,
                 exchange_rate=to_dec(row[2]),
@@ -144,6 +156,14 @@ async def load_order_money_context(db: AsyncSession, tenant_id: int, base: str, 
                 other_cost=to_dec(row[6]),
                 projected_quantity=int(row[7]) if row[7] else None,
             )
+            if row[8] is not None:  # dozen-first: per-dozen basis, scaled by order qty / 12
+                info.unit_price = to_dec(row[9])
+                info.total_amount = to_dec(row[10])
+                info.material_cost = to_dec(row[11])
+                info.manufacturing_cost = to_dec(row[12])
+                info.other_cost = to_dec(row[13])
+                info.projected_quantity = 12
+            ctx.quotations[int(row[0])] = info
     pis: dict[int, list[tuple[int, Decimal | None, str | None]]] = defaultdict(list)
     for oid, pi_id, amount, ccy in (
         await db.execute(
@@ -240,6 +260,11 @@ def resolve_revenue(order: Order, ctx: OrderMoneyContext) -> Revenue:
             rev.source, rev.value_class = SRC_PI, CLASS_COMMITTED
             rev.currency = single[0][2] or (quotation.currency if quotation else ctx.base)
             rev.gross_source = q4(single[0][1])
+        if rev.source is None and quotation is not None and qty is not None and positive(quotation.unit_price) is not None:
+            rev.source, rev.value_class = SRC_QUOTATION_PER_PIECE, CLASS_ESTIMATED
+            rev.currency = quotation.currency
+            rev.gross_source = q4(quotation.unit_price * qty)
+            rev.reason_codes.append("REVENUE_FROM_QUOTATION")
         if rev.source is None and quotation is not None and positive(quotation.total_amount) is not None:
             factor = scale_factor(order, quotation)
             rev.currency = quotation.currency
@@ -261,7 +286,10 @@ def resolve_revenue(order: Order, ctx: OrderMoneyContext) -> Revenue:
     if terms is not None:
         kind, rate = terms
         if kind == "FIXED":
-            rev.commission_source = q4(rate * qty) if qty is not None else ZERO
+            if is_per_order_fixed(order):  # dozen-first quotation: FIXED = one amount for the whole order
+                rev.commission_source = q4(rate)
+            else:
+                rev.commission_source = q4(rate * qty) if qty is not None else ZERO
         else:
             rev.commission_source = q4(rev.gross_source * rate / HUNDRED)
         rev.commission_basis = kind

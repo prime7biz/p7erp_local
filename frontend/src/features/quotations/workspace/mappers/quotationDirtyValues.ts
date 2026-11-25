@@ -19,7 +19,16 @@ const HEADER_SKIPPED = [
   "total_amount",
   "quoted_price",
   "cost_per_piece",
+  // Dozen-first numbers the workspace and the server calculate.
+  "material_cost_per_dozen",
+  "manufacturing_cost_per_dozen",
+  "other_cost_per_dozen",
+  "total_cost_per_dozen",
+  "quoted_price_per_dozen",
+  "quoted_price_per_piece",
 ] as const;
+/** Browser-only row key (never a user change). */
+const ROW_KEY = ["_rowKey"] as const;
 const MATERIAL_CALCULATED = ["amount_per_dozen", "total_amount", "base_amount"] as const;
 const MANUFACTURING_CALCULATED = [
   "total_line_cost",
@@ -50,9 +59,16 @@ export interface QuotationDirtyInput {
 export function quotationDirtyValues(input: QuotationDirtyInput) {
   return {
     header: input.quotation ? withoutKeys(input.quotation, HEADER_SKIPPED) : null,
-    materials: input.materials.map((row) => withoutKeys(row, MATERIAL_CALCULATED)),
-    manufacturing: input.manufacturing.map((row) => withoutKeys(row, MANUFACTURING_CALCULATED)),
-    otherCosts: input.otherCosts.map((row) => withoutKeys(row, OTHER_COST_CALCULATED)),
+    materials: input.materials.map((row) => withoutKeys(row, [...MATERIAL_CALCULATED, ...ROW_KEY])),
+    manufacturing: input.manufacturing.map((row) =>
+      // With a dozen-first method the line output per day is calculated, not typed.
+      withoutKeys(row, [
+        ...MANUFACTURING_CALCULATED,
+        ...ROW_KEY,
+        ...(row.cm_mode ? (["production_per_day"] as const) : []),
+      ]),
+    ),
+    otherCosts: input.otherCosts.map((row) => withoutKeys(row, [...OTHER_COST_CALCULATED, ...ROW_KEY])),
     sizeRatios: input.sizeRatios,
     useManualQuotedPrice: input.useManualQuotedPrice,
     manualQuotedPrice: input.manualQuotedPrice,

@@ -6330,10 +6330,14 @@ async def lc_profitability(
     if not order or order.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Order not found")
     quotation = await db.get(Quotation, order.quotation_id) if order.quotation_id else None
+    if quotation is not None and quotation.tenant_id != tenant.id:
+        quotation = None
     order_qty = float(order.quantity or 0)
-    quoted_rate = _to_float(quotation.quoted_price if quotation else "0")
+    from app.modules.quotations.quotation_basis import cost_for_quantity, unit_price as quotation_unit_price
+
+    quoted_rate = _to_float(quotation_unit_price(quotation) if quotation else "0")
     order_value = round(order_qty * quoted_rate, 2)
-    est_cost = _to_float(quotation.total_cost if quotation else "0")
+    est_cost = _to_float(cost_for_quantity(quotation, order.quantity) if quotation else "0")
     gross_profit = round(order_value - est_cost, 2)
     return {
         "order_id": order.id,
@@ -6357,7 +6361,11 @@ async def costing_variance(
     if not order or order.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Order not found")
     quotation = await db.get(Quotation, order.quotation_id) if order.quotation_id else None
-    planned = _to_float(quotation.total_cost if quotation else "0")
+    if quotation is not None and quotation.tenant_id != tenant.id:
+        quotation = None
+    from app.modules.quotations.quotation_basis import cost_for_quantity
+
+    planned = _to_float(cost_for_quantity(quotation, order.quantity) if quotation else "0")
     # P7 currently has no actual-cost ledger bridge; use posted voucher amount as actual baseline.
     # A reversal voucher carries the original's voucher number as reference (not the order code) and mirrors its
     # lines, so it is followed through reverses_voucher_id: a voucher one reversal step away subtracts its CREDIT

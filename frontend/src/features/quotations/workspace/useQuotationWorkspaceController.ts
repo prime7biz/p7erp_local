@@ -37,6 +37,41 @@ import {
   toSafeNumber,
 } from "./mappers/quotationNumeric";
 import { getCustomersCached } from "@/lib/masterData";
+import {
+  applyResultToManufacturing,
+  applyResultToMaterials,
+  applyResultToOtherCosts,
+  computeWorkspaceCosting,
+  headerPatchFromResult,
+  orderTotalsFromResult,
+} from "./mappers/quotationCostingAdapter";
+import { ensureRowKeys, needsRowKeys } from "./mappers/rowKeys";
+import { useQuotationCostingAccuracyV1 } from "./quotationCostingFlags";
+
+/**
+ * A dozen-first quotation does not store a "manual price" flag. If the saved per-piece price differs
+ * from what the engine calculates, the user typed it, so the manual box is shown again.
+ * Returns the manual per-piece price, or null when the saved price is the calculated one.
+ */
+function savedManualPricePerPiece(
+  q: QuotationDetailResponse,
+  mats: QuotationMaterialLine[],
+  mfg: QuotationManufacturingLine[],
+  oc: QuotationOtherCostLine[],
+): string | null {
+  if (q.costing_basis !== "PER_DOZEN") return null;
+  const saved = toSafeNumber(q.quoted_price_per_piece);
+  if (saved <= 0) return null;
+  const auto = computeWorkspaceCosting({
+    quotation: q,
+    materials: mats,
+    manufacturing: mfg,
+    otherCosts: oc,
+    manualPricePerPiece: null,
+  });
+  if (!auto.ok) return null;
+  return Math.abs(auto.result.pricePerPiece - saved) > 0.00005 ? String(q.quoted_price_per_piece) : null;
+}
 
 export function useQuotationWorkspaceController(id?: string) {
   const navigate = useNavigate();
@@ -87,6 +122,10 @@ export function useQuotationWorkspaceController(id?: string) {
   const [manualQuotedPrice, setManualQuotedPrice] = useState("");
   const [revisions, setRevisions] = useState<QuotationResponse[]>([]);
   const [formBaseline, setFormBaseline] = useState(0);
+  /** Tenant flag quotation_costing_accuracy_v1: new quotations are costed per dozen when ON. */
+  const costingFlagOn = useQuotationCostingAccuracyV1();
+  /** This quotation is costed per dozen (12 pcs) and priced per piece. */
+  const dozenFirst = quotation?.costing_basis === "PER_DOZEN";
 
   useEffect(() => {
     const load = async () => {
@@ -143,6 +182,9 @@ export function useQuotationWorkspaceController(id?: string) {
             commission_mode: settings.default_commission_mode ?? null,
             commission_type: null,
             commission_value: null,
+            costing_basis: costingFlagOn ? "PER_DOZEN" : null,
+            margin_method: costingFlagOn ? "MARKUP_ON_COST" : null,
+            fixed_commission_basis: costingFlagOn ? "PER_ORDER" : null,
             material_cost: null,
             manufacturing_cost: null,
             other_cost: null,
@@ -200,6 +242,12 @@ export function useQuotationWorkspaceController(id?: string) {
           ]);
           setCustomer(cust);
           setInquiry(inq);
+          if (q.costing_basis === "PER_DOZEN") {
+            const manualPc = savedManualPricePerPiece(q, mats, mfg, oc);
+            setUseManualQuotedPrice(manualPc != null);
+            setManualQuotedPrice(manualPc ?? "");
+            return;
+          }
           // Detect manual quoted price: differs from auto (total_cost * (1 + profit%)).
           const cost = toSafeNumber(q.total_cost);
           const profitPct = toSafeNumber(q.profit_percentage);
@@ -221,7 +269,7 @@ export function useQuotationWorkspaceController(id?: string) {
       }
     };
     load();
-  }, [id, isNew]);
+  }, [id, isNew, costingFlagOn]);
 
   // All versions of this quotation (v1 first), from the server lineage.
   const savedQuotationId = !isNew && quotation ? quotation.id : 0;
@@ -297,10 +345,39 @@ export function useQuotationWorkspaceController(id?: string) {
 
   const quotationCurrency = quotation?.currency ?? "USD";
 
-  const totals = useMemo(
-    () => calculateQuotationTotals(materials, manufacturing, otherCosts, quotationCurrency),
-    [materials, manufacturing, otherCosts, quotationCurrency],
+  /** Manual buyer price per piece (dozen-first) typed by the user, else null = calculated. */
+  const manualPricePerPiece =
+    useManualQuotedPrice && manualQuotedPrice.trim() !== "" ? toSafeNumber(manualQuotedPrice) : null;
+
+  /** Dozen-first engine result (live preview; the server recalculates on save). */
+  const costing = useMemo(
+    () =>
+      dozenFirst && quotation
+        ? computeWorkspaceCosting({ quotation, materials, manufacturing, otherCosts, manualPricePerPiece })
+        : null,
+    [dozenFirst, quotation, materials, manufacturing, otherCosts, manualPricePerPiece],
   );
+  const costingError = costing && !costing.ok ? costing : null;
+
+  const totals = useMemo(() => {
+    if (costing) {
+      return costing.ok
+        ? orderTotalsFromResult(costing.result, toSafeNumber(quotation?.projected_quantity))
+        : { matTotal: 0, mfgTotal: 0, otherTotal: 0, total: 0 };
+    }
+    return calculateQuotationTotals(materials, manufacturing, otherCosts, quotationCurrency);
+  }, [costing, quotation?.projected_quantity, materials, manufacturing, otherCosts, quotationCurrency]);
+
+  // Every costing row gets a stable key so deleting a row never hands its picker state to the next row.
+  useEffect(() => {
+    if (needsRowKeys(materials)) setMaterials((rows) => ensureRowKeys(rows));
+  }, [materials]);
+  useEffect(() => {
+    if (needsRowKeys(manufacturing)) setManufacturing((rows) => ensureRowKeys(rows));
+  }, [manufacturing]);
+  useEffect(() => {
+    if (needsRowKeys(otherCosts)) setOtherCosts((rows) => ensureRowKeys(rows));
+  }, [otherCosts]);
 
   const selectedStyle = useMemo(
     () => styles.find((s) => s.id === quotation?.style_id) ?? null,
@@ -346,20 +423,22 @@ export function useQuotationWorkspaceController(id?: string) {
             row.unit = "";
           }
         }
-        const qc = quotation?.currency ?? "USD";
-        const calculated = computeMaterialLineAmounts(
-          row,
-          toSafeNumber(quotation?.projected_quantity),
-          qc,
-        );
-        row.amount_per_dozen = calculated.amount_per_dozen;
-        row.total_amount = calculated.total_amount;
-        row.base_amount = calculated.base_amount;
+        if (!dozenFirst) {
+          const qc = quotation?.currency ?? "USD";
+          const calculated = computeMaterialLineAmounts(
+            row,
+            toSafeNumber(quotation?.projected_quantity),
+            qc,
+          );
+          row.amount_per_dozen = calculated.amount_per_dozen;
+          row.total_amount = calculated.total_amount;
+          row.base_amount = calculated.base_amount;
+        }
         next[index] = row;
         return next;
       });
     },
-    [items, units, quotation?.projected_quantity, quotation?.currency],
+    [items, units, quotation?.projected_quantity, quotation?.currency, dozenFirst],
   );
 
   // Depend on primitive header fields only: the rollup header sync replaces `quotation` with a new object.
@@ -367,7 +446,7 @@ export function useQuotationWorkspaceController(id?: string) {
   const projectedQuantity = quotation?.projected_quantity;
 
   useEffect(() => {
-    if (quotationId == null) return;
+    if (quotationId == null || dozenFirst) return;
     const pq = toSafeNumber(projectedQuantity);
     setMaterials((rows) =>
       rows.map((row) => {
@@ -380,10 +459,10 @@ export function useQuotationWorkspaceController(id?: string) {
         };
       }),
     );
-  }, [quotationId, quotationCurrency, projectedQuantity]);
+  }, [quotationId, quotationCurrency, projectedQuantity, dozenFirst]);
 
   useEffect(() => {
-    if (quotationId == null) return;
+    if (quotationId == null || dozenFirst) return;
     const pq = toSafeNumber(projectedQuantity);
     setManufacturing((rows) =>
       rows.map((row) => ({
@@ -391,7 +470,7 @@ export function useQuotationWorkspaceController(id?: string) {
         ...computeManufacturingLineAmounts(row, pq),
       })),
     );
-  }, [quotationId, projectedQuantity]);
+  }, [quotationId, projectedQuantity, dozenFirst]);
 
   const refreshCostingMasters = useCallback(async () => {
     const [cats, itemsRes, unitsRes] = await Promise.all([
@@ -409,6 +488,11 @@ export function useQuotationWorkspaceController(id?: string) {
       setManufacturing((rows) => {
         const next = [...rows];
         let row = { ...next[index], ...patch } as QuotationManufacturingLine;
+        if (dozenFirst) {
+          // The dozen-first engine fills the amounts; here only the typed value is stored.
+          next[index] = row;
+          return next;
+        }
         if ("production_per_hour" in patch || "machines_required" in patch) {
           const pph = toSafeNumber(row.production_per_hour);
           const mach = Math.max(0, row.machines_required);
@@ -423,13 +507,17 @@ export function useQuotationWorkspaceController(id?: string) {
         return next;
       });
     },
-    [quotation?.projected_quantity],
+    [quotation?.projected_quantity, dozenFirst],
   );
 
   const onOtherCostChange = (index: number, patch: Partial<QuotationOtherCostLine>) => {
     setOtherCosts((rows) => {
       const next = [...rows];
       let row = { ...next[index], ...patch } as QuotationOtherCostLine;
+      if (dozenFirst) {
+        next[index] = row;
+        return next;
+      }
       const { matTotal, mfgTotal } = calculateQuotationTotals(
         materials,
         manufacturing,
@@ -443,6 +531,7 @@ export function useQuotationWorkspaceController(id?: string) {
   };
 
   useEffect(() => {
+    if (dozenFirst) return;
     setOtherCosts((rows) => {
       const mapped = rows.map((row) =>
         applyOtherCostCalculation(row, totals.matTotal, totals.mfgTotal),
@@ -458,7 +547,7 @@ export function useQuotationWorkspaceController(id?: string) {
       });
       return same ? rows : mapped;
     });
-  }, [totals.matTotal, totals.mfgTotal]);
+  }, [totals.matTotal, totals.mfgTotal, dozenFirst]);
 
   const onSizeRatioChange = (index: number, patch: Partial<QuotationSizeRatioLine>) => {
     setSizeRatios((rows) => {
@@ -642,7 +731,11 @@ export function useQuotationWorkspaceController(id?: string) {
       materials.some((m) => m.category_id != null || m.item_id != null || (m.description ?? "").trim()) ||
       manufacturing.some((m) => (m.style_part ?? "").trim()) ||
       otherCosts.some((c) => (c.cost_head ?? "").trim());
-    if (pq <= 0 && hasCostLines) {
+    if (dozenFirst && costingError) {
+      setError(costingError.message);
+      return;
+    }
+    if (!dozenFirst && pq <= 0 && hasCostLines) {
       setError(
         "Projected quantity is zero — costing line totals will be zero. Set a quantity or remove costing lines.",
       );
@@ -708,6 +801,7 @@ export function useQuotationWorkspaceController(id?: string) {
         manufacturing,
         otherCosts,
         sizeRatios,
+        manualPricePerPiece: dozenFirst ? manualPricePerPiece : null,
       });
       const updated = await api.updateQuotationFull(targetId, body);
       setPendingCreatedId(null);
@@ -735,7 +829,22 @@ export function useQuotationWorkspaceController(id?: string) {
     }
   };
 
+  // Dozen-first: fill every line amount and the header numbers from the engine while editing.
   useEffect(() => {
+    if (!dozenFirst || !isEditing || !quotation || !costing || !costing.ok) return;
+    const qty = Math.max(0, Math.trunc(toSafeNumber(quotation.projected_quantity)));
+    const cur = quotation.currency ?? "USD";
+    setMaterials((rows) => applyResultToMaterials(rows, costing.result, qty));
+    setManufacturing((rows) => applyResultToManufacturing(rows, costing.result, qty));
+    setOtherCosts((rows) => applyResultToOtherCosts(rows, costing.result, qty, cur));
+    const patch = headerPatchFromResult(costing.result, qty);
+    const current = quotation as unknown as Record<string, unknown>;
+    const changed = Object.entries(patch).some(([key, value]) => current[key] !== value);
+    if (changed) setQuotation((prev) => (prev ? { ...prev, ...patch } : prev));
+  }, [dozenFirst, isEditing, quotation, costing]);
+
+  useEffect(() => {
+    if (dozenFirst) return;
     if (!quotation || !isEditing) return;
     const projectedQty = toSafeNumber(quotation.projected_quantity);
     const totalCost = totals.total;
@@ -767,7 +876,7 @@ export function useQuotationWorkspaceController(id?: string) {
     if (Object.keys(patch).length > 0) {
       setQuotation((prev) => (prev ? { ...prev, ...patch } : prev));
     }
-  }, [isEditing, manualQuotedPrice, quotation, totals, useManualQuotedPrice]);
+  }, [dozenFirst, isEditing, manualQuotedPrice, quotation, totals, useManualQuotedPrice]);
 
   const refreshExchangeRates = async () => {
     if (!quotation) return;
@@ -890,6 +999,14 @@ export function useQuotationWorkspaceController(id?: string) {
       setOtherCosts(savedSnapshot.otherCosts);
       setSizeRatios(savedSnapshot.sizeRatios);
       const q = savedSnapshot.quotation;
+      if (q.costing_basis === "PER_DOZEN") {
+        const manualPc = savedManualPricePerPiece(q, savedSnapshot.materials, savedSnapshot.manufacturing, savedSnapshot.otherCosts);
+        setUseManualQuotedPrice(manualPc != null);
+        setManualQuotedPrice(manualPc ?? "");
+        setIsEditing(false);
+        setError("");
+        return;
+      }
       const autoQuoted = computeAutoQuotedPrice({
         totalCost: toSafeNumber(q.total_cost),
         profitPercentage: toSafeNumber(q.profit_percentage),
@@ -908,6 +1025,22 @@ export function useQuotationWorkspaceController(id?: string) {
     }
     setIsEditing(false);
     setError("");
+  };
+
+  /**
+   * Switch an older quotation to dozen-first costing (needs the tenant flag). Nothing is saved until
+   * the user presses Save; the server then recalculates every line.
+   */
+  const convertToDozenFirst = () => {
+    if (!quotation || quotation.costing_basis != null || !costingFlagOn) return;
+    setIsEditing(true);
+    setUseManualQuotedPrice(false);
+    setManualQuotedPrice("");
+    updateQuotationHeader({
+      costing_basis: "PER_DOZEN",
+      margin_method: "MARKUP_ON_COST",
+      fixed_commission_basis: "PER_ORDER",
+    });
   };
 
   const duplicateAsNewVersion = async () => {
@@ -980,6 +1113,12 @@ export function useQuotationWorkspaceController(id?: string) {
     isSuperseded,
     selectedStyle,
     totals,
+    costingFlagOn,
+    dozenFirst,
+    costing,
+    costingError,
+    manualPricePerPiece,
+    convertToDozenFirst,
     allLinks,
     updateQuotationHeader,
     onMaterialChange,

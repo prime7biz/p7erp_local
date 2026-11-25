@@ -1,9 +1,11 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import type { CostingItemResponse } from "@/api/client";
+import { api, type CostingItemResponse } from "@/api/client";
+import { logApiError } from "@/utils/logApiError";
 import { toSafeNumber } from "../mappers/quotationNumeric";
 
 type Props = {
+  /** Items already loaded by the page. Used to label saved lines and to show quick results. */
   items: CostingItemResponse[];
   categoryId: number | null;
   itemId: number | null;
@@ -16,8 +18,16 @@ function displayItem(it: CostingItemResponse) {
   return `${it.item_code} · ${it.name}`;
 }
 
-const LIST_CAP = 60;
+const PAGE_SIZE = 50;
+const SEARCH_DEBOUNCE_MS = 250;
+const MENU_MAX_HEIGHT = 240;
 
+/**
+ * Material item picker for quotation lines.
+ *
+ * Every row asks the server for its own matches (search + category + paging), so a long item list
+ * works the same on the first row and on every later row.
+ */
 export function MaterialItemCombobox({
   items,
   categoryId,
@@ -30,31 +40,81 @@ export function MaterialItemCombobox({
   const [query, setQuery] = useState("");
   const [highlight, setHighlight] = useState(0);
   const [portalStyle, setPortalStyle] = useState<React.CSSProperties | null>(null);
+  const [results, setResults] = useState<CostingItemResponse[]>([]);
+  const [total, setTotal] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [hydrated, setHydrated] = useState<CostingItemResponse | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
   const typingRef = useRef(false);
+  const requestSeq = useRef(0);
 
-  const selected = useMemo(() => items.find((i) => i.id === itemId) ?? null, [items, itemId]);
+  const selected = useMemo(() => {
+    if (itemId == null) return null;
+    return (
+      items.find((i) => i.id === itemId) ??
+      results.find((i) => i.id === itemId) ??
+      (hydrated?.id === itemId ? hydrated : null)
+    );
+  }, [items, results, hydrated, itemId]);
 
-  const filteredAll = useMemo(() => {
-    let list = categoryId != null ? items.filter((i) => i.category_id === categoryId) : items;
-    // When open with a selected item and user hasn't typed, show the full category list.
-    const q = query.trim().toLowerCase();
-    const selectedLabel = selected ? displayItem(selected).toLowerCase() : "";
-    const filterActive = q && !(selected && q === selectedLabel && !typingRef.current);
-    if (filterActive) {
-      list = list.filter(
-        (i) => i.item_code.toLowerCase().includes(q) || i.name.toLowerCase().includes(q),
-      );
-    }
-    return list;
-  }, [items, categoryId, query, selected]);
+  // A saved line can point to an item that is not on any loaded page: fetch just that one.
+  useEffect(() => {
+    if (itemId == null || selected != null) return;
+    let cancelled = false;
+    api
+      .getCostingItem(itemId)
+      .then((row) => {
+        if (!cancelled) setHydrated(row);
+      })
+      .catch((err) => logApiError("quotation material item hydrate", err));
+    return () => {
+      cancelled = true;
+    };
+  }, [itemId, selected]);
 
-  const filtered = filteredAll.slice(0, LIST_CAP);
-  const truncated = filteredAll.length > LIST_CAP;
+  const searchText = useMemo(() => {
+    const q = query.trim();
+    if (!q) return "";
+    // Opening with a selected item and no typing shows the whole category, not just the one item.
+    if (selected && !typingRef.current && q.toLowerCase() === displayItem(selected).toLowerCase()) return "";
+    return q;
+  }, [query, selected, open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** Index 0 = clear, 1..n = items, n+1 = create (optional). */
-  const optionCount = 1 + filtered.length + (onRequestCreateNew ? 1 : 0);
+  const fetchPage = useCallback(
+    async (offset: number, append: boolean) => {
+      const seq = ++requestSeq.current;
+      setLoading(true);
+      setLoadError(false);
+      try {
+        const page = await api.listCostingItemsPage({
+          category_id: categoryId,
+          search: searchText,
+          limit: PAGE_SIZE,
+          offset,
+        });
+        if (seq !== requestSeq.current) return;
+        setResults((prev) => (append ? [...prev, ...page.rows] : page.rows));
+        setTotal(page.total);
+      } catch (err) {
+        if (seq !== requestSeq.current) return;
+        logApiError("quotation material items", err);
+        setLoadError(true);
+        if (!append) setResults([]);
+      } finally {
+        if (seq === requestSeq.current) setLoading(false);
+      }
+    },
+    [categoryId, searchText],
+  );
+
+  // Load (debounced) whenever the menu is open and the category or search text changes.
+  useEffect(() => {
+    if (!open) return;
+    const handle = window.setTimeout(() => void fetchPage(0, false), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(handle);
+  }, [open, fetchPage]);
 
   useEffect(() => {
     if (selected && !typingRef.current) setQuery(displayItem(selected));
@@ -63,20 +123,23 @@ export function MaterialItemCombobox({
 
   useEffect(() => {
     setHighlight(0);
-  }, [open, filtered.length, categoryId]);
+  }, [open, results.length, categoryId]);
 
-  const updatePortalPosition = () => {
+  const updatePortalPosition = useCallback(() => {
     const el = rootRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const flipUp = spaceBelow < MENU_MAX_HEIGHT && rect.top > spaceBelow;
     setPortalStyle({
       position: "fixed",
-      top: rect.bottom + 2,
       left: rect.left,
-      width: Math.max(rect.width, 220),
+      width: Math.max(rect.width, 260),
       zIndex: 80,
+      maxHeight: MENU_MAX_HEIGHT,
+      ...(flipUp ? { bottom: window.innerHeight - rect.top + 2 } : { top: rect.bottom + 2 }),
     });
-  };
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -98,7 +161,14 @@ export function MaterialItemCombobox({
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onScroll);
     };
-  }, [open, listboxId]);
+  }, [open, listboxId, updatePortalPosition]);
+
+  const canLoadMore = total != null && results.length < total;
+
+  /** Index 0 = clear, 1..n = items, then "load more" (optional), then create (optional). */
+  const loadMoreIndex = canLoadMore ? 1 + results.length : -1;
+  const createIndex = onRequestCreateNew ? 1 + results.length + (canLoadMore ? 1 : 0) : -1;
+  const optionCount = 1 + results.length + (canLoadMore ? 1 : 0) + (onRequestCreateNew ? 1 : 0);
 
   const applyHighlight = (delta: number) => {
     if (optionCount === 0) return;
@@ -111,25 +181,29 @@ export function MaterialItemCombobox({
   };
 
   const chooseIndex = (idx: number) => {
-    typingRef.current = false;
     if (idx === 0) {
+      typingRef.current = false;
       onSelect(null);
       setQuery("");
       setOpen(false);
       return;
     }
-    const itemIdx = idx - 1;
-    if (itemIdx >= 0 && itemIdx < filtered.length) {
-      const it = filtered[itemIdx];
-      if (it != null) {
-        onSelect(it);
-        setQuery(displayItem(it));
-        setOpen(false);
-      }
+    if (idx === loadMoreIndex) {
+      void fetchPage(results.length, true);
       return;
     }
-    if (onRequestCreateNew && itemIdx === filtered.length) {
+    if (idx === createIndex && onRequestCreateNew) {
+      typingRef.current = false;
       onRequestCreateNew();
+      setOpen(false);
+      return;
+    }
+    const it = results[idx - 1];
+    if (it != null) {
+      typingRef.current = false;
+      setHydrated(it);
+      onSelect(it);
+      setQuery(displayItem(it));
       setOpen(false);
     }
   };
@@ -160,65 +234,77 @@ export function MaterialItemCombobox({
     return <span className="text-xs">{selected ? displayItem(selected) : "—"}</span>;
   }
 
+  const optionClass = (active: boolean, muted = false) =>
+    `block w-full px-2 py-1.5 text-left text-[11px] hover:bg-surface-subtle ${
+      active ? "bg-surface-subtle text-text-primary" : muted ? "text-text-muted" : "text-text-secondary"
+    }`;
+
   const menu = open ? (
     <div
       id={listboxId}
       role="listbox"
       style={portalStyle ?? undefined}
-      className="max-h-44 overflow-y-auto rounded-md border border-border bg-surface-raised py-0.5 shadow-lg"
+      className="overflow-y-auto rounded-md border border-border bg-surface-raised py-0.5 shadow-lg"
     >
       <button
         type="button"
         role="option"
         aria-selected={highlight === 0}
-        className={`block w-full px-2 py-1.5 text-left text-[11px] hover:bg-surface-subtle ${
-          highlight === 0 ? "bg-surface-subtle text-text-primary" : "text-text-muted"
-        }`}
+        className={optionClass(highlight === 0, true)}
         onMouseDown={(e) => e.preventDefault()}
         onMouseEnter={() => setHighlight(0)}
         onClick={() => chooseIndex(0)}
       >
         Clear selection
       </button>
-      {filtered.length === 0 && !onRequestCreateNew ? (
-        <div className="px-2 py-2 text-[11px] text-text-muted">No matches</div>
-      ) : (
-        filtered.map((it, idx) => {
-          const i = idx + 1;
-          return (
-            <button
-              key={it.id}
-              type="button"
-              role="option"
-              aria-selected={highlight === i}
-              className={`block w-full px-2 py-1.5 text-left text-[11px] hover:bg-surface-subtle ${
-                highlight === i ? "bg-surface-subtle text-text-primary" : "text-text-secondary"
-              }`}
-              onMouseDown={(e) => e.preventDefault()}
-              onMouseEnter={() => setHighlight(i)}
-              onClick={() => chooseIndex(i)}
-            >
-              {displayItem(it)}
-            </button>
-          );
-        })
-      )}
-      {truncated ? (
-        <div className="border-t border-border-subtle px-2 py-1 text-[10px] text-text-muted">
-          Showing first {LIST_CAP} of {filteredAll.length}. Type to narrow.
+      {loading && results.length === 0 ? (
+        <div className="px-2 py-2 text-[11px] text-text-muted">Loading items…</div>
+      ) : loadError ? (
+        <div className="px-2 py-2 text-[11px] text-red-600">Could not load items. Close and open to retry.</div>
+      ) : results.length === 0 ? (
+        <div className="px-2 py-2 text-[11px] text-text-muted">
+          {categoryId != null ? "No items in this category match." : "No matches"}
         </div>
+      ) : (
+        results.map((it, idx) => (
+          <button
+            key={it.id}
+            type="button"
+            role="option"
+            aria-selected={highlight === idx + 1}
+            className={optionClass(highlight === idx + 1)}
+            onMouseDown={(e) => e.preventDefault()}
+            onMouseEnter={() => setHighlight(idx + 1)}
+            onClick={() => chooseIndex(idx + 1)}
+          >
+            {displayItem(it)}
+          </button>
+        ))
+      )}
+      {canLoadMore ? (
+        <button
+          type="button"
+          role="option"
+          aria-selected={highlight === loadMoreIndex}
+          className={`${optionClass(highlight === loadMoreIndex)} border-t border-border-subtle`}
+          onMouseDown={(e) => e.preventDefault()}
+          onMouseEnter={() => setHighlight(loadMoreIndex)}
+          onClick={() => chooseIndex(loadMoreIndex)}
+        >
+          {loading ? "Loading…" : `Load more (${results.length} of ${total})`}
+        </button>
       ) : null}
       {onRequestCreateNew ? (
         <button
           type="button"
           role="option"
-          aria-selected={highlight === filtered.length + 1}
+          aria-selected={highlight === createIndex}
           className={`block w-full border-t border-border-subtle px-2 py-1.5 text-left text-[11px] font-medium text-brand-primary hover:bg-surface-subtle ${
-            highlight === filtered.length + 1 ? "bg-surface-subtle" : ""
+            highlight === createIndex ? "bg-surface-subtle" : ""
           }`}
           onMouseDown={(e) => e.preventDefault()}
-          onMouseEnter={() => setHighlight(filtered.length + 1)}
-          onClick={() => chooseIndex(filtered.length + 1)}
+          onMouseEnter={() => setHighlight(createIndex)}
+          onClick={() => chooseIndex(createIndex)}
         >
           + Create new item
         </button>

@@ -422,6 +422,31 @@ export function ConfigurationPage() {
             <input
               type="checkbox"
               className="mt-1 rounded border-border-strong"
+              checked={featureFlags.quotation_costing_accuracy_v1 === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  quotation_costing_accuracy_v1: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Enable accurate dozen-first quotation costing</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                When checked, new and edited quotations are costed per dozen (12 pcs) and quoted per piece, with
+                material wastage %, three CM methods (SMV + CPM, line output, direct CM), a Margin-on-FOB option and a
+                server-checked price. Quotations saved before this stay unchanged until you convert them. If you turn
+                this off later, quotations already saved this way become read-only. Off by default.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface-subtle p-3" hidden={!showTier("more")}>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
               checked={featureFlags.material_control_hub_v1 === true}
               onChange={(e) =>
                 setFeatureFlags((prev) => ({

@@ -101,3 +101,14 @@ approval. Agents must not re-report these as new findings, but they must flag an
 - **Fixed (2026-11-10, user decision):** the three amounts are 4-decimal text (same as the payroll API) and
   `download_url` is always null. The P7 frontend is the only client in this repository. Test
   `tests/test_hr_ess_payslip_period.py`.
+
+## KI-11: legacy `quotations.quoted_price` is an order total, but some readers treated it as a unit price
+
+- **Where:** the order commercial snapshot (`orders/commercial_snapshot_service.py`), invoice price and
+  `mfg_intelligence/revenue_resolver.py` read `quoted_price` as a per-piece price; legacy quotations store an
+  order total in `quoted_price` / `total_amount` (the customer portal already divided by quantity).
+- **Status (2026-11-25):** legacy quotations are unchanged (still an order total) so nothing silently moves.
+  Dozen-first quotations (flag `quotation_costing_accuracy_v1`, `costing_basis = PER_DOZEN`) store the per-piece
+  price in `quoted_price_per_piece` and freeze that per-piece value as `quoted_price` in the order snapshot.
+  The unit-vs-total mismatch for legacy quotations is still open and needs an owner decision before any change.
+  Tests `tests/test_quotation_costing_downstream.py`.

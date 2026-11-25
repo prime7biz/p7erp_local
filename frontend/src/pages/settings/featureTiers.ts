@@ -25,6 +25,7 @@ export const TIER_KEYS: Record<Exclude<FeatureTier, "essential">, string[]> = {
     "knitting_enabled",
     "inbound_job_work_v1",
     "inquiry_workbench_v1",
+    "quotation_costing_accuracy_v1",
     "material_control_hub_v1",
     "material_inbound_v2",
     "material_alloc_ud_v1",

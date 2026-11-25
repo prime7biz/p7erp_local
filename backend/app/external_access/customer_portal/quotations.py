@@ -97,6 +97,9 @@ def _quoted_unit_price(q: Quotation) -> str | None:
     from decimal import Decimal, ROUND_HALF_UP
 
     qty = q.projected_quantity or 0
+    if q.costing_basis is not None and q.quoted_price_per_piece is not None:
+        # Dozen-first quotation: the per-piece price is stored, so it needs no quantity.
+        return _money(q.quoted_price_per_piece)
     raw = q.total_amount if q.total_amount is not None else q.quoted_price
     if raw is None or qty <= 0:
         return None
@@ -105,6 +108,13 @@ def _quoted_unit_price(q: Quotation) -> str | None:
     except Exception:
         return None
     return f"{(total / Decimal(qty)).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP):.4f}"
+
+
+def _quoted_total_amount(q: Quotation) -> str | None:
+    """Order total for buyers; a dozen-first quotation without a quantity has no order total yet."""
+    if q.costing_basis is not None and (q.projected_quantity or 0) <= 0:
+        return None
+    return _money(q.total_amount if q.total_amount is not None else q.quoted_price)
 
 
 def _to_out(q: Quotation, last_response: str | None) -> PortalQuotationOut:
@@ -116,7 +126,7 @@ def _to_out(q: Quotation, last_response: str | None) -> PortalQuotationOut:
         style_ref=q.style_ref,
         quantity=q.projected_quantity,
         quoted_unit_price=_quoted_unit_price(q),
-        total_amount=_money(q.total_amount if q.total_amount is not None else q.quoted_price),
+        total_amount=_quoted_total_amount(q),
         currency=q.currency,
         valid_until=q.valid_until,
         my_last_response=last_response,  # type: ignore[arg-type]

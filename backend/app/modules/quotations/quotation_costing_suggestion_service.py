@@ -730,6 +730,15 @@ async def apply_costing_suggestions(
     q, mats, mfg, oth, _sr = await _load_lines_for_suggestions(db, tenant_id=tenant_id, quotation_id=quotation_id)
     if q.id != quotation_id:
         raise HTTPException(status_code=404, detail="Quotation not found")
+    if q.costing_basis is not None and any(decision == "apply" for _i, decision in actions):
+        # Line suggestions use the per-piece model; applying them would desync a dozen-first price.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "DOZEN_FIRST_AI_APPLY_UNSUPPORTED",
+                "message": "AI line suggestions cannot be applied to a dozen-first quotation. Edit the lines directly.",
+            },
+        )
 
     data = await get_costing_suggestion_batch(db, tenant_id=tenant_id, batch_id=batch_id)
     batch: QuotationCostingSuggestionBatch = data["batch"]

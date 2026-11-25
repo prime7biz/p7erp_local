@@ -83,6 +83,13 @@ async def create_bom_from_order_prefill(
         per_dozen = _safe_float(m.consumption_per_dozen)
         net_per_unit = per_dozen / 12.0 if per_dozen else 0.0
         unit_price = _safe_float(m.unit_price)
+        # Dozen-first quotation: the quote priced GROSS consumption (net + wastage). Carry the wastage onto the BOM
+        # line and freeze the gross figure as "quoted", so a BOM at the same wastage shows no false variance.
+        line_wastage = None
+        quoted_per_unit = net_per_unit
+        if quotation.costing_basis is not None and m.wastage_pct is not None:
+            line_wastage = Decimal(str(m.wastage_pct))
+            quoted_per_unit = net_per_unit * (1.0 + float(line_wastage) / 100.0)
 
         item_code = None
         if m.item_id:
@@ -105,8 +112,8 @@ async def create_bom_from_order_prefill(
             base_consumption=Decimal(str(net_per_unit or 0)).quantize(
                 Decimal("0.000001"), rounding=ROUND_HALF_UP
             ),
-            wastage_pct=None,
-            quoted_consumption_per_unit=net_per_unit,
+            wastage_pct=line_wastage,
+            quoted_consumption_per_unit=quoted_per_unit,
             quoted_unit_price=unit_price,
             quoted_currency=m.currency or "USD",
             process_loss_pct=0,

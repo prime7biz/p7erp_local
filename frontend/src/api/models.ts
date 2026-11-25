@@ -4711,6 +4711,9 @@ export interface QuotationResponse {
   cost_per_piece?: string | null;
   profit_percentage?: string | null;
   quoted_price?: string | null;
+  costing_basis?: "PER_DOZEN" | null;
+  margin_method?: "MARKUP_ON_COST" | "MARGIN_ON_FOB" | null;
+  quoted_price_per_piece?: string | null;
   status: string;
   is_converted_to_order?: boolean;
   converted_order_id?: number | null;
@@ -7213,7 +7216,13 @@ export interface QuotationMaterialLine {
   exchange_rate: string;
   base_amount: string;
   local_amount: string;
+  /** Dozen-first costing (flag quotation_costing_accuracy_v1): extra % on consumption. */
+  wastage_pct?: string | null;
+  /** Browser-only stable key for the row (never sent to the server). */
+  _rowKey?: string;
 }
+
+export type QuotationCmMode = "SMV_CPM" | "LINE_OUTPUT" | "DIRECT";
 
 export interface QuotationManufacturingLine {
   id?: number | null;
@@ -7231,6 +7240,15 @@ export interface QuotationManufacturingLine {
   exchange_rate: string;
   base_amount: string;
   local_amount: string;
+  /** Dozen-first costing: how this line is calculated. Null = legacy per-piece line. */
+  cm_mode?: QuotationCmMode | null;
+  smv?: string | null;
+  efficiency_pct?: string | null;
+  cpm?: string | null;
+  cpm_basis?: "EARNED_MIN" | "AVAILABLE_MIN" | null;
+  working_hours_per_day?: string | null;
+  direct_cm_basis?: "PER_DOZEN" | "PER_PIECE" | null;
+  _rowKey?: string;
 }
 
 export interface QuotationOtherCostLine {
@@ -7248,6 +7266,9 @@ export interface QuotationOtherCostLine {
   exchange_rate: string;
   base_amount: string;
   local_amount: string;
+  /** Dozen-first costing: basis of a fixed amount. */
+  cost_basis?: "PER_DOZEN" | "PER_PIECE" | "PER_ORDER" | null;
+  _rowKey?: string;
 }
 
 export interface QuotationSizeRatioLine {
@@ -7315,6 +7336,16 @@ export interface QuotationDetailResponse {
   size_ratios: QuotationSizeRatioLine[];
   commercial_book_currency?: string | null;
   ai_indicators?: QuotationAiIndicatorsOut | null;
+  /** Dozen-first costing. Null on legacy quotations. */
+  costing_basis?: "PER_DOZEN" | null;
+  margin_method?: "MARKUP_ON_COST" | "MARGIN_ON_FOB" | null;
+  fixed_commission_basis?: "PER_ORDER" | null;
+  material_cost_per_dozen?: string | null;
+  manufacturing_cost_per_dozen?: string | null;
+  other_cost_per_dozen?: string | null;
+  total_cost_per_dozen?: string | null;
+  quoted_price_per_dozen?: string | null;
+  quoted_price_per_piece?: string | null;
 }
 
 // Body for full quotation update (PUT)
@@ -7352,6 +7383,11 @@ export interface QuotationFullUpdate {
   manufacturing?: QuotationManufacturingLine[] | null;
   other_costs?: QuotationOtherCostLine[] | null;
   size_ratios?: QuotationSizeRatioLine[] | null;
+  costing_basis?: "PER_DOZEN" | null;
+  margin_method?: "MARKUP_ON_COST" | "MARGIN_ON_FOB" | null;
+  fixed_commission_basis?: "PER_ORDER" | null;
+  /** Only for a manual buyer price; omit/null = the server calculates it. */
+  quoted_price_per_piece?: string | null;
 }
 
 export interface QuotationCreate {

@@ -158,17 +158,36 @@ export const merchApi = {
   },
   // Costing masters
   async listItemCategories(): Promise<ItemCategoryResponse[]> {
-    return request<ItemCategoryResponse[]>("/api/v1/costing/item-categories");
+    return request<ItemCategoryResponse[]>("/api/v1/costing/item-categories?limit=500");
   },
   async listItemUnits(): Promise<ItemUnitResponse[]> {
-    return request<ItemUnitResponse[]>("/api/v1/costing/item-units");
+    return request<ItemUnitResponse[]>("/api/v1/costing/item-units?limit=500");
   },
-  async listCostingItems(params?: { category_id?: number; search?: string }): Promise<CostingItemResponse[]> {
+  async listCostingItems(params?: { category_id?: number; search?: string; limit?: number }): Promise<CostingItemResponse[]> {
     const q = new URLSearchParams();
     if (params?.category_id != null) q.set("category_id", String(params.category_id));
     if (params?.search != null && params.search.trim() !== "") q.set("search", params.search.trim());
-    const suffix = q.toString() ? `?${q.toString()}` : "";
+    q.set("limit", String(params?.limit ?? 1000));
+    const suffix = `?${q.toString()}`;
     return request<CostingItemResponse[]>(`/api/v1/costing/items${suffix}`);
+  },
+  /** One page of items + total match count (`X-Total-Count`) for the server-backed material picker. */
+  async listCostingItemsPage(params: {
+    category_id?: number | null;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ListWithTotal<CostingItemResponse>> {
+    const q = new URLSearchParams();
+    if (params.category_id != null) q.set("category_id", String(params.category_id));
+    if (params.search != null && params.search.trim() !== "") q.set("search", params.search.trim());
+    q.set("limit", String(params.limit ?? 50));
+    q.set("offset", String(params.offset ?? 0));
+    return requestWithTotal<CostingItemResponse>(`/api/v1/costing/items?${q.toString()}`);
+  },
+  /** One saved item (used to label an already-saved line that is not on the first page). */
+  async getCostingItem(itemId: number): Promise<CostingItemResponse> {
+    return request<CostingItemResponse>(`/api/v1/costing/items/${itemId}`);
   },
   async listCurrencies(): Promise<CurrencyMasterResponse[]> {
     return request<CurrencyMasterResponse[]>("/api/v1/costing/currencies");

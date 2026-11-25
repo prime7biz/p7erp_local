@@ -290,6 +290,11 @@ FINISHING_STAGE_WIP_V1 = "finishing_stage_wip_v1"
 # Strict (only an explicit true switches it on), default OFF; never add to DEFAULT_ON_FEATURE_FLAGS.
 CUSTOMER_PORTAL_QUOTATIONS_ENABLED = "customer_portal_quotations_enabled"
 
+# Dozen-first quotation costing (materials + wastage, 3 CM modes, per-piece quoting, margin-on-FOB; migration 338).
+# Strict (only an explicit true switches it on), default OFF; never add to DEFAULT_ON_FEATURE_FLAGS.
+# Turn it on only after the downstream readers (revenue, invoices, profitability) are deployed and tested.
+QUOTATION_COSTING_ACCURACY_V1 = "quotation_costing_accuracy_v1"
+
 # Flags that are on for every tenant (existing and new) unless explicitly set to False.
 # API payloads read by the frontend (`/auth/me`, `/settings/config`) fill these in as True when missing.
 DEFAULT_ON_FEATURE_FLAGS: tuple[str, ...] = (
@@ -496,6 +501,11 @@ def is_kpi_engine_v1_enabled(feature_flags: Any) -> bool:
 def is_kpi_predictive_v1_enabled(feature_flags: Any) -> bool:
     """Strict: KPI predictions; requires kpi_engine_v1."""
     return is_kpi_engine_v1_enabled(feature_flags) and _flag_true(feature_flags, KPI_PREDICTIVE_V1)
+
+
+def is_quotation_costing_accuracy_v1_enabled(feature_flags: Any) -> bool:
+    """Strict: dozen-first quotation costing engine; default OFF."""
+    return _flag_true(feature_flags, QUOTATION_COSTING_ACCURACY_V1)
 
 
 def is_customer_portal_quotations_enabled(feature_flags: Any) -> bool:

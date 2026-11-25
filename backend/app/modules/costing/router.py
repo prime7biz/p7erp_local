@@ -3,7 +3,7 @@ Costing engine master data APIs (PrimeX parity).
 List endpoints for item categories, item units, items, and currencies.
 Used by the quotation costing form.
 """
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, field_validator
@@ -27,7 +27,6 @@ router = APIRouter(prefix="/costing", tags=["costing"])
 
 def _ensure_tenant(user: User, tenant: Tenant) -> None:
     if user.tenant_id != tenant.id:
-        from fastapi import HTTPException, status
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
 
@@ -158,8 +157,27 @@ async def list_item_units(
 
 
 # ----- Items -----
+def _item_response(item_row: Item, u: ItemUnit | None) -> ItemResponse:
+    return ItemResponse(
+        id=item_row.id,
+        tenant_id=item_row.tenant_id,
+        item_code=item_row.item_code,
+        name=item_row.name,
+        description=item_row.description,
+        category_id=item_row.category_id,
+        unit_id=item_row.unit_id,
+        subcategory_id=item_row.subcategory_id,
+        stock_group_id=item_row.stock_group_id,
+        unit_code=u.unit_code if u is not None else None,
+        unit_name=u.name if u is not None else None,
+        default_cost=item_row.default_cost,
+        is_active=item_row.is_active,
+    )
+
+
 @router.get("/items", response_model=list[ItemResponse])
 async def list_items(
+    response: Response,
     category_id: int | None = Query(default=None, description="Filter by category"),
     search: str | None = Query(
         default=None,
@@ -171,46 +189,53 @@ async def list_items(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List items for the current tenant (for material dropdown in quotation)."""
+    """List items for the current tenant (material picker in quotation). `X-Total-Count` = matches before paging."""
     _ensure_tenant(user, tenant)
+    conditions = [Item.tenant_id == tenant.id, Item.is_active.is_(True)]
+    if category_id is not None:
+        conditions.append(Item.category_id == category_id)
+    if search and search.strip():
+        escaped = search.strip().lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pat = f"%{escaped}%"
+        conditions.append(
+            or_(
+                func.lower(Item.item_code).like(pat, escape="\\"),
+                func.lower(Item.name).like(pat, escape="\\"),
+            )
+        )
+    total = (await db.execute(select(func.count(Item.id)).where(*conditions))).scalar_one()
     stmt = (
         select(Item, ItemUnit)
-        .join(ItemUnit, Item.unit_id == ItemUnit.id)
-        .where(Item.tenant_id == tenant.id, Item.is_active.is_(True))
+        .outerjoin(ItemUnit, (Item.unit_id == ItemUnit.id) & (ItemUnit.tenant_id == tenant.id))
+        .where(*conditions)
+        .order_by(Item.item_code)
+        .offset(offset)
+        .limit(limit)
     )
-    if category_id is not None:
-        stmt = stmt.where(Item.category_id == category_id)
-    if search and search.strip():
-        pat = f"%{search.strip().lower()}%"
-        stmt = stmt.where(
-            or_(
-                func.lower(Item.item_code).like(pat),
-                func.lower(Item.name).like(pat),
-            )
-        )
-    stmt = stmt.order_by(Item.item_code).offset(offset).limit(limit)
     result = await db.execute(stmt)
-    out: list[ItemResponse] = []
-    for item_row, u in result.all():
-        out.append(
-            ItemResponse(
-                id=item_row.id,
-                tenant_id=item_row.tenant_id,
-                item_code=item_row.item_code,
-                name=item_row.name,
-                description=item_row.description,
-                category_id=item_row.category_id,
-                unit_id=item_row.unit_id,
-                subcategory_id=item_row.subcategory_id,
-                stock_group_id=item_row.stock_group_id,
-                unit_code=u.unit_code,
-                unit_name=u.name,
-                default_cost=item_row.default_cost,
-                is_active=item_row.is_active,
-            )
-        )
-    return out
+    response.headers["X-Total-Count"] = str(int(total or 0))
+    return [_item_response(item_row, u) for item_row, u in result.all()]
 
+
+@router.get("/items/{item_id}", response_model=ItemResponse)
+async def get_item(
+    item_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """One item of the current tenant (used to show an already-saved material line). Other tenants look like 404."""
+    _ensure_tenant(user, tenant)
+    row = (
+        await db.execute(
+            select(Item, ItemUnit)
+            .outerjoin(ItemUnit, (Item.unit_id == ItemUnit.id) & (ItemUnit.tenant_id == tenant.id))
+            .where(Item.id == item_id, Item.tenant_id == tenant.id)
+        )
+    ).first()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
+    return _item_response(row[0], row[1])
 
 # ----- Currencies -----
 @router.get("/currencies", response_model=list[CurrencyResponse])

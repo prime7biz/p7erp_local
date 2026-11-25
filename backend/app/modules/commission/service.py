@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Order
@@ -58,14 +58,21 @@ def calculate_amounts(
     rate: Decimal,
     tds_rate_pct: Decimal,
     vds_rate_pct: Decimal,
+    fixed_gross: Decimal | None = None,
 ) -> Amounts | None:
-    """Gross = value × rate% (PERCENTAGE) or pieces × rate (FIXED); net = gross − TDS − VDS. None if not computable."""
+    """Gross = value × rate% (PERCENTAGE) or pieces × rate (FIXED); net = gross − TDS − VDS. None if not computable.
+
+    ``fixed_gross`` is the already-allocated share of a PER-ORDER fixed commission for this shipment
+    (see ``per_order_fixed_gross``); it replaces pieces × rate for that case only."""
     if rate <= 0:
         return None
     if rate_type == RATE_FIXED:
-        if not shipped_qty or shipped_qty <= 0:
-            return None
-        gross = money(Decimal(shipped_qty) * rate)
+        if fixed_gross is not None:
+            gross = money(fixed_gross)
+        else:
+            if not shipped_qty or shipped_qty <= 0:
+                return None
+            gross = money(Decimal(shipped_qty) * rate)
     else:
         gross = money(shipped_value * rate / HUNDRED)
     if gross <= 0:
@@ -146,6 +153,67 @@ async def resolve_payable(db: AsyncSession, tenant_id: int, order: Order) -> Res
     return None
 
 
+def is_per_order_fixed(order: Order) -> bool:
+    """True when the order came from a dozen-first quotation whose FIXED commission is ONE amount for the order."""
+    snap = order.commercial_snapshot_json if isinstance(order.commercial_snapshot_json, dict) else {}
+    return str(snap.get("fixed_commission_basis") or "").strip().upper() == "PER_ORDER"
+
+
+async def per_order_fixed_gross(
+    db: AsyncSession,
+    tenant_id: int,
+    order: Order,
+    shipment: CommissionShipment,
+    resolved: ResolvedRate,
+    direction: str,
+) -> Decimal | None:
+    """Share of a per-order fixed commission recognised on ``shipment``.
+
+    Proportional to shipped quantity, capped so the cumulative total never passes the order amount, and the
+    shipment that completes the order quantity takes the rounding remainder. None = nothing to recognise.
+    """
+    order_qty = int(order.quantity or 0)
+    shipped = int(shipment.shipped_qty or 0)
+    if order_qty <= 0 or shipped <= 0:
+        return None
+    # Serialise concurrent shipments of one order so two requests cannot both take the remainder.
+    await db.execute(select(Order.id).where(Order.id == order.id, Order.tenant_id == tenant_id).with_for_update())
+    total = money(resolved.rate)
+    prior_qty = int(
+        await db.scalar(
+            select(func.coalesce(func.sum(CommissionShipment.shipped_qty), 0)).where(
+                CommissionShipment.tenant_id == tenant_id,
+                CommissionShipment.order_id == order.id,
+                CommissionShipment.id != shipment.id,
+            )
+        )
+        or 0
+    )
+    prior_gross = Decimal(
+        str(
+            await db.scalar(
+                select(func.coalesce(func.sum(CommissionEntry.gross_amount), 0))
+                .join(CommissionShipment, CommissionShipment.id == CommissionEntry.shipment_id)
+                .where(
+                    CommissionEntry.tenant_id == tenant_id,
+                    CommissionShipment.order_id == order.id,
+                    CommissionShipment.id != shipment.id,
+                    CommissionEntry.direction == direction,
+                    # No counterparty filter: the order amount is ONE amount, whichever factory ships it.
+                    CommissionEntry.rate_source == "order",
+                )
+            )
+            or 0
+        )
+    )
+    remaining = total - prior_gross
+    if remaining <= 0:
+        return None
+    if prior_qty + shipped >= order_qty:
+        return remaining  # final shipment: whatever is left, so the entries add up to the order amount
+    return min(money(total * Decimal(shipped) / Decimal(order_qty)), remaining)
+
+
 async def get_settings_row(db: AsyncSession, tenant_id: int) -> CommissionSettings | None:
     return (await db.execute(select(CommissionSettings).where(CommissionSettings.tenant_id == tenant_id))).scalar_one_or_none()
 
@@ -162,6 +230,11 @@ async def build_entries(db: AsyncSession, tenant_id: int, order: Order, shipment
     ):
         if not resolved:
             continue
+        fixed_gross: Decimal | None = None
+        if resolved.rate_type == RATE_FIXED and resolved.source == "order" and is_per_order_fixed(order):
+            fixed_gross = await per_order_fixed_gross(db, tenant_id, order, shipment, resolved, direction)
+            if fixed_gross is None:
+                continue
         amounts = calculate_amounts(
             shipped_value=Decimal(shipment.shipped_value),
             shipped_qty=shipment.shipped_qty,
@@ -169,6 +242,7 @@ async def build_entries(db: AsyncSession, tenant_id: int, order: Order, shipment
             rate=resolved.rate,
             tds_rate_pct=Decimal(tds_pct),
             vds_rate_pct=Decimal(vds_pct),
+            fixed_gross=fixed_gross,
         )
         if not amounts:
             continue

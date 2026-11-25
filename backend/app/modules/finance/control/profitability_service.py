@@ -310,15 +310,30 @@ async def _budget_and_counts(db: AsyncSession, tenant: Tenant, order_cond: list)
     def total(column):
         return func.coalesce(func.sum(case((usable, func.coalesce(column, 0) * rate), else_=0)), 0)
 
+    # Dozen-first quotations (costing_basis set) are priced per dozen / per piece, so their budget is the
+    # per-dozen cost x ORDER quantity / 12 (the quote may have had no quantity). Legacy rows stay unchanged.
+    order_qty = func.coalesce(Order.quantity, 0)
+
+    def basis(legacy_column, per_dozen_column):
+        return case(
+            (Quotation.costing_basis.is_not(None), func.coalesce(per_dozen_column, 0) * order_qty / 12),
+            else_=legacy_column,
+        )
+
+    revenue_column = case(
+        (Quotation.costing_basis.is_not(None), func.coalesce(Quotation.quoted_price_per_piece, 0) * order_qty),
+        else_=Quotation.total_amount,
+    )
+
     row = (
         await db.execute(
             select(
                 func.count(Order.id),
                 func.count(case((usable, Order.id))),
-                total(Quotation.total_amount),
-                total(Quotation.material_cost),
-                total(Quotation.manufacturing_cost),
-                total(Quotation.other_cost),
+                total(revenue_column),
+                total(basis(Quotation.material_cost, Quotation.material_cost_per_dozen)),
+                total(basis(Quotation.manufacturing_cost, Quotation.manufacturing_cost_per_dozen)),
+                total(basis(Quotation.other_cost, Quotation.other_cost_per_dozen)),
             )
             .select_from(Order)
             .outerjoin(Quotation, and_(Quotation.id == Order.quotation_id, Quotation.tenant_id == tenant.id))

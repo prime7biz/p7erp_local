@@ -453,5 +453,10 @@ async def _quotation(db: AsyncSession, tenant_id: int, rid: int) -> ScreenContex
             "version_no": q.version_no,
             "currency": q.currency,
             "quoted_price": str(q.quoted_price) if q.quoted_price is not None else None,
+            "quoted_price_per_piece": (
+                str(q.quoted_price_per_piece)
+                if q.costing_basis is not None and q.quoted_price_per_piece is not None
+                else None
+            ),
         },
     )

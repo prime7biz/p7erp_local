@@ -1,0 +1,117 @@
+{
+  "_note": "Shared by backend/tests/test_quotation_costing_calculator.py and frontend mappers/quotationCostingEngine.test.ts. All money is per dozen (12 pcs) unless the key says per_piece; strings are 4-decimal ROUND_HALF_UP.",
+  "cases": [
+    {
+      "name": "markup_basic",
+      "input": {
+        "materials": [{"cons": "2.5", "price": "4"}, {"cons": "0.3", "price": "10"}],
+        "manufacturing": [{"mode": "SMV_CPM", "smv": "12", "cpm": "0.05", "cpm_basis": "EARNED_MIN"}],
+        "other_costs": [{"type": "fixed", "value": "1.8", "basis": "PER_DOZEN"}],
+        "qty": 1200, "profit_pct": "15"
+      },
+      "expected": {"material_per_dozen": "13.0000", "manufacturing_per_dozen": "7.2000", "other_per_dozen": "1.8000", "total_cost_per_dozen": "22.0000", "price_per_dozen": "25.3000", "price_per_piece": "2.1083"}
+    },
+    {
+      "name": "material_wastage",
+      "input": {
+        "materials": [{"cons": "2.5", "price": "4", "wastage": "10"}, {"cons": "0.3", "price": "10"}],
+        "manufacturing": [{"mode": "SMV_CPM", "smv": "12", "cpm": "0.05", "cpm_basis": "EARNED_MIN"}],
+        "other_costs": [{"type": "fixed", "value": "1.8", "basis": "PER_DOZEN"}],
+        "qty": 1200, "profit_pct": "15"
+      },
+      "expected": {"material_per_dozen": "14.0000", "manufacturing_per_dozen": "7.2000", "other_per_dozen": "1.8000", "total_cost_per_dozen": "23.0000", "price_per_dozen": "26.4500", "price_per_piece": "2.2042"}
+    },
+    {
+      "name": "margin_on_fob",
+      "input": {
+        "materials": [{"cons": "2.5", "price": "4"}, {"cons": "0.3", "price": "10"}],
+        "manufacturing": [{"mode": "SMV_CPM", "smv": "12", "cpm": "0.05", "cpm_basis": "EARNED_MIN"}],
+        "other_costs": [{"type": "fixed", "value": "1.8", "basis": "PER_DOZEN"}],
+        "qty": 1200, "profit_pct": "15", "margin_method": "MARGIN_ON_FOB"
+      },
+      "expected": {"material_per_dozen": "13.0000", "manufacturing_per_dozen": "7.2000", "other_per_dozen": "1.8000", "total_cost_per_dozen": "22.0000", "price_per_dozen": "25.8824", "price_per_piece": "2.1569"}
+    },
+    {
+      "name": "markup_included_percentage_commission",
+      "input": {
+        "materials": [{"cons": "2.5", "price": "4"}, {"cons": "0.3", "price": "10"}],
+        "manufacturing": [{"mode": "SMV_CPM", "smv": "12", "cpm": "0.05", "cpm_basis": "EARNED_MIN"}],
+        "other_costs": [{"type": "fixed", "value": "1.8", "basis": "PER_DOZEN"}],
+        "qty": 1200, "profit_pct": "15", "commission": {"mode": "INCLUDE", "type": "PERCENTAGE", "value": "5"}
+      },
+      "expected": {"material_per_dozen": "13.0000", "manufacturing_per_dozen": "7.2000", "other_per_dozen": "1.8000", "total_cost_per_dozen": "22.0000", "price_per_dozen": "26.5650", "price_per_piece": "2.2138"}
+    },
+    {
+      "name": "fob_included_percentage_commission",
+      "input": {
+        "materials": [{"cons": "2.5", "price": "4"}, {"cons": "0.3", "price": "10"}],
+        "manufacturing": [{"mode": "SMV_CPM", "smv": "12", "cpm": "0.05", "cpm_basis": "EARNED_MIN"}],
+        "other_costs": [{"type": "fixed", "value": "1.8", "basis": "PER_DOZEN"}],
+        "qty": 1200, "profit_pct": "15", "margin_method": "MARGIN_ON_FOB", "commission": {"mode": "INCLUDE", "type": "PERCENTAGE", "value": "5"}
+      },
+      "expected": {"material_per_dozen": "13.0000", "manufacturing_per_dozen": "7.2000", "other_per_dozen": "1.8000", "total_cost_per_dozen": "22.0000", "price_per_dozen": "27.5000", "price_per_piece": "2.2917"}
+    },
+    {
+      "name": "markup_included_fixed_commission",
+      "input": {
+        "materials": [{"cons": "2.5", "price": "4"}, {"cons": "0.3", "price": "10"}],
+        "manufacturing": [{"mode": "SMV_CPM", "smv": "12", "cpm": "0.05", "cpm_basis": "EARNED_MIN"}],
+        "other_costs": [{"type": "fixed", "value": "1.8", "basis": "PER_DOZEN"}],
+        "qty": 1200, "profit_pct": "15", "commission": {"mode": "INCLUDE", "type": "FIXED", "value": "600"}
+      },
+      "expected": {"material_per_dozen": "13.0000", "manufacturing_per_dozen": "7.2000", "other_per_dozen": "1.8000", "total_cost_per_dozen": "22.0000", "price_per_dozen": "31.3000", "price_per_piece": "2.6083"}
+    },
+    {
+      "name": "cm_line_output",
+      "input": {
+        "materials": [{"cons": "2.5", "price": "4"}, {"cons": "0.3", "price": "10"}],
+        "manufacturing": [{"mode": "LINE_OUTPUT", "machines": 20, "cost_machine": "25", "pph": "60", "hours": "8"}],
+        "qty": 1200, "profit_pct": "0"
+      },
+      "expected": {"material_per_dozen": "13.0000", "manufacturing_per_dozen": "12.5000", "other_per_dozen": "0.0000", "total_cost_per_dozen": "25.5000", "price_per_dozen": "25.5000", "price_per_piece": "2.1250"}
+    },
+    {
+      "name": "cm_available_minute_with_efficiency",
+      "input": {
+        "materials": [{"cons": "2.5", "price": "4"}, {"cons": "0.3", "price": "10"}],
+        "manufacturing": [{"mode": "SMV_CPM", "smv": "12", "eff": "50", "cpm": "0.05", "cpm_basis": "AVAILABLE_MIN"}],
+        "qty": 1200, "profit_pct": "0"
+      },
+      "expected": {"material_per_dozen": "13.0000", "manufacturing_per_dozen": "14.4000", "other_per_dozen": "0.0000", "total_cost_per_dozen": "27.4000", "price_per_dozen": "27.4000", "price_per_piece": "2.2833"}
+    },
+    {
+      "name": "cm_direct_per_dozen",
+      "input": {
+        "materials": [{"cons": "2.5", "price": "4"}, {"cons": "0.3", "price": "10"}],
+        "manufacturing": [{"mode": "DIRECT", "direct_basis": "PER_DOZEN", "direct_dozen": "10"}],
+        "qty": 0, "profit_pct": "10"
+      },
+      "expected": {"material_per_dozen": "13.0000", "manufacturing_per_dozen": "10.0000", "other_per_dozen": "0.0000", "total_cost_per_dozen": "23.0000", "price_per_dozen": "25.3000", "price_per_piece": "2.1083"}
+    },
+    {
+      "name": "other_cost_per_order",
+      "input": {
+        "materials": [{"cons": "2.5", "price": "4"}, {"cons": "0.3", "price": "10"}],
+        "other_costs": [{"type": "fixed", "value": "1200", "basis": "PER_ORDER"}],
+        "qty": 2400, "profit_pct": "10"
+      },
+      "expected": {"material_per_dozen": "13.0000", "manufacturing_per_dozen": "0.0000", "other_per_dozen": "6.0000", "total_cost_per_dozen": "19.0000", "price_per_dozen": "20.9000", "price_per_piece": "1.7417"}
+    },
+    {
+      "name": "non_terminating_per_piece",
+      "input": {
+        "materials": [{"cons": "1", "price": "10"}],
+        "qty": 1200, "profit_pct": "0"
+      },
+      "expected": {"material_per_dozen": "10.0000", "manufacturing_per_dozen": "0.0000", "other_per_dozen": "0.0000", "total_cost_per_dozen": "10.0000", "price_per_dozen": "10.0000", "price_per_piece": "0.8333"}
+    },
+    {
+      "name": "line_currency_fx",
+      "input": {
+        "materials": [{"cons": "2", "price": "100", "fx": "0.01"}],
+        "qty": 1200, "profit_pct": "0"
+      },
+      "expected": {"material_per_dozen": "2.0000", "manufacturing_per_dozen": "0.0000", "other_per_dozen": "0.0000", "total_cost_per_dozen": "2.0000", "price_per_dozen": "2.0000", "price_per_piece": "0.1667"}
+    }
+  ]
+}

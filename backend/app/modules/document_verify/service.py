@@ -204,7 +204,11 @@ async def _verify_quotation(db: AsyncSession, quotation: Quotation) -> Quotation
     qty = quotation.projected_quantity or 0
     order_total = _to_decimal(quotation.total_amount if quotation.total_amount is not None else quotation.quoted_price)
     unit_price: str | None = None
-    if order_total is not None and qty > 0:
+    if quotation.costing_basis is not None and quotation.quoted_price_per_piece is not None:
+        unit_price = _money_text(quotation.quoted_price_per_piece)  # dozen-first: stored per-piece price
+        if qty <= 0:
+            order_total = None  # no quantity yet, so no order total to show a buyer
+    elif order_total is not None and qty > 0:
         unit_price = f"{(order_total / Decimal(qty)).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP):.4f}"
     return QuotationPublicVerification(
         is_valid=True,
@@ -215,7 +219,7 @@ async def _verify_quotation(db: AsyncSession, quotation: Quotation) -> Quotation
         style_ref=quotation.style_ref,
         quantity=quotation.projected_quantity,
         quoted_unit_price=unit_price,
-        total_amount=_money_text(quotation.total_amount if quotation.total_amount is not None else quotation.quoted_price),
+        total_amount=_money_text(order_total),
         currency=quotation.currency,
         valid_until=_iso_date(quotation.valid_until),
     )

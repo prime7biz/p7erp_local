@@ -427,6 +427,20 @@ Below **Quotation Basics** a **Suggestions** bar helps you fill the draft faster
 
 Use the section bar (**Basics, Materials, CM, Other Costs, Size Ratios, Breakdown**) to jump between sections.
 
+## Dozen-first costing (when the switch is on)
+
+If your company turned on **Settings → Configuration → More → Enable accurate dozen-first quotation costing**, a new quotation is costed the way garment buyers expect: **everything per dozen (12 pcs), price quoted per piece**. The expected quantity can be zero or unknown; the per-piece price still works.
+
+- **Materials** — enter **Consumption** per dozen and a **Wastage %**. The cost is consumption × (1 + wastage %) × price.
+- **Labor / CM** — pick one of three methods per style part: **SMV + efficiency + CPM** (earned or available minutes), **Line output** (daily line cost ÷ daily output of the whole line) or **Direct CM** (a fixed amount per dozen or per piece).
+- **Other costs** — a **Percentage**, or a **Fixed** amount **per dozen**, **per piece** or **per order** (per order needs a quantity above zero).
+- **FOB Studio** (right side) shows cost per dozen, the price per piece and per dozen, and lets you choose **Markup on cost** or **Margin on FOB price**. A fixed commission is **one amount for the whole order**; on partial shipments it is recognised in proportion to the pieces shipped.
+- **Preview: match buyer target** works out the margin needed to reach the buyer's target price (it uses a live exchange rate only when the currencies differ). Click **Apply to draft** to use it; a negative margin is allowed but shown with a warning.
+- You may type your own **per-piece price**; it replaces the calculated one.
+- The server re-checks every number when you **Save draft**, so the saved price is always the server's.
+
+Quotations saved before the switch stay as they were. If the switch is turned off later, quotations saved this way become read-only.
+
 ## What happens next
 
 When the costing is right, send it for approval: **Submit for review → Approve → Send to customer** (the **Send to customer** button is on the quotation page once it is Approved). See **Quotation approval and convert to order**.
@@ -462,7 +476,7 @@ Open **Print**. **Document mode** has two choices: **Buyer Quotation** (no inter
         "size ratio",
       ],
       estimatedMinutes: 8,
-      lastUpdated: "2026-11-23",
+      lastUpdated: "2026-11-25",
       featured: true,
       audience: "merchandiser",
       coverImage: `${S}/merch-quotation-workspace.jpg`,

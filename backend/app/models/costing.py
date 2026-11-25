@@ -262,6 +262,8 @@ class QuotationMaterial(Base):
     exchange_rate: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False, default=Decimal("1"))
     base_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
     local_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
+    # Migration 338 (flag quotation_costing_accuracy_v1). NULL = legacy line (no wastage applied).
+    wastage_pct: Mapped[Decimal | None] = mapped_column(Numeric(10, 4), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )
@@ -302,6 +304,14 @@ class QuotationManufacturing(Base):
     exchange_rate: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False, default=Decimal("1"))
     base_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
     local_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
+    # Migration 338 (flag quotation_costing_accuracy_v1). cm_mode NULL = legacy stored-value line.
+    cm_mode: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    smv: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    efficiency_pct: Mapped[Decimal | None] = mapped_column(Numeric(10, 4), nullable=True)
+    cpm: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
+    cpm_basis: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    working_hours_per_day: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), nullable=True)
+    direct_cm_basis: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )
@@ -337,6 +347,8 @@ class QuotationOtherCost(Base):
     exchange_rate: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False, default=Decimal("1"))
     base_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
     local_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
+    # Migration 338: PER_DOZEN | PER_PIECE | PER_ORDER for fixed rows. NULL = legacy (treated as PER_ORDER).
+    cost_basis: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

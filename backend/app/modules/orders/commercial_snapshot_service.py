@@ -9,10 +9,27 @@ from app.common.money import format_money, format_pct, format_rate
 from app.models import Order, Quotation
 from app.modules.orders.commercial_fields import is_quotation_commercial_locked
 from app.modules.orders.commercial_numeraire import resolve_commercial_book_currency
+from app.modules.quotations.quotation_basis import unit_price as quotation_unit_price
+
 
 
 def quotation_commercial_header_dict(q: Quotation) -> dict[str, Any]:
+  dozen_first = q.costing_basis is not None
+  extra: dict[str, Any] = {}
+  if dozen_first:
+    # Readers of the order snapshot (invoice price, revenue) treat `quoted_price` as a UNIT price, so a
+    # dozen-first quotation freezes the per-piece price there; `total_amount` stays the order total.
+    extra = {
+      "costing_basis": q.costing_basis,
+      "margin_method": q.margin_method,
+      # FIXED commission is ONE amount for the whole order (commission/service.py allocates it by shipped qty).
+      "fixed_commission_basis": q.fixed_commission_basis or "PER_ORDER",
+      "quoted_price_per_piece": format_money(q.quoted_price_per_piece),
+      "quoted_price_per_dozen": format_money(q.quoted_price_per_dozen),
+      "total_cost_per_dozen": format_money(q.total_cost_per_dozen),
+    }
   return {
+    **extra,
     "quotation_id": q.id,
     "quotation_code": q.quotation_code,
     "version_no": q.version_no,
@@ -21,7 +38,7 @@ def quotation_commercial_header_dict(q: Quotation) -> dict[str, Any]:
     "target_price_currency": q.target_price_currency,
     "target_price": format_money(q.target_price),
     "exchange_rate": format_rate(q.exchange_rate),
-    "quoted_price": format_money(q.quoted_price),
+    "quoted_price": format_money(quotation_unit_price(q)),
     "total_amount": format_money(q.total_amount),
     "total_cost": format_money(q.total_cost),
     "profit_percentage": format_pct(q.profit_percentage),
@@ -81,7 +98,7 @@ def list_commercial_discrepancies(
     return out
 
   field_checks: list[tuple[str, str, Any]] = [
-    ("quoted_price", "Quoted price", live_quotation.quoted_price),
+    ("quoted_price", "Quoted price", quotation_unit_price(live_quotation)),
     ("total_amount", "Total / offer amount", live_quotation.total_amount),
     ("document_currency", "Document currency", live_quotation.currency),
     ("target_price_currency", "Buyer target currency", live_quotation.target_price_currency),

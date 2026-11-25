@@ -1,45 +1,85 @@
-# Build and push application images to Docker Hub.
+# Manual fallback publisher. Use only when deploy.yml could not publish a release tag.
 #
-# Repo secrets (Settings → Secrets and variables → Actions → Repository secrets):
-#   DOCKERHUB_TOKEN   – Docker Hub access token (required; if blank, login fails with "Username and password required")
-#   VITE_API_BASE_URL – Passed as build-arg to frontend images (same as deploy workflow)
-# Docker Hub namespace is fixed to prime7biz (matches deploy-admin.yml).
+# Run from the GitHub Actions UI with an existing release tag (vX.Y.Z). The workflow
+# validates that the tag is on origin/main, tests that exact commit, and publishes the
+# three immutable version tags. It never moves :latest.
 #
-# Semantic versioning: tags v1.0.0 etc. Each run pushes :latest and :${{ github.ref_name }} (main or v*).
-# Triggers: pushes to main, version tags v*, and manual workflow_dispatch.
-# Images are pushed only after the shared tests (tests.yml) pass.
-
-name: Docker Hub Build
+# Publish-once: if any version tag already exists on Docker Hub, the run stops. Use a new
+# semver tag for a rebuild. Automatic runs are disabled on purpose (see deploy.yml).
+name: Docker Hub Build (Manual Fallback)
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to publish, for example v1.25.1'
+        required: true
+        type: string
 
+# Same literal group as deploy.yml and deploy-admin.yml: one publisher at a time.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: p7erp-image-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
-  # Gate: images are pushed only after backend + frontend tests pass (same jobs as CI, tests.yml).
-  tests:
-    name: Tests
-    permissions:
-      contents: read
-    uses: ./.github/workflows/tests.yml
-
-  build-and-push:
-    name: Build and push to Docker Hub
-    needs: tests
+  verify-release:
+    name: Verify Release Tag
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      sha: ${{ steps.check.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag and main reachability
+        id: check
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$INPUT_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: tag '$INPUT_TAG' must look like vX.Y.Z." >&2
+            exit 1
+          fi
+          git fetch --tags --force origin --quiet
+          sha="$(git rev-parse --verify --quiet "refs/tags/${INPUT_TAG}^{commit}")" || {
+            echo "ERROR: tag ${INPUT_TAG} does not exist." >&2
+            exit 1
+          }
+          git fetch origin main --quiet
+          if ! git merge-base --is-ancestor "$sha" origin/main; then
+            echo "ERROR: ${INPUT_TAG} (${sha}) is not on origin/main." >&2
+            exit 1
+          fi
+          {
+            echo "version=$INPUT_TAG"
+            echo "sha=$sha"
+          } >> "$GITHUB_OUTPUT"
+          echo "Verified ${INPUT_TAG} at ${sha}"
+
+  tests:
+    name: Tests
+    needs: verify-release
+    uses: ./.github/workflows/tests.yml
+    with:
+      ref: ${{ needs.verify-release.outputs.sha }}
+
+  publish:
+    name: Build and Publish Images
+    needs: [verify-release, tests]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.verify-release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify-release.outputs.sha }}
+          fetch-depth: 0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -50,12 +90,29 @@ jobs:
           username: prime7biz
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Same as deploy.yml: keep the live release's hashed files in the new frontend image.
+      - name: Refuse to reuse an existing release tag
+        run: |
+          set -uo pipefail
+          for repo in p7erp-backend p7erp-frontend p7erp-frontend-admin; do
+            image="prime7biz/${repo}:${VERSION}"
+            out="$(docker buildx imagetools inspect "$image" 2>&1)" && rc=0 || rc=$?
+            if [[ $rc -eq 0 ]]; then
+              echo "ERROR: ${image} already exists. Release tags are publish-once; create a new semver tag." >&2
+              exit 1
+            fi
+            if ! grep -qiE 'not found|manifest unknown|404' <<< "$out"; then
+              echo "ERROR: could not verify ${image}: ${out}" >&2
+              exit 1
+            fi
+            echo "OK: ${image} is unused"
+          done
+
+      # Same previous-frontend resolution as deploy.yml (PWA assets from the prior release).
       - name: Resolve previous frontend image
         id: previous
         run: |
           git fetch --tags --force --quiet || true
-          prev_tag=$(git tag --list 'v*' --sort=-v:refname | grep -vxF -- "${GITHUB_REF_NAME}" | head -n1 || true)
+          prev_tag=$(git tag --list 'v*' --sort=-v:refname | grep -vxF -- "${VERSION}" | head -n1 || true)
           image="nginx:1.27-alpine"
           if [[ -n "${prev_tag}" ]]; then
             digest=$(docker buildx imagetools inspect "prime7biz/p7erp-frontend:${prev_tag}" --format '{{.Manifest.Digest}}' 2>/dev/null || true)
@@ -64,29 +121,26 @@ jobs:
           echo "image=$image" >> "$GITHUB_OUTPUT"
           echo "Previous frontend image: ${prev_tag:-none} -> $image"
 
-      - name: Build and push backend
+      # Phase 1: build all three images without pushing.
+      - name: Build backend (no push)
         uses: docker/build-push-action@v5
         with:
           context: backend
-          push: true
-          tags: |
-            prime7biz/p7erp-backend:latest
-            prime7biz/p7erp-backend:${{ github.ref_name }}
+          push: false
+          tags: prime7biz/p7erp-backend:${{ needs.verify-release.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build and push frontend
+      - name: Build frontend (no push)
         uses: docker/build-push-action@v5
         with:
           context: frontend
           file: frontend/Dockerfile.prod
-          push: true
-          tags: |
-            prime7biz/p7erp-frontend:latest
-            prime7biz/p7erp-frontend:${{ github.ref_name }}
+          push: false
+          tags: prime7biz/p7erp-frontend:${{ needs.verify-release.outputs.version }}
           build-args: |
             VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
-            VITE_APP_VERSION=${{ github.ref_name }}
+            VITE_APP_VERSION=${{ needs.verify-release.outputs.version }}
             VITE_PWA_ENABLED=${{ vars.VITE_PWA_ENABLED || 'false' }}
             VITE_ANDROID_APK_URL=${{ vars.VITE_ANDROID_APK_URL || '' }}
             VITE_PLAY_STORE_URL=${{ vars.VITE_PLAY_STORE_URL || '' }}
@@ -96,15 +150,54 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build and push frontend-admin
+      - name: Build frontend-admin (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: frontend-admin
+          file: frontend-admin/Dockerfile.prod
+          push: false
+          tags: prime7biz/p7erp-frontend-admin:${{ needs.verify-release.outputs.version }}
+          build-args: |
+            VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Phase 2: push the immutable version tags. :latest is not touched by this fallback.
+      - name: Push backend
+        uses: docker/build-push-action@v5
+        with:
+          context: backend
+          push: true
+          tags: prime7biz/p7erp-backend:${{ needs.verify-release.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: frontend
+          file: frontend/Dockerfile.prod
+          push: true
+          tags: prime7biz/p7erp-frontend:${{ needs.verify-release.outputs.version }}
+          build-args: |
+            VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
+            VITE_APP_VERSION=${{ needs.verify-release.outputs.version }}
+            VITE_PWA_ENABLED=${{ vars.VITE_PWA_ENABLED || 'false' }}
+            VITE_ANDROID_APK_URL=${{ vars.VITE_ANDROID_APK_URL || '' }}
+            VITE_PLAY_STORE_URL=${{ vars.VITE_PLAY_STORE_URL || '' }}
+            VITE_PLAUSIBLE_DOMAIN=${{ vars.VITE_PLAUSIBLE_DOMAIN || '' }}
+            PRERENDER_HYDRATE=${{ vars.PRERENDER_HYDRATE || 'false' }}
+            PREVIOUS_FRONTEND_IMAGE=${{ steps.previous.outputs.image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Push frontend-admin
         uses: docker/build-push-action@v5
         with:
           context: frontend-admin
           file: frontend-admin/Dockerfile.prod
           push: true
-          tags: |
-            prime7biz/p7erp-frontend-admin:latest
-            prime7biz/p7erp-frontend-admin:${{ github.ref_name }}
+          tags: prime7biz/p7erp-frontend-admin:${{ needs.verify-release.outputs.version }}
           build-args: |
             VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
           cache-from: type=gha

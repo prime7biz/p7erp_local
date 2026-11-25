@@ -5,13 +5,24 @@ alwaysApply: false
 
 # Standard deployment process
 
-**Trigger:** When the user says **`deploy`**, **`release`**, or **`push to live`**, execute **all phases below end-to-end**. Do not stop after commit or after `git push origin main`.
+**Trigger:** When the user says **`deploy`**, **`release`**, or **`push to live`**, execute **all phases below end-to-end**. Do not stop after commit, after `git push origin dev`, or after CI is green on `dev`.
 
-**How production deploy works** (see `.github/workflows/deploy.yml`):
-- Push to **`main`** → CI + Docker image build/push only (no live server update).
-- Push **`v*` tag** → Docker image build/push only (images tagged `vX.Y.Z` on Docker Hub).
-- **Deploy** and **Docker Hub Build** first run the shared tests (`.github/workflows/tests.yml`); the build/push job `needs: tests`, so failing tests ⇒ no image pushed and the workflow concludes `failure`.
-- **Live server** → manual SSH only (`scripts/deploy_production_remote.sh` or commands in `docs/DEPLOYMENT_PROCESS.md`). GitHub does **not** SSH to production.
+**How production deploy works** (see `docs/DEPLOYMENT_PROCESS.md`, `.github/workflows/`):
+
+| Step | Branch / trigger | What runs | Docker Hub | Live server |
+|------|------------------|-----------|------------|-------------|
+| 1 | Push **`dev`** | `CI` (`ci.yml`): shared tests and compose validation (Docker build check runs on `main` and PRs only) | No | No |
+| 2 | Merge **`dev` → `main`** (PR, automatic after dev CI passes) | `CI` on `main` | No | No |
+| 3 | Push **`v*` tag** on `main` | `Deploy` (`deploy.yml`): verify tag is on `main`, tests, push immutable `vX.Y.Z` images, then promote `:latest` | Yes | No |
+| 4 | Manual SSH (agent runs it on `deploy`) | `scripts/deploy_production_remote.sh vX.Y.Z` | Pulls the tag | Yes |
+
+- **Pushes to `main` never build or push images.** Only `v*` tags do.
+- **Deploy** runs the shared tests (`.github/workflows/tests.yml`) before any image is pushed. A failing test means no image for that tag.
+- **Manual runs** (`workflow_dispatch` only, never triggered by pushes):
+  - `Deploy` (`deploy.yml`): manual runs are always a dry run (tests and builds only, nothing pushed). Real publishing happens only from a `v*` tag.
+  - `Docker Hub Build (Manual Fallback)` (`docker-build.yml`): publishes an existing `vX.Y.Z` tag, never moves `:latest`.
+  - `Build and Push Admin UI (Manual)` (`deploy-admin.yml`): publishes only `prime7biz/p7erp-frontend-admin:<tag>`, never moves `:latest`.
+- **Live server** → SSH only, by the script in step 4. GitHub does **not** SSH to production.
 
 Human runbook mirror: `docs/DEPLOYMENT_PROCESS.md`. Cutover detail: `docs/GO_LIVE_CUTOVER_RUNBOOK.md`.
 
@@ -30,39 +41,48 @@ cd frontend; npm run lint; npm run build
 
 ---
 
-## Phase 1 — Commit
+## Phase 1 — Commit on `dev`
 
 Follow git safety protocol (`git status`, `git diff`, `git log -5`). User saying **deploy** implies commit is OK.
 
-- Stage only `backend/`, `frontend/`, `docs/`.
-- **Never** stage: `__pycache__/`, `.pytest_cache/`, `backend/media/`, `frontend/dist/`, `.env`, credentials.
+- Work on the **`dev`** branch. Never commit directly to `main`.
+- Stage only `backend/`, `frontend/`, `docs/`, `.github/`, `scripts/` (and `AGENTS.md` / `.cursor/rules/` when they changed).
+- **Never** stage: `__pycache__/`, `.pytest_cache/`, `backend/media/`, `frontend/dist/`, `.env`, credentials, backups.
 - Use a clear commit message (feat/fix/chore + why).
 
 Skip if working tree is already clean.
 
 ---
 
-## Phase 2 — Push main
+## Phase 2 — Push `dev` and wait for CI on `dev`
 
 ```powershell
-git push origin main
+git push origin dev
 ```
 
-Tell the user: this builds images on GitHub; it does **not** update the live server yet.
+Tell the user: this runs tests on GitHub. It does **not** build images and does **not** update the live server.
+
+Poll GitHub Actions until **CI** on the pushed commit (match `head_sha`) is `completed` / `success`. Retry every 60–90s; timeout ~25 min.
+
+**Hard stop** if CI on `dev` fails. Do not merge to `main`, do not tag.
 
 ---
 
-## Phase 3 — Wait for CI on main
+## Phase 3 — Promote `dev` → `main` (automatic after dev CI passes)
 
-Poll GitHub Actions until **CI**, **Deploy** (build job), and **Docker Hub Build** on `main` are `completed` / `success`. Retry every 60–90s; timeout ~25 min (tests run before the image build).
+1. Open a PR from `dev` to `main` (or reuse the open one). Use `gh` if logged in, otherwise the GitHub REST API.
+2. Enable auto-merge (or merge when checks pass). GitHub's branch protection / ruleset decides whether that is allowed.
+3. Wait until CI on `main` (the merge commit) is `completed` / `success`.
 
-**Windows:** Do not use host `gh` (npm shim breaks). Poll via Docker Python:
+If the PR cannot be created or merged (no `gh` login, ruleset blocks it), **stop and report** the exact blocker. Do not force-push and do not bypass branch protection.
+
+**Hard stop** if CI on `main` fails. Do not tag.
+
+Poll helper (Windows; host `gh` may be unavailable):
 
 ```powershell
 docker compose exec -T backend python -c "import json,urllib.request; d=json.load(urllib.request.urlopen('https://api.github.com/repos/prime7biz/p7erp_local/actions/runs?per_page=8')); sha=open('.git/refs/heads/main').read().strip()[:7]; [print(r['name'], r['status'], r.get('conclusion')) for r in d['workflow_runs'] if r['head_sha'].startswith(sha)]"
 ```
-
-**Hard stop** if CI fails. Do not tag.
 
 ---
 
@@ -78,31 +98,38 @@ docker compose exec -T backend python -c "import json,urllib.request; d=json.loa
    - **minor** (v1.5.0 → v1.6.0): features, API additions, migrations, multi-module work
    - **major:** ask user first
    State chosen tag and **rollback pin** (previous tag) before creating the tag.
-3. **Migrations:** Warn that **manual** live deploy runs `alembic upgrade head` on the server (not via GitHub).
-   Prefer the SSH live-deploy command in `deploy-production-backup.mdc` (same host used in prior Cursor deploys).
+3. **Migrations:** Warn that the live deploy runs `alembic upgrade head` on the server (not via GitHub).
+   The script checks the database revision against the image head and refuses unsafe automatic rollback.
 
 ---
 
-## Phase 5 — Tag and push tag
+## Phase 5 — Tag `main` and push the tag
+
+The tag must point at the commit on `main` that passed Phase 3.
 
 ```powershell
-git tag vX.Y.Z
+git fetch origin main
+git tag vX.Y.Z origin/main
 git push origin vX.Y.Z
 ```
 
+The `Deploy` workflow refuses the tag if it is not on `main` or if the version already exists on Docker Hub.
+
 ---
 
-## Phase 6 — Wait for tag image build + manual live deploy
+## Phase 6 — Wait for tag image build, then live deploy
 
-Poll workflows where `head_branch` is the new tag until **Deploy** (build-and-push) completes successfully (~15–20 min including the test gate).
+Poll workflows where `head_branch` is the new tag until **Deploy** completes successfully (~15–20 min including the test gate). Images `prime7biz/p7erp-backend:vX.Y.Z` and `prime7biz/p7erp-frontend:vX.Y.Z` must exist.
 
 Then update production over SSH using the **known live-server command** in
-`deploy-production-backup.mdc` (do not wait for the user to paste host details if those facts are already known).
+`deploy-production-backup.mdc` (do not wait for the user to paste host details if those facts are already known):
 
 ```bash
 ssh -o BatchMode=yes -o ConnectTimeout=20 root@188.245.156.127 \
   "sudo -u primeadmin -H bash -lc 'cd /home/primeadmin/p7erp_local && git pull --ff-only origin main && DEPLOY_PATH=/home/primeadmin/p7erp_local bash scripts/deploy_production_remote.sh vX.Y.Z'"
 ```
+
+The script is application-only: it never recreates postgres, redis, ollama or watchtower. It stops beat and drains Celery before the backend change, restores beat and worker if it stops early, and restores the previous image pins automatically only when no migration could have run. If it stops with a migration applied, it leaves worker and beat stopped and prints the recovery steps. Do not improvise on the server.
 
 ---
 
@@ -110,7 +137,7 @@ ssh -o BatchMode=yes -o ConnectTimeout=20 root@188.245.156.127 \
 
 | Check | Action |
 |-------|--------|
-| Health | `GET /api/health` or backend `/health` → 200 |
+| Health | `GET /api/health` or backend `/health` → 200 and `version` = `vX.Y.Z` |
 | Login | Company code + user at https://prime7erp.com |
 | Customers | List loads |
 | Inventory | Stock summary or PO list |
@@ -139,6 +166,7 @@ Migration rollback: `alembic downgrade -1` (repeat as needed) **or** restore DB 
 ## Hard stops (do not deploy)
 
 - Pre-flight local checks fail
-- CI on `main` fails
+- CI on `dev` or on `main` fails
+- Dev → main promotion blocked (no GitHub login, ruleset blocks merge) — report, do not bypass
 - New migrations / data-risk release but production DB backup was not taken successfully
 - Staged files include `.env` or credentials

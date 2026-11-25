@@ -10,20 +10,36 @@
 
 ## How deploy works (important)
 
-| Action | What happens |
-|--------|----------------|
-| `git push origin main` | GitHub CI runs tests + builds Docker images (`:main` + `:latest`). **Live server is NOT updated.** |
-| `git push origin vX.Y.Z` | GitHub builds images tagged `vX.Y.Z` on Docker Hub. **Live server is NOT updated automatically.** |
-| **Manual SSH** (you choose when) | Pull images on server, restart containers, run migrations. See `scripts/deploy_production_remote.sh`. |
+The safe path is **dev → main → `v*` tag → live**. Each step has its own gate, so nothing reaches
+production without passing tests on `dev` and on `main`.
 
-Workflow file: `.github/workflows/deploy.yml` (build/push only — no GitHub SSH to production).
+| Step | Action | What happens | Docker Hub | Live server |
+|------|--------|--------------|------------|-------------|
+| 1 | `git push origin dev` | **CI** runs tests + compose validation on `dev` | No | No |
+| 2 | Merge `dev` into `main` (PR, automatic after dev CI passes) | **CI** runs on `main` | No | No |
+| 3 | `git tag vX.Y.Z origin/main` + `git push origin vX.Y.Z` | **Deploy** (`deploy.yml`) checks the tag is on `main`, runs tests, pushes immutable `vX.Y.Z` images for backend, frontend and frontend-admin, then moves `:latest` | Yes | No |
+| 4 | Manual SSH (you choose when; the agent runs it on **deploy**) | `scripts/deploy_production_remote.sh vX.Y.Z` pulls the tag and restarts application services | Pulls | Yes |
 
-**Test gate before images are pushed:** the **Deploy** and **Docker Hub Build** workflows first run
+Workflow files: `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`. GitHub never SSHes to production.
+
+**Manual fallbacks** (`workflow_dispatch` only, never triggered by pushes):
+
+| Workflow | Use |
+|----------|-----|
+| **Deploy** (manual run) | Dry run only: runs tests and builds, pushes nothing. Refused unless run from `main`. |
+| **Docker Hub Build (Manual Fallback)** (`docker-build.yml`) | Publishes an existing `vX.Y.Z` tag again. Never moves `:latest`. |
+| **Build and Push Admin UI (Manual)** (`deploy-admin.yml`) | Publishes only `prime7biz/p7erp-frontend-admin:<tag>`. Never moves `:latest`. |
+
+**Test gate before images are pushed:** the **Deploy** and manual **Docker Hub Build** workflows first run
 the same backend + frontend tests as **CI** (shared file `.github/workflows/tests.yml`, shown on
 GitHub as `Tests / Backend Tests (Python)` and `Tests / Frontend Tests (Node.js)`). The image
 build/push job (`needs: tests`) only starts when both pass, so a failing test means **no new
-image on Docker Hub** for that commit or tag. This adds about 4–5 minutes before images appear.
-Workflow names (**CI**, **Deploy**, **Docker Hub Build**) and build job names are unchanged.
+image on Docker Hub** for that tag. This adds about 4–5 minutes before images appear.
+Workflow names (**CI**, **Deploy**, **Docker Hub Build (Manual Fallback)**) and build job names are unchanged.
+
+**Why images are not built on every push:** building and pushing on each `dev` or `main` push
+published untested images and made the release path noisy. Images are now built once, from an
+immutable tag on `main`, so the same bytes are what production runs.
 
 ---
 
@@ -48,13 +64,17 @@ Only commit `backend/`, `frontend/`, `docs/`. Never commit `.env`, `dist/`, `__p
 
 ---
 
-## Phase 2 — Push to main
+## Phase 2 — Push to dev, then promote to main
 
 ```powershell
-git push origin main
+git push origin dev
 ```
 
-Wait for GitHub Actions **CI** to pass (green check on GitHub → Actions tab).
+Wait for GitHub Actions **CI** on `dev` to pass (match the commit SHA on the Actions tab).
+Then promote `dev` into `main` with a pull request (automatic merge once checks pass, if your
+GitHub ruleset allows it). Wait for **CI** on `main` to pass too.
+
+Never push a release directly to `main` from a local machine if it skipped `dev`.
 
 ---
 
@@ -72,14 +92,18 @@ If this release adds Alembic migrations, backup is **mandatory** — deploy runs
 
 ---
 
-## Phase 4 — Tag and deploy to production
+## Phase 4 — Tag `main` and publish images
+
+Tag the commit on `main` that passed CI (not a random local commit):
 
 ```powershell
-git tag v1.5.1
+git fetch origin main
+git tag v1.5.1 origin/main
 git push origin v1.5.1
 ```
 
 Replace `v1.5.1` with your chosen version. Monitor GitHub Actions → **Deploy** workflow.
+The workflow refuses the tag if it is not on `main` or if that version already exists on Docker Hub.
 
 ---
 
@@ -109,7 +133,30 @@ docker compose -f docker-compose.prod.yml exec -T backend alembic current
 
 ## Manual live deploy (after images are built)
 
-GitHub only builds and pushes Docker images. When you are ready to update production, SSH to the server:
+GitHub only builds and pushes Docker images. When you are ready to update production, SSH to the server.
+
+**What the script does (`scripts/deploy_production_remote.sh vX.Y.Z`):**
+
+1. Takes a lock so only one deploy runs at a time.
+2. Pulls only the backend and frontend images for `vX.Y.Z`.
+3. Checks that postgres, redis and ollama are healthy. If not, it stops before any change.
+4. Compares the database revision with the new image's Alembic head.
+5. Stops **beat**, waits for Celery to drain (`DRAIN_TIMEOUT_SECONDS`, default 900 s), then stops **worker**.
+6. Writes the new image pins to `.env` atomically, keeping every other setting.
+7. Starts **backend** (applies migrations), waits for `/health` and checks the version.
+8. Starts **worker** and **beat**, then replaces **frontend**.
+
+It never recreates postgres, redis, ollama or watchtower. A short backend restart is expected.
+
+**Failure rules:**
+
+| Where it fails | What happens |
+|----------------|--------------|
+| Before the image pins change (infra unhealthy, Celery does not drain) | Nothing changes. Beat and worker are restarted on the current release. Exit 1. |
+| After the pins change, and no migration could have run | The previous pins from `.env.previous-release` are restored and the previous release is started again. Exit 1. |
+| After the pins change, and a migration ran (or its status is unknown) | Worker and beat stay **stopped on purpose** so old code never runs on a migrated schema. The script prints recovery steps (restore the pre-release backup, then restore the pins). |
+
+Run it as the server admin user, for example:
 
 ```bash
 ssh root@<DEPLOY_HOST>

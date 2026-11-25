@@ -218,13 +218,16 @@ This is a prerequisite for any automatic-update design (`AUTOMATIC-UPDATE-STRATE
 
 ## 11. GitHub Actions and deployment
 
-- **[VERIFIED]** Push to `main` or a `v*` tag runs the shared tests, then builds and pushes backend and frontend images
-  tagged `latest` and the ref name; the frontend gets `VITE_APP_VERSION` at build time
-  (`.github/workflows/deploy.yml:16-70`). A second workflow (`docker-build.yml`) pushes the same tags.
+- **[VERIFIED 2026-11-10, UPDATED 2026-11-25]** Only a `v*` tag builds and pushes backend, frontend and frontend-admin
+  images (immutable `vX.Y.Z` tags; `:latest` moves only after all three exist). Pushes to `dev` and `main` run tests and
+  compose validation only. The release path is dev → main → tag → manual live deploy
+  (`.github/workflows/deploy.yml`, `ci.yml`). `docker-build.yml` and `deploy-admin.yml` are manual-only fallbacks.
 - **[VERIFIED]** Production is updated manually over SSH with `scripts/deploy_production_remote.sh <tag>`: it writes the
   image tags into `.env`, runs `docker compose pull` and `up -d`, waits for `/health`, and prints `alembic current`
-  (`scripts/deploy_production_remote.sh:31-68`). It does not restore the previous tags on failure and does not check that
-  the running version equals the tag.
+  (`scripts/deploy_production_remote.sh:31-68`). [UPDATED 2026-11-25] The script now drains Celery and stops beat before
+  the pins change, restores the previous pins automatically only when no migration could have run, checks the backend
+  version equals the tag, and leaves worker and beat stopped (with recovery steps) when a migration ran and the release
+  failed. See `docs/DEPLOYMENT_PROCESS.md`.
 - **[VERIFIED]** The `deploy.update_config` / `failure_action: rollback` blocks (`docker-compose.prod.yml:185-187`,
   `266-268`) apply to Docker Swarm, not to plain `docker compose up`, so they do not give automatic rollback here.
 - **[VERIFIED]** There is no app store step anywhere. A web deploy already reaches every browser user.

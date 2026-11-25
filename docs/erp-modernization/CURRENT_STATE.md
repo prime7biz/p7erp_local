@@ -16,7 +16,7 @@ Paths are relative to the repository root. Finding IDs (e.g. `FIN-01`) are defin
 | Frontend | React 18.3, Vite 6, TypeScript 5.6, React Router 7, Tailwind 3, i18next (en/bn); TanStack Query mounted but rarely used | `frontend/package.json`, `frontend/src/app/router.tsx`, `AppProtectedRouter.tsx` |
 | Admin console | Separate React app at `/admin/` | `frontend-admin/` |
 | AI | Gemini, OpenRouter, Ollama, vLLM adapters; pgvector + BM25 retrieval; MCP server | `backend/app/modules/ai_tool/`, `ai_extract/`, `governed_ai/`, `erp_ai_phases/`, `mcp_server/` |
-| Delivery | GitHub Actions: CI (alembic + pytest on real Postgres, frontend lint/tsc/build/vitest); image build/push to Docker Hub on `main` and `v*` tags; **manual** SSH deploy via `scripts/deploy_production_remote.sh` | `.github/workflows/*.yml` |
+| Delivery | GitHub Actions: CI (alembic + pytest on real Postgres, frontend lint/tsc/build/vitest); image build/push to Docker Hub only on `v*` tags (dev → main promotion, tests on both); **manual** SSH deploy via `scripts/deploy_production_remote.sh` | `.github/workflows/*.yml` |
 | Production runtime | Docker Compose (`docker-compose.prod.yml`): postgres, redis, ollama, backend, worker, beat, nginx-served frontend, Watchtower | `docker-compose.prod.yml` |
 
 Scale indicators: ~55 backend modules (~5 MB Python), 447 frontend page components, 138 backend test files (~556 tests),

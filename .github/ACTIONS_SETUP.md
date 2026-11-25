@@ -4,7 +4,7 @@ This project includes two GitHub Actions workflows:
 
 ## 1. CI Workflow (`.github/workflows/ci.yml`)
 
-Runs on every push to `main`/`develop` and on pull requests.
+Runs on every push to `dev` or `main` and on pull requests to them. Tests only; no Docker Hub push.
 
 ### Jobs
 
@@ -37,13 +37,13 @@ The CI workflow automatically:
 
 ## 2. Deploy Workflow (`.github/workflows/deploy.yml`)
 
-Triggered on push to `main` or when a `v*` tag is pushed.
+Triggered only when a `v*` tag is pushed (the tag must point at `main`). Manual runs are dry runs only.
 
 ### Job: Build and Push
 
-- Builds backend and frontend Docker images
-- Pushes to Docker Hub (`prime7biz/p7erp-backend`, `prime7biz/p7erp-frontend`)
-- Tags: `latest` plus branch/tag name (`main` or `vX.Y.Z`)
+- Runs the shared tests first, then builds backend, frontend and frontend-admin Docker images
+- Pushes immutable `vX.Y.Z` tags to Docker Hub (`prime7biz/p7erp-backend`, `prime7biz/p7erp-frontend`, `prime7biz/p7erp-frontend-admin`)
+- Moves `latest` only after all three version tags exist
 - **Does not SSH to the live server** — production updates are manual
 
 ### Live server (manual)
@@ -121,6 +121,6 @@ act
 3. **For CI only:** Push to your default branch and watch **Actions** tab for results
 4. **For deployment:** 
    - Add `DOCKERHUB_TOKEN` and `VITE_API_BASE_URL` to GitHub secrets
-   - Tag a release: `git tag v0.1.0 && git push origin v0.1.0` (builds images only)
+   - Tag a release on `main`: `git tag v0.1.0 origin/main && git push origin v0.1.0` (builds images only)
    - Manually SSH to production when ready: `scripts/deploy_production_remote.sh v0.1.0`
 5. **Monitor logs** in the Actions tab; click a failed job for details

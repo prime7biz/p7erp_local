@@ -1,21 +1,83 @@
-# Semantic versioning: push v* tags for releases; images tagged :latest and :${{ github.ref_name }}.
-name: Build and Push Admin UI
+# Manual publisher for the admin UI image (prime7biz/p7erp-frontend-admin).
+#
+# Run from the GitHub Actions UI with an existing release tag (vX.Y.Z) that is on origin/main.
+# Publishes only the immutable version tag and never moves :latest. The admin UI has no
+# service in docker-compose.prod.yml yet, so this image is publication-only.
+#
+# Automatic runs are disabled on purpose: deploy.yml is the only automatic release publisher.
+name: Build and Push Admin UI (Manual)
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*'
-    paths:
-      - 'frontend-admin/**'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to publish, for example v1.25.1'
+        required: true
+        type: string
+
+# Same literal group as deploy.yml and docker-build.yml: one publisher at a time.
+concurrency:
+  group: p7erp-image-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
-  build-and-push:
+  verify-release:
+    name: Verify Release Tag
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      sha: ${{ steps.check.outputs.sha }}
     steps:
-      - name: Check out code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag and main reachability
+        id: check
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$INPUT_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: tag '$INPUT_TAG' must look like vX.Y.Z." >&2
+            exit 1
+          fi
+          git fetch --tags --force origin --quiet
+          sha="$(git rev-parse --verify --quiet "refs/tags/${INPUT_TAG}^{commit}")" || {
+            echo "ERROR: tag ${INPUT_TAG} does not exist." >&2
+            exit 1
+          }
+          git fetch origin main --quiet
+          if ! git merge-base --is-ancestor "$sha" origin/main; then
+            echo "ERROR: ${INPUT_TAG} (${sha}) is not on origin/main." >&2
+            exit 1
+          fi
+          {
+            echo "version=$INPUT_TAG"
+            echo "sha=$sha"
+          } >> "$GITHUB_OUTPUT"
+
+  # Full shared gate (backend, frontend, frontend-admin) on the exact tag commit.
+  tests:
+    name: Tests
+    needs: verify-release
+    uses: ./.github/workflows/tests.yml
+    with:
+      ref: ${{ needs.verify-release.outputs.sha }}
+
+  publish:
+    name: Build and Push frontend-admin
+    needs: [verify-release, tests]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.verify-release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify-release.outputs.sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -26,11 +88,41 @@ jobs:
           username: prime7biz
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push Docker image
+      - name: Refuse to reuse an existing release tag
+        run: |
+          set -uo pipefail
+          image="prime7biz/p7erp-frontend-admin:${VERSION}"
+          out="$(docker buildx imagetools inspect "$image" 2>&1)" && rc=0 || rc=$?
+          if [[ $rc -eq 0 ]]; then
+            echo "ERROR: ${image} already exists. Release tags are publish-once; create a new semver tag." >&2
+            exit 1
+          fi
+          if ! grep -qiE 'not found|manifest unknown|404' <<< "$out"; then
+            echo "ERROR: could not verify ${image}: ${out}" >&2
+            exit 1
+          fi
+          echo "OK: ${image} is unused"
+
+      - name: Build frontend-admin (no push)
         uses: docker/build-push-action@v5
         with:
-          context: ./frontend-admin
+          context: frontend-admin
+          file: frontend-admin/Dockerfile.prod
+          push: false
+          tags: prime7biz/p7erp-frontend-admin:${{ needs.verify-release.outputs.version }}
+          build-args: |
+            VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Push frontend-admin (version tag only)
+        uses: docker/build-push-action@v5
+        with:
+          context: frontend-admin
+          file: frontend-admin/Dockerfile.prod
           push: true
-          tags: |
-            prime7biz/p7erp-frontend-admin:latest
-            prime7biz/p7erp-frontend-admin:${{ github.ref_name }}
+          tags: prime7biz/p7erp-frontend-admin:${{ needs.verify-release.outputs.version }}
+          build-args: |
+            VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

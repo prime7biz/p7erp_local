@@ -1,51 +1,24 @@
 name: CI
 
+# Test feedback for the dev branch, pull requests and main. Nothing here pushes Docker images.
+# Image publishing lives only in deploy.yml (release tags), docker-build.yml and deploy-admin.yml
+# (manual fallbacks). See docs/DEPLOYMENT_PROCESS.md.
 on:
   push:
-    branches: [main, develop]
+    branches: [dev, main]
   pull_request:
-    branches: [main, develop]
+    branches: [dev, main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # Backend + frontend tests live in tests.yml (also used as the gate before image pushes in
-  # deploy.yml and docker-build.yml). Shown on GitHub as "Tests / Backend Tests (Python)" etc.
+  # Backend, frontend and frontend-admin tests live in tests.yml (also used as the gate before
+  # image pushes in deploy.yml, docker-build.yml and deploy-admin.yml).
   tests:
     name: Tests
     uses: ./.github/workflows/tests.yml
-
-  docker-build:
-    name: Docker Image Build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build backend image
-        uses: docker/build-push-action@v5
-        with:
-          context: backend
-          push: false
-          tags: p7erp-backend:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build frontend image
-        uses: docker/build-push-action@v5
-        with:
-          context: frontend
-          file: frontend/Dockerfile.prod
-          push: false
-          tags: p7erp-frontend:${{ github.sha }}
-          build-args: |
-            VITE_API_BASE_URL=http://localhost:8000
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   compose-validation:
     name: Docker Compose Validation
@@ -62,8 +35,54 @@ jobs:
           AI_CONFIRMATION_TOKEN_PEPPER: dummy_pepper_for_ci
 
       - name: Validate docker-compose.prod.yml
+        run: docker compose -f docker-compose.prod.yml config > /dev/null
         env:
           MCP_HUMAN_APPROVAL_SECRET: "dummy_secret_for_ci"
           AI_CONFIRMATION_TOKEN_PEPPER: "dummy_pepper"
           CORS_ORIGINS: "*"
-        run: docker compose -f docker-compose.prod.yml config > /dev/null
+
+  # Dry-run image builds (push: false) only for main pushes and PRs into main. dev stays fast.
+  docker-build-check:
+    name: Docker Build Check
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.base_ref == 'main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: backend
+          push: false
+          tags: p7erp-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: frontend
+          file: frontend/Dockerfile.prod
+          push: false
+          tags: p7erp-frontend:${{ github.sha }}
+          build-args: |
+            VITE_API_BASE_URL=http://localhost:8000
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend-admin image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: frontend-admin
+          file: frontend-admin/Dockerfile.prod
+          push: false
+          tags: p7erp-frontend-admin:${{ github.sha }}
+          build-args: |
+            VITE_API_BASE_URL=http://localhost:8000
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

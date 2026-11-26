@@ -41,27 +41,40 @@ export function HrEmployeeSelect({
   onChange,
   placeholder = "Search employee code or name…",
   required = false,
+  activeOnly = false,
+  excludeId = null,
 }: {
   id?: string;
   value: number | null;
   onChange: (id: number | null) => void;
   placeholder?: string;
   required?: boolean;
+  /** Only employees who are currently active (for example a reporting manager). */
+  activeOnly?: boolean;
+  /** Leave one employee out of the list (for example the employee being edited). */
+  excludeId?: number | null;
 }) {
-  const fetchPage = useCallback(async (query: string, page: number, pageSize: number) => {
-    const rows = await api.listHrEmployees({
-      search: query || undefined,
-      limit: pageSize,
-      offset: (page - 1) * pageSize,
-    });
-    const options: RemoteSelectOption[] = rows.map((e) => ({
-      value: e.id,
-      label: `${e.employee_code} · ${[e.first_name, e.last_name].filter(Boolean).join(" ")}`,
-    }));
-    // The list endpoint has no total; a full page means "there may be more".
-    const total = rows.length < pageSize ? (page - 1) * pageSize + rows.length : page * pageSize + 1;
-    return { options, total };
-  }, []);
+  const fetchPage = useCallback(
+    async (query: string, page: number, pageSize: number) => {
+      const rows = await api.listHrEmployees({
+        search: query || undefined,
+        active_only: activeOnly ? true : undefined,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+      });
+      const options: RemoteSelectOption[] = rows
+        .filter((e) => e.id !== excludeId)
+        .map((e) => ({
+          value: e.id,
+          label: `${e.employee_code} · ${[e.first_name, e.last_name].filter(Boolean).join(" ")}`,
+        }));
+      // The list endpoint has no total; a full page means "there may be more".
+      const full = rows.length >= pageSize;
+      const total = full ? page * pageSize + 1 : (page - 1) * pageSize + rows.length;
+      return { options, total, totalIsEstimate: full };
+    },
+    [activeOnly, excludeId],
+  );
 
   const hydrateById = useCallback(async (employeeId: number) => {
     try {

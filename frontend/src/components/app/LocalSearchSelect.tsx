@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type UIEvent,
 } from "react";
 import { createPortal } from "react-dom";
 
@@ -47,7 +48,10 @@ type Props<T = unknown> = {
 const PORTAL_MENU_MAX_HEIGHT = 320;
 const PORTAL_MENU_MIN_WIDTH = 320;
 const VIEWPORT_GAP = 8;
-const MAX_VISIBLE = 100;
+/** Rows drawn at first; more are drawn as the user scrolls (nothing is ever cut off). */
+const INITIAL_VISIBLE = 150;
+const VISIBLE_STEP = 150;
+const SCROLL_LOAD_THRESHOLD_PX = 40;
 
 function valuesEqual(a: string | number | null | "", b: string | number | null | ""): boolean {
   if (a === "" || a == null) return b === "" || b == null;
@@ -55,8 +59,13 @@ function valuesEqual(a: string | number | null | "", b: string | number | null |
   return String(a) === String(b);
 }
 
+/** Every typed word must appear somewhere in the label ("senior op" finds "Senior Operator"). */
 function defaultFilter<T>(opt: LocalSelectOption<T>, query: string): boolean {
-  return opt.label.toLowerCase().includes(query);
+  const label = opt.label.toLowerCase();
+  return query
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((word) => label.includes(word));
 }
 
 /**
@@ -96,11 +105,30 @@ export function LocalSearchSelect<T = unknown>({
   );
   const hasValue = selected != null;
 
-  const filtered = useMemo(() => {
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE);
+
+  const matches = useMemo(() => {
     const q = searchInput.trim().toLowerCase();
-    const list = q ? options.filter((o) => filterFn(o, q)) : options;
-    return list.slice(0, MAX_VISIBLE);
+    return q ? options.filter((o) => filterFn(o, q)) : options;
   }, [options, searchInput, filterFn]);
+
+  const filtered = useMemo(() => matches.slice(0, visibleCount), [matches, visibleCount]);
+
+  // Start from the top again whenever the search text changes or the menu is reopened.
+  useEffect(() => {
+    setVisibleCount(INITIAL_VISIBLE);
+  }, [searchInput, open]);
+
+  const loadMoreRows = useCallback(() => {
+    setVisibleCount((n) => (n < matches.length ? n + VISIBLE_STEP : n));
+  }, [matches.length]);
+
+  const onMenuScroll = (e: UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight <= SCROLL_LOAD_THRESHOLD_PX) {
+      loadMoreRows();
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -115,7 +143,7 @@ export function LocalSearchSelect<T = unknown>({
 
   useEffect(() => {
     setActiveIndex(-1);
-  }, [filtered, open]);
+  }, [searchInput, open]);
 
   const updatePortalPosition = useCallback(() => {
     const input = inputRef.current;
@@ -181,6 +209,7 @@ export function LocalSearchSelect<T = unknown>({
     <div
       ref={menuRef}
       role="listbox"
+      onScroll={onMenuScroll}
       style={menuPortal ? portalStyle ?? { position: "fixed", visibility: "hidden" } : undefined}
       className={
         menuPortal
@@ -219,6 +248,11 @@ export function LocalSearchSelect<T = unknown>({
           </button>
         ))
       )}
+      {matches.length > filtered.length ? (
+        <div className="px-2 py-1.5 text-center text-[11px] text-text-muted" aria-live="polite">
+          Showing {filtered.length} of {matches.length} — scroll or type to narrow
+        </div>
+      ) : null}
       {onCreateNew ? (
         <button
           type="button"
@@ -276,6 +310,8 @@ export function LocalSearchSelect<T = unknown>({
               return;
             }
             if (filtered.length === 0) return;
+            // Reaching the last drawn row with the keyboard draws the next batch.
+            if (e.key === "ArrowDown" && activeIndex + 1 >= filtered.length - 1) loadMoreRows();
             setActiveIndex((i) =>
               e.key === "ArrowDown" ? Math.min(filtered.length - 1, i + 1) : Math.max(0, i - 1),
             );

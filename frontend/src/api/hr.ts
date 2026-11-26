@@ -154,7 +154,8 @@ export const hrApi = {
     offset?: number;
   }): Promise<HrDepartmentResponse[]> {
     const q = new URLSearchParams();
-    if (params?.active_only === false) q.set("active_only", "false");
+    // The server default is "all rows", so `true` must be sent for the filter to apply.
+    if (params?.active_only != null) q.set("active_only", String(params.active_only));
     if (params?.search) q.set("search", params.search);
     if (params?.limit != null) q.set("limit", String(params.limit));
     if (params?.offset != null) q.set("offset", String(params.offset));
@@ -190,7 +191,7 @@ export const hrApi = {
     offset?: number;
   }): Promise<HrDesignationResponse[]> {
     const q = new URLSearchParams();
-    if (params?.active_only === false) q.set("active_only", "false");
+    if (params?.active_only != null) q.set("active_only", String(params.active_only));
     if (params?.department_id != null) q.set("department_id", String(params.department_id));
     if (params?.search) q.set("search", params.search);
     if (params?.limit != null) q.set("limit", String(params.limit));
@@ -223,7 +224,7 @@ export const hrApi = {
     offset?: number;
   }): Promise<HrEmployeeResponse[]> {
     const q = new URLSearchParams();
-    if (params?.active_only === false) q.set("active_only", "false");
+    if (params?.active_only != null) q.set("active_only", String(params.active_only));
     if (params?.department_id != null) q.set("department_id", String(params.department_id));
     if (params?.designation_id != null) q.set("designation_id", String(params.designation_id));
     if (params?.search) q.set("search", params.search);

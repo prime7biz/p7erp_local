@@ -16,6 +16,7 @@ from app.common.document_history import record_doc_event
 from app.common.orm_numeric import decimal_to_money_response
 from app.common.ownership import ensure_owned
 from app.common.pagination import MAX_PAGE_SIZE
+from app.common.search_tokens import multi_word_ilike_clause
 from app.models import Customer, CustomerContact, Tenant, User
 from app.models.finance import OutstandingBill
 from app.models.merch import Inquiry, Order, Quotation
@@ -155,20 +156,21 @@ def apply_customer_filters(
     customer_type: str | None,
 ):
     stmt = stmt.where(Customer.tenant_id == tenant_id)
-    if q:
-        pattern = f"%{q.strip().lower()}%"
-        stmt = stmt.where(
-            or_(
-                func.lower(Customer.customer_code).like(pattern),
-                func.lower(Customer.name).like(pattern),
-                func.lower(Customer.legal_entity_name).like(pattern),
-                func.lower(Customer.trade_name).like(pattern),
-                func.lower(Customer.contact_email).like(pattern),
-                func.lower(Customer.email).like(pattern),
-                func.lower(Customer.contact_phone).like(pattern),
-                func.lower(Customer.phone).like(pattern),
-            )
-        )
+    q_clause = multi_word_ilike_clause(
+        q,
+        [
+            Customer.customer_code,
+            Customer.name,
+            Customer.legal_entity_name,
+            Customer.trade_name,
+            Customer.contact_email,
+            Customer.email,
+            Customer.contact_phone,
+            Customer.phone,
+        ],
+    )
+    if q_clause is not None:
+        stmt = stmt.where(q_clause)
     if status_filter:
         stmt = stmt.where(func.lower(Customer.status) == status_filter.strip().lower())
     if country:

@@ -2,7 +2,8 @@
  * HR → Manpower → Sanctioned strength: approved quota by department + designation vs present headcount.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, type HrDepartmentResponse, type HrDesignationResponse } from "@/api/client";
+import type { HrDepartmentResponse, HrDesignationResponse } from "@/api/client";
+import { fetchAllHrDepartments, fetchAllHrDesignations } from "@/pages/app/hr/hrMasterData";
 import {
   hrManpowerApi,
   type ManpowerSanctionedRow,
@@ -49,8 +50,8 @@ export function HrManpowerSanctionedPage() {
     try {
       const [sum, deps, desigs] = await Promise.all([
         hrManpowerApi.standingSummary(),
-        api.listHrDepartments({ limit: 500 }),
-        api.listHrDesignations({ limit: 500 }),
+        fetchAllHrDepartments(),
+        fetchAllHrDesignations(),
       ]);
       setSummary(sum);
       setDepartments(deps);

@@ -9,7 +9,9 @@ import {
   type HrEmployeeUpdate,
   type HrSectionResponse,
 } from "@/api/client";
+import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { HrEmployeeSelect } from "@/components/hr/kit/HrEmployeeFields";
 import { EmployeeWorkspace } from "@/components/hr/workspace/EmployeeWorkspace";
 import { AgeVerificationTab } from "@/components/hr/workspace/recordTabs/AgeVerificationTab";
 import { DocumentsTab } from "@/components/hr/workspace/recordTabs/DocumentsTab";
@@ -19,6 +21,7 @@ import { ProductionTab } from "@/components/hr/workspace/recordTabs/ProductionTa
 import { downloadBlob } from "@/components/hr/workspace/recordTabs/shared";
 import { StatusHistoryTab } from "@/components/hr/workspace/recordTabs/StatusHistoryTab";
 import { useAuth } from "@/context/AuthContext";
+import { fetchAllHrDepartments, fetchAllHrDesignations } from "./hrMasterData";
 
 type Tab = "personal" | "job" | "identity" | "documents" | "age" | "medical" | "history" | "salary" | "production";
 
@@ -48,7 +51,6 @@ function LegacyEmployeeDetail() {
   const [departments, setDepartments] = useState<HrDepartmentResponse[]>([]);
   const [designations, setDesignations] = useState<HrDesignationResponse[]>([]);
   const [sections, setSections] = useState<HrSectionResponse[]>([]);
-  const [managers, setManagers] = useState<HrEmployeeResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -57,10 +59,19 @@ function LegacyEmployeeDetail() {
   const [openDocActions, setOpenDocActions] = useState(false);
   const [docGenerating, setDocGenerating] = useState(false);
 
-  const designationOptions = useMemo(() => {
-    if (!form.department_id) return designations;
-    return designations.filter((d) => !d.department_id || d.department_id === form.department_id);
-  }, [designations, form.department_id]);
+  // Every department, designation and section is listed; typing narrows the list.
+  const departmentOptions = useMemo(
+    () => departments.map((d) => ({ value: d.id, label: `${d.code} - ${d.name}` })),
+    [departments],
+  );
+  const designationOptions = useMemo(
+    () => designations.map((d) => ({ value: d.id, label: `${d.code} - ${d.title}` })),
+    [designations],
+  );
+  const sectionOptions = useMemo(
+    () => sections.map((s) => ({ value: s.id, label: `${s.code} - ${s.name} (${s.section_type})` })),
+    [sections],
+  );
 
   const loadCore = useCallback(async () => {
     if (!Number.isFinite(employeeIdNum) || employeeIdNum <= 0) {
@@ -71,18 +82,16 @@ function LegacyEmployeeDetail() {
     setLoading(true);
     setError("");
     try {
-      const [row, depRows, desRows, secRows, empPick] = await Promise.all([
+      const [row, depRows, desRows, secRows] = await Promise.all([
         api.getHrEmployee(employeeIdNum),
-        api.listHrDepartments({ active_only: false }),
-        api.listHrDesignations({ active_only: false }),
+        fetchAllHrDepartments(),
+        fetchAllHrDesignations(),
         api.listHrSections({ active_only: false }),
-        api.listHrEmployees({ active_only: true }),
       ]);
       setEmployee(row);
       setDepartments(depRows);
       setDesignations(desRows);
       setSections(secRows);
-      setManagers(empPick.filter((e) => e.id !== row.id));
       setForm({
         employee_code: row.employee_code,
         first_name: row.first_name,
@@ -375,42 +384,27 @@ function LegacyEmployeeDetail() {
             value={form.attendance_device_pin ?? ""}
             onChange={(e) => setForm((p) => ({ ...p, attendance_device_pin: e.target.value }))}
           />
-          <select
-            className="rounded border px-3 py-2 text-sm"
+          <LocalSearchSelect
             value={form.department_id ?? ""}
-            onChange={(e) => setForm((p) => ({ ...p, department_id: e.target.value ? Number(e.target.value) : null, designation_id: null }))}
-          >
-            <option value="">No department</option>
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.code} - {d.name}
-              </option>
-            ))}
-          </select>
-          <select
-            className="rounded border px-3 py-2 text-sm"
+            options={departmentOptions}
+            onChange={(next) => setForm((p) => ({ ...p, department_id: next === "" ? null : Number(next) }))}
+            placeholder="No department"
+            aria-label="Department"
+          />
+          <LocalSearchSelect
             value={form.designation_id ?? ""}
-            onChange={(e) => setForm((p) => ({ ...p, designation_id: e.target.value ? Number(e.target.value) : null }))}
-          >
-            <option value="">No designation</option>
-            {designationOptions.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.code} - {d.title}
-              </option>
-            ))}
-          </select>
-          <select
-            className="rounded border px-3 py-2 text-sm"
+            options={designationOptions}
+            onChange={(next) => setForm((p) => ({ ...p, designation_id: next === "" ? null : Number(next) }))}
+            placeholder="No designation"
+            aria-label="Designation"
+          />
+          <LocalSearchSelect
             value={form.section_id ?? ""}
-            onChange={(e) => setForm((p) => ({ ...p, section_id: e.target.value ? Number(e.target.value) : null }))}
-          >
-            <option value="">No section / line</option>
-            {sections.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.code} - {s.name} ({s.section_type})
-              </option>
-            ))}
-          </select>
+            options={sectionOptions}
+            onChange={(next) => setForm((p) => ({ ...p, section_id: next === "" ? null : Number(next) }))}
+            placeholder="No section / line"
+            aria-label="Section / line"
+          />
           <select
             className="rounded border px-3 py-2 text-sm"
             value={form.employee_category ?? ""}
@@ -423,18 +417,15 @@ function LegacyEmployeeDetail() {
               </option>
             ))}
           </select>
-          <select
-            className="sm:col-span-2 rounded border px-3 py-2 text-sm"
-            value={form.reporting_manager_id ?? ""}
-            onChange={(e) => setForm((p) => ({ ...p, reporting_manager_id: e.target.value ? Number(e.target.value) : null }))}
-          >
-            <option value="">Reporting manager</option>
-            {managers.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.employee_code} — {m.first_name} {m.last_name ?? ""}
-              </option>
-            ))}
-          </select>
+          <div className="sm:col-span-2">
+            <HrEmployeeSelect
+              value={form.reporting_manager_id ?? null}
+              onChange={(id) => setForm((p) => ({ ...p, reporting_manager_id: id }))}
+              placeholder="Reporting manager (search code or name)"
+              activeOnly
+              excludeId={employee.id}
+            />
+          </div>
           <input type="date" className="rounded border px-3 py-2 text-sm" value={form.joining_date ?? ""} onChange={(e) => setForm((p) => ({ ...p, joining_date: e.target.value }))} />
           <input type="date" className="rounded border px-3 py-2 text-sm" value={form.confirmation_date ?? ""} onChange={(e) => setForm((p) => ({ ...p, confirmation_date: e.target.value }))} />
           <input type="date" className="sm:col-span-2 rounded border px-3 py-2 text-sm" value={form.exit_date ?? ""} onChange={(e) => setForm((p) => ({ ...p, exit_date: e.target.value }))} />

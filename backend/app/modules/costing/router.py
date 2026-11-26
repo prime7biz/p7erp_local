@@ -4,13 +4,14 @@ List endpoints for item categories, item units, items, and currencies.
 Used by the quotation costing form.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, field_validator
 
 from app.common.auth import get_current_user
 from app.common.money import format_money, parse_money
 from app.common.pagination import DEFAULT_PAGE_SIZE, HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT, MAX_PAGE_SIZE
+from app.common.search_tokens import multi_word_ilike_clause
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -194,15 +195,9 @@ async def list_items(
     conditions = [Item.tenant_id == tenant.id, Item.is_active.is_(True)]
     if category_id is not None:
         conditions.append(Item.category_id == category_id)
-    if search and search.strip():
-        escaped = search.strip().lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        pat = f"%{escaped}%"
-        conditions.append(
-            or_(
-                func.lower(Item.item_code).like(pat, escape="\\"),
-                func.lower(Item.name).like(pat, escape="\\"),
-            )
-        )
+    item_clause = multi_word_ilike_clause(search, [Item.item_code, Item.name])
+    if item_clause is not None:
+        conditions.append(item_clause)
     total = (await db.execute(select(func.count(Item.id)).where(*conditions))).scalar_one()
     stmt = (
         select(Item, ItemUnit)

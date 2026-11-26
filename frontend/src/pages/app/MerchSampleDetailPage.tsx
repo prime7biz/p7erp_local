@@ -15,7 +15,9 @@ import {
   type InventoryItemResponse,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { WorkflowSummaryStrip } from "@/components/app/WorkflowSummaryStrip";
+import { fetchInventoryItemPage, hydrateInventoryItem } from "@/lib/remoteSelectFetchers";
 import { logApiError } from "@/utils/logApiError";
 
 export function MerchSampleDetailPage() {
@@ -27,7 +29,6 @@ export function MerchSampleDetailPage() {
   const [tasks, setTasks] = useState<MerchSampleTaskOut[]>([]);
   const [costLines, setCostLines] = useState<MerchSampleCostLineOut[]>([]);
   const [matLines, setMatLines] = useState<MerchSampleMaterialLineOut[]>([]);
-  const [items, setItems] = useState<InventoryItemResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [commentText, setCommentText] = useState("");
@@ -54,20 +55,13 @@ export function MerchSampleDetailPage() {
     setLoading(true);
     setError("");
     try {
-      const [s, c, m, t, co, ml, invPage] = await Promise.all([
+      const [s, c, m, t, co, ml] = await Promise.all([
         api.getMerchSample(sampleId),
         api.listMerchSampleComments(sampleId),
         api.getMerchSampleMetrics(sampleId),
         api.listMerchSampleTasks(sampleId),
         api.listMerchSampleCostLines(sampleId),
         api.listMerchSampleMaterialLines(sampleId),
-        api.listInventoryItemsPaginated({ page: 1, page_size: 400 }).catch(() => ({
-          items: [],
-          total: 0,
-          page: 1,
-          page_size: 400,
-          total_pages: 0,
-        })),
       ]);
       setRow(s);
       setComments(c);
@@ -75,7 +69,6 @@ export function MerchSampleDetailPage() {
       setTasks(t);
       setCostLines(co);
       setMatLines(ml);
-      setItems(invPage.items ?? []);
     } catch (e) {
       logApiError("MerchSampleDetailPage.load", e);
       setError(e instanceof Error ? e.message : "Failed to load");
@@ -216,8 +209,6 @@ export function MerchSampleDetailPage() {
       setBusy(false);
     }
   };
-
-  const stripItems = items.slice(0, 400);
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 px-4 py-6">
@@ -477,18 +468,17 @@ export function MerchSampleDetailPage() {
             <div className="rounded-xl border border-border bg-surface-raised p-4 text-sm">
               <h3 className="text-sm font-semibold text-text-primary">Material lines</h3>
               <div className="mt-2 flex flex-wrap gap-2">
-                <select
-                  className="min-w-[200px] flex-1 rounded border border-border px-2 py-1 text-xs"
+                <RemoteSearchSelect<InventoryItemResponse>
+                  className="min-w-[200px] flex-1"
                   value={newMat.item_id || ""}
-                  onChange={(e) => setNewMat((m) => ({ ...m, item_id: Number(e.target.value) }))}
-                >
-                  <option value="">Select item…</option>
-                  {stripItems.map((it) => (
-                    <option key={it.id} value={it.id}>
-                      {it.item_code} — {it.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(next) => setNewMat((m) => ({ ...m, item_id: next === "" ? 0 : next }))}
+                  fetchPage={fetchInventoryItemPage}
+                  hydrateById={hydrateInventoryItem}
+                  placeholder="Search item code or name…"
+                  aria-label="Material item"
+                  menuPortal
+                />
+
                 <input
                   className="w-24 rounded border border-border px-2 py-1 text-xs"
                   value={newMat.qty}

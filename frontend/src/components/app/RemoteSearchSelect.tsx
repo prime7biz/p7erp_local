@@ -19,7 +19,7 @@ type Props<T = unknown> = {
     query: string,
     page: number,
     pageSize: number,
-  ) => Promise<{ options: RemoteSelectOption<T>[]; total: number }>;
+  ) => Promise<{ options: RemoteSelectOption<T>[]; total: number; totalIsEstimate?: boolean }>;
   hydrateById?: (id: number) => Promise<RemoteSelectOption<T> | null>;
   pageSize?: number;
   debounceMs?: number;
@@ -58,7 +58,7 @@ export function RemoteSearchSelect<T = unknown>({
   "aria-label": ariaLabel,
   fetchPage,
   hydrateById,
-  pageSize = 40,
+  pageSize = 100,
   debounceMs = 300,
   emptyMessage = "No matches",
   allowClear = true,
@@ -82,6 +82,9 @@ export function RemoteSearchSelect<T = unknown>({
     error,
     loadMore,
     hasMore,
+    total,
+    totalIsEstimate,
+    searching,
     selectedLabel,
     numericValue,
   } = useRemotePaginatedSearch<T>({
@@ -165,6 +168,13 @@ export function RemoteSearchSelect<T = unknown>({
     <div
       ref={menuRef}
       role="listbox"
+      onScroll={(e) => {
+        // Auto-load the next page when the user scrolls near the bottom.
+        const el = e.currentTarget;
+        if (hasMore && !loading && !loadingMore && el.scrollHeight - el.scrollTop - el.clientHeight <= 40) {
+          void loadMore();
+        }
+      }}
       style={menuPortal ? portalStyle ?? { position: "fixed", visibility: "hidden" } : undefined}
       className={
         menuPortal
@@ -186,8 +196,8 @@ export function RemoteSearchSelect<T = unknown>({
           Clear selection
         </button>
       ) : null}
-      {loading ? (
-        <div className="px-2 py-2 text-xs text-text-muted">Loading…</div>
+      {loading || (searching && options.length === 0) ? (
+        <div className="px-2 py-2 text-xs text-text-muted">{searching ? "Searching…" : "Loading…"}</div>
       ) : error ? (
         <div className="px-2 py-2 text-xs text-status-danger-foreground">{error}</div>
       ) : options.length === 0 ? (
@@ -211,6 +221,12 @@ export function RemoteSearchSelect<T = unknown>({
           </button>
         ))
       )}
+      {options.length > 0 && total > 0 && !loading ? (
+        <div className="px-2 py-1 text-center text-[11px] text-text-muted" aria-live="polite">
+          {totalIsEstimate && hasMore ? `Showing ${options.length}` : `Showing ${options.length} of ${total}`}
+          {hasMore ? " — scroll or type to narrow" : ""}
+        </div>
+      ) : null}
       {hasMore && !loading ? (
         <button
           type="button"

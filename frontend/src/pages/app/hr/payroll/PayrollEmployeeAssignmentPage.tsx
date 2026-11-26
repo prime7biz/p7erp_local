@@ -1,13 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  api,
-  type HrEmployeeResponse,
-  type HrPayrollAssignmentResponse,
-} from "@/api/client";
+import { api, type HrPayrollAssignmentResponse } from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
 import { HrStatusBadge } from "@/components/hr/HrStatusBadge";
 import { HrDataTable, type HrTableColumn } from "@/components/hr/kit/HrDataTable";
-import { HrEmployeeCell } from "@/components/hr/kit/HrEmployeeFields";
+import { HrEmployeeCell, HrEmployeeSelect } from "@/components/hr/kit/HrEmployeeFields";
 import { useEmployeeLookup } from "@/components/hr/kit/useEmployeeLookup";
 import { useAuth } from "@/context/AuthContext";
 import { todayLocalISO } from "@/lib/dates";
@@ -32,7 +28,6 @@ function assignmentStatus(row: HrPayrollAssignmentResponse): string {
 export function PayrollEmployeeAssignmentPage() {
   const { me } = useAuth();
   const [rows, setRows] = useState<HrPayrollAssignmentResponse[]>([]);
-  const [employees, setEmployees] = useState<HrEmployeeResponse[]>([]);
   const [structures, setStructures] = useState<PayrollStructureOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -46,7 +41,6 @@ export function PayrollEmployeeAssignmentPage() {
   });
   const [submitting, setSubmitting] = useState(false);
 
-  const empById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
   const structById = useMemo(() => new Map(structures.map((s) => [s.id, s])), [structures]);
   const lookup = useEmployeeLookup(useMemo(() => rows.map((r) => r.employee_id), [rows]));
 
@@ -54,13 +48,11 @@ export function PayrollEmployeeAssignmentPage() {
     setLoading(true);
     setError("");
     try {
-      const [a, e, s] = await Promise.all([
+      const [a, s] = await Promise.all([
         api.listHrPayrollAssignments(),
-        api.listHrEmployees({ active_only: true }),
         api.listHrSalaryStructures({ active_only: true }),
       ]);
       setRows(a);
-      setEmployees(e);
       setStructures(s as unknown as PayrollStructureOption[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
@@ -129,8 +121,7 @@ export function PayrollEmployeeAssignmentPage() {
   const employeeText = (id: number) => {
     const found = lookup(id);
     if (found) return `${found.employee_code} ${found.full_name}`;
-    const emp = empById.get(id);
-    return emp ? `${emp.employee_code} ${emp.first_name} ${emp.last_name}` : `#${id}`;
+    return `#${id}`;
   };
 
   const columns: HrTableColumn<HrPayrollAssignmentResponse>[] = [
@@ -168,22 +159,18 @@ export function PayrollEmployeeAssignmentPage() {
       <form onSubmit={(e) => void onSubmit(e)} className="rounded-xl border border-border bg-surface-raised p-4 space-y-3">
         <h3 className="text-sm font-semibold text-text-primary">Assign structure</h3>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <label className="text-xs text-text-secondary">
-            Employee
-            <select
-              className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
-              value={form.employee_id || ""}
-              onChange={(e) => setForm((f) => ({ ...f, employee_id: Number(e.target.value) }))}
-              required
-            >
-              <option value="">Select…</option>
-              {employees.map((emp) => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.employee_code} — {emp.first_name} {emp.last_name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="text-xs text-text-secondary">
+            <span className="block">Employee</span>
+            <div className="mt-1">
+              <HrEmployeeSelect
+                value={form.employee_id || null}
+                onChange={(id) => setForm((f) => ({ ...f, employee_id: id ?? 0 }))}
+                placeholder="Search employee code or name…"
+                activeOnly
+                required
+              />
+            </div>
+          </div>
           <label className="text-xs text-text-secondary">
             Structure
             <select

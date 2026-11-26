@@ -1,7 +1,8 @@
 /** Hooks and small helpers shared by the Bangladesh HR screens. */
 import { useCallback, useEffect, useState } from "react";
-import { api, type HrEmployeeResponse } from "@/api/client";
+import type { HrEmployeeResponse } from "@/api/client";
 import { todayLocalISO } from "@/lib/dates";
+import { fetchAllHrEmployees } from "@/pages/app/hr/hrMasterData";
 import { logApiError } from "@/utils/logApiError";
 
 /** Run an async action with busy state and an error / success message. */
@@ -66,7 +67,10 @@ export function employeeLabel(e: Pick<HrEmployeeResponse, "employee_code" | "fir
   return `${e.employee_code} - ${[e.first_name, e.last_name].filter(Boolean).join(" ")}`;
 }
 
-/** Active employees, loaded once per screen section. */
+/**
+ * Every employee, loaded once per screen section. Inactive (separated) employees are kept on
+ * purpose: their names must still show on separation, case and allowance lists.
+ */
 export function useEmployees() {
-  return useLoad<HrEmployeeResponse[]>(() => api.listHrEmployees({ active_only: true }), []);
+  return useLoad<HrEmployeeResponse[]>(() => fetchAllHrEmployees(), []);
 }

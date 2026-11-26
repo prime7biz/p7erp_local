@@ -24,7 +24,7 @@ export interface UseRemotePaginatedSearchParams<T> {
     query: string,
     page: number,
     pageSize: number,
-  ) => Promise<{ options: RemoteSelectOption<T>[]; total: number }>;
+  ) => Promise<{ options: RemoteSelectOption<T>[]; total: number; totalIsEstimate?: boolean }>;
   hydrateById?: (id: number) => Promise<RemoteSelectOption<T> | null>;
   enabled?: boolean;
 }
@@ -36,7 +36,7 @@ export interface UseRemotePaginatedSearchParams<T> {
 export function useRemotePaginatedSearch<T = unknown>({
   valueId,
   debounceMs = 300,
-  pageSize = 40,
+  pageSize = 100,
   fetchPage,
   hydrateById,
   enabled = true,
@@ -47,6 +47,7 @@ export function useRemotePaginatedSearch<T = unknown>({
   const [options, setOptions] = useState<RemoteSelectOption<T>[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [totalIsEstimate, setTotalIsEstimate] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
@@ -88,6 +89,7 @@ export function useRemotePaginatedSearch<T = unknown>({
       if (seq !== listSeq.current) return;
       setOptions(res.options);
       setTotal(res.total);
+      setTotalIsEstimate(Boolean(res.totalIsEstimate));
       setPage(1);
     } catch (e) {
       if (seq !== listSeq.current) return;
@@ -114,6 +116,8 @@ export function useRemotePaginatedSearch<T = unknown>({
       const res = await fetchPageRef.current(debouncedQuery.trim(), nextPage, pageSize);
       if (seq !== appendSeq.current) return;
       setPage(nextPage);
+      setTotal(res.total);
+      setTotalIsEstimate(Boolean(res.totalIsEstimate));
       setOptions((prev) => {
         const seen = new Set(prev.map((o) => o.value));
         const add = res.options.filter((o) => !seen.has(o.value));
@@ -143,12 +147,15 @@ export function useRemotePaginatedSearch<T = unknown>({
     setSearchInput,
     options,
     total,
+    totalIsEstimate,
     page,
     loading,
     loadingMore,
     error,
     loadMore,
     hasMore: total > 0 && options.length < total,
+    /** True while the user has typed something the server has not been asked about yet (debounce). */
+    searching: open && searchInput.trim() !== debouncedQuery.trim(),
     selectedLabel,
     hydrated,
     numericValue,

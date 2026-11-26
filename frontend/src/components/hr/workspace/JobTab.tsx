@@ -1,6 +1,7 @@
 import { useMemo } from "react";
-import type { HrDepartmentResponse, HrDesignationResponse, HrEmployeeResponse, HrSectionResponse } from "@/api/client";
+import type { HrDepartmentResponse, HrDesignationResponse, HrSectionResponse } from "@/api/client";
 import type { HrQuickAddRecord } from "@/components/hr/HrMasterQuickAddModal";
+import { HrEmployeeSelect } from "@/components/hr/kit/HrEmployeeFields";
 import { QuickAddSelect } from "@/components/hr/QuickAddSelect";
 import { CheckboxField, Section, SelectField, TextField } from "./formControls";
 import {
@@ -22,7 +23,8 @@ type Props = {
   departments: HrDepartmentResponse[];
   designations: HrDesignationResponse[];
   sections: HrSectionResponse[];
-  managers: HrEmployeeResponse[];
+  /** The employee being edited (cannot be their own reporting manager). */
+  excludeEmployeeId?: number | null;
   onMasterCreated: (kind: "department" | "designation" | "section", record: HrQuickAddRecord) => void;
   highlight: ReadonlySet<string>;
   issueTempGatePass: boolean;
@@ -33,17 +35,15 @@ type Props = {
 };
 
 export function JobTab({
-  mode, form, setField, employeeCode, nextCode, departments, designations, sections, managers, onMasterCreated,
+  mode, form, setField, employeeCode, nextCode, departments, designations, sections, excludeEmployeeId = null, onMasterCreated,
   highlight, issueTempGatePass, onIssueTempGatePassChange, canManageGatePass, joiningDateRequired = false,
 }: Props) {
   const autoGatePass = shouldAutoIssueGatePass(form.employment_type);
   const departmentOptions = useMemo(() => departments.map((d) => ({ id: d.id, label: `${d.code} - ${d.name}` })), [departments]);
+  // Every designation is listed (typing narrows it); the department does not hide any of them.
   const designationOptions = useMemo(
-    () =>
-      designations
-        .filter((d) => !form.department_id || !d.department_id || d.department_id === form.department_id)
-        .map((d) => ({ id: d.id, label: `${d.code} - ${d.title}` })),
-    [designations, form.department_id],
+    () => designations.map((d) => ({ id: d.id, label: `${d.code} - ${d.title}` })),
+    [designations],
   );
   const sectionOptions = useMemo(() => sections.map((s) => ({ id: s.id, label: `${s.code} - ${s.name} (${s.section_type})` })), [sections]);
   const calculated = calculateConfirmationDate(form.joining_date, form.probation_months);
@@ -120,10 +120,7 @@ export function JobTab({
           emptyLabel="Undefined (no department)"
           value={form.department_id}
           options={departmentOptions}
-          onChange={(id) => {
-            setField("department_id", id);
-            setField("designation_id", null);
-          }}
+          onChange={(id) => setField("department_id", id)}
           onCreated={(r) => onMasterCreated("department", r)}
         />
         <QuickAddSelect
@@ -146,15 +143,19 @@ export function JobTab({
           onChange={(id) => setField("section_id", id)}
           onCreated={(r) => onMasterCreated("section", r)}
         />
-        <SelectField
-          label="Reporting manager"
-          searchable
-          value={form.reporting_manager_id ? String(form.reporting_manager_id) : ""}
-          onChange={(v) => setField("reporting_manager_id", v ? Number(v) : null)}
-          options={managers.map((m) => ({ value: String(m.id), label: `${m.employee_code} — ${m.first_name} ${m.last_name ?? ""}`.trim() }))}
-          emptyLabel="No reporting manager"
-          className="sm:col-span-2"
-        />
+        <div className="sm:col-span-2">
+          <label htmlFor="reporting-manager" className="mb-1 block text-xs font-medium text-text-muted">
+            Reporting manager
+          </label>
+          <HrEmployeeSelect
+            id="reporting-manager"
+            value={form.reporting_manager_id}
+            onChange={(id) => setField("reporting_manager_id", id)}
+            placeholder="No reporting manager (search code or name)"
+            activeOnly
+            excludeId={excludeEmployeeId}
+          />
+        </div>
         <TextField
           label="Device PIN"
           value={form.attendance_device_pin}

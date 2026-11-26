@@ -457,7 +457,11 @@ function StyleSmvCard({ canEdit }: { canEdit: boolean }) {
     const offset = (page - 1) * pageSize;
     const rows = await api.listStyles({ search: query || undefined, limit: pageSize, offset });
     const options: RemoteSelectOption[] = rows.map((s) => ({ value: s.id, label: `${s.style_code} · ${s.name}` }));
-    return { options, total: rows.length < pageSize ? offset + rows.length : page * pageSize + 1 };
+    return {
+      options,
+      total: rows.length < pageSize ? offset + rows.length : page * pageSize + 1,
+      totalIsEstimate: rows.length >= pageSize,
+    };
   }, []);
   return (
     <PanelCard testId="mfg-style-smv-card" title="Style standard SMV" subtitle="Approve the minutes per piece planning should use for a style.">

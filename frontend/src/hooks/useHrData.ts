@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type HrDepartmentResponse, type HrDesignationResponse, type HrEmployeeResponse } from "@/api/client";
+import type { HrDepartmentResponse, HrDesignationResponse, HrEmployeeResponse } from "@/api/client";
+import { fetchAllHrDepartments, fetchAllHrDesignations, fetchAllHrEmployees } from "@/pages/app/hr/hrMasterData";
 
-/** Load departments, designations, and employees for HR forms (cached per mount). */
+/** Load departments, designations, and employees for HR forms (every row, loaded page by page). */
 export function useHrMasters(activeEmployeesOnly = true) {
   const [departments, setDepartments] = useState<HrDepartmentResponse[]>([]);
   const [designations, setDesignations] = useState<HrDesignationResponse[]>([]);
@@ -14,9 +15,9 @@ export function useHrMasters(activeEmployeesOnly = true) {
     setError("");
     try {
       const [d, g, e] = await Promise.all([
-        api.listHrDepartments({ active_only: false }),
-        api.listHrDesignations({ active_only: false }),
-        api.listHrEmployees({ active_only: activeEmployeesOnly }),
+        fetchAllHrDepartments(),
+        fetchAllHrDesignations(),
+        fetchAllHrEmployees({ activeOnly: activeEmployeesOnly }),
       ]);
       setDepartments(d);
       setDesignations(g);

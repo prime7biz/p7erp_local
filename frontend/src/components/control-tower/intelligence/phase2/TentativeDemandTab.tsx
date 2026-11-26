@@ -412,7 +412,7 @@ function DemandPicker({ source, value, onChange }: { source: "INQUIRY" | "QUOTAT
               label: r.quotation_code,
             }));
       const total = options.length < pageSize ? offset + options.length : page * pageSize + 1;
-      return { options, total };
+      return { options, total, totalIsEstimate: options.length >= pageSize };
     },
     [source],
   );

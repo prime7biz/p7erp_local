@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type HrDesignationResponse } from "@/api/client";
 import { LocalSearchSelect } from "@/components/app/LocalSearchSelect";
+import { fetchAllHrDesignations } from "@/pages/app/hr/hrMasterData";
 import { logApiError } from "@/utils/logApiError";
 import { useConfirm } from "@/components/app/useConfirm";
 
@@ -157,7 +158,7 @@ export function ProductionSetupPage() {
         api.getProductionSettings(),
         api.listSewingLines(),
         api.listProductionShifts(),
-        api.listHrDesignations({ active_only: true }),
+        fetchAllHrDesignations(),
         api.listFactoryProfiles(),
       ]);
       setSettings(mapProductionSettings(s));
@@ -1785,23 +1786,19 @@ export function ProductionSetupPage() {
           </label>
           <label className="text-xs text-text-secondary">
             HR designation (preferred)
-            <select
-              className={inputCls}
+            <LocalSearchSelect
               value={crewRoleForm.designation_id ?? ""}
-              onChange={(e) =>
+              onChange={(next) =>
                 setCrewRoleForm((s) => ({
                   ...s,
-                  designation_id: e.target.value ? Number(e.target.value) : null,
+                  designation_id: next === "" ? null : Number(next),
                 }))
               }
-            >
-              <option value="">— optional —</option>
-              {designations.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.title}
-                </option>
-              ))}
-            </select>
+              options={designations.map((d) => ({ value: d.id, label: d.title }))}
+              placeholder="— optional — (type to search)"
+              aria-label="HR designation"
+              menuPortal
+            />
           </label>
           <label className="text-xs text-text-secondary">
             Designation label (fallback)

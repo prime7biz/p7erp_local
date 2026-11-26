@@ -18,7 +18,7 @@ function displayItem(it: CostingItemResponse) {
   return `${it.item_code} · ${it.name}`;
 }
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 100;
 const SEARCH_DEBOUNCE_MS = 250;
 const MENU_MAX_HEIGHT = 240;
 
@@ -245,6 +245,13 @@ export function MaterialItemCombobox({
       role="listbox"
       style={portalStyle ?? undefined}
       className="overflow-y-auto rounded-md border border-border bg-surface-raised py-0.5 shadow-lg"
+      onScroll={(e) => {
+        // Auto-load the next page when the user scrolls near the bottom.
+        const el = e.currentTarget;
+        if (canLoadMore && !loading && el.scrollHeight - el.scrollTop - el.clientHeight <= 40) {
+          void fetchPage(results.length, true);
+        }
+      }}
     >
       <button
         type="button"

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { api, type HrJobRequisitionResponse } from "@/api/client";
+import { fetchAllHrDepartments } from "@/pages/app/hr/hrMasterData";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
 import { HrStatusBadge } from "@/components/hr/HrStatusBadge";
 import { HrDataTable, type HrTableColumn } from "@/components/hr/kit/HrDataTable";
@@ -59,7 +60,7 @@ export function HrJobRequisitionsPage() {
   const [saving, setSaving] = useState(false);
   const departments = useHrOptions(
     "departmentsAll",
-    () => api.listHrDepartments({ active_only: false, limit: 500 }),
+    () => fetchAllHrDepartments(),
     (d) => ({ value: d.id, label: `${d.code} · ${d.name}${d.is_active ? "" : " (inactive)"}` }),
   );
   const lookup = useEmployeeLookup(useMemo(() => rows.map((r) => r.hiring_manager_employee_id), [rows]));

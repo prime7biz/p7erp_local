@@ -154,9 +154,9 @@ export function InventoryItemsPage() {
     setError("");
     try {
       const [cat, sub, uni, wh, sg, itmPage] = await Promise.all([
-        api.listInventoryItemCategories({ limit: 500 }),
-        api.listInventoryItemSubcategories({ limit: 500 }),
-        api.listInventoryItemUnits({ limit: 500 }),
+        api.listInventoryItemCategories(),
+        api.listInventoryItemSubcategories(),
+        api.listInventoryItemUnits(),
         getWarehousesCached(),
         api.listStockGroups(),
         api.listInventoryItemsPaginated({

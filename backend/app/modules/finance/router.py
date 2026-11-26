@@ -82,6 +82,7 @@ from app.modules.finance.voucher_controls import (
     fiscal_year_calendar,
 )
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT, MAX_PAGE_SIZE
+from app.common.search_tokens import multi_word_ilike_clause
 from app.common.control_tower_flags import require_control_tower_enabled
 from app.common.ownership import ensure_all_owned, ensure_owned
 from app.common.tenant import require_tenant
@@ -1856,14 +1857,9 @@ async def list_chart_of_accounts(
     filters = [ChartOfAccount.tenant_id == tenant.id]
     if active_only:
         filters.append(ChartOfAccount.is_active.is_(True))
-    if search and search.strip():
-        pat = f"%{search.strip().lower()}%"
-        filters.append(
-            or_(
-                func.lower(ChartOfAccount.account_number).like(pat),
-                func.lower(ChartOfAccount.name).like(pat),
-            )
-        )
+    coa_clause = multi_word_ilike_clause(search, [ChartOfAccount.account_number, ChartOfAccount.name])
+    if coa_clause is not None:
+        filters.append(coa_clause)
     total = int(
         (await db.execute(select(func.count(ChartOfAccount.id)).where(*filters))).scalar() or 0,
     )
@@ -4752,14 +4748,9 @@ async def list_cost_centers(
     filters = [CostCenter.tenant_id == tenant.id]
     if active_only:
         filters.append(CostCenter.is_active.is_(True))
-    if search and search.strip():
-        pat = f"%{search.strip().lower()}%"
-        filters.append(
-            or_(
-                func.lower(CostCenter.center_code).like(pat),
-                func.lower(CostCenter.name).like(pat),
-            )
-        )
+    cc_clause = multi_word_ilike_clause(search, [CostCenter.center_code, CostCenter.name])
+    if cc_clause is not None:
+        filters.append(cc_clause)
     total = int((await db.execute(select(func.count(CostCenter.id)).where(*filters))).scalar() or 0)
     response.headers["X-Total-Count"] = str(total)
     stmt = (

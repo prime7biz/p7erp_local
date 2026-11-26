@@ -207,7 +207,7 @@ export async function fetchStylePage(
   query: string,
   page: number,
   pageSize: number,
-): Promise<{ options: RemoteSelectOption<StyleResponse>[]; total: number }> {
+): Promise<{ options: RemoteSelectOption<StyleResponse>[]; total: number; totalIsEstimate?: boolean }> {
   const res = await merchApi.listStylesWithTotal({
     search: query || undefined,
     limit: pageSize,
@@ -217,6 +217,7 @@ export async function fetchStylePage(
     options: res.rows.map((s) => ({ value: s.id, label: styleLabel(s), meta: s })),
     // Server may omit total; assume another page when this page is full.
     total: res.total ?? (page - 1) * pageSize + res.rows.length + (res.rows.length === pageSize ? 1 : 0),
+    totalIsEstimate: res.total == null && res.rows.length === pageSize,
   };
 }
 
@@ -310,7 +311,7 @@ export async function fetchTradeCasePage(
   query: string,
   page: number,
   pageSize: number,
-): Promise<{ options: RemoteSelectOption<TradeCaseRow>[]; total: number }> {
+): Promise<{ options: RemoteSelectOption<TradeCaseRow>[]; total: number; totalIsEstimate?: boolean }> {
   const offset = (page - 1) * pageSize;
   const rows = await api.listTradeCases({
     search: query.trim() || undefined,
@@ -321,6 +322,7 @@ export async function fetchTradeCasePage(
   const slice = hasMore ? rows.slice(0, pageSize) : rows;
   const total = hasMore ? offset + pageSize + 1 : offset + slice.length;
   return {
+    totalIsEstimate: hasMore,
     options: slice.map((t) => ({
       value: t.id,
       label: tradeCaseLabel(t),

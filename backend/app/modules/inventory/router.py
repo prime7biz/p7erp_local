@@ -30,6 +30,7 @@ from app.common.inventory_validation import (
     validate_signed_adjustment_qty_str,
 )
 from app.common.inventory_policy import tenant_allows_negative_stock
+from app.common.search_tokens import multi_word_ilike_clause
 from app.common.pagination import (
     DEFAULT_PAGE_SIZE,
     HR_LIST_DEFAULT_LIMIT,
@@ -1872,21 +1873,17 @@ async def list_item_categories(
         description="Case-insensitive substring match on category code or name",
     ),
     limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
     stmt = select(ItemCategory).where(ItemCategory.tenant_id == tenant.id)
-    if search and search.strip():
-        pat = f"%{search.strip().lower()}%"
-        stmt = stmt.where(
-            or_(
-                func.lower(ItemCategory.category_code).like(pat),
-                func.lower(ItemCategory.name).like(pat),
-            )
-        )
-    result = await db.execute(stmt.order_by(ItemCategory.category_code).limit(limit))
+    clause = multi_word_ilike_clause(search, [ItemCategory.category_code, ItemCategory.name])
+    if clause is not None:
+        stmt = stmt.where(clause)
+    result = await db.execute(stmt.order_by(ItemCategory.category_code, ItemCategory.id).offset(offset).limit(limit))
     return list(result.scalars().all())
 
 
@@ -1958,6 +1955,7 @@ async def list_item_subcategories(
         description="Case-insensitive substring match on subcategory code or name",
     ),
     limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1966,15 +1964,12 @@ async def list_item_subcategories(
     stmt = select(ItemSubcategory).where(ItemSubcategory.tenant_id == tenant.id)
     if category_id is not None:
         stmt = stmt.where(ItemSubcategory.category_id == category_id)
-    if search and search.strip():
-        pat = f"%{search.strip().lower()}%"
-        stmt = stmt.where(
-            or_(
-                func.lower(ItemSubcategory.subcategory_code).like(pat),
-                func.lower(ItemSubcategory.name).like(pat),
-            )
-        )
-    result = await db.execute(stmt.order_by(ItemSubcategory.subcategory_code).limit(limit))
+    clause = multi_word_ilike_clause(search, [ItemSubcategory.subcategory_code, ItemSubcategory.name])
+    if clause is not None:
+        stmt = stmt.where(clause)
+    result = await db.execute(
+        stmt.order_by(ItemSubcategory.subcategory_code, ItemSubcategory.id).offset(offset).limit(limit)
+    )
     return list(result.scalars().all())
 
 
@@ -2048,21 +2043,17 @@ async def list_item_units(
         description="Case-insensitive substring match on unit code or name",
     ),
     limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
     stmt = select(ItemUnit).where(ItemUnit.tenant_id == tenant.id)
-    if search and search.strip():
-        pat = f"%{search.strip().lower()}%"
-        stmt = stmt.where(
-            or_(
-                func.lower(ItemUnit.unit_code).like(pat),
-                func.lower(ItemUnit.name).like(pat),
-            )
-        )
-    result = await db.execute(stmt.order_by(ItemUnit.unit_code).limit(limit))
+    clause = multi_word_ilike_clause(search, [ItemUnit.unit_code, ItemUnit.name])
+    if clause is not None:
+        stmt = stmt.where(clause)
+    result = await db.execute(stmt.order_by(ItemUnit.unit_code, ItemUnit.id).offset(offset).limit(limit))
     return list(result.scalars().all())
 
 
@@ -2147,14 +2138,9 @@ async def list_items(
         filters.append(Item.category_id == category_id)
     if subcategory_id is not None:
         filters.append(Item.subcategory_id == subcategory_id)
-    if search and search.strip():
-        pat = f"%{search.strip().lower()}%"
-        filters.append(
-            or_(
-                func.lower(Item.item_code).like(pat),
-                func.lower(Item.name).like(pat),
-            )
-        )
+    item_clause = multi_word_ilike_clause(search, [Item.item_code, Item.name])
+    if item_clause is not None:
+        filters.append(item_clause)
     total = int((await db.execute(select(func.count(Item.id)).where(*filters))).scalar() or 0)
     tp = total_pages(total, ps)
     sp = safe_page(page, total, ps)
@@ -2344,6 +2330,7 @@ async def delete_item(
 @router.get("/warehouses", response_model=list[WarehouseOut])
 async def list_warehouses(
     limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description="Max rows (safety cap for large tenants)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -2352,7 +2339,8 @@ async def list_warehouses(
     result = await db.execute(
         select(Warehouse)
         .where(Warehouse.tenant_id == tenant.id)
-        .order_by(Warehouse.warehouse_code)
+        .order_by(Warehouse.warehouse_code, Warehouse.id)
+        .offset(offset)
         .limit(limit)
     )
     return list(result.scalars().all())
@@ -2421,6 +2409,7 @@ async def delete_warehouse(
 @router.get("/stock-groups", response_model=list[StockGroupOut])
 async def list_stock_groups(
     limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -2429,7 +2418,8 @@ async def list_stock_groups(
     result = await db.execute(
         select(StockGroup)
         .where(StockGroup.tenant_id == tenant.id)
-        .order_by(StockGroup.group_code)
+        .order_by(StockGroup.group_code, StockGroup.id)
+        .offset(offset)
         .limit(limit)
     )
     return list(result.scalars().all())
@@ -2533,12 +2523,9 @@ async def list_vendors(
     _ensure_tenant(user, tenant)
     ps = clamp_page_size(page_size)
     stmt = select(Vendor).where(Vendor.tenant_id == tenant.id)
-    if search:
-        pattern = f"%{search.strip().lower()}%"
-        stmt = stmt.where(
-            func.lower(Vendor.vendor_code).like(pattern)
-            | func.lower(Vendor.name).like(pattern)
-        )
+    vendor_clause = multi_word_ilike_clause(search, [Vendor.vendor_code, Vendor.name])
+    if vendor_clause is not None:
+        stmt = stmt.where(vendor_clause)
     if is_active is not None:
         stmt = stmt.where(Vendor.is_active == is_active)
     if vendor_type:

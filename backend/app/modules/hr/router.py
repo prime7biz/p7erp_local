@@ -6,7 +6,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +14,7 @@ from app.common.business_date import today_local
 from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.codegen import next_tenant_code
+from app.common.search_tokens import multi_word_ilike_clause
 from app.common.permissions import (
     PERMISSION_HR_COMPLIANCE_MANAGE,
     PERMISSION_HR_COMPLIANCE_VIEW,
@@ -190,10 +191,10 @@ async def list_departments(
     stmt = select(Department).where(Department.tenant_id == tenant.id)
     if active_only:
         stmt = stmt.where(Department.is_active.is_(True))
-    if search and search.strip():
-        term = f"%{search.strip()}%"
-        stmt = stmt.where(or_(Department.code.ilike(term), Department.name.ilike(term)))
-    stmt = stmt.order_by(Department.name).offset(offset).limit(limit)
+    dept_clause = multi_word_ilike_clause(search, [Department.code, Department.name])
+    if dept_clause is not None:
+        stmt = stmt.where(dept_clause)
+    stmt = stmt.order_by(Department.name, Department.id).offset(offset).limit(limit)
     result = await db.execute(stmt)
     return [_department_to_response(r) for r in result.scalars().all()]
 
@@ -348,10 +349,10 @@ async def list_designations(
         stmt = stmt.where(Designation.department_id == department_id)
     if active_only:
         stmt = stmt.where(Designation.is_active.is_(True))
-    if search and search.strip():
-        term = f"%{search.strip()}%"
-        stmt = stmt.where(or_(Designation.code.ilike(term), Designation.title.ilike(term)))
-    stmt = stmt.order_by(Designation.title).offset(offset).limit(limit)
+    desig_clause = multi_word_ilike_clause(search, [Designation.code, Designation.title])
+    if desig_clause is not None:
+        stmt = stmt.where(desig_clause)
+    stmt = stmt.order_by(Designation.title, Designation.id).offset(offset).limit(limit)
     result = await db.execute(stmt)
     return [_designation_to_response(r) for r in result.scalars().all()]
 
@@ -472,17 +473,12 @@ async def list_employees(
         stmt = stmt.where(Employee.designation_id == designation_id)
     if active_only:
         stmt = stmt.where(Employee.is_active.is_(True))
-    if search and search.strip():
-        term = f"%{search.strip()}%"
-        stmt = stmt.where(
-            or_(
-                Employee.employee_code.ilike(term),
-                Employee.first_name.ilike(term),
-                Employee.last_name.ilike(term),
-                Employee.email.ilike(term),
-            )
-        )
-    stmt = stmt.order_by(Employee.employee_code).offset(offset).limit(limit)
+    emp_clause = multi_word_ilike_clause(
+        search, [Employee.employee_code, Employee.first_name, Employee.last_name, Employee.email]
+    )
+    if emp_clause is not None:
+        stmt = stmt.where(emp_clause)
+    stmt = stmt.order_by(Employee.employee_code, Employee.id).offset(offset).limit(limit)
     result = await db.execute(stmt)
     access = await employee_service.employee_field_access(db, user, tenant.id)
     return [_employee_to_response(r, access) for r in result.scalars().all()]

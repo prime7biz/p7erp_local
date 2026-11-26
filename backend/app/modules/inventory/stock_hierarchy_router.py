@@ -8,13 +8,14 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.business_date import today_local
 from app.common.codegen import next_tenant_code
 from app.common.inventory_policy import tenant_allows_negative_stock
+from app.common.search_tokens import multi_word_ilike_clause
 from app.common.permissions import (
     PERMISSION_INVENTORY_BATCH_CREATE,
     PERMISSION_INVENTORY_BATCH_VIEW,
@@ -280,9 +281,9 @@ async def list_stock_items(
     q = select(Item).where(Item.tenant_id == tenant.id, Item.is_active.is_(True))
     if group_id:
         q = q.where(Item.stock_group_id == group_id)
-    if search:
-        term = f"%{search.strip()}%"
-        q = q.where(or_(Item.name.ilike(term), Item.item_code.ilike(term)))
+    stock_clause = multi_word_ilike_clause(search, [Item.name, Item.item_code])
+    if stock_clause is not None:
+        q = q.where(stock_clause)
     if low_stock:
         q = q.where(Item.reorder_level.is_not(None), Item.current_stock <= Item.reorder_level)
     if expiry_nearing and is_batch_tracking_enabled(tenant.feature_flags):

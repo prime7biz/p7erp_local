@@ -22,6 +22,7 @@ from app.common.authority.constants import (
     CLASS1_APPROVAL_PENDING,
     CLASS1_APPROVAL_REJECTED,
 )
+from app.common.business_date import today_local
 from app.common.tenant_feature_keys import USER_AUTHORITY_CLASSES_V1
 from app.database import get_db
 from app.main import app
@@ -105,7 +106,9 @@ def _headers(user: User, tenant: Tenant) -> dict[str, str]:
 def _voucher_body(rent_id: int, cash_id: int, voucher_date: date | None = None):
     return {
         "voucher_type": "JOURNAL",
-        "voucher_date": (voucher_date or date.today()).isoformat(),
+        # Business "today" (tenant/app timezone, Asia/Dhaka by default), the same clock the voucher
+        # workflow uses. date.today() is UTC on CI and flips to "yesterday" after 18:00 UTC.
+        "voucher_date": (voucher_date or today_local()).isoformat(),
         "description": "Authority workflow test",
         "lines": [
             {"account_id": rent_id, "entry_type": "DEBIT", "amount": "50"},

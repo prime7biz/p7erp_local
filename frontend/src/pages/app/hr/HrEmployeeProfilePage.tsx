@@ -36,6 +36,7 @@ import {
   type ProfileTab,
 } from "./employeeProfileLogic";
 import { formatShortDate, formatTenure } from "./hrEmployeesListLogic";
+import { fetchAllHrDepartments, fetchAllHrDesignations } from "./hrMasterData";
 
 const PREFIX = "/app/hr";
 
@@ -138,8 +139,8 @@ export function HrEmployeeProfilePage() {
       api.getHrEmployee(id),
       api.getHrEmployeeOverview(id),
       api.getHrEmployeeAccess(),
-      api.listHrDepartments({ active_only: false, limit: 500 }),
-      api.listHrDesignations({ active_only: false, limit: 500 }),
+      fetchAllHrDepartments(),
+      fetchAllHrDesignations(),
       api.listHrSections({ active_only: false }),
     ])
       .then(([emp, ov, acc, deps, desigs, secs]) => {

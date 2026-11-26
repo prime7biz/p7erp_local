@@ -8,18 +8,28 @@ import { fetchAllPages } from "./hrEmployeesListLogic";
 const PAGE_SIZE = 500;
 const MAX_PAGES = 20;
 
-export async function fetchAllHrDepartments() {
+export async function fetchAllHrDepartments(opts?: { activeOnly?: boolean }) {
   const { rows } = await fetchAllPages(
-    (limit, offset) => api.listHrDepartments({ active_only: false, limit, offset }),
+    (limit, offset) => api.listHrDepartments({ active_only: opts?.activeOnly ?? false, limit, offset }),
     PAGE_SIZE,
     MAX_PAGES,
   );
   return rows;
 }
 
-export async function fetchAllHrDesignations() {
+export async function fetchAllHrDesignations(opts?: { activeOnly?: boolean }) {
   const { rows } = await fetchAllPages(
-    (limit, offset) => api.listHrDesignations({ active_only: false, limit, offset }),
+    (limit, offset) => api.listHrDesignations({ active_only: opts?.activeOnly ?? false, limit, offset }),
+    PAGE_SIZE,
+    MAX_PAGES,
+  );
+  return rows;
+}
+
+/** Every employee (not only the first 100). Use for screens that really need the whole list. */
+export async function fetchAllHrEmployees(opts?: { activeOnly?: boolean }) {
+  const { rows } = await fetchAllPages(
+    (limit, offset) => api.listHrEmployees({ active_only: opts?.activeOnly ?? false, limit, offset }),
     PAGE_SIZE,
     MAX_PAGES,
   );

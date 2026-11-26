@@ -123,6 +123,30 @@ import type {
   WipVsGlResponse,
 } from "@/api/models";
 
+/** Server maximum rows per request for the master lists below. */
+const MASTER_PAGE_SIZE = 500;
+/** Safety stop: 40 requests x 500 rows = 20,000 rows. */
+const MASTER_MAX_PAGES = 40;
+
+/**
+ * Master lists (categories, units, warehouses, ...) are capped per request by the server.
+ * With an explicit `limit` this is one request (old behaviour). Without it, keep asking for
+ * the next 500 rows until a short page comes back, so no option is silently missing.
+ */
+async function fetchAllByOffset<T>(
+  params: { limit?: number; offset?: number } | undefined,
+  fetchPage: (limit: number, offset: number) => Promise<T[]>,
+): Promise<T[]> {
+  if (params?.limit != null) return fetchPage(params.limit, params.offset ?? 0);
+  const out: T[] = [];
+  for (let page = 0; page < MASTER_MAX_PAGES; page += 1) {
+    const rows = await fetchPage(MASTER_PAGE_SIZE, page * MASTER_PAGE_SIZE);
+    out.push(...rows);
+    if (rows.length < MASTER_PAGE_SIZE) break;
+  }
+  return out;
+}
+
 export const inventoryApi = {
   async listPurchaseOrderSupplierUpdates(
     poId: number,
@@ -230,12 +254,15 @@ export const inventoryApi = {
     );
   },
   // Inventory module (legacy parity wave)
-  async listInventoryItemCategories(params?: { search?: string; limit?: number }): Promise<ItemCategoryResponse[]> {
-    const q = new URLSearchParams();
-    if (params?.search != null && params.search.trim() !== "") q.set("search", params.search.trim());
-    if (params?.limit != null) q.set("limit", String(params.limit));
-    const suffix = q.toString() ? `?${q.toString()}` : "";
-    return request<ItemCategoryResponse[]>(`/api/v1/inventory/item-categories${suffix}`);
+  /** Without `limit` every category is loaded (500 per request); with `limit` only that single page. */
+  async listInventoryItemCategories(params?: { search?: string; limit?: number; offset?: number }): Promise<ItemCategoryResponse[]> {
+    return fetchAllByOffset(params, (limit, offset) => {
+      const q = new URLSearchParams();
+      if (params?.search != null && params.search.trim() !== "") q.set("search", params.search.trim());
+      q.set("limit", String(limit));
+      if (offset > 0) q.set("offset", String(offset));
+      return request<ItemCategoryResponse[]>(`/api/v1/inventory/item-categories?${q.toString()}`);
+    });
   },
   async createInventoryItemCategory(data: ItemCategoryCreate): Promise<ItemCategoryResponse> {
     return request<ItemCategoryResponse>("/api/v1/inventory/item-categories", {
@@ -256,13 +283,16 @@ export const inventoryApi = {
     category_id?: number;
     search?: string;
     limit?: number;
+    offset?: number;
   }): Promise<ItemSubcategoryResponse[]> {
-    const q = new URLSearchParams();
-    if (params?.category_id != null) q.set("category_id", String(params.category_id));
-    if (params?.search != null && params.search.trim() !== "") q.set("search", params.search.trim());
-    if (params?.limit != null) q.set("limit", String(params.limit));
-    const suffix = q.toString() ? `?${q.toString()}` : "";
-    return request<ItemSubcategoryResponse[]>(`/api/v1/inventory/item-subcategories${suffix}`);
+    return fetchAllByOffset(params, (limit, offset) => {
+      const q = new URLSearchParams();
+      if (params?.category_id != null) q.set("category_id", String(params.category_id));
+      if (params?.search != null && params.search.trim() !== "") q.set("search", params.search.trim());
+      q.set("limit", String(limit));
+      if (offset > 0) q.set("offset", String(offset));
+      return request<ItemSubcategoryResponse[]>(`/api/v1/inventory/item-subcategories?${q.toString()}`);
+    });
   },
   async createInventoryItemSubcategory(data: ItemSubcategoryCreate): Promise<ItemSubcategoryResponse> {
     return request<ItemSubcategoryResponse>("/api/v1/inventory/item-subcategories", {
@@ -279,12 +309,14 @@ export const inventoryApi = {
   async deleteInventoryItemSubcategory(id: number): Promise<void> {
     return request<void>(`/api/v1/inventory/item-subcategories/${id}`, { method: "DELETE" });
   },
-  async listInventoryItemUnits(params?: { search?: string; limit?: number }): Promise<ItemUnitResponse[]> {
-    const q = new URLSearchParams();
-    if (params?.search != null && params.search.trim() !== "") q.set("search", params.search.trim());
-    if (params?.limit != null) q.set("limit", String(params.limit));
-    const suffix = q.toString() ? `?${q.toString()}` : "";
-    return request<ItemUnitResponse[]>(`/api/v1/inventory/item-units${suffix}`);
+  async listInventoryItemUnits(params?: { search?: string; limit?: number; offset?: number }): Promise<ItemUnitResponse[]> {
+    return fetchAllByOffset(params, (limit, offset) => {
+      const q = new URLSearchParams();
+      if (params?.search != null && params.search.trim() !== "") q.set("search", params.search.trim());
+      q.set("limit", String(limit));
+      if (offset > 0) q.set("offset", String(offset));
+      return request<ItemUnitResponse[]>(`/api/v1/inventory/item-units?${q.toString()}`);
+    });
   },
   async createInventoryItemUnit(data: ItemUnitCreate): Promise<ItemUnitResponse> {
     return request<ItemUnitResponse>("/api/v1/inventory/item-units", {
@@ -347,8 +379,11 @@ export const inventoryApi = {
   async deleteInventoryItem(id: number): Promise<void> {
     return request<void>(`/api/v1/inventory/items/${id}`, { method: "DELETE" });
   },
+  /** Every warehouse of the tenant (500 per request until the list ends; the server default is only 50). */
   async listWarehouses(): Promise<WarehouseResponse[]> {
-    return request<WarehouseResponse[]>("/api/v1/inventory/warehouses");
+    return fetchAllByOffset(undefined, (limit, offset) =>
+      request<WarehouseResponse[]>(`/api/v1/inventory/warehouses?limit=${limit}${offset > 0 ? `&offset=${offset}` : ""}`),
+    );
   },
   async createWarehouse(data: WarehouseCreate): Promise<WarehouseResponse> {
     return request<WarehouseResponse>("/api/v1/inventory/warehouses", {
@@ -426,8 +461,11 @@ export const inventoryApi = {
   async deleteVendor(id: number): Promise<void> {
     return request<void>(`/api/v1/inventory/vendors/${id}`, { method: "DELETE" });
   },
+  /** Every stock group of the tenant (500 per request until the list ends; the server default is only 50). */
   async listStockGroups(): Promise<StockGroupResponse[]> {
-    return request<StockGroupResponse[]>("/api/v1/inventory/stock-groups");
+    return fetchAllByOffset(undefined, (limit, offset) =>
+      request<StockGroupResponse[]>(`/api/v1/inventory/stock-groups?limit=${limit}${offset > 0 ? `&offset=${offset}` : ""}`),
+    );
   },
   async createStockGroup(data: StockGroupCreate): Promise<StockGroupResponse> {
     return request<StockGroupResponse>("/api/v1/inventory/stock-groups", {

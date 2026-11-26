@@ -2,7 +2,8 @@
  * HR → Manpower → Settings: ratio targets and department → sewing/cutting/finishing groups.
  */
 import { useCallback, useEffect, useState } from "react";
-import { api, type HrDepartmentResponse } from "@/api/client";
+import type { HrDepartmentResponse } from "@/api/client";
+import { fetchAllHrDepartments } from "@/pages/app/hr/hrMasterData";
 import {
   hrManpowerApi,
   type DepartmentGroupKey,
@@ -62,7 +63,7 @@ export function HrManpowerSettingsPage() {
     try {
       const [s, deps, g] = await Promise.all([
         hrManpowerApi.getSettings(),
-        api.listHrDepartments({ limit: 500 }),
+        fetchAllHrDepartments(),
         hrManpowerApi.listDepartmentGroups(),
       ]);
       setSettings(s);

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LocalSearchSelect, type LocalSelectOption } from "./LocalSearchSelect";
 
@@ -97,6 +97,61 @@ describe("LocalSearchSelect", () => {
 
     expect(onChange).toHaveBeenCalledWith("");
     expect((screen.getByRole("combobox") as HTMLInputElement).value).toBe("");
+  });
+
+  it("matches words in any order (multi-word search)", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    const input = screen.getByRole("combobox", { name: "Designation" });
+    await user.click(input);
+    await user.type(input, "operator senior");
+
+    const list = screen.getByRole("listbox");
+    expect(within(list).getByRole("option", { name: "Senior Operator" })).toBeTruthy();
+    expect(within(list).queryByRole("option", { name: "Junior Operator" })).toBeNull();
+  });
+
+  it("can reach every row of a long list by scrolling and by typing", async () => {
+    const user = userEvent.setup();
+    const many: LocalSelectOption[] = Array.from({ length: 400 }, (_, i) => ({
+      value: i + 1,
+      label: `Designation ${i + 1}`,
+    }));
+    render(<LocalSearchSelect value={null} onChange={() => {}} options={many} aria-label="Many" />);
+
+    const input = screen.getByRole("combobox", { name: "Many" });
+    await user.click(input);
+    const list = screen.getByRole("listbox");
+    // First batch only, with a count line so nothing looks missing.
+    expect(within(list).getAllByRole("option").length).toBe(150);
+    expect(within(list).getByText(/Showing 150 of 400/)).toBeTruthy();
+
+    // Scrolling to the bottom draws the next batch.
+    Object.defineProperty(list, "scrollHeight", { configurable: true, value: 1000 });
+    Object.defineProperty(list, "clientHeight", { configurable: true, value: 200 });
+    list.scrollTop = 800;
+    fireEvent.scroll(list);
+    expect(within(list).getAllByRole("option").length).toBe(300);
+
+    // Typing finds a row that was not on screen yet.
+    await user.type(input, "designation 399");
+    expect(within(screen.getByRole("listbox")).getByRole("option", { name: "Designation 399" })).toBeTruthy();
+  });
+
+  it("keeps moving down with the arrow key past the first batch of rows", async () => {
+    const user = userEvent.setup();
+    const many: LocalSelectOption[] = Array.from({ length: 400 }, (_, i) => ({
+      value: i + 1,
+      label: `Designation ${i + 1}`,
+    }));
+    render(<LocalSearchSelect value={null} onChange={() => {}} options={many} aria-label="Many" />);
+
+    const input = screen.getByRole("combobox", { name: "Many" });
+    await user.click(input);
+    await user.keyboard("{ArrowDown}".repeat(152));
+
+    expect(within(screen.getByRole("listbox")).getAllByRole("option").length).toBeGreaterThan(150);
   });
 
   it("closes on Escape", async () => {

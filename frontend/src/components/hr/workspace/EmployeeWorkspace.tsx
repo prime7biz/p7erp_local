@@ -37,6 +37,7 @@ import { HrPageHeader } from "@/components/hr/HrPageHeader";
 import { useRecordBreadcrumb } from "@/components/shell/recordBreadcrumb";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
+import { fetchAllHrDepartments, fetchAllHrDesignations } from "@/pages/app/hr/hrMasterData";
 import { logApiError } from "@/utils/logApiError";
 import { AiAutofillPanel, type AiConflict } from "./AiAutofillPanel";
 import { ChecklistTab } from "./ChecklistTab";
@@ -125,7 +126,6 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
   const [departments, setDepartments] = useState<HrDepartmentResponse[]>([]);
   const [designations, setDesignations] = useState<HrDesignationResponse[]>([]);
   const [sections, setSections] = useState<HrSectionResponse[]>([]);
-  const [managers, setManagers] = useState<HrEmployeeResponse[]>([]);
   const [nextCode, setNextCode] = useState<string | null>(null);
   const [compOptions, setCompOptions] = useState<HrCompensationOptions | null>(null);
   const [compensation, setCompensation] = useState<HrEmployeeCompensationView | null>(null);
@@ -207,12 +207,12 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
     setLoading(true);
     setError("");
     try {
-      const [acc, deps, desigs, secs, people] = await Promise.all([
+      // Departments and designations are loaded page by page, so a long list is never cut at 100.
+      const [acc, deps, desigs, secs] = await Promise.all([
         api.getHrEmployeeAccess(),
-        api.listHrDepartments({ active_only: false }),
-        api.listHrDesignations({ active_only: false }),
+        fetchAllHrDepartments(),
+        fetchAllHrDesignations(),
         api.listHrSections({ active_only: false }),
-        api.listHrEmployees({ active_only: true }),
       ]);
       setAccess(acc);
       setDepartments(deps);
@@ -224,7 +224,6 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
       if (mode === "edit") {
         const row = await api.getHrEmployee(employeeIdNum);
         setEmployee(row);
-        setManagers(people.filter((p) => p.id !== row.id));
         const f = formFromEmployee(row);
         setForm(f);
         setInitialForm(f);
@@ -241,7 +240,6 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
             .catch((e) => logApiError("EmployeeWorkspace.payBenefits", e));
         }
       } else {
-        setManagers(people);
         hrBangladeshApi
           .employeeNumberFormat()
           .then((r) => setNextCode(r.next_code))
@@ -827,7 +825,7 @@ export function EmployeeWorkspace({ mode }: { mode: WorkspaceMode }) {
             departments={departments}
             designations={designations}
             sections={sections}
-            managers={managers}
+            excludeEmployeeId={employee?.id ?? null}
             onMasterCreated={onMasterCreated}
             highlight={highlight}
             issueTempGatePass={issueTempGatePass}

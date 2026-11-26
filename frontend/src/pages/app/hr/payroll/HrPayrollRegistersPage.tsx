@@ -10,6 +10,7 @@ import { KitTable } from "@/components/hr/bd/BdKitTable";
 import { Badge, Banner, Card, Field, Messages, SimpleTable, btnPrimary, btnSecondary, inputCls } from "@/components/hr/bd/BdUi";
 import { money, useAction, useLoad } from "@/components/hr/bd/bdHooks";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { fetchAllHrDepartments } from "@/pages/app/hr/hrMasterData";
 
 const FROZEN_STATUSES = ["FINALIZED", "APPROVED", "POSTED"];
 
@@ -118,7 +119,7 @@ function Acknowledgements({ runId }: { runId: number }) {
 
 export function HrPayrollRegistersPage() {
   const runs = useLoad<HrPayrollRunResponse[]>(() => api.listHrPayrollRuns(), []);
-  const departments = useLoad(() => api.listHrDepartments({ active_only: false }), []);
+  const departments = useLoad(() => fetchAllHrDepartments(), []);
   const [runId, setRunId] = useState<number | null>(null);
   const [deptId, setDeptId] = useState("");
   const [view, setView] = useState<"top" | "departments" | "payments">("top");

@@ -145,9 +145,9 @@ export function PurchaseOrdersPage() {
   async function openItemCreate() {
     try {
       const [categories, subcategories, units] = await Promise.all([
-        api.listInventoryItemCategories({ limit: 500 }),
-        api.listInventoryItemSubcategories({ limit: 500 }),
-        api.listInventoryItemUnits({ limit: 500 }),
+        api.listInventoryItemCategories(),
+        api.listInventoryItemSubcategories(),
+        api.listInventoryItemUnits(),
       ]);
       if (categories.length === 0 || units.length === 0) {
         toast.error("Add at least one item category and unit first (Inventory → Items).");

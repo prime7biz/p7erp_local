@@ -28,6 +28,14 @@ powershell -ExecutionPolicy Bypass -File scripts\release\release_gate.ps1 <comma
 
 Exit codes: `0` PASS, `1` FAIL (stop), `2` timeout (stop), `3` NEEDS DECISION (ask the user), `4` UNKNOWN (stop).
 
+GitHub calls need a token (anonymous calls are rate-limited). In the same shell command, set it from git credentials without printing it:
+
+```powershell
+$env:GIT_TERMINAL_PROMPT='0'; $c = "protocol=https`nhost=github.com`n`n" | & git credential fill 2>$null; $env:GITHUB_TOKEN = ((@($c | Where-Object { $_ -like 'password=*' }))[0]).Substring(9); powershell -NoProfile -ExecutionPolicy Bypass -File scripts\release\release_gate.ps1 <command> [args]; Remove-Item Env:\GITHUB_TOKEN
+```
+
+A gate that cannot reach GitHub returns `4` (UNKNOWN). That is a stop, never a pass.
+
 Human runbook: `docs/DEPLOYMENT_PROCESS.md`. Backup procedure: `.cursor/rules/deploy-production-backup.mdc`.
 
 ---

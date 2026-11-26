@@ -1,4 +1,4 @@
-# Release gates for the P7 ERP `deploy` flow (Windows PowerShell 5.1 or PowerShell 7).
+﻿# Release gates for the P7 ERP `deploy` flow (Windows PowerShell 5.1 or PowerShell 7).
 #
 # This script only CHECKS. It never commits, pushes, tags, merges or changes the live
 # server. The release steps in .cursor/rules/deployment-process.mdc run only after the
@@ -6,7 +6,7 @@
 #
 # Run from the repository root:
 #   powershell -ExecutionPolicy Bypass -File scripts\release\release_gate.ps1 preflight
-#   powershell -ExecutionPolicy Bypass -File scripts\release\release_gate.ps1 ci <sha>
+#   powershell -ExecutionPolicy Bypass -File scripts\release\release_gate.ps1 ci <sha> -Branch main
 #   powershell -ExecutionPolicy Bypass -File scripts\release\release_gate.ps1 on-main <sha>
 #   powershell -ExecutionPolicy Bypass -File scripts\release\release_gate.ps1 tag-free v1.26.0
 #   powershell -ExecutionPolicy Bypass -File scripts\release\release_gate.ps1 images v1.26.0
@@ -25,6 +25,8 @@ param(
 
     [string]$Workflow = 'CI',
     [string]$Event = 'push',
+    # Branch or tag the run must belong to (for example main, dev, or v1.25.1). Empty = any.
+    [string]$Branch = '',
     [int]$TimeoutMinutes = 25,
     [string]$Repo = 'prime7biz/p7erp_local',
     [string]$SshTarget = 'root@188.245.156.127',
@@ -36,7 +38,25 @@ param(
 $ErrorActionPreference = 'Continue'
 
 $Images = @('prime7biz/p7erp-backend', 'prime7biz/p7erp-frontend', 'prime7biz/p7erp-frontend-admin')
-$GitHubHeaders = @{ 'User-Agent' = 'p7-release-gate'; 'Accept' = 'application/vnd.github+json' }
+
+# Anonymous GitHub API calls are limited to 60 per hour, so authenticate when a token exists.
+# The token comes from $env:GITHUB_TOKEN or from the same git credential store used for pushes.
+# It is never printed.
+function Get-GitHubHeaders {
+    $headers = @{ 'User-Agent' = 'p7-release-gate'; 'Accept' = 'application/vnd.github+json' }
+    $token = $env:GITHUB_TOKEN
+    if (-not $token) {
+        $env:GIT_TERMINAL_PROMPT = '0'
+        $credential = "protocol=https`nhost=github.com`n`n" | & git credential fill 2>$null
+        $line = @($credential | Where-Object { $_ -like 'password=*' }) | Select-Object -First 1
+        if ($line) { $token = $line.Substring('password='.Length) }
+    }
+    if ($token) { $headers['Authorization'] = "Bearer $token" }
+    return $headers
+}
+$GitHubHeaders = Get-GitHubHeaders
+# Docker Hub must not receive the GitHub token.
+$DockerHubHeaders = @{ 'User-Agent' = 'p7-release-gate' }
 
 function Pass([string]$Message) { Write-Output "PASS: $Message"; exit 0 }
 function Fail([string]$Message) { Write-Output "FAIL: $Message"; exit 1 }
@@ -132,7 +152,8 @@ switch ($Command) {
 
             # Match the exact commit, never just the most recent run.
             $match = @($response.workflow_runs | Where-Object {
-                $_.head_sha -eq $sha -and $_.name -eq $Workflow -and $_.event -eq $Event
+                $_.head_sha -eq $sha -and $_.name -eq $Workflow -and $_.event -eq $Event -and
+                ($Branch -eq '' -or $_.head_branch -eq $Branch)
             })
             if ($match.Count -gt 0) {
                 $run = $match | Sort-Object created_at -Descending | Select-Object -First 1
@@ -176,7 +197,7 @@ switch ($Command) {
         foreach ($image in $Images) {
             $status = 0
             try {
-                Invoke-RestMethod -Uri "https://hub.docker.com/v2/repositories/$image/tags/$Target" -Headers $GitHubHeaders | Out-Null
+                Invoke-RestMethod -Uri "https://hub.docker.com/v2/repositories/$image/tags/$Target" -Headers $DockerHubHeaders | Out-Null
                 $status = 200
             } catch {
                 $status = Get-HttpStatus $_
@@ -193,7 +214,7 @@ switch ($Command) {
         $missing = @()
         foreach ($image in $Images) {
             try {
-                Invoke-RestMethod -Uri "https://hub.docker.com/v2/repositories/$image/tags/$Target" -Headers $GitHubHeaders | Out-Null
+                Invoke-RestMethod -Uri "https://hub.docker.com/v2/repositories/$image/tags/$Target" -Headers $DockerHubHeaders | Out-Null
             } catch {
                 $status = Get-HttpStatus $_
                 if ($status -eq 404) { $missing += "$image`:$Target" }

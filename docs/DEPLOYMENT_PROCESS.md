@@ -1,28 +1,50 @@
-# P7 ERP — Standard Deployment Process
+﻿# P7 ERP — Standard Deployment Process
 
-**For beginners:** This is the step-by-step checklist for releasing code to the **live server** (https://prime7erp.com).
+**For beginners:** Say **"deploy"** once in Cursor. The agent runs every safety gate below in order.
+If any gate fails, it stops and tells you exactly what happened. The live server is changed only at the very end, and only after every earlier gate passes.
 
-**In Cursor:** Say **"deploy"** and the agent follows `.cursor/rules/deployment-process.mdc` automatically.
-
-**Related docs:** `docs/BUILD_VERIFICATION.md` (local build), `docs/GO_LIVE_CUTOVER_RUNBOOK.md` (full cutover), `docs/GO_LIVE_PRODUCTION_HARDENING.md` (server secrets).
+Rules: `.cursor/rules/deployment-process.mdc` (agent steps). Gate script: `scripts/release/release_gate.ps1` (read-only checks).
 
 ---
 
-## How deploy works (important)
+## What "deploy" does
 
-The safe path is **dev → main → `v*` tag → live**. Each step has its own gate, so nothing reaches
-production without passing tests on `dev` and on `main`.
+| Gate | What is checked or done | If it fails |
+|------|-------------------------|-------------|
+| 0 Preflight | On branch `dev`, clean tree (or you approve the listed commit), no secret files, not behind origin, Python import + frontend build | Stop |
+| 1 Dev | Push `dev`; GitHub **CI** passes on that exact commit | Stop. `main` untouched |
+| 2 Main | Fast-forward `main` to that commit; **CI** passes on `main` | Stop before any tag |
+| 3 Backup | Production PostgreSQL backup, only when a migration or data risk exists | Stop before any tag |
+| 4 Tag and images | Create `vX.Y.Z` on `main`; **Deploy** publishes all three immutable Docker Hub images | Stop. Live untouched |
+| 5 Live | `scripts/deploy_production_remote.sh vX.Y.Z` over SSH | Script recovery rules below |
+| 6 Verify | Live backend `/health` reports `vX.Y.Z`; smoke checks | Report and follow rollback |
 
-| Step | Action | What happens | Docker Hub | Live server |
-|------|--------|--------------|------------|-------------|
-| 1 | `git push origin dev` | **CI** runs tests + compose validation on `dev` | No | No |
-| 2 | Merge `dev` into `main` (PR, automatic after dev CI passes) | **CI** runs on `main` | No | No |
-| 3 | `git tag vX.Y.Z origin/main` + `git push origin vX.Y.Z` | **Deploy** (`deploy.yml`) checks the tag is on `main`, runs tests, pushes immutable `vX.Y.Z` images for backend, frontend and frontend-admin, then moves `:latest` | Yes | No |
-| 4 | Manual SSH (you choose when; the agent runs it on **deploy**) | `scripts/deploy_production_remote.sh vX.Y.Z` pulls the tag and restarts application services | Pulls | Yes |
+Nothing reaches production unless `dev` CI, `main` CI, the backup (when needed), and the image check all pass.
+GitHub never SSHes to the server. Only the deploy script changes live services.
 
-Workflow files: `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`. GitHub never SSHes to production.
+---
 
-**Manual fallbacks** (`workflow_dispatch` only, never triggered by pushes):
+## Safety rules
+
+- Only the application services change: backend, worker, beat, frontend. PostgreSQL, Redis, Ollama and Watchtower are never recreated by a release.
+- Images use immutable version tags. Production never uses `latest`.
+- A version tag is used once. A tag is always on `main`.
+- Before a migration, a database backup must succeed.
+- Expect a short restart window (backend and Celery restart). Health checks reduce the impact but do not promise zero downtime.
+
+---
+
+## One-time GitHub setup (repository owner)
+
+Not configured yet. The release flow still works without it, but these settings make the protection real:
+
+1. **Main protection ruleset** on `main`: require the CI checks (`Tests / Backend Tests (Python)`, `Tests / Frontend Tests (Node.js)`, `Tests / Frontend Admin Checks (Node.js)`, `Docker Compose Validation`); block force pushes and branch deletion.
+2. Optional stricter flow: require a pull request into `main` and enable auto-merge. This needs a GitHub login with permission to open PRs (`gh auth login`), and the release flow then uses the PR instead of the direct fast-forward push.
+3. Keep Docker Hub and SSH credentials only with the people who release.
+
+---
+
+## Manual fallbacks (never used by pushes)
 
 | Workflow | Use |
 |----------|-----|
@@ -30,146 +52,44 @@ Workflow files: `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`. GitH
 | **Docker Hub Build (Manual Fallback)** (`docker-build.yml`) | Publishes an existing `vX.Y.Z` tag again. Never moves `:latest`. |
 | **Build and Push Admin UI (Manual)** (`deploy-admin.yml`) | Publishes only `prime7biz/p7erp-frontend-admin:<tag>`. Never moves `:latest`. |
 
-**Test gate before images are pushed:** the **Deploy** and manual **Docker Hub Build** workflows first run
-the same backend + frontend tests as **CI** (shared file `.github/workflows/tests.yml`, shown on
-GitHub as `Tests / Backend Tests (Python)` and `Tests / Frontend Tests (Node.js)`). The image
-build/push job (`needs: tests`) only starts when both pass, so a failing test means **no new
-image on Docker Hub** for that tag. This adds about 4–5 minutes before images appear.
-Workflow names (**CI**, **Deploy**, **Docker Hub Build (Manual Fallback)**) and build job names are unchanged.
-
-**Why images are not built on every push:** building and pushing on each `dev` or `main` push
-published untested images and made the release path noisy. Images are now built once, from an
-immutable tag on `main`, so the same bytes are what production runs.
-
 ---
 
-## Phase 0 — Pre-flight (local, before commit)
+## Check a gate by hand
 
-Run from repo root (`p7erp_local`):
+From the repository root (PowerShell):
 
 ```powershell
-docker compose exec backend pytest -q
-docker compose exec backend python -c "import app.main"
-docker compose exec backend alembic current
-cd frontend; npm run lint; npm run build
+powershell -ExecutionPolicy Bypass -File scripts\release\release_gate.ps1 preflight
+powershell -ExecutionPolicy Bypass -File scripts\release\release_gate.ps1 ci <full-commit-sha>
+powershell -ExecutionPolicy Bypass -File scripts\release\release_gate.ps1 on-main <full-commit-sha>
+powershell -ExecutionPolicy Bypass -File scripts\release\release_gate.ps1 tag-free v1.26.0
+powershell -ExecutionPolicy Bypass -File scripts\release\release_gate.ps1 images v1.26.0
+powershell -ExecutionPolicy Bypass -File scripts\release\release_gate.ps1 live-version v1.26.0
 ```
 
-**Stop if anything fails.** Fix locally first.
+Exit codes: `0` PASS, `1` FAIL, `2` timeout, `3` needs your decision (uncommitted changes), `4` could not verify.
 
 ---
 
-## Phase 1 — Commit
+## Live server script (`scripts/deploy_production_remote.sh vX.Y.Z`)
 
-Only commit `backend/`, `frontend/`, `docs/`. Never commit `.env`, `dist/`, `__pycache__/`, or `backend/media/`.
+It takes a lock so only one deploy runs at a time, then:
 
----
-
-## Phase 2 — Push to dev, then promote to main
-
-```powershell
-git push origin dev
-```
-
-Wait for GitHub Actions **CI** on `dev` to pass (match the commit SHA on the Actions tab).
-Then promote `dev` into `main` with a pull request (automatic merge once checks pass, if your
-GitHub ruleset allows it). Wait for **CI** on `main` to pass too.
-
-Never push a release directly to `main` from a local machine if it skipped `dev`.
-
----
-
-## Phase 3 — Pre-tag checklist
-
-Before creating a version tag:
-
-1. **Backup production database** (PostgreSQL snapshot on server or hosting panel).
-2. **Pick version tag** (semver):
-   - Patch: `v1.5.0` → `v1.5.1` (small fixes)
-   - Minor: `v1.5.0` → `v1.6.0` (features, migrations, multi-module)
-3. **Note rollback tag** (previous version, e.g. `v1.4.0`).
-
-If this release adds Alembic migrations, backup is **mandatory** — deploy runs `alembic upgrade head` on live.
-
----
-
-## Phase 4 — Tag `main` and publish images
-
-Tag the commit on `main` that passed CI (not a random local commit):
-
-```powershell
-git fetch origin main
-git tag v1.5.1 origin/main
-git push origin v1.5.1
-```
-
-Replace `v1.5.1` with your chosen version. Monitor GitHub Actions → **Deploy** workflow.
-The workflow refuses the tag if it is not on `main` or if that version already exists on Docker Hub.
-
----
-
-## Phase 5 — Post-deploy smoke (within 15 minutes)
-
-Open https://prime7erp.com and check:
-
-| # | Check |
-|---|-------|
-| 1 | Login (company code + user) |
-| 2 | Dashboard loads |
-| 3 | Customers list |
-| 4 | Inventory stock summary |
-| 5 | Finance vouchers list |
-| 6 | HR employees list |
-| 7 | Trade cases (if buying house / both tenant) |
-| 8 | API money fields still show as strings (e.g. `"100.5000"` in browser Network tab) |
-
-On server (SSH), confirm migration:
-
-```bash
-docker compose -f docker-compose.prod.yml exec -T backend alembic current
-# expect: <revision> (head)
-```
-
----
-
-## Manual live deploy (after images are built)
-
-GitHub only builds and pushes Docker images. When you are ready to update production, SSH to the server.
-
-**What the script does (`scripts/deploy_production_remote.sh vX.Y.Z`):**
-
-1. Takes a lock so only one deploy runs at a time.
-2. Pulls only the backend and frontend images for `vX.Y.Z`.
-3. Checks that postgres, redis and ollama are healthy. If not, it stops before any change.
-4. Compares the database revision with the new image's Alembic head.
-5. Stops **beat**, waits for Celery to drain (`DRAIN_TIMEOUT_SECONDS`, default 900 s), then stops **worker**.
-6. Writes the new image pins to `.env` atomically, keeping every other setting.
-7. Starts **backend** (applies migrations), waits for `/health` and checks the version.
-8. Starts **worker** and **beat**, then replaces **frontend**.
-
-It never recreates postgres, redis, ollama or watchtower. A short backend restart is expected.
+1. Pulls only the backend and frontend images for `vX.Y.Z`.
+2. Checks that PostgreSQL, Redis and Ollama are healthy. If not, it stops before any change.
+3. Compares the database migration revision with the new image's head.
+4. Stops **beat**, waits for Celery to drain (`DRAIN_TIMEOUT_SECONDS`, default 900 s), then stops **worker**.
+5. Writes the new image pins to `.env` atomically, keeping every other setting.
+6. Starts **backend** (applies migrations), waits for `/health` and checks the version.
+7. Starts **worker** and **beat**, then replaces **frontend**.
 
 **Failure rules:**
 
 | Where it fails | What happens |
 |----------------|--------------|
-| Before the image pins change (infra unhealthy, Celery does not drain) | Nothing changes. Beat and worker are restarted on the current release. Exit 1. |
-| After the pins change, and no migration could have run | The previous pins from `.env.previous-release` are restored and the previous release is started again. Exit 1. |
-| After the pins change, and a migration ran (or its status is unknown) | Worker and beat stay **stopped on purpose** so old code never runs on a migrated schema. The script prints recovery steps (restore the pre-release backup, then restore the pins). |
-
-Run it as the server admin user, for example:
-
-```bash
-ssh root@<DEPLOY_HOST>
-sudo -u primeadmin -H bash -lc 'cd /home/primeadmin/p7erp_local && git pull --ff-only origin main && DEPLOY_PATH=/home/primeadmin/p7erp_local bash scripts/deploy_production_remote.sh vX.Y.Z'
-```
-
-Or on the server directly:
-
-```bash
-cd /home/primeadmin/p7erp_local
-git pull --ff-only origin main
-DEPLOY_PATH=/home/primeadmin/p7erp_local bash scripts/deploy_production_remote.sh vX.Y.Z
-```
+| Before the image pins change (infrastructure unhealthy, Celery does not drain) | Nothing changes. Beat and worker are restarted on the current release. Exit 1. |
+| After the pins change, and no migration could have run | The previous pins from `.env.previous-release` are restored and the previous release is started. Exit 1. |
+| After the pins change, and a migration ran (or its status is unknown) | Worker and beat stay **stopped on purpose** so old code never runs on a migrated schema. The script prints recovery steps: restore the pre-release backup, then the pins. |
 
 ---
 

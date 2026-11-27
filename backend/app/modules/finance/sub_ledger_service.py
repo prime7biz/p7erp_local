@@ -200,7 +200,8 @@ async def replace_line_intents(
             continue
         await _party_ledger_blocks(db, tenant_id, line.account_id, feature_flags)
         total = Decimal("0")
-        base = quantize_amount(line.base_amount or 0)
+        # Reference amounts are in the line's own currency, so compare with line.amount (not base_amount).
+        line_total = quantize_amount(line.amount or 0)
         for intent in intents:
             amount = quantize_amount(intent.amount)
             if amount <= 0:
@@ -263,7 +264,7 @@ async def replace_line_intents(
                     created_by=user_id,
                 )
             )
-        if total > base:
+        if total > line_total:
             raise HTTPException(status_code=400, detail="Reference amounts cannot be more than the line amount.")
     await db.flush()
 
@@ -410,6 +411,59 @@ async def apply_pending_intents(db: AsyncSession, tenant_id: int, voucher: Vouch
     await db.flush()
 
 
+async def _restore_manual_allocations(
+    db: AsyncSession, tenant_id: int, voucher_id: int, applied_intents: list[VoucherLineBillIntent]
+) -> None:
+    """Give back the open amount for hand-made AGAINST_REF allocations before they are deleted.
+
+    Allocations created from draft intents were already restored by the intent loop, so they are
+    matched (line, bill, amount) and skipped. Whatever is left was made by ``allocate_bill_wise``.
+    """
+    already_restored = [
+        (intent.voucher_line_id, intent.target_bill_reference_id, quantize_amount(intent.amount))
+        for intent in applied_intents
+        if intent.allocation_type == "AGAINST_REF" and intent.target_bill_reference_id
+    ]
+    allocations = (
+        await db.execute(
+            select(BillAllocation).where(
+                BillAllocation.tenant_id == tenant_id,
+                BillAllocation.voucher_id == voucher_id,
+                BillAllocation.allocation_type == "AGAINST_REF",
+                BillAllocation.bill_reference_id.is_not(None),
+            )
+        )
+    ).scalars().all()
+    manual: list[BillAllocation] = []
+    for alloc in allocations:
+        key = (alloc.voucher_line_id, alloc.bill_reference_id, quantize_amount(alloc.amount))
+        if key in already_restored:
+            already_restored.remove(key)
+        else:
+            manual.append(alloc)
+    if not manual:
+        return
+    refs = {
+        row.id: row
+        for row in (
+            await db.execute(
+                select(BillReference)
+                .where(
+                    BillReference.tenant_id == tenant_id,
+                    BillReference.id.in_({alloc.bill_reference_id for alloc in manual}),
+                )
+                .with_for_update()
+            )
+        ).scalars().all()
+    }
+    for alloc in manual:
+        ref = refs.get(alloc.bill_reference_id)
+        if ref is None:
+            continue
+        ref.pending_amount = quantize_amount(ref.pending_amount or 0) + quantize_amount(alloc.amount)
+        ref.status = "OPEN" if ref.pending_amount >= quantize_amount(ref.original_amount or 0) else "PARTIALLY_SETTLED"
+
+
 async def reverse_applied_intents(db: AsyncSession, tenant_id: int, voucher_id: int, *, reset_to_pending: bool) -> None:
     intents = (
         await db.execute(
@@ -447,6 +501,7 @@ async def reverse_applied_intents(db: AsyncSession, tenant_id: int, voucher_id: 
                 ref.pending_amount = quantize_amount(ref.pending_amount or 0) + quantize_amount(intent.amount)
                 ref.status = "OPEN" if ref.pending_amount >= quantize_amount(ref.original_amount or 0) else "PARTIALLY_SETTLED"
         intent.lifecycle_status = "PENDING" if reset_to_pending else "REVERSED"
+    await _restore_manual_allocations(db, tenant_id, voucher_id, intents)
     await db.execute(
         delete(BillAllocation).where(
             BillAllocation.tenant_id == tenant_id,

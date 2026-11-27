@@ -726,6 +726,12 @@ export const menuSections: MenuSection[] = [
           { icon: FileText, label: "Bills", href: `${PREFIX}/accounts/outstanding-bills` },
           {
             icon: BookOpen,
+            label: "Sub-accounts",
+            href: `${PREFIX}/finance/sub-ledger`,
+            requiresFeatureFlag: "finance_sub_ledger_tracking_v1",
+          },
+          {
+            icon: BookOpen,
             label: "Party Ledgers",
             href: `${PREFIX}/finance/party-ledgers`,
             requiresFeatureFlag: "party_ledger_enabled",

@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
@@ -119,6 +120,8 @@ class ChartOfAccount(Base):
     )
     last_reviewed_at: Mapped[date | None] = mapped_column(Date, nullable=True)
     enable_bill_wise: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Person/source tracking on one control ledger (flag finance_sub_ledger_tracking_v1). Nullable so old rows stay valid.
+    enable_sub_accounts: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False, server_default="false")
     system_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_protected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -344,6 +347,9 @@ class VoucherLine(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     voucher_id: Mapped[int] = mapped_column(ForeignKey("vouchers.id", ondelete="CASCADE"), nullable=False, index=True)
     account_id: Mapped[int] = mapped_column(ForeignKey("chart_of_accounts.id", ondelete="RESTRICT"), nullable=False, index=True)
+    sub_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("finance_sub_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     cost_center_id: Mapped[int | None] = mapped_column(ForeignKey("cost_centers.id", ondelete="SET NULL"), nullable=True, index=True)
     currency: Mapped[str] = mapped_column(String(8), nullable=False, default="BDT")
     exchange_rate: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False, default=Decimal("1"), server_default="1")
@@ -733,6 +739,10 @@ class BillReference(Base):
     bill_type: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     party_name: Mapped[str] = mapped_column(String(255), nullable=False)
     account_id: Mapped[int] = mapped_column(ForeignKey("chart_of_accounts.id", ondelete="RESTRICT"), nullable=False, index=True)
+    sub_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("finance_sub_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    entry_side: Mapped[str | None] = mapped_column(String(8), nullable=True)
     original_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     pending_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     source_voucher_id: Mapped[int | None] = mapped_column(ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True, index=True)
@@ -762,6 +772,9 @@ class BillAllocation(Base):
     account_id: Mapped[int] = mapped_column(
         ForeignKey("chart_of_accounts.id", ondelete="RESTRICT"), nullable=False, index=True
     )
+    sub_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("finance_sub_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     allocation_date: Mapped[date] = mapped_column(Date, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
@@ -780,3 +793,69 @@ class AccountingPeriod(Base):
     closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     closed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class FinanceSubAccount(Base):
+    """A person or source tracked under one control ledger (advances, hand loans)."""
+
+    __tablename__ = "finance_sub_accounts"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_finance_sub_accounts_tenant_code"),
+        Index("ix_finance_sub_accounts_tenant_category_active", "tenant_id", "category", "is_active"),
+        CheckConstraint(
+            "category IN ('EMPLOYEE_ADVANCE','HAND_LOAN_LENDER','LOAN_BORROWER','PARTY','OTHER')",
+            name="ck_finance_sub_accounts_category",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(32), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    employee_id: Mapped[int | None] = mapped_column(ForeignKey("hr_employees.id", ondelete="SET NULL"), nullable=True)
+    customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id", ondelete="SET NULL"), nullable=True)
+    vendor_id: Mapped[int | None] = mapped_column(ForeignKey("vendors.id", ondelete="SET NULL"), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class VoucherLineBillIntent(Base):
+    """Tally-style reference chosen on a draft line. Applied to bill_references only when the voucher is posted."""
+
+    __tablename__ = "voucher_line_bill_intents"
+    __table_args__ = (
+        Index("ix_vlbi_tenant_voucher", "tenant_id", "voucher_id"),
+        Index("ix_vlbi_tenant_line", "tenant_id", "voucher_line_id"),
+        Index("ix_vlbi_tenant_target", "tenant_id", "target_bill_reference_id"),
+        CheckConstraint(
+            "allocation_type IN ('NEW_REF','AGAINST_REF','ADVANCE','ON_ACCOUNT')",
+            name="ck_vlbi_allocation_type",
+        ),
+        CheckConstraint(
+            "lifecycle_status IN ('PENDING','APPLIED','REVERSED','CANCELLED')",
+            name="ck_vlbi_lifecycle",
+        ),
+        CheckConstraint("amount > 0", name="ck_vlbi_amount_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    voucher_id: Mapped[int] = mapped_column(ForeignKey("vouchers.id", ondelete="CASCADE"), nullable=False, index=True)
+    voucher_line_id: Mapped[int] = mapped_column(ForeignKey("voucher_lines.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("chart_of_accounts.id", ondelete="RESTRICT"), nullable=False)
+    sub_account_id: Mapped[int | None] = mapped_column(ForeignKey("finance_sub_accounts.id", ondelete="SET NULL"), nullable=True)
+    allocation_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    reference_no: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    target_bill_reference_id: Mapped[int | None] = mapped_column(ForeignKey("bill_references.id", ondelete="SET NULL"), nullable=True)
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lifecycle_status: Mapped[str] = mapped_column(String(20), nullable=False, default="PENDING", server_default="PENDING")
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

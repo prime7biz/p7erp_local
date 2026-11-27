@@ -1436,11 +1436,13 @@ export const financeApi = {
   },
 
   // Commercial
-  async listBillReferences(params?: { bill_type?: string; status_filter?: string; account_id?: number; search?: string }): Promise<BillReferenceRow[]> {
+  async listBillReferences(params?: { bill_type?: string; status_filter?: string; account_id?: number; sub_account_id?: number; source_voucher_id?: number; search?: string }): Promise<BillReferenceRow[]> {
     const q = new URLSearchParams();
     if (params?.bill_type) q.set("bill_type", params.bill_type);
     if (params?.status_filter) q.set("status_filter", params.status_filter);
     if (params?.account_id) q.set("account_id", String(params.account_id));
+    if (params?.sub_account_id) q.set("sub_account_id", String(params.sub_account_id));
+    if (params?.source_voucher_id) q.set("source_voucher_id", String(params.source_voucher_id));
     if (params?.search) q.set("search", params.search);
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<BillReferenceRow[]>(`/api/v1/finance/bill-references${suffix}`);

@@ -76,6 +76,7 @@ const pages = {
   vouchers: () => import("@/pages/app/VouchersPage").then((m) => ({ default: m.VouchersPage })),
   voucherApprovals: () => import("@/pages/app/VoucherApprovalsPage").then((m) => ({ default: m.VoucherApprovalsPage })),
   outstandingBills: () => import("@/pages/app/OutstandingBillsPage").then((m) => ({ default: m.OutstandingBillsPage })),
+  subLedger: () => import("@/pages/app/finance/SubLedgerRegisterPage").then((m) => ({ default: m.SubLedgerRegisterPage })),
   vendorBills: () => import("@/pages/app/accounts/VendorBillsPage").then((m) => ({ default: m.VendorBillsPage })),
   purchaseWorkflow: () => import("@/pages/app/PurchaseWorkflowPage").then((m) => ({ default: m.PurchaseWorkflowPage })),
   partyLedgers: () =>
@@ -233,6 +234,13 @@ export const FINANCE_HUBS = [
       { id: "vouchers", label: "Vouchers", legacyPath: "accounts/vouchers", load: pages.vouchers },
       { id: "approvals", label: "Approvals", legacyPath: "accounts/vouchers/approval-queue", load: pages.voucherApprovals },
       { id: "outstanding-bills", label: "Outstanding Bills", legacyPath: "accounts/outstanding-bills", load: pages.outstandingBills },
+      {
+        id: "sub-ledger",
+        label: "Sub-accounts",
+        legacyPath: "finance/sub-ledger",
+        load: pages.subLedger,
+        requiresFeatureFlag: "finance_sub_ledger_tracking_v1",
+      },
       { id: "vendor-bills", label: "Vendor Bills (GRN)", legacyPath: "accounts/vendor-bills", load: pages.vendorBills },
       { id: "purchase-ap", label: "Purchase & AP", legacyPath: "accounts/purchase-workflow", load: pages.purchaseWorkflow },
       {

@@ -830,6 +830,9 @@ async def post_held_voucher_to_books(
     await sync_ci_allocation_status_for_voucher(db, tenant_id=tenant_id, voucher=voucher)
     await on_voucher_posted(db, tenant_id, voucher, feature_flags=feature_flags, created_by=user_id)
     await on_coa_interest_voucher_posted(db, tenant_id, voucher)
+    from app.modules.finance.sub_ledger_service import apply_pending_intents
+
+    await apply_pending_intents(db, tenant_id, voucher, user_id)
     await db.flush()
     return list(warnings)
 

@@ -218,6 +218,7 @@ async def _account_insights(
                 "normal_balance": account.normal_balance,
                 "is_cash_or_bank": _is_cash_or_bank(account, group),
                 "enable_bill_wise": bool(account.enable_bill_wise),
+                "enable_sub_accounts": bool(getattr(account, "enable_sub_accounts", False)),
                 "balance": _money(balance),
                 "projected_balance": _money(projected),
                 "times_used_last_year": count,

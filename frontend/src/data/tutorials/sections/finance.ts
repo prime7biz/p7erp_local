@@ -928,6 +928,33 @@ Money in and money out are the most common vouchers:
       relatedArticleIds: ["fin-voucher-entry", "fin-bills-ap", "fin-tax-deductions", "fin-cheques", "commercial-overview"],
     },
     {
+      id: "fin-sub-ledger",
+      title: "Sub-accounts for advances and hand loans",
+      summary:
+        "Track many people under one control ledger, and keep a Tally-style payment reference that becomes a bill only when the voucher is posted.",
+      tags: ["finance", "advances", "hand loans", "sub-accounts"],
+      lastUpdated: "2026-11-28",
+      content: `## When to use this
+
+Turn this on in **Settings → Configuration** with **Sub-account tracking for advances and hand loans**. It stays off until an admin switches it on.
+
+Use **one control ledger plus a person** for staff advances and hand loans that do not earn interest. Keep a **separate ledger** for a supplier, a customer, or a loan that earns interest. That loan ledger can use both interest and bill-wise references.
+
+## Steps
+
+1. Open **Finance → Transactions → Sub-accounts** (\`/app/finance/sub-ledger\`) and add each person with a short code and a name.
+2. On the control ledger in **Chart of Accounts**, tick **Sub-account tracking**. Do not also tick **Bill-wise tracking** on that same ledger.
+3. On a voucher line, pick the person and a reference type: **New Ref**, **Against Ref**, **Advance**, or **On Account**.
+4. Save the voucher as a draft. The reference stays on the draft. It becomes an open bill only when someone posts the voucher.
+5. The register shows each person's balance from posted vouchers.
+
+## Rollback
+
+Switch the setting off. Existing drafts stay in the books. New lines will not ask for a person until the setting is on again.
+`,
+      relatedAppRoutes: ["/app/finance/sub-ledger", "/app/accounts/vouchers", "/app/accounts"],
+    },
+    {
       id: "fin-bills-ap",
       title: "Step-by-step: supplier bills and purchase & AP",
       summary:

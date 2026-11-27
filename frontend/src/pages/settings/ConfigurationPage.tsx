@@ -1333,6 +1333,28 @@ export function ConfigurationPage() {
             <input
               type="checkbox"
               className="mt-1 rounded border-border-strong"
+              checked={featureFlags.finance_sub_ledger_tracking_v1 === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  finance_sub_ledger_tracking_v1: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Sub-account tracking for advances and hand loans</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                One control ledger can track many people (staff advances and non-interest hand loans). Interest-bearing
+                loans stay as their own ledgers and may also use bill-wise references. Draft vouchers store the
+                reference and it becomes a bill only when the voucher is posted. Off by default (
+                <code className="text-[11px]">finance_sub_ledger_tracking_v1</code>).
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
               checked={featureFlags.finance_ai_insights_v2 === true}
               onChange={(e) =>
                 setFeatureFlags((prev) => ({

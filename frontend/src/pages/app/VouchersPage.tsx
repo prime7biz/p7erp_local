@@ -17,6 +17,8 @@ import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
+import { BillIntentFields } from "@/components/finance/BillIntentFields";
+import { listSubAccounts, type SubAccount } from "@/api/subLedger";
 import { ScrollTableCard } from "@/components/finance/kit";
 import { listTableTheadClass } from "@/components/app/listPageLayout";
 import { VoucherActionReasonModal } from "@/components/vouchers/VoucherActionReasonModal";
@@ -88,6 +90,8 @@ export function VouchersPage() {
   const confirm = useConfirm();
   const { me } = useAuth();
   const gstEnabled = me?.feature_flags?.gst_system_enabled === true;
+  const subLedgerOn = me?.feature_flags?.finance_sub_ledger_tracking_v1 === true;
+  const [subAccounts, setSubAccounts] = useState<SubAccount[]>([]);
   const directPostOn = me?.feature_flags?.direct_post_vouchers === true && resolveRole(me?.role_name).isElevated;
   const assistEnabled = me?.feature_flags?.voucher_entry_assist_enabled !== false;
   const fyStartMonth = normalizeStartMonth(me?.feature_flags?.fiscal_year_start_month);
@@ -109,6 +113,7 @@ export function VouchersPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [accountBillWiseMap, setAccountBillWiseMap] = useState<Record<number, boolean>>({});
+  const [accountSubMap, setAccountSubMap] = useState<Record<number, boolean>>({});
   const billWiseFetchedRef = useRef<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -148,6 +153,19 @@ export function VouchersPage() {
   const [formBaseline, setFormBaseline] = useState(0);
   const formDirty = useFormDirty(form, formBaseline);
   useUnsavedChangesGuard(showCreate && formDirty);
+
+  useEffect(() => {
+    if (!subLedgerOn) return;
+    let cancelled = false;
+    listSubAccounts()
+      .then((rows) => {
+        if (!cancelled) setSubAccounts(rows.filter((row) => row.is_active));
+      })
+      .catch((e) => logApiError("VouchersPage.listSubAccounts", e));
+    return () => {
+      cancelled = true;
+    };
+  }, [subLedgerOn]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -227,7 +245,10 @@ export function VouchersPage() {
       billWiseFetchedRef.current.add(id);
       void api
         .getChartOfAccount(id)
-        .then((a) => setAccountBillWiseMap((m) => ({ ...m, [id]: Boolean(a.enable_bill_wise) })))
+        .then((a) => {
+          setAccountBillWiseMap((m) => ({ ...m, [id]: Boolean(a.enable_bill_wise) }));
+          setAccountSubMap((m) => ({ ...m, [id]: Boolean(a.enable_sub_accounts) }));
+        })
         .catch((e) => {
           logApiError("VouchersPage.getChartOfAccount", e);
         });
@@ -628,6 +649,8 @@ export function VouchersPage() {
         amount: line.amount,
         notes: line.notes ?? "",
         cost_nature_override: line.cost_nature_override ?? null,
+        sub_account_id: line.sub_account_id ?? null,
+        bill_intents: line.bill_intents ?? [],
       })),
     });
     setFormBaseline((n) => n + 1);
@@ -934,10 +957,11 @@ export function VouchersPage() {
                           value={line.account_id > 0 ? line.account_id : ""}
                           onChange={(next, opt) => {
                             const id = typeof next === "number" && next > 0 ? next : 0;
-                            setLine(idx, { account_id: id });
+                            setLine(idx, { account_id: id, sub_account_id: null, bill_intents: [] });
                             const meta = opt?.meta;
                             if (meta && id > 0) {
                               setAccountBillWiseMap((m) => ({ ...m, [id]: Boolean(meta.enable_bill_wise) }));
+                              setAccountSubMap((m) => ({ ...m, [id]: Boolean(meta.enable_sub_accounts) }));
                             }
                           }}
                           fetchPage={fetchChartAccountPage}
@@ -1065,6 +1089,14 @@ export function VouchersPage() {
                         value={line.notes ?? ""}
                         onChange={(e) => setLine(idx, { notes: e.target.value })}
                       />
+                      {subLedgerOn && line.account_id > 0 && (accountBillWiseMap[line.account_id] || accountSubMap[line.account_id]) ? (
+                        <BillIntentFields
+                          line={line}
+                          people={subAccounts}
+                          showPerson={Boolean(accountSubMap[line.account_id])}
+                          onChange={(patch) => setLine(idx, patch)}
+                        />
+                      ) : null}
                     </div>
                   </div>
                 );

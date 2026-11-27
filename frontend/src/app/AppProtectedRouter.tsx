@@ -395,6 +395,9 @@ const ProfitabilityPage = lazy(() =>
 const OutstandingBillsPage = lazy(() =>
   import("@/pages/app/OutstandingBillsPage").then((m) => ({ default: m.OutstandingBillsPage })),
 );
+const SubLedgerRegisterPage = lazy(() =>
+  import("@/pages/app/finance/SubLedgerRegisterPage").then((m) => ({ default: m.SubLedgerRegisterPage })),
+);
 const BankReconciliationPage = lazy(() =>
   import("@/pages/app/BankReconciliationPage").then((m) => ({ default: m.BankReconciliationPage })),
 );
@@ -1119,6 +1122,7 @@ export function AppProtectedRouter() {
           <Route path="accounts/vouchers/approval-queue" element={<FinanceLegacyRoute from="accounts/vouchers/approval-queue" Page={VoucherApprovalsPage} />} />
           <Route path="accounts/currency" element={<FinanceLegacyRoute from="accounts/currency" Page={AccountsCurrencyPage} />} />
           <Route path="accounts/outstanding-bills" element={<FinanceLegacyRoute from="accounts/outstanding-bills" Page={OutstandingBillsPage} />} />
+          <Route path="finance/sub-ledger" element={<FinanceLegacyRoute from="finance/sub-ledger" Page={SubLedgerRegisterPage} />} />
           <Route path="accounts/cost-centers" element={<FinanceLegacyRoute from="accounts/cost-centers" Page={CostCentersPage} />} />
           <Route path="accounts/budgets" element={<FinanceLegacyRoute from="accounts/budgets" Page={BudgetsPage} />} />
           <Route path="accounts/purchase-workflow" element={<FinanceLegacyRoute from="accounts/purchase-workflow" Page={PurchaseWorkflowPage} />} />

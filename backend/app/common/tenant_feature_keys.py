@@ -72,6 +72,9 @@ PARTY_LEDGER_INTEREST_CALC = "party_ledger_interest_calc"
 # Optional interest on Asset / Liability chart-of-accounts ledgers (default OFF, strict true).
 COA_LEDGER_INTEREST_V1 = "coa_ledger_interest_v1"
 
+# Person/source tracking and draft-safe Tally references (default OFF, strict true).
+FINANCE_SUB_LEDGER_TRACKING_V1 = "finance_sub_ledger_tracking_v1"
+
 # Sprint 2 stock hierarchy / batch / godown (default off).
 STOCK_HIERARCHY_ENABLED = "stock_hierarchy_enabled"
 BATCH_TRACKING_ENABLED = "batch_tracking_enabled"
@@ -774,6 +777,11 @@ def is_party_ledger_interest_calc(feature_flags: Any) -> bool:
 def is_coa_ledger_interest_v1_enabled(feature_flags: Any) -> bool:
     """COA Asset/Liability interest only when the flag is exactly True."""
     return _flag_true(feature_flags, COA_LEDGER_INTEREST_V1)
+
+
+def is_finance_sub_ledger_tracking_v1_enabled(feature_flags: Any) -> bool:
+    """Sub-accounts and draft bill references only when the flag is exactly True."""
+    return _flag_true(feature_flags, FINANCE_SUB_LEDGER_TRACKING_V1)
 
 
 def is_stock_hierarchy_enabled(feature_flags: Any) -> bool:

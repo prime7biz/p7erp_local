@@ -49,3 +49,6 @@ backups/
 
 # Private audit material (exploit-level security detail; never commit — repo is public)
 docs/erp-modernization/private/
+
+# Live Tally day-book extracts (real company data). Keep them off the public repo.
+backend/scripts/tally_daybook_import/local_data/

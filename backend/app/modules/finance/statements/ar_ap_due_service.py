@@ -107,10 +107,14 @@ def _source_parts(tenant: Tenant, source: str):
         due = func.coalesce(PartyLedgerBill.due_date, PartyLedgerBill.bill_date)
         return PartyLedgerBill.pending_amount, due, PartyLedgerBill.bill_date, side, join, conds, None
     if source == AR_AP_DUE_SOURCE_BILL_REFERENCES:
+        from app.modules.finance.sub_ledger_service import posted_or_manual_bill_clause
+
         conds = [
             BillReference.tenant_id == tid,
             func.upper(BillReference.status).in_(BILL_REFERENCE_OPEN_STATUSES),
+            func.upper(BillReference.bill_type).in_(("RECEIVABLE", "PAYABLE")),
             BillReference.pending_amount > 0,
+            posted_or_manual_bill_clause(),
         ]
         due = func.coalesce(BillReference.due_date, BillReference.bill_date)
         return BillReference.pending_amount, due, BillReference.bill_date, func.upper(BillReference.bill_type), None, conds, None

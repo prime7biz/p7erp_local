@@ -22,6 +22,7 @@ const EMBEDDABLE_ROUTES = [
   "accounts/vouchers",
   "accounts/vouchers/approval-queue",
   "accounts/outstanding-bills",
+  "finance/sub-ledger",
   "accounts/vendor-bills",
   "accounts/purchase-workflow",
   "finance/party-ledgers",
@@ -229,13 +230,14 @@ describe("Finance sidebar", () => {
     "/app/finance/profitability/orders",
     "/app/finance/profitability/entity",
     "/app/finance/management-performance",
+    "/app/finance/sub-ledger",
   ];
 
   it("flag OFF keeps the current long Finance menu", () => {
     const original = menuSections.find((s) => s.section === "Finance")!;
     const originalHrefs = (original.subsections ?? []).flatMap((sub) => sub.items.map((i) => i.href));
     // 56 classic links + 8 links to the new finance pages (each shown only when its own flag is true).
-    expect(originalHrefs).toHaveLength(64);
+    expect(originalHrefs).toHaveLength(65);
     const offFlags: Record<string, boolean | string>[] = [{}, { finance_hubs_v2: false }, { finance_hubs_v2: "true" }];
     for (const flags of offFlags) {
       const links = financeLinks(flags);

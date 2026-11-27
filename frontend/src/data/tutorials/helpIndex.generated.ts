@@ -1559,6 +1559,16 @@ export const tutorialHelpIndex: TutorialHelpEntry[] = [
     ]
   },
   {
+    "id": "fin-sub-ledger",
+    "title": "Sub-accounts for advances and hand loans",
+    "summary": "Track many people under one control ledger, and keep a Tally-style payment reference that becomes a bill only when the voucher is posted.",
+    "relatedAppRoutes": [
+      "/app/finance/sub-ledger",
+      "/app/accounts/vouchers",
+      "/app/accounts"
+    ]
+  },
+  {
     "id": "fin-bills-ap",
     "title": "Step-by-step: supplier bills and purchase & AP",
     "summary": "Turn received goods into supplier bills — from Vendor bills (GRN) or Purchase & AP — post them to payables, and follow open bills until they are paid.",

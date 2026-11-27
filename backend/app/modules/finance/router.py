@@ -441,6 +441,7 @@ class ChartAccountBody(BaseModel):
     parent_account_id: int | None = None
     last_reviewed_at: date | None = None
     enable_bill_wise: bool = False
+    enable_sub_accounts: bool = False
     cost_nature: CostNatureLiteral | None = None
     # Optional COA interest (tenant flag coa_ledger_interest_v1)
     interest_enabled: bool = False
@@ -451,6 +452,11 @@ class ChartAccountBody(BaseModel):
     interest_amount: MoneyStrNonNegOpt = None
     interest_counterpart_account_id: int | None = None
     interest_activation_date: date | None = None
+
+    @field_validator("enable_sub_accounts", mode="before")
+    @classmethod
+    def _coerce_enable_sub_accounts(cls, v):
+        return bool(v)
 
     @field_validator("cost_nature", mode="before")
     @classmethod
@@ -503,6 +509,15 @@ class VoucherTypeOut(BaseModel):
         from_attributes = True
 
 
+class BillIntentBody(BaseModel):
+    allocation_type: Literal["NEW_REF", "AGAINST_REF", "ADVANCE", "ON_ACCOUNT"]
+    reference_no: str | None = None
+    target_bill_reference_id: int | None = None
+    due_date: date | None = None
+    amount: MoneyStrNonNeg
+    notes: str | None = None
+
+
 class VoucherLineBody(BaseModel):
     account_id: int
     cost_center_id: int | None = None
@@ -515,6 +530,8 @@ class VoucherLineBody(BaseModel):
     amount: MoneyStrNonNeg
     notes: str | None = None
     cost_nature_override: CostNatureLiteral | None = None
+    sub_account_id: int | None = None
+    bill_intents: list[BillIntentBody] = []
 
     @field_validator("cost_nature_override", mode="before")
     @classmethod
@@ -1151,6 +1168,11 @@ async def _voucher_out(
 ) -> VoucherOut:
     lines_result = await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id).order_by(VoucherLine.id))
     lines = list(lines_result.scalars().all())
+    from app.modules.finance.sub_ledger_service import intents_by_line
+
+    packed = await intents_by_line(db, voucher.tenant_id, [voucher.id])
+    for line in lines:
+        line.bill_intents = packed.get(line.id, [])
     return _voucher_to_out(voucher, lines, control_warnings=control_warnings)
 
 
@@ -1929,9 +1951,16 @@ async def create_chart_account(
             width=coa_cfg["account_number_width"],
         )
     await ensure_owned(db, ChartOfAccount, body.parent_account_id, tenant.id, "Parent ledger account")
-    from app.common.tenant_feature_keys import is_coa_ledger_interest_v1_enabled
+    from app.common.tenant_feature_keys import (
+        is_coa_ledger_interest_v1_enabled,
+        is_finance_sub_ledger_tracking_v1_enabled,
+    )
     from app.modules.finance.coa_interest.validation import validate_interest_policy
 
+    if body.enable_sub_accounts and not is_finance_sub_ledger_tracking_v1_enabled(tenant.feature_flags):
+        raise HTTPException(status_code=400, detail="Sub-account tracking is switched off for this company.")
+    if body.enable_sub_accounts and body.account_type != "posting":
+        raise HTTPException(status_code=400, detail="Sub-accounts can only be used on a posting ledger.")
     interest_fields = await validate_interest_policy(
         db,
         tenant_id=tenant.id,
@@ -1945,6 +1974,9 @@ async def create_chart_account(
         interest_amount=body.interest_amount,
         interest_counterpart_account_id=body.interest_counterpart_account_id,
         interest_activation_date=body.interest_activation_date,
+        enable_bill_wise=body.enable_bill_wise,
+        enable_sub_accounts=body.enable_sub_accounts,
+        allow_bill_wise_with_interest=is_finance_sub_ledger_tracking_v1_enabled(tenant.feature_flags),
     )
     payload = body.model_dump(
         exclude={
@@ -2026,9 +2058,16 @@ async def update_chart_account(
             detail=f"Normal balance must be '{group.default_normal_balance}' for this account group.",
         )
     await ensure_owned(db, ChartOfAccount, body.parent_account_id, tenant.id, "Parent ledger account")
-    from app.common.tenant_feature_keys import is_coa_ledger_interest_v1_enabled
+    from app.common.tenant_feature_keys import (
+        is_coa_ledger_interest_v1_enabled,
+        is_finance_sub_ledger_tracking_v1_enabled,
+    )
     from app.modules.finance.coa_interest.validation import validate_interest_policy
 
+    if body.enable_sub_accounts and not is_finance_sub_ledger_tracking_v1_enabled(tenant.feature_flags):
+        raise HTTPException(status_code=400, detail="Sub-account tracking is switched off for this company.")
+    if body.enable_sub_accounts and body.account_type != "posting":
+        raise HTTPException(status_code=400, detail="Sub-accounts can only be used on a posting ledger.")
     interest_fields = await validate_interest_policy(
         db,
         tenant_id=tenant.id,
@@ -2042,6 +2081,9 @@ async def update_chart_account(
         interest_amount=body.interest_amount,
         interest_counterpart_account_id=body.interest_counterpart_account_id,
         interest_activation_date=body.interest_activation_date,
+        enable_bill_wise=body.enable_bill_wise,
+        enable_sub_accounts=body.enable_sub_accounts,
+        allow_bill_wise_with_interest=is_finance_sub_ledger_tracking_v1_enabled(tenant.feature_flags),
     )
     for key, value in body.model_dump(
         exclude={
@@ -2091,6 +2133,18 @@ async def delete_chart_account(
     ).scalar()
     if use_count and use_count > 0:
         raise HTTPException(status_code=400, detail="Cannot delete ledger with voucher entries")
+    from app.models.finance import BillAllocation, BillReference, VoucherLineBillIntent
+
+    for model, label in (
+        (BillReference, "bill references"),
+        (BillAllocation, "bill allocations"),
+        (VoucherLineBillIntent, "bill references on drafts"),
+    ):
+        linked = (
+            await db.execute(select(func.count()).select_from(model).where(model.tenant_id == tenant.id, model.account_id == account_id))
+        ).scalar()
+        if linked:
+            raise HTTPException(status_code=400, detail=f"Cannot delete ledger with {label}")
     await db.delete(row)
     await db.commit()
     await _invalidate_account_group_hierarchy_cache(tenant.id)
@@ -2738,6 +2792,10 @@ async def create_voucher(
             center = await db.get(CostCenter, line.cost_center_id)
             if not center or center.tenant_id != tenant.id:
                 raise HTTPException(status_code=404, detail=f"Cost center not found: {line.cost_center_id}")
+        if getattr(line, "sub_account_id", None) is not None:
+            from app.models.finance import FinanceSubAccount
+
+            await ensure_owned(db, FinanceSubAccount, line.sub_account_id, tenant.id, "Sub-account")
         if getattr(acct, "account_type", "posting") == "header":
             raise HTTPException(
                 status_code=400,
@@ -2761,6 +2819,7 @@ async def create_voucher(
             tenant_id=tenant.id,
             voucher_id=row.id,
             account_id=line.account_id,
+            sub_account_id=getattr(line, "sub_account_id", None),
             cost_center_id=line.cost_center_id,
             currency=line_currency,
             exchange_rate=str(round(line_rate, 8)),
@@ -2779,6 +2838,16 @@ async def create_voucher(
     assert_lines_balanced(created_lines)
     _apply_internal_signature(row, created_lines)
     await db.flush()
+    from app.modules.finance.sub_ledger_service import replace_line_intents
+
+    await replace_line_intents(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        voucher=row,
+        pairs=list(zip(created_lines, [line.bill_intents for line in body.lines])),
+        feature_flags=tenant.feature_flags,
+    )
     control_warnings: list[str] = []
     control_warnings.extend(
         await collect_bank_cash_control_warnings(
@@ -2913,6 +2982,10 @@ async def update_voucher(
             center = await db.get(CostCenter, line.cost_center_id)
             if not center or center.tenant_id != tenant.id:
                 raise HTTPException(status_code=404, detail=f"Cost center not found: {line.cost_center_id}")
+        if getattr(line, "sub_account_id", None) is not None:
+            from app.models.finance import FinanceSubAccount
+
+            await ensure_owned(db, FinanceSubAccount, line.sub_account_id, tenant.id, "Sub-account")
         if getattr(acct, "account_type", "posting") == "header":
             raise HTTPException(
                 status_code=400,
@@ -2936,6 +3009,7 @@ async def update_voucher(
             tenant_id=tenant.id,
             voucher_id=row.id,
             account_id=line.account_id,
+            sub_account_id=getattr(line, "sub_account_id", None),
             cost_center_id=line.cost_center_id,
             currency=line_currency,
             exchange_rate=str(round(line_rate, 8)),
@@ -2952,6 +3026,17 @@ async def update_voucher(
 
     assert_lines_balanced(updated_lines)
     _apply_internal_signature(row, updated_lines)
+    await db.flush()
+    from app.modules.finance.sub_ledger_service import replace_line_intents
+
+    await replace_line_intents(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        voucher=row,
+        pairs=list(zip(updated_lines, [line.bill_intents for line in body.lines])),
+        feature_flags=tenant.feature_flags,
+    )
     try:
         from app.modules.finance.gst_tax_hooks import maybe_auto_calculate_tax_on_voucher
 
@@ -3305,6 +3390,9 @@ async def update_voucher_status(
             created_by=user.id,
         )
         await on_coa_interest_voucher_posted(db, tenant.id, row)
+        from app.modules.finance.sub_ledger_service import apply_pending_intents
+
+        await apply_pending_intents(db, tenant.id, row, user.id)
         try:
             from app.modules.finance.tds_service import maybe_auto_tds_on_payment_voucher
 
@@ -3331,6 +3419,10 @@ async def update_voucher_status(
         )
 
         await on_payment_voucher_cancelled(db, tenant.id, row)
+        if next_status == "CANCELLED":
+            from app.modules.finance.sub_ledger_service import cancel_pending_intents
+
+            await cancel_pending_intents(db, tenant.id, row.id)
         await sync_allocation_status_for_voucher(db, tenant_id=tenant.id, voucher=row)
         await sync_ci_allocation_status_for_voucher(db, tenant_id=tenant.id, voucher=row)
         await on_voucher_cancelled(db, tenant.id, row, feature_flags=tenant.feature_flags)
@@ -7133,6 +7225,9 @@ async def cancel_posted_voucher(
     from app.modules.finance.party_ledger_hooks import on_voucher_cancelled
 
     await on_voucher_cancelled(db, tenant.id, voucher, feature_flags=tenant.feature_flags)
+    from app.modules.finance.sub_ledger_service import reverse_applied_intents
+
+    await reverse_applied_intents(db, tenant.id, voucher.id, reset_to_pending=True)
     await record_voucher_event(
         db,
         tenant_id=tenant.id,
@@ -7233,6 +7328,7 @@ async def reverse_voucher(
                 amount=line.amount,
                 notes=f"Reversal line of voucher {src.voucher_number}",
                 cost_nature_override=getattr(line, "cost_nature_override", None),
+                sub_account_id=getattr(line, "sub_account_id", None),
             )
         )
     await db.flush()
@@ -7251,6 +7347,9 @@ async def reverse_voucher(
     await sync_allocation_status_for_voucher(db, tenant_id=tenant.id, voucher=src)
     await sync_ci_allocation_status_for_voucher(db, tenant_id=tenant.id, voucher=src)
     await on_voucher_cancelled(db, tenant.id, src, feature_flags=tenant.feature_flags)
+    from app.modules.finance.sub_ledger_service import reverse_applied_intents
+
+    await reverse_applied_intents(db, tenant.id, src.id, reset_to_pending=False)
     post_warnings = await finalize_posted_voucher_metadata(
         db, tenant.id, rev, rev_lines, strict_duplicate_check=False
     )
@@ -7724,6 +7823,9 @@ class BillRefOut(BaseModel):
     status: str
     credit_period_days: int | None
     is_overdue: bool
+    sub_account_id: int | None = None
+    sub_account_name: str | None = None
+    entry_side: str | None = None
     notes: str | None
     created_at: datetime | None
 
@@ -7743,6 +7845,8 @@ async def list_bill_references(
     bill_type: str | None = Query(default=None),
     status_filter: str | None = Query(default=None),
     account_id: int | None = Query(default=None),
+    sub_account_id: int | None = Query(default=None),
+    source_voucher_id: int | None = Query(default=None),
     search: str | None = Query(default=None),
     limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
@@ -7758,6 +7862,10 @@ async def list_bill_references(
         stmt = stmt.where(BillReference.status == status_filter.strip().upper())
     if account_id:
         stmt = stmt.where(BillReference.account_id == account_id)
+    if sub_account_id:
+        stmt = stmt.where(BillReference.sub_account_id == sub_account_id)
+    if source_voucher_id:
+        stmt = stmt.where(BillReference.source_voucher_id == source_voucher_id)
     if search:
         q = f"%{search.strip().lower()}%"
         stmt = stmt.where(
@@ -7788,11 +7896,14 @@ async def list_bill_references(
             bill_date=r.bill_date, due_date=r.due_date, bill_type=r.bill_type,
             party_name=r.party_name, account_id=r.account_id,
             account_name=acct.name if acct else None,
-            original_amount=r.original_amount, pending_amount=r.pending_amount,
+            original_amount=str(r.original_amount), pending_amount=str(r.pending_amount),
             source_voucher_id=r.source_voucher_id,
             source_doc_type=r.source_doc_type, source_doc_number=r.source_doc_number,
             status=r.status, credit_period_days=r.credit_period_days,
-            is_overdue=r.is_overdue, notes=r.notes, created_at=r.created_at,
+            is_overdue=r.is_overdue,
+            sub_account_id=r.sub_account_id,
+            entry_side=r.entry_side,
+            notes=r.notes, created_at=r.created_at,
         ))
     return out
 
@@ -7913,6 +8024,11 @@ async def allocate_bill_wise(
     amount = _to_float(body.amount)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
+    posted = await db.get(Voucher, body.voucher_id)
+    if posted is None or posted.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Voucher not found")
+    if (posted.status or "").upper() != "POSTED":
+        raise HTTPException(status_code=400, detail="Bill references can be allocated only after the voucher is posted.")
     voucher = await db.get(Voucher, body.voucher_id)
     if not voucher or voucher.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Voucher not found")
@@ -7992,6 +8108,8 @@ async def auto_create_bill_refs_from_voucher(
     voucher = await db.get(Voucher, voucher_id)
     if not voucher or voucher.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Voucher not found")
+    if (voucher.status or "").upper() != "POSTED":
+        raise HTTPException(status_code=400, detail="Bill references can be created only after the voucher is posted.")
     lines = list(
         (await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id))).scalars().all()
     )
@@ -8032,33 +8150,39 @@ async def bill_wise_outstanding_report(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    from decimal import Decimal
+
+    from app.modules.finance.sub_ledger_service import posted_or_manual_bill_clause
+
     rows = list(
         (await db.execute(
             select(BillReference).where(
                 BillReference.tenant_id == tenant.id,
                 BillReference.status.in_(["OPEN", "PARTIALLY_SETTLED"]),
+                func.upper(BillReference.bill_type).in_(("RECEIVABLE", "PAYABLE")),
+                posted_or_manual_bill_clause(),
             )
         )).scalars().all()
     )
-    receivable_total = 0.0
-    payable_total = 0.0
+    receivable_total = Decimal("0")
+    payable_total = Decimal("0")
     receivable_count = 0
     payable_count = 0
-    overdue_total = 0.0
+    overdue_total = Decimal("0")
     for r in rows:
-        pending = _to_float(r.pending_amount)
+        pending = Decimal(str(r.pending_amount or 0))
         if r.bill_type == "RECEIVABLE":
             receivable_total += pending
             receivable_count += 1
-        else:
+        elif r.bill_type == "PAYABLE":
             payable_total += pending
             payable_count += 1
-        if r.is_overdue or (r.due_date and r.due_date < today_local(tenant)):
+        if r.bill_type in {"RECEIVABLE", "PAYABLE"} and (r.is_overdue or (r.due_date and r.due_date < today_local(tenant))):
             overdue_total += pending
     return {
-        "receivable": {"total": round(receivable_total, 2), "count": receivable_count},
-        "payable": {"total": round(payable_total, 2), "count": payable_count},
-        "overdue_total": round(overdue_total, 2),
+        "receivable": {"total": float(receivable_total.quantize(Decimal("0.01"))), "count": receivable_count},
+        "payable": {"total": float(payable_total.quantize(Decimal("0.01"))), "count": payable_count},
+        "overdue_total": float(overdue_total.quantize(Decimal("0.01"))),
     }
 
 
@@ -8070,12 +8194,15 @@ async def bill_wise_aging_report(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    from app.modules.finance.sub_ledger_service import posted_or_manual_bill_clause
+
     rows = list(
         (await db.execute(
             select(BillReference).where(
                 BillReference.tenant_id == tenant.id,
                 BillReference.bill_type == bill_type.strip().upper(),
                 BillReference.status.in_(["OPEN", "PARTIALLY_SETTLED"]),
+                posted_or_manual_bill_clause(),
             ).order_by(BillReference.bill_date.asc())
         )).scalars().all()
     )
@@ -8589,3 +8716,7 @@ router.include_router(_mgmt_performance_router)
 from app.modules.finance.coa_interest.router import router as _coa_interest_router  # noqa: E402
 
 router.include_router(_coa_interest_router)
+
+from app.modules.finance.sub_ledger_router import router as _sub_ledger_router  # noqa: E402
+
+router.include_router(_sub_ledger_router)

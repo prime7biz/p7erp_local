@@ -63,7 +63,9 @@ MANIFEST: dict[str, dict[str, str]] = {
         'bank_reconciliation_id': 'handler-calls-ensure_owned',
         'facility_utilization_id': 'handler-calls-ensure_owned',
         'lines[].account_id': 'handler-calls-ensure_owned',
+        'lines[].bill_intents[].target_bill_reference_id': 'reviewed: ensure_owned BillReference in replace_line_intents',
         'lines[].cost_center_id': 'handler-calls-ensure_owned',
+        'lines[].sub_account_id': 'reviewed: ensure_owned FinanceSubAccount in replace_line_intents',
     },
     'PATCH /api/v1/hr/attendance/devices/{device_id}': {
         'default_shift_id': 'handler-calls-ensure_owned',
@@ -461,6 +463,11 @@ MANIFEST: dict[str, dict[str, str]] = {
         'lines[].account_id': 'handler-calls-ensure_owned',
         'lines[].cost_center_id': 'handler-calls-ensure_owned',
     },
+    'PATCH /api/v1/finance/sub-accounts/{sub_account_id}': {
+        'customer_id': 'reviewed: ensure_owned Customer',
+        'employee_id': 'reviewed: ensure_owned Employee',
+        'vendor_id': 'reviewed: ensure_owned Vendor',
+    },
     'POST /api/v1/finance/chart-of-accounts': {
         'group_id': 'handler-calls-ensure_owned',
         'interest_counterpart_account_id': 'reviewed: ensure_owned via validate_interest_policy',
@@ -544,12 +551,19 @@ MANIFEST: dict[str, dict[str, str]] = {
         'exclude_voucher_id': 'unreviewed',
         'lines[].account_id': 'unreviewed',
     },
+    'POST /api/v1/finance/sub-accounts': {
+        'customer_id': 'reviewed: ensure_owned Customer',
+        'employee_id': 'reviewed: ensure_owned Employee',
+        'vendor_id': 'reviewed: ensure_owned Vendor',
+    },
     'POST /api/v1/finance/vouchers': {
         'bank_reconciliation_id': 'handler-calls-ensure_owned',
         'btb_lc_id': 'handler-calls-ensure_owned',
         'facility_utilization_id': 'handler-calls-ensure_owned',
         'lines[].account_id': 'handler-calls-ensure_owned',
+        'lines[].bill_intents[].target_bill_reference_id': 'reviewed: ensure_owned BillReference in replace_line_intents',
         'lines[].cost_center_id': 'handler-calls-ensure_owned',
+        'lines[].sub_account_id': 'reviewed: ensure_owned FinanceSubAccount in replace_line_intents',
         'trade_case_id': 'handler-calls-ensure_owned',
     },
     'POST /api/v1/finance/vouchers/available-actions-batch': {
@@ -557,7 +571,9 @@ MANIFEST: dict[str, dict[str, str]] = {
     },
     'POST /api/v1/finance/vouchers/duplicate-risk-check': {
         'lines[].account_id': 'unreviewed',
+        'lines[].bill_intents[].target_bill_reference_id': 'reviewed: duplicate check reads account ids and amounts only',
         'lines[].cost_center_id': 'unreviewed',
+        'lines[].sub_account_id': 'reviewed: duplicate check reads account ids and amounts only',
     },
     'POST /api/v1/finance/vouchers/{voucher_id}/calculate-tax': {
         'taxable_lines[].voucher_line_id': 'unreviewed',

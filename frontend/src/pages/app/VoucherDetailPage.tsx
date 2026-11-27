@@ -136,9 +136,9 @@ export function VoucherDetailPage() {
         setActions([]);
       }
       try {
-        const refs = await api.listBillReferences();
+        const refs = await api.listBillReferences({ source_voucher_id: id });
         if (!latest.isCurrent(token)) return;
-        setBillRefs(refs.filter((r) => r.source_voucher_id === id));
+        setBillRefs(refs);
       } catch (e) {
         logApiError("VoucherDetailPage.listBillReferences", e);
         if (!latest.isCurrent(token)) return;

@@ -51,6 +51,7 @@ const defaultForm: ChartOfAccountCreate = {
   parent_account_id: null,
   last_reviewed_at: "",
   enable_bill_wise: false,
+  enable_sub_accounts: false,
   cost_nature: null,
   interest_enabled: false,
   interest_basis: null,
@@ -70,6 +71,7 @@ export function ChartOfAccountsPage() {
   const confirm = useConfirm();
   const { me } = useAuth();
   const interestFlagOn = me?.feature_flags?.coa_ledger_interest_v1 === true;
+  const subLedgerOn = me?.feature_flags?.finance_sub_ledger_tracking_v1 === true;
   const [groups, setGroups] = useState<AccountGroupResponse[]>([]);
   const [rows, setRows] = useState<ChartOfAccountResponse[]>([]);
   const [showInactive, setShowInactive] = useState(false);
@@ -151,7 +153,8 @@ export function ChartOfAccountsPage() {
   const canActivateInterest =
     interestFlagOn &&
     (selectedNature === "asset" || selectedNature === "liability") &&
-    !form.enable_bill_wise &&
+    !form.enable_sub_accounts &&
+    (subLedgerOn || !form.enable_bill_wise) &&
     !form.maintain_fc_balance;
   const counterpartOptions = useMemo(() => {
     const want = selectedNature === "liability" ? "expense" : selectedNature === "asset" ? "income" : "";
@@ -265,6 +268,7 @@ export function ChartOfAccountsPage() {
       is_active: row.is_active,
       is_bank_account: row.is_bank_account,
       enable_bill_wise: row.enable_bill_wise ?? false,
+      enable_sub_accounts: row.enable_sub_accounts ?? false,
       account_type: row.account_type ?? "posting",
       reporting_code: row.reporting_code ?? "",
       display_order: row.display_order ?? 0,
@@ -842,10 +846,33 @@ export function ChartOfAccountsPage() {
             <input
               type="checkbox"
               checked={!!form.enable_bill_wise}
-              onChange={(e) => setForm((p) => ({ ...p, enable_bill_wise: e.target.checked }))}
+              onChange={(e) =>
+                setForm((p) => ({
+                  ...p,
+                  enable_bill_wise: e.target.checked,
+                  enable_sub_accounts: e.target.checked ? false : p.enable_sub_accounts,
+                }))
+              }
             />
             Bill-wise tracking
           </label>
+          {subLedgerOn ? (
+            <label className="flex items-center gap-2 text-sm" title="Track many people under this one ledger">
+              <input
+                type="checkbox"
+                checked={!!form.enable_sub_accounts}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    enable_sub_accounts: e.target.checked,
+                    enable_bill_wise: e.target.checked ? false : p.enable_bill_wise,
+                    interest_enabled: e.target.checked ? false : p.interest_enabled,
+                  }))
+                }
+              />
+              Sub-account tracking
+            </label>
+          ) : null}
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"

@@ -9453,6 +9453,7 @@ export interface ChartOfAccountCreate {
   parent_account_id?: number | null;
   last_reviewed_at?: string | null;
   enable_bill_wise?: boolean;
+  enable_sub_accounts?: boolean;
   /** Default cost bucket for reporting; null = inherit none / unknown. */
   cost_nature?: FinanceCostNature | null;
   /** Optional Asset/Liability interest (tenant flag coa_ledger_interest_v1). */
@@ -9530,6 +9531,17 @@ export interface VoucherLineCreate {
   notes?: string;
   /** When set, overrides chart_of_accounts.cost_nature for this line. */
   cost_nature_override?: FinanceCostNature | null;
+  sub_account_id?: number | null;
+  bill_intents?: BillIntentInput[];
+}
+
+export interface BillIntentInput {
+  allocation_type: "NEW_REF" | "AGAINST_REF" | "ADVANCE" | "ON_ACCOUNT";
+  reference_no?: string | null;
+  target_bill_reference_id?: number | null;
+  due_date?: string | null;
+  amount: string;
+  notes?: string | null;
 }
 
 export interface VoucherCreate {

@@ -33,6 +33,11 @@ async def validate_interest_policy(
     interest_amount: Decimal | str | float | None,
     interest_counterpart_account_id: int | None,
     interest_activation_date: date | None,
+    enable_bill_wise: bool | None = None,
+    enable_sub_accounts: bool | None = None,
+    maintain_fc_balance: bool | None = None,
+    account_type: str | None = None,
+    allow_bill_wise_with_interest: bool = False,
 ) -> dict:
     """Return cleaned interest fields. Raises HTTPException on invalid policy."""
     if not interest_enabled:
@@ -54,19 +59,34 @@ async def validate_interest_policy(
             detail="Interest can only be activated on Asset or Liability ledgers.",
         )
 
+    bill_wise = bool(account.enable_bill_wise) if enable_bill_wise is None and account is not None else bool(enable_bill_wise)
+    sub_accounts = (
+        bool(getattr(account, "enable_sub_accounts", False))
+        if enable_sub_accounts is None and account is not None
+        else bool(enable_sub_accounts)
+    )
+    foreign_currency = (
+        bool(account.maintain_fc_balance) if maintain_fc_balance is None and account is not None else bool(maintain_fc_balance)
+    )
+    kind = (account.account_type if account_type is None and account is not None else account_type) or "posting"
+    if sub_accounts:
+        raise HTTPException(
+            status_code=400,
+            detail="Interest is not used on a sub-account control ledger. Use a separate ledger for an interest-bearing loan.",
+        )
+    if foreign_currency:
+        raise HTTPException(
+            status_code=400,
+            detail="Interest is not supported on foreign-currency ledgers in this version.",
+        )
+    if bill_wise and not allow_bill_wise_with_interest:
+        raise HTTPException(
+            status_code=400,
+            detail="Interest is not supported on bill-wise (party) ledgers. Use party ledger interest instead.",
+        )
+    if kind.lower() != "posting":
+        raise HTTPException(status_code=400, detail="Interest can only be activated on posting ledgers.")
     if account is not None:
-        if bool(account.maintain_fc_balance):
-            raise HTTPException(
-                status_code=400,
-                detail="Interest is not supported on foreign-currency ledgers in this version.",
-            )
-        if bool(account.enable_bill_wise):
-            raise HTTPException(
-                status_code=400,
-                detail="Interest is not supported on bill-wise (party) ledgers. Use party ledger interest instead.",
-            )
-        if (account.account_type or "posting").lower() != "posting":
-            raise HTTPException(status_code=400, detail="Interest can only be activated on posting ledgers.")
         await assert_coa_interest_allowed_for_account(db, tenant_id, account.id)
 
     basis = (interest_basis or "").strip().lower()

@@ -25,6 +25,7 @@ from app.common.business_date import today_local
 from app.models.commercial import CommercialInvoice, CommercialInvoiceLine
 from app.models.costing import Item
 from app.models.finance import AccountGroup, BillReference, ChartOfAccount, OutstandingBill, VendorBill
+from app.modules.finance.sub_ledger_service import posted_or_manual_bill_clause
 from app.models.inventory import (
     DeliveryChallan,
     DeliveryChallanOrder,
@@ -261,6 +262,8 @@ async def overdue_bills(db: AsyncSession, tenant_id: int, *, as_of: date, limit:
                 BillReference.due_date < as_of,
                 func.upper(BillReference.status).notin_(("SETTLED", *CANCELLED)),
                 BillReference.pending_amount > 0,
+                func.upper(BillReference.bill_type).in_(("RECEIVABLE", "PAYABLE")),
+                posted_or_manual_bill_clause(),
             )
             .order_by(BillReference.due_date)
             .limit(limit)

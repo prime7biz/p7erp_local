@@ -81,6 +81,7 @@ from app.models.commercial import (
 )
 from app.models.facility import Facility, FacilityUtilization, RepaymentScheduleLine
 from app.models.finance import BillReference, OutstandingBill, VendorBill, VendorBillLine
+from app.modules.finance.sub_ledger_service import posted_or_manual_bill_clause
 from app.models.hr_payroll import PayrollCalculationSnapshot, PayrollPeriod, PayrollRun, PayrollRunLine
 from app.models.inventory import GoodsReceiving, GoodsReceivingItem, PurchaseOrder, PurchaseOrderItem, Vendor
 from app.models.party_ledger import PartyLedger, PartyLedgerBill
@@ -651,6 +652,7 @@ async def _payables(db: AsyncSession, tenant: Tenant, b: _Builder, rules: _Rules
                         func.upper(BillReference.bill_type) == "PAYABLE",
                         func.upper(BillReference.status).in_(BR_OPEN_STATUSES),
                         BillReference.pending_amount > 0,
+                        posted_or_manual_bill_clause(),
                         ~rules.funded_po(VendorBill.purchase_order_id, PurchaseOrder.btb_lc_id),
                     )
                     .order_by(due_eff.desc().nulls_last(), BillReference.id.desc())

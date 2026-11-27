@@ -56,6 +56,7 @@ def lines_snapshot(lines: Iterable[VoucherLine]) -> list[dict[str, Any]]:
             "entry_type": ln.entry_type,
             "amount": f"{float(ln.amount or 0):.4f}",
             "cost_center_id": ln.cost_center_id,
+            "sub_account_id": getattr(ln, "sub_account_id", None),
         }
         for ln in lines
     ]

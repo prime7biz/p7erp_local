@@ -26,6 +26,14 @@ from fastapi import HTTPException
 API = "/api/v1/hr/class-requests"
 
 
+def _not_friday(start: date) -> date:
+    """The default HR weekend is Friday. Leave on that day is rejected before the class check."""
+    day = start
+    while day.weekday() == 4:
+        day += timedelta(days=1)
+    return day
+
+
 async def _seed(db, *, flag_on: bool = True):
     slug = uuid.uuid4().hex[:10]
     flags = {USER_AUTHORITY_CLASSES_V1: True} if flag_on else {}
@@ -338,6 +346,8 @@ async def test_leave_create_locked_and_class_request_path(db_session_integration
         yield db
 
     app.dependency_overrides[get_db] = _override
+    direct_day = _not_friday(date.today())
+    class_day = _not_friday(direct_day + timedelta(days=1))
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             locked = await client.post(
@@ -346,8 +356,8 @@ async def test_leave_create_locked_and_class_request_path(db_session_integration
                 json={
                     "employee_id": emp.id,
                     "leave_type_id": lt.id,
-                    "from_date": date.today().isoformat(),
-                    "to_date": date.today().isoformat(),
+                    "from_date": direct_day.isoformat(),
+                    "to_date": direct_day.isoformat(),
                     "days_requested": "1",
                     "reason": "direct",
                 },
@@ -364,8 +374,8 @@ async def test_leave_create_locked_and_class_request_path(db_session_integration
                     "employee_id": emp.id,
                     "payload": {
                         "leave_type_id": lt.id,
-                        "from_date": (date.today() + timedelta(days=7)).isoformat(),
-                        "to_date": (date.today() + timedelta(days=7)).isoformat(),
+                        "from_date": class_day.isoformat(),
+                        "to_date": class_day.isoformat(),
                         "days_requested": "1",
                         "reason": "class leave",
                     },

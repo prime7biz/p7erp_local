@@ -110,6 +110,40 @@ async def _party_ledger_blocks(db: AsyncSession, tenant_id: int, account_id: int
         )
 
 
+async def _load_accounts_and_groups(
+    db: AsyncSession, tenant_id: int, account_ids: set[int]
+) -> tuple[dict[int, ChartOfAccount], dict[int, AccountGroup]]:
+    """Load this tenant's ledgers and their groups in two queries."""
+    if not account_ids:
+        return {}, {}
+    accounts = {
+        row.id: row
+        for row in (
+            await db.execute(
+                select(ChartOfAccount).where(
+                    ChartOfAccount.tenant_id == tenant_id,
+                    ChartOfAccount.id.in_(account_ids),
+                )
+            )
+        ).scalars().all()
+    }
+    group_ids = {row.group_id for row in accounts.values() if row.group_id}
+    if not group_ids:
+        return accounts, {}
+    groups = {
+        row.id: row
+        for row in (
+            await db.execute(
+                select(AccountGroup).where(
+                    AccountGroup.tenant_id == tenant_id,
+                    AccountGroup.id.in_(group_ids),
+                )
+            )
+        ).scalars().all()
+    }
+    return accounts, groups
+
+
 async def replace_line_intents(
     db: AsyncSession,
     *,
@@ -123,6 +157,39 @@ async def replace_line_intents(
     from app.common.tenant_feature_keys import is_finance_sub_ledger_tracking_v1_enabled
 
     enabled = is_finance_sub_ledger_tracking_v1_enabled(feature_flags)
+    accounts, groups = await _load_accounts_and_groups(
+        db, tenant_id, {line.account_id for line, intents in pairs if intents}
+    )
+    against_ids = {
+        intent.target_bill_reference_id
+        for _, intents in pairs
+        for intent in intents
+        if (getattr(intent, "allocation_type", "") or "").upper() == "AGAINST_REF"
+        and getattr(intent, "target_bill_reference_id", None)
+    }
+    source_vouchers: dict[int, Voucher] = {}
+    if against_ids:
+        bill_rows = (
+            await db.execute(
+                select(BillReference).where(
+                    BillReference.tenant_id == tenant_id,
+                    BillReference.id.in_(against_ids),
+                )
+            )
+        ).scalars().all()
+        source_ids = {row.source_voucher_id for row in bill_rows if row.source_voucher_id}
+        if source_ids:
+            source_vouchers = {
+                row.id: row
+                for row in (
+                    await db.execute(
+                        select(Voucher).where(
+                            Voucher.tenant_id == tenant_id,
+                            Voucher.id.in_(source_ids),
+                        )
+                    )
+                ).scalars().all()
+            }
     for line, intents in pairs:
         if line.sub_account_id is not None or intents:
             if not enabled:
@@ -150,8 +217,8 @@ async def replace_line_intents(
                         detail="New Ref and Advance create their own bill when the voucher is posted.",
                     )
                 target_id = None
-                account = await db.get(ChartOfAccount, line.account_id)
-                group = await db.get(AccountGroup, account.group_id) if account and account.group_id else None
+                account = accounts.get(line.account_id)
+                group = groups.get(account.group_id) if account and account.group_id else None
                 if account is None or account.tenant_id != tenant_id or group is None or group.tenant_id != tenant_id:
                     raise HTTPException(status_code=400, detail="Account group not found.")
                 classify_bill_type(group, line.entry_type, kind)
@@ -164,8 +231,8 @@ async def replace_line_intents(
                 if (ref.status or "").upper() not in OPEN_STATUSES:
                     raise HTTPException(status_code=400, detail="That reference is not open.")
                 if ref.source_voucher_id is not None:
-                    source = await db.get(Voucher, ref.source_voucher_id)
-                    if source is None or source.tenant_id != tenant_id or source.status != "POSTED":
+                    source = source_vouchers.get(ref.source_voucher_id)
+                    if source is None or source.status != "POSTED":
                         raise HTTPException(status_code=400, detail="That reference is not in the books yet.")
                 if ref.entry_side and ref.entry_side == line.entry_type:
                     raise HTTPException(status_code=400, detail="Against Ref must be the opposite side of the open reference.")
@@ -226,13 +293,27 @@ async def apply_pending_intents(db: AsyncSession, tenant_id: int, voucher: Vouch
             )
         )
     ).scalars().all()
+    if not intents:
+        return
+    lines = {
+        row.id: row
+        for row in (
+            await db.execute(
+                select(VoucherLine).where(
+                    VoucherLine.tenant_id == tenant_id,
+                    VoucherLine.id.in_({row.voucher_line_id for row in intents}),
+                )
+            )
+        ).scalars().all()
+    }
+    accounts, groups = await _load_accounts_and_groups(db, tenant_id, {row.account_id for row in intents})
     for intent in intents:
-        line = await db.get(VoucherLine, intent.voucher_line_id)
-        account = await db.get(ChartOfAccount, intent.account_id)
-        if line is None or account is None or account.tenant_id != tenant_id:
+        line = lines.get(intent.voucher_line_id)
+        account = accounts.get(intent.account_id)
+        if line is None or account is None:
             raise HTTPException(status_code=400, detail="Bill reference line is no longer valid.")
-        group = await db.get(AccountGroup, account.group_id)
-        if group is None or group.tenant_id != tenant_id:
+        group = groups.get(account.group_id) if account.group_id else None
+        if group is None:
             raise HTTPException(status_code=400, detail="Account group not found.")
         amount = quantize_amount(intent.amount)
         if intent.allocation_type in {"NEW_REF", "ADVANCE"}:

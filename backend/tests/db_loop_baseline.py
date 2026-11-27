@@ -60,6 +60,9 @@ BASELINE: dict[str, int] = {
     'app/modules/finance/router.py::list_cash_forecast_scenarios': 1,
     'app/modules/finance/router.py::multi_currency_revaluation_summary': 1,
     'app/modules/finance/router.py::update_voucher': 3,
+    # One posted voucher has a few lines. Each open bill is row-locked before it is settled or undone.
+    'app/modules/finance/sub_ledger_service.py::apply_pending_intents': 1,
+    'app/modules/finance/sub_ledger_service.py::reverse_applied_intents': 1,
     'app/modules/finance/tax_calculation_service.py::apply_tax_lines_to_voucher': 2,
     'app/modules/finance/tds_service.py::_tds_party_line': 1,
     'app/modules/finance/tds_service.py::create_tds_liability_voucher': 1,

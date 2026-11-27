@@ -2135,14 +2135,21 @@ async def delete_chart_account(
         raise HTTPException(status_code=400, detail="Cannot delete ledger with voucher entries")
     from app.models.finance import BillAllocation, BillReference, VoucherLineBillIntent
 
-    for model, label in (
-        (BillReference, "bill references"),
-        (BillAllocation, "bill allocations"),
-        (VoucherLineBillIntent, "bill references on drafts"),
+    async def _linked(model) -> int:
+        return (
+            await db.execute(
+                select(func.count()).select_from(model).where(
+                    model.tenant_id == tenant.id,
+                    model.account_id == account_id,
+                )
+            )
+        ).scalar() or 0
+
+    for label, linked in (
+        ("bill references", await _linked(BillReference)),
+        ("bill allocations", await _linked(BillAllocation)),
+        ("bill references on drafts", await _linked(VoucherLineBillIntent)),
     ):
-        linked = (
-            await db.execute(select(func.count()).select_from(model).where(model.tenant_id == tenant.id, model.account_id == account_id))
-        ).scalar()
         if linked:
             raise HTTPException(status_code=400, detail=f"Cannot delete ledger with {label}")
     await db.delete(row)
